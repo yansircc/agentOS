@@ -2190,7 +2190,7 @@ export const distributionFindingsForPackage = ({
   ...distributionSubpathFindings({ record, manifest, sourceByFile, edges }),
 ];
 
-export const distributionEffectPeerFindings = (records) => {
+export const distributionEffectPeerFindings = (records, expectedRange) => {
   const ranges = new Map();
   const findings = [];
   for (const { record, manifest } of records) {
@@ -2198,8 +2198,8 @@ export const distributionEffectPeerFindings = (records) => {
     if (typeof range !== "string") continue;
     ranges.set(range, [...(ranges.get(range) ?? []), record]);
   }
-  if (ranges.size <= 1) return findings;
-  const expected = [...ranges.keys()].sort(compare)[0];
+  const expected = expectedRange ?? [...ranges.keys()].sort(compare)[0];
+  if (expected === undefined || (expectedRange === undefined && ranges.size <= 1)) return findings;
   for (const [range, rangeRecords] of [...ranges.entries()].sort(([left], [right]) =>
     compare(left, right),
   )) {
@@ -2220,6 +2220,307 @@ export const distributionEffectPeerFindings = (records) => {
   return findings;
 };
 
+const hardInstallEntryName = (entry) => {
+  if (typeof entry === "string") return entry;
+  if (isRecord(entry) && typeof entry.name === "string") return entry.name;
+  return undefined;
+};
+
+const packageUnitHardDependencyNames = (unit) => {
+  const envelope = unit.hardInstallEnvelope;
+  if (!isRecord(envelope)) return new Set();
+  return new Set(
+    (Array.isArray(envelope.dependencies)
+      ? envelope.dependencies.map(hardInstallEntryName)
+      : []
+    ).filter((value) => typeof value === "string" && value.length > 0),
+  );
+};
+
+const packageUnitRequiredPeers = (unit) =>
+  Array.isArray(unit.hardInstallEnvelope?.requiredPeers)
+    ? unit.hardInstallEnvelope.requiredPeers.filter(
+        (peer) => isRecord(peer) && typeof peer.name === "string" && typeof peer.range === "string",
+      )
+    : [];
+
+const packageUnitOptionalPeerEntries = (unit) =>
+  Array.isArray(unit.publicSubpaths)
+    ? unit.publicSubpaths.flatMap((subpath) =>
+        Array.isArray(subpath.optionalPeers)
+          ? subpath.optionalPeers
+              .filter((peer) => typeof peer === "string" && peer.length > 0)
+              .map((peer) => ({ peer, subpath: subpath.subpath }))
+          : [],
+      )
+    : [];
+
+const distributionUnitFinding = ({ kind, unit, message, specifier, target }) =>
+  distributionFinding({
+    kind,
+    file: packageUnitsRegistryPath,
+    packageName: isRecord(unit) && typeof unit.id === "string" ? unit.id : undefined,
+    message,
+    specifier,
+    target,
+  });
+
+export const distributionUnitRegistryFindings = ({ registry, expectedEffectRange }) => {
+  if (!isRecord(registry) || !Array.isArray(registry.packageUnits)) return [];
+  const findings = [];
+  for (const unit of registry.packageUnits.filter(isRecord)) {
+    const rootSubpaths = Array.isArray(unit.publicSubpaths)
+      ? unit.publicSubpaths.filter((subpath) => subpath.subpath === ".")
+      : [];
+    if (rootSubpaths.length !== 1) {
+      findings.push(
+        distributionUnitFinding({
+          kind: "package-unit-root-export",
+          unit,
+          message: "package unit must declare exactly one root public subpath",
+          target: String(rootSubpaths.length),
+        }),
+      );
+    }
+    for (const rootSubpath of rootSubpaths) {
+      const rootOptionalPeers = Array.isArray(rootSubpath.optionalPeers)
+        ? rootSubpath.optionalPeers.filter((peer) => typeof peer === "string" && peer.length > 0)
+        : [];
+      for (const peer of rootOptionalPeers) {
+        findings.push(
+          distributionUnitFinding({
+            kind: "package-unit-root-optional-peer",
+            unit,
+            message: "package root cannot require a subpath-local optional peer",
+            specifier: peer,
+            target: ".",
+          }),
+        );
+      }
+    }
+
+    const hardDependencyNames = packageUnitHardDependencyNames(unit);
+    const requiredPeers = packageUnitRequiredPeers(unit);
+    const requiredPeerNames = new Set(requiredPeers.map((peer) => peer.name));
+    const optionalPeerEntries = packageUnitOptionalPeerEntries(unit);
+    const optionalPeerKeys = new Set();
+    for (const { peer, subpath } of optionalPeerEntries) {
+      const key = `${subpath}\0${peer}`;
+      if (optionalPeerKeys.has(key)) {
+        findings.push(
+          distributionUnitFinding({
+            kind: "package-unit-optional-peer-duplicate",
+            unit,
+            message: "subpath optionalPeers must not contain duplicate peers",
+            specifier: peer,
+            target: subpath,
+          }),
+        );
+      }
+      optionalPeerKeys.add(key);
+      if (hardDependencyNames.has(peer) || requiredPeerNames.has(peer)) {
+        findings.push(
+          distributionUnitFinding({
+            kind: "package-unit-hard-locality",
+            unit,
+            message: "subpath-local optional peer is also declared as a package-wide obligation",
+            specifier: peer,
+            target: subpath,
+          }),
+        );
+      }
+      if (peer === "effect") {
+        findings.push(
+          distributionUnitFinding({
+            kind: "package-unit-effect-peer-invariant",
+            unit,
+            message:
+              "effect is a single package-wide peer invariant, not a subpath-local optional peer",
+            specifier: peer,
+            target: subpath,
+          }),
+        );
+      }
+    }
+
+    for (const peer of requiredPeers.filter((entry) => entry.name === "effect")) {
+      if (expectedEffectRange !== undefined && peer.range !== expectedEffectRange) {
+        findings.push(
+          distributionUnitFinding({
+            kind: "package-unit-effect-peer-invariant",
+            unit,
+            message: `effect peer range must match root catalog single source ${expectedEffectRange}`,
+            specifier: "effect",
+            target: peer.range,
+          }),
+        );
+      }
+    }
+  }
+  return findings;
+};
+
+const distributionArchitectureFailures = () => {
+  const moduleBuckets = moduleBucketRegistry();
+  const packageUnits = readJson(packageUnitsRegistryPath);
+  const distributionRoots = readJson(distributionRootsRegistryPath);
+  const bucketIds = new Set(
+    Array.isArray(moduleBuckets.buckets) ? moduleBuckets.buckets.map((bucket) => bucket.id) : [],
+  );
+  const ambientIds = new Set(
+    Array.isArray(moduleBuckets.ambients)
+      ? moduleBuckets.ambients.map((ambient) => ambient.id)
+      : [],
+  );
+  const packageUnitIds = new Set(
+    Array.isArray(packageUnits.packageUnits)
+      ? packageUnits.packageUnits.map((unit) => unit.id)
+      : [],
+  );
+  const targetProfileIds = new Set(
+    Array.isArray(distributionRoots.targetProfiles)
+      ? distributionRoots.targetProfiles.map((profile) => profile.id)
+      : [],
+  );
+  const expectedEffectRange = readJson("package.json").catalog?.effect;
+  return [
+    ...packageUnitsRegistryFindings({
+      registry: packageUnits,
+      bucketIds,
+      ambientIds,
+      targetProfileIds,
+    }),
+    ...distributionRootsRegistryFindings({
+      registry: distributionRoots,
+      packageUnitIds,
+      ambientIds,
+    }),
+    ...distributionUnitRegistryFindings({
+      registry: packageUnits,
+      expectedEffectRange,
+    }).map(formatDistributionFinding),
+  ];
+};
+
+export const distributionUnitNegativeFixtureFailures = () => {
+  const failures = [];
+  const fixtureRecord = {
+    name: "@agent-os/runtime",
+    path: "packages/runtime",
+  };
+  const bucketIds = new Set(["axioms", "ledger", "projection", "adapter"]);
+  const ambientIds = new Set(["neutral", "browser", "node", "cloudflare-worker"]);
+  const targetProfileIds = new Set(["neutral", "browser", "node", "cloudflare-worker"]);
+  const schemaFindings = packageUnitsRegistryFindings({
+    registry: { schemaVersion: 2, policy: {}, packageUnits: [] },
+    bucketIds,
+    ambientIds,
+    targetProfileIds,
+  });
+  if (!schemaFindings.some((finding) => finding.includes("schemaVersion must be 1"))) {
+    failures.push(
+      `schema negative fixture: expected schemaVersion failure, got ${schemaFindings.join("\n")}`,
+    );
+  }
+
+  const semanticFindings = distributionUnitRegistryFindings({
+    expectedEffectRange: "^4.0.0",
+    registry: {
+      packageUnits: [
+        {
+          id: "client",
+          hardInstallEnvelope: {
+            dependencies: ["react"],
+            installScripts: [],
+            nativeArtifacts: [],
+            packageWideMetadata: [],
+            requiredPeers: [{ name: "effect", range: "^5.0.0" }],
+          },
+          publicSubpaths: [
+            { subpath: ".", optionalPeers: ["react"] },
+            { subpath: "./react", optionalPeers: ["react", "react"] },
+            { subpath: "./effect", optionalPeers: ["effect"] },
+          ],
+        },
+      ],
+    },
+  });
+  for (const kind of [
+    "package-unit-root-optional-peer",
+    "package-unit-hard-locality",
+    "package-unit-optional-peer-duplicate",
+    "package-unit-effect-peer-invariant",
+  ]) {
+    if (!semanticFindings.some((finding) => finding.kind === kind)) {
+      failures.push(
+        `semantic negative fixture: expected ${kind}, got ${JSON.stringify(
+          semanticFindings.map((finding) => finding.kind),
+        )}`,
+      );
+    }
+  }
+
+  const leakFindings = distributionFindingsForPackage({
+    record: fixtureRecord,
+    manifest: {
+      peerDependencies: { react: "^19" },
+      peerDependenciesMeta: { react: { optional: true } },
+      exports: {
+        ".": "./src/index.ts",
+        "./react": "./src/react.ts",
+      },
+    },
+    sourceByFile: new Map([
+      ["packages/runtime/src/index.ts", 'export type { ReactNode } from "./react";'],
+      [
+        "packages/runtime/src/react.ts",
+        'import type { ReactNode } from "react"; import { useMemo } from "react"; export type { ReactNode }; export { useMemo };',
+      ],
+    ]),
+    edges: [
+      {
+        from: fixtureRecord,
+        to: fixtureRecord,
+        fromFile: "packages/runtime/src/index.ts",
+        toFile: "packages/runtime/src/react.ts",
+        specifier: "./react",
+      },
+    ],
+  });
+  for (const kind of ["root-dts-peer-type-leak", "root-subpath-peer-leak"]) {
+    if (!leakFindings.some((finding) => finding.kind === kind)) {
+      failures.push(
+        `root leak negative fixture: expected ${kind}, got ${JSON.stringify(
+          leakFindings.map((finding) => finding.kind),
+        )}`,
+      );
+    }
+  }
+
+  const effectFindings = distributionEffectPeerFindings(
+    [
+      {
+        record: fixtureRecord,
+        manifest: {
+          peerDependencies: {
+            effect: "^5.0.0",
+          },
+        },
+      },
+    ],
+    "^4.0.0",
+  );
+  if (!effectFindings.some((finding) => finding.kind === "effect-peer-invariant")) {
+    failures.push(
+      `effect peer negative fixture: expected effect-peer-invariant, got ${JSON.stringify(
+        effectFindings.map((finding) => finding.kind),
+      )}`,
+    );
+  }
+
+  return failures;
+};
+
 const formatDistributionFinding = (finding) => {
   const location =
     finding.line === undefined
@@ -2232,8 +2533,13 @@ const formatDistributionFinding = (finding) => {
 
 const checkDistributionUnits = (args = []) => {
   const reportOnly = args.length === 1 && args[0] === "--report-only";
-  if (!reportOnly && args.length > 0) {
+  const negativeFixtures = args.length === 1 && args[0] === "--negative-fixtures";
+  if (!reportOnly && !negativeFixtures && args.length > 0) {
     throw new Error(`distribution-units: unexpected argument(s): ${args.join(" ")}`);
+  }
+  if (negativeFixtures) {
+    failIfAny("distribution units negative fixtures", distributionUnitNegativeFixtureFailures());
+    return;
   }
   const records = graphWorkspacePackageRecords(repoRoot).filter(
     (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
@@ -2249,7 +2555,7 @@ const checkDistributionUnits = (args = []) => {
     record,
     manifest: readJson(`${record.path}/package.json`),
   }));
-  const findings = [
+  const reportFindings = [
     ...recordsWithManifests.flatMap(({ record, manifest }) => {
       const packageSourceByFile = new Map(
         [...sourceByFile.entries()].filter(([file]) => file.startsWith(`${record.path}/`)),
@@ -2262,7 +2568,10 @@ const checkDistributionUnits = (args = []) => {
         edges: graph.edges,
       });
     }),
-    ...distributionEffectPeerFindings(recordsWithManifests),
+    ...distributionEffectPeerFindings(
+      recordsWithManifests,
+      readJson("package.json").catalog?.effect,
+    ),
   ].sort(
     (left, right) =>
       compare(left.severity, right.severity) ||
@@ -2270,20 +2579,36 @@ const checkDistributionUnits = (args = []) => {
       compare(left.file, right.file) ||
       compare(left.specifier ?? "", right.specifier ?? ""),
   );
-  const splitterCount = findings.filter((finding) => finding.severity !== "info").length;
-  const infoCount = findings.length - splitterCount;
-  const lines = findings.map(formatDistributionFinding);
   if (reportOnly) {
+    const splitterCount = reportFindings.filter((finding) => finding.severity !== "info").length;
+    const infoCount = reportFindings.length - splitterCount;
+    const lines = reportFindings.map(formatDistributionFinding);
     console.log(
-      `distribution units report-only: ${findings.length} finding(s); ${splitterCount} package-wide obligation(s); ${infoCount} localizable observation(s)`,
+      `distribution units report-only: ${reportFindings.length} finding(s); ${splitterCount} package-wide obligation(s); ${infoCount} localizable observation(s)`,
     );
     for (const line of lines) console.log(line);
     return;
   }
-  failIfAny(
-    "distribution units",
-    findings.filter((finding) => finding.severity !== "info").map(formatDistributionFinding),
+  const rootLeakFindings = recordsWithManifests.flatMap(({ record, manifest }) => {
+    const packageSourceByFile = new Map(
+      [...sourceByFile.entries()].filter(([file]) => file.startsWith(`${record.path}/`)),
+    );
+    return distributionSubpathFindings({
+      record,
+      manifest,
+      sourceByFile: packageSourceByFile,
+      edges: graph.edges,
+    }).filter((finding) => finding.kind.startsWith("root-"));
+  });
+  const effectPeerFindings = distributionEffectPeerFindings(
+    recordsWithManifests,
+    readJson("package.json").catalog?.effect,
   );
+  failIfAny("distribution units", [
+    ...distributionArchitectureFailures(),
+    ...rootLeakFindings.map(formatDistributionFinding),
+    ...effectPeerFindings.map(formatDistributionFinding),
+  ]);
 };
 
 const clientSectionBody = (source, heading) => {

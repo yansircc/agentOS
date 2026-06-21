@@ -8,6 +8,8 @@ import {
   distributionEffectPeerFindings,
   distributionFindingsForPackage,
   distributionManifestFindings,
+  distributionUnitNegativeFixtureFailures,
+  distributionUnitRegistryFindings,
   packageUnitsRegistryFindings,
 } from "../src/check/algorithmic-checks.mjs";
 
@@ -123,6 +125,40 @@ void test("optional peer locality is a subpath fact, not a hard package split", 
   );
 });
 
+void test("package unit semantics reject root and hard-obligation optional peers", () => {
+  const findings = distributionUnitRegistryFindings({
+    expectedEffectRange: "^4.0.0",
+    registry: {
+      packageUnits: [
+        {
+          id: "client",
+          hardInstallEnvelope: {
+            dependencies: ["react"],
+            installScripts: [],
+            nativeArtifacts: [],
+            packageWideMetadata: [],
+            requiredPeers: [{ name: "effect", range: "^5.0.0" }],
+          },
+          publicSubpaths: [
+            { subpath: ".", optionalPeers: ["react"] },
+            { subpath: "./react", optionalPeers: ["react"] },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(
+    findings.map((finding) => [finding.kind, finding.specifier]),
+    [
+      ["package-unit-root-optional-peer", "react"],
+      ["package-unit-hard-locality", "react"],
+      ["package-unit-hard-locality", "react"],
+      ["package-unit-effect-peer-invariant", "effect"],
+    ],
+  );
+});
+
 void test("root closure catches value and d.ts optional peer leaks", () => {
   const findings = distributionFindingsForPackage({
     record,
@@ -191,4 +227,8 @@ void test("effect peer range scanner reports version drift", () => {
     findings.map((finding) => [finding.kind, finding.file, finding.specifier]),
     [["effect-peer-invariant", "packages/adapter/package.json", "effect"]],
   );
+});
+
+void test("distribution unit negative fixtures prove enforce gates are live", () => {
+  assert.deepEqual(distributionUnitNegativeFixtureFailures(), []);
 });
