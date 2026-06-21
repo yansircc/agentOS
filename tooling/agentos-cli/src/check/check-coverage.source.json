@@ -333,7 +333,7 @@
       "assertions": [
         {
           "failureCondition": "convergence-boundary: post-v3 downstream surfaces must stay outside substrate truth ownership, generated closed targets must not choose implementation wiring from manifest/deployment JSON at runtime, and spikes must remain local-only",
-          "negativeWitness": "algorithmic projection rejects source mutations caught by client-boundaries, generated-static-target-linking, or spike-hygiene before role-survival deletion decisions run"
+          "negativeWitness": "algorithmic projection rejects source mutations caught by client-boundaries, generated-static-target-linking, or spike-hygiene"
         }
       ]
     },
@@ -342,7 +342,7 @@
         "kind": "mainlineChecker",
         "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 423, tooling/agentos-cli/src/check/sources/role-survival.source.json, and docs/agent/boundary-rules.source.json",
+      "owner": "architecture/module-buckets.json and docs/agent/boundary-rules.source.json",
       "ruleId": "convergence-import-dag",
       "target": {
         "kind": "algorithmic",
@@ -351,8 +351,8 @@
       },
       "assertions": [
         {
-          "failureCondition": "convergence-import-dag: workspace package imports become cyclic, package roles are unowned or multiply owned, or a package imports a role not allowed by the source-owned role-edge DAG",
-          "negativeWitness": "algorithmic projection rejects role-survival package role drift and package import edges outside the roleEdges table owned by docs/agent/boundary-rules.source.json"
+          "failureCondition": "convergence-import-dag: workspace package imports become cyclic or module imports violate the source-owned bucket and ambient DAGs",
+          "negativeWitness": "algorithmic projection rejects package import cycles and module import edges outside the bucket and ambient DAGs owned by architecture/module-buckets.json"
         }
       ]
     },
@@ -372,25 +372,6 @@
         {
           "failureCondition": "convergence-public-surface: deprecated exports, retired framework packages, or unowned retained projection vocabulary remain public",
           "negativeWitness": "algorithmic projection rejects non-empty Deprecated exports sections, retained @agent-os/ag-ui-react/@agent-os/ag-ui-svelte surfaces, and retained projection vocabulary without an existing public export and source-owned reason"
-        }
-      ]
-    },
-    {
-      "source": {
-        "kind": "mainlineChecker",
-        "path": "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
-      },
-      "owner": "CST 419 and tooling/agentos-cli/src/check/sources/role-survival.source.json",
-      "ruleId": "convergence-roles",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "convergence-roles",
-        "checker": "convergence-roles"
-      },
-      "assertions": [
-        {
-          "failureCondition": "convergence-roles: every package, export, script, doc surface, and public vocabulary must project to exactly one v3 role",
-          "negativeWitness": "algorithmic projection rejects unowned package paths, unowned scripts, stale doc/API surfaces, uncovered docs/agent source vocabularies, and package paths matching zero or multiple packageRoleRules"
         }
       ]
     },

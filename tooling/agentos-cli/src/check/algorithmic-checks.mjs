@@ -371,76 +371,6 @@ const checkForbiddenPackageEdges = ({ ruleId, constraints, edges, failures }) =>
   }
 };
 
-const convergenceRoleForPackage = (record, failures) => {
-  const rules = Array.isArray(convergenceRoleManifest().packageRoleRules)
-    ? convergenceRoleManifest().packageRoleRules
-    : [];
-  const matchingRules = rules.filter((rule) => roleSurvivalPackageMatches(record, rule));
-  if (matchingRules.length !== 1) {
-    failures.push(
-      `${record.path}: expected exactly one convergence role for import DAG, matched ${matchingRules.length}`,
-    );
-    return undefined;
-  }
-  const role = matchingRules[0].role;
-  if (!convergenceRoleIds.has(role)) {
-    failures.push(`${record.path}: invalid convergence role ${role}`);
-    return undefined;
-  }
-  return role;
-};
-
-const checkRoleImportEdges = ({ ruleId, constraints, records, edges, failures }) => {
-  const roleByPackageName = new Map();
-  for (const record of records) {
-    const role = convergenceRoleForPackage(record, failures);
-    if (role !== undefined) roleByPackageName.set(record.name, role);
-  }
-
-  const allowedTargetRolesByFromRole = new Map();
-  for (const [index, edge] of (constraints.roleEdges ?? []).entries()) {
-    const label = `${ruleId}.constraints.roleEdges[${index}]`;
-    if (!isRecord(edge)) {
-      failures.push(`${label} must be an object`);
-      continue;
-    }
-    if (!convergenceRoleIds.has(edge.fromRole)) {
-      failures.push(`${label}: invalid fromRole ${edge.fromRole}`);
-      continue;
-    }
-    if (!Array.isArray(edge.allowedTargetRoles)) {
-      failures.push(`${label}: allowedTargetRoles must be an array`);
-      continue;
-    }
-    const allowed = new Set();
-    for (const role of edge.allowedTargetRoles) {
-      if (!convergenceRoleIds.has(role)) {
-        failures.push(`${label}: invalid allowed target role ${role}`);
-        continue;
-      }
-      allowed.add(role);
-    }
-    allowedTargetRolesByFromRole.set(edge.fromRole, allowed);
-  }
-
-  for (const role of convergenceRoleIds) {
-    if (!allowedTargetRolesByFromRole.has(role)) {
-      failures.push(`${ruleId}.constraints.roleEdges: missing fromRole ${role}`);
-    }
-  }
-
-  for (const edge of edges) {
-    const fromRole = roleByPackageName.get(edge.from.name);
-    const toRole = roleByPackageName.get(edge.to.name);
-    if (fromRole === undefined || toRole === undefined) continue;
-    const allowed = allowedTargetRolesByFromRole.get(fromRole);
-    if (allowed === undefined || allowed.has(toRole)) continue;
-    failures.push(
-      `${edge.file}: ${ruleId}: ${edge.from.name} (${fromRole}) must not import ${edge.specifier} (${edge.to.name}; ${toRole})`,
-    );
-  }
-};
-
 const checkPackageImportDag = ({ ruleId, label }) => {
   const constraints = ruleConstraints(ruleId);
   const records = graphWorkspacePackageRecords(repoRoot).filter(
@@ -454,9 +384,6 @@ const checkPackageImportDag = ({ ruleId, label }) => {
   }
 
   checkForbiddenPackageEdges({ ruleId, constraints, edges, failures });
-  if (constraints.roleEdges !== undefined) {
-    checkRoleImportEdges({ ruleId, constraints, records, edges, failures });
-  }
 
   failIfAny(label, failures);
 };
@@ -464,11 +391,13 @@ const checkPackageImportDag = ({ ruleId, label }) => {
 const checkSubstrateImportDag = () =>
   checkPackageImportDag({ ruleId: "substrate-import-dag", label: "substrate import DAG" });
 
-const checkConvergenceImportDag = () =>
+const checkConvergenceImportDag = () => {
   checkPackageImportDag({
     ruleId: "convergence-import-dag",
     label: "convergence import DAG",
   });
+  checkModuleBuckets();
+};
 
 const checkModuleGraphOracle = () => {
   const records = graphWorkspacePackageRecords(repoRoot).filter(
@@ -3421,288 +3350,12 @@ const checkConvergenceBoundary = () => {
   console.log("convergence boundary passed");
 };
 
-const convergenceRoleIds = new Set([
-  "law-contract-owner",
-  "capability-protocol",
-  "provider-bundle",
-  "projection-sink",
-  "repo-local-tooling",
-]);
-
-const convergenceRoleManifest = () =>
-  readJson("tooling/agentos-cli/src/check/sources/role-survival.source.json");
-
 const publicExportNames = (apiSource) =>
   new Set([
     ...manifestNames(path.join(repoRoot, apiSource), "Public exports"),
     ...manifestNames(path.join(repoRoot, apiSource), "Experimental exports"),
     ...manifestNames(path.join(repoRoot, apiSource), "Deprecated exports"),
   ]);
-
-const roleSurvivalPackageMatches = (record, rule) =>
-  !(
-    (rule.excludePaths ?? []).includes(record.path) ||
-    (rule.excludePathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix))
-  ) &&
-  ((rule.paths ?? []).includes(record.path) ||
-    (rule.pathPrefixes ?? []).some((prefix) => packagePathMatches(record.path, prefix)));
-
-const roleSurvivalArrayAt = (file, pointer) => {
-  const value = readJson(file)[pointer];
-  return Array.isArray(value) ? value : undefined;
-};
-
-const checkRoleSurvivalRoles = ({ manifest, failures }) => {
-  if (manifest.schemaVersion !== 1) failures.push("role survival manifest schemaVersion must be 1");
-  const actualRoles = new Set();
-  for (const role of manifest.roles ?? []) {
-    if (!isRecord(role) || typeof role.id !== "string") {
-      failures.push("role survival manifest roles must declare string ids");
-      continue;
-    }
-    actualRoles.add(role.id);
-    if (!convergenceRoleIds.has(role.id)) failures.push(`unexpected convergence role ${role.id}`);
-    if (typeof role.meaning !== "string" || role.meaning.length === 0) {
-      failures.push(`${role.id}: missing role meaning`);
-    }
-  }
-  for (const roleId of convergenceRoleIds) {
-    if (!actualRoles.has(roleId)) failures.push(`missing convergence role ${roleId}`);
-  }
-};
-
-const checkRoleSurvivalPackages = ({ manifest, failures }) => {
-  const rules = Array.isArray(manifest.packageRoleRules) ? manifest.packageRoleRules : [];
-  for (const [index, rule] of rules.entries()) {
-    const label = `packageRoleRules[${index}]`;
-    if (!isRecord(rule)) {
-      failures.push(`${label} must be an object`);
-      continue;
-    }
-    if (!convergenceRoleIds.has(rule.role)) failures.push(`${label}: invalid role ${rule.role}`);
-    if (!Array.isArray(rule.paths)) failures.push(`${label}: paths must be an array`);
-    if (!Array.isArray(rule.pathPrefixes)) failures.push(`${label}: pathPrefixes must be an array`);
-    if (rule.excludePaths !== undefined && !Array.isArray(rule.excludePaths)) {
-      failures.push(`${label}: excludePaths must be an array when present`);
-    }
-    if (rule.excludePathPrefixes !== undefined && !Array.isArray(rule.excludePathPrefixes)) {
-      failures.push(`${label}: excludePathPrefixes must be an array when present`);
-    }
-    if (typeof rule.reason !== "string" || rule.reason.length === 0) {
-      failures.push(`${label}: missing reason`);
-    }
-  }
-
-  const packageRecords = workspacePackageRecords();
-  const packagesByPath = new Map(packageRecords.map((record) => [record.path, record]));
-  const surfacePackages = readJson("docs/surface.json").packages ?? [];
-  const surfaceByPath = new Map();
-  for (const pkg of surfacePackages) {
-    if (!isRecord(pkg) || typeof pkg.path !== "string") {
-      failures.push("docs/surface.json: package entries must declare path");
-      continue;
-    }
-    if (surfaceByPath.has(pkg.path))
-      failures.push(`docs/surface.json: duplicate package path ${pkg.path}`);
-    surfaceByPath.set(pkg.path, pkg);
-  }
-
-  for (const record of packageRecords) {
-    const matchingRules = rules.filter((rule) => roleSurvivalPackageMatches(record, rule));
-    if (matchingRules.length !== 1) {
-      failures.push(
-        `${record.path}: expected exactly one convergence role, matched ${matchingRules.length}`,
-      );
-    }
-    const surface = surfaceByPath.get(record.path);
-    if (surface === undefined) {
-      failures.push(`${record.path}: missing docs/surface.json package owner`);
-    } else if (surface.name !== record.name) {
-      failures.push(
-        `${record.path}: docs/surface.json name ${surface.name} differs from ${record.name}`,
-      );
-    }
-  }
-  for (const pkg of surfacePackages) {
-    if (!packagesByPath.has(pkg.path))
-      failures.push(`docs/surface.json: stale package path ${pkg.path}`);
-  }
-};
-
-const checkRoleSurvivalExports = ({ failures }) => {
-  const surfacePackages = readJson("docs/surface.json").packages ?? [];
-  let exportCount = 0;
-  for (const pkg of surfacePackages) {
-    if (!isRecord(pkg) || typeof pkg.path !== "string") continue;
-    const packageJson = readJson(`${pkg.path}/package.json`);
-    if (typeof pkg.apiSource !== "string") {
-      if (packageJson.private !== true) {
-        failures.push(
-          `${pkg.path}: non-private packages require apiSource for export role projection`,
-        );
-      }
-      if (packageJson.exports !== undefined) {
-        failures.push(`${pkg.path}: package exports require apiSource for export role projection`);
-      }
-      exportCount += Object.keys(packageJson.bin ?? {}).length;
-      continue;
-    }
-    const packageApi = `${pkg.path}/PUBLIC_API.md`;
-    if (!fs.existsSync(path.join(repoRoot, packageApi))) {
-      failures.push(`${pkg.path}: missing generated PUBLIC_API.md`);
-    }
-    if (!fs.existsSync(path.join(repoRoot, pkg.apiSource))) {
-      failures.push(`${pkg.path}: missing apiSource ${pkg.apiSource}`);
-      continue;
-    }
-    exportCount += publicExportNames(pkg.apiSource).size;
-  }
-  return exportCount;
-};
-
-const checkRoleSurvivalScripts = ({ manifest, failures }) => {
-  const rootScripts = manifest.scriptSurfaces?.rootScripts;
-  if (rootScripts?.role !== "repo-local-tooling") {
-    failures.push("scriptSurfaces.rootScripts must project to repo-local-tooling");
-  }
-  if (rootScripts?.sourceRule !== "repo-tooling-surface") {
-    failures.push("scriptSurfaces.rootScripts must point to repo-tooling-surface");
-  }
-  const expectedRootScripts = new Set(
-    (ruleConstraints("repo-tooling-surface").rootScripts ?? []).flatMap((script) => {
-      if (typeof script !== "string") {
-        failures.push("repo-tooling-surface rootScripts must contain strings");
-        return [];
-      }
-      return [script];
-    }),
-  );
-  const actualRootScripts = Object.keys(readJson("package.json").scripts ?? {});
-  for (const script of actualRootScripts) {
-    if (!expectedRootScripts.has(script))
-      failures.push(`package.json: unowned root script ${script}`);
-  }
-  for (const script of expectedRootScripts) {
-    const scriptName = String(script);
-    if (!actualRootScripts.includes(scriptName))
-      failures.push(`package.json: missing root script ${scriptName}`);
-  }
-
-  const packageScripts = manifest.scriptSurfaces?.packageScripts;
-  if (packageScripts?.role !== "repo-local-tooling") {
-    failures.push("scriptSurfaces.packageScripts must project to repo-local-tooling");
-  }
-  const allowedPackageScripts = new Set(packageScripts?.allowedNames ?? []);
-  let scriptCount = actualRootScripts.length;
-  for (const record of workspacePackageRecords()) {
-    const pkg = readJson(`${record.path}/package.json`);
-    for (const scriptName of Object.keys(pkg.scripts ?? {})) {
-      scriptCount += 1;
-      if (!allowedPackageScripts.has(scriptName)) {
-        failures.push(`${record.path}/package.json: unowned package script ${scriptName}`);
-      }
-    }
-  }
-  return scriptCount;
-};
-
-const checkRoleSurvivalDocsAndVocabulary = ({ manifest, failures }) => {
-  const docSurfaces = manifest.docSurfaces ?? {};
-  if (docSurfaces.surfaceSource?.path !== "docs/surface.json") {
-    failures.push("docSurfaces.surfaceSource must own docs/surface.json");
-  }
-  if (docSurfaces.surfaceSource?.role !== "repo-local-tooling") {
-    failures.push("docs/surface.json must project to repo-local-tooling");
-  }
-  if (docSurfaces.packageDocs !== "inherit-package-role") {
-    failures.push("docSurfaces.packageDocs must inherit package role");
-  }
-  if (docSurfaces.packageApiDocs !== "inherit-package-role") {
-    failures.push("docSurfaces.packageApiDocs must inherit package role");
-  }
-
-  const surfacePackages = readJson("docs/surface.json").packages ?? [];
-  const expectedPackageDocs = new Set(
-    surfacePackages.flatMap((pkg) => {
-      if (!isRecord(pkg) || typeof pkg.slug !== "string") {
-        failures.push("docs/surface.json: package doc surfaces require string slugs");
-        return [];
-      }
-      return [`docs/packages/${pkg.slug}.md`];
-    }),
-  );
-  const expectedApiDocs = new Set(
-    surfacePackages.flatMap((pkg) =>
-      isRecord(pkg) && typeof pkg.apiSource === "string" ? [pkg.apiSource] : [],
-    ),
-  );
-  for (const file of expectedPackageDocs) {
-    const filePath = String(file);
-    if (!fs.existsSync(path.join(repoRoot, filePath)))
-      failures.push(`missing package doc ${filePath}`);
-  }
-  for (const file of walk("docs/packages").filter((entry) => entry.endsWith(".md"))) {
-    if (!expectedPackageDocs.has(file)) failures.push(`unowned package doc ${file}`);
-  }
-  for (const file of expectedApiDocs) {
-    const filePath = String(file);
-    if (!fs.existsSync(path.join(repoRoot, filePath)))
-      failures.push(`missing package API doc ${filePath}`);
-  }
-  for (const file of walk("docs/api").filter((entry) => entry.endsWith(".md"))) {
-    if (!expectedApiDocs.has(file)) failures.push(`unowned package API doc ${file}`);
-  }
-
-  const agentSources = Array.isArray(docSurfaces.agentSources) ? docSurfaces.agentSources : [];
-  const coveredAgentSources = new Set();
-  let vocabularyCount = 0;
-  for (const [index, source] of agentSources.entries()) {
-    const label = `docSurfaces.agentSources[${index}]`;
-    if (!isRecord(source)) {
-      failures.push(`${label} must be an object`);
-      continue;
-    }
-    if (!convergenceRoleIds.has(source.role))
-      failures.push(`${label}: invalid role ${source.role}`);
-    if (typeof source.path !== "string") {
-      failures.push(`${label}: missing path`);
-      continue;
-    }
-    coveredAgentSources.add(source.path);
-    const values = roleSurvivalArrayAt(source.path, source.pointer);
-    if (values === undefined) {
-      failures.push(`${source.path}: ${source.pointer} must be an array`);
-    } else {
-      vocabularyCount += values.length;
-    }
-  }
-  for (const file of walk("docs/agent").filter((entry) => entry.endsWith(".source.json"))) {
-    if (!coveredAgentSources.has(file)) failures.push(`unowned agent source vocabulary ${file}`);
-  }
-  return {
-    docCount: 1 + expectedPackageDocs.size + expectedApiDocs.size + coveredAgentSources.size,
-    vocabularyCount,
-  };
-};
-
-const checkConvergenceRoles = () => {
-  const failures = [];
-  const manifest = convergenceRoleManifest();
-
-  checkRoleSurvivalRoles({ manifest, failures });
-  checkRoleSurvivalPackages({ manifest, failures });
-  const exportCount = checkRoleSurvivalExports({ failures });
-  const scriptCount = checkRoleSurvivalScripts({ manifest, failures });
-  const { docCount, vocabularyCount } = checkRoleSurvivalDocsAndVocabulary({
-    manifest,
-    failures,
-  });
-
-  failIfAny("convergence roles", failures);
-  console.log(
-    `convergence roles covered ${workspacePackageRecords().length} packages, ${exportCount} exports, ${scriptCount} scripts, ${docCount} doc surfaces, ${vocabularyCount} public vocabulary entries`,
-  );
-};
 
 const publicSurfaceSweepManifest = () =>
   readJson("tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json");
@@ -3717,7 +3370,6 @@ const packageExportsSymbol = (exports, symbolName) =>
 
 const checkConvergencePublicSurface = () => {
   checkPublicApi();
-  checkConvergenceRoles();
   checkClientBoundaries();
 
   const manifest = publicSurfaceSweepManifest();
@@ -3754,13 +3406,14 @@ const checkConvergencePublicSurface = () => {
     }
   }
 
+  const moduleBucketIds = new Set(moduleBucketRegistry().buckets.map((bucket) => bucket.id));
   for (const retained of manifest.retainedProjectionVocabulary ?? []) {
     if (!isRecord(retained)) {
       failures.push("retainedProjectionVocabulary entries must be objects");
       continue;
     }
-    if (!convergenceRoleIds.has(retained.role)) {
-      failures.push(`${retained.export}: retained projection vocabulary has invalid role`);
+    if (typeof retained.moduleBucket !== "string" || !moduleBucketIds.has(retained.moduleBucket)) {
+      failures.push(`${retained.export}: retained projection vocabulary has invalid moduleBucket`);
     }
     if (typeof retained.reason !== "string" || retained.reason.length === 0) {
       failures.push(`${retained.export}: retained projection vocabulary requires reason`);
@@ -3815,7 +3468,6 @@ const checkerById = new Map([
   ["convergence-boundary", checkConvergenceBoundary],
   ["convergence-import-dag", checkConvergenceImportDag],
   ["convergence-public-surface", checkConvergencePublicSurface],
-  ["convergence-roles", checkConvergenceRoles],
   ["d12-a155-substrate-absorption", checkBoundaryProjection],
   ["distribution-units", checkDistributionUnits],
   ["docs-site-build", checkDocsSiteBuild],

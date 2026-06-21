@@ -246,10 +246,6 @@
       },
       {
         "type": "rule",
-        "id": "convergence-roles"
-      },
-      {
-        "type": "rule",
         "id": "convergence-public-surface"
       },
       {
@@ -494,35 +490,7 @@
       "acceptance": {
         "engine": "algorithmic",
         "checker": "convergence-boundary",
-        "reason": "post-v3 boundary freeze is the conjunction of client/workspace-host boundary, generated static-target linking, and spike hygiene until role-survival owns package deletion decisions"
-      }
-    },
-    {
-      "id": "convergence-roles",
-      "owner": "CST 419 and tooling/agentos-cli/src/check/sources/role-survival.source.json",
-      "invariantId": "invariant.algebra.single-code-source",
-      "kind": "repo-boundary",
-      "diagnostics": [
-        "every package, export, script, doc surface, and public vocabulary must project to exactly one v3 role",
-        "role none means delete; multiple roles mean split or merge",
-        "role-survival.source.json is the only role survival source"
-      ],
-      "paths": [
-        "tooling/agentos-cli/src/check/sources/role-survival.source.json",
-        "docs/surface.json",
-        "docs/agent/*.source.json",
-        "docs/api/*.md",
-        "docs/packages/*.md",
-        "packages/**/package.json",
-        "packages/**/PUBLIC_API.md",
-        "tooling/**/package.json",
-        "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
-      ],
-      "commandGroup": "all",
-      "acceptance": {
-        "engine": "algorithmic",
-        "checker": "convergence-roles",
-        "reason": "role survival is a positive projection from role-survival.source.json over the actual package/export/script/doc/vocabulary inventory"
+        "reason": "post-v3 boundary freeze is the conjunction of client/workspace-host boundary, generated static-target linking, and spike hygiene"
       }
     },
     {
@@ -537,7 +505,6 @@
       ],
       "paths": [
         "tooling/agentos-cli/src/check/sources/public-surface-sweep.source.json",
-        "tooling/agentos-cli/src/check/sources/role-survival.source.json",
         "docs/surface.json",
         "docs/api/*.md",
         "packages/**/PUBLIC_API.md",
@@ -548,65 +515,31 @@
       "acceptance": {
         "engine": "algorithmic",
         "checker": "convergence-public-surface",
-        "reason": "public surface sweep composes public-api, role-survival, client-boundary, and explicit deprecated/retired surface rules"
+        "reason": "public surface sweep composes public-api, module-bucket, distribution-unit, client-boundary, and explicit deprecated/retired surface rules"
       }
     },
     {
       "id": "convergence-import-dag",
-      "owner": "CST 423, tooling/agentos-cli/src/check/sources/role-survival.source.json, and docs/agent/boundary-rules.source.json",
+      "owner": "architecture/module-buckets.json and docs/agent/boundary-rules.source.json",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [
         "every workspace package import must remain acyclic",
-        "role-survival.source.json is the only package role source for DAG buckets",
-        "role edges must flow toward owned laws, protocols, projections, providers, or repo-local tooling without importing downstream roles"
+        "module-buckets.json is the only bucket and ambient source for import DAG layering",
+        "module imports must flow through the declared bucket DAG and ambient DAG without using package survival roles"
       ],
       "paths": [
-        "tooling/agentos-cli/src/check/sources/role-survival.source.json",
+        "architecture/module-buckets.json",
         "docs/agent/boundary-rules.source.json",
         "packages/**/src/**/*.ts",
         "tooling/**/src/**/*.ts"
       ],
       "commandGroup": "all",
-      "constraints": {
-        "roleEdges": [
-          {
-            "fromRole": "law-contract-owner",
-            "allowedTargetRoles": ["law-contract-owner"]
-          },
-          {
-            "fromRole": "capability-protocol",
-            "allowedTargetRoles": ["law-contract-owner", "capability-protocol"]
-          },
-          {
-            "fromRole": "projection-sink",
-            "allowedTargetRoles": ["law-contract-owner", "capability-protocol", "projection-sink"]
-          },
-          {
-            "fromRole": "provider-bundle",
-            "allowedTargetRoles": [
-              "law-contract-owner",
-              "capability-protocol",
-              "projection-sink",
-              "provider-bundle"
-            ]
-          },
-          {
-            "fromRole": "repo-local-tooling",
-            "allowedTargetRoles": [
-              "law-contract-owner",
-              "capability-protocol",
-              "projection-sink",
-              "provider-bundle",
-              "repo-local-tooling"
-            ]
-          }
-        ]
-      },
+      "constraints": {},
       "acceptance": {
         "engine": "algorithmic",
         "checker": "convergence-import-dag",
-        "reason": "post-v3 import layering is a projection from role-survival package roles plus the source-owned role-edge DAG constraints"
+        "reason": "post-v3 import layering is package acyclicity plus module-bucket and ambient DAG enforcement"
       }
     },
     {

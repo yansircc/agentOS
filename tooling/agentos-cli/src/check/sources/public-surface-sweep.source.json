@@ -1,7 +1,12 @@
 {
   "schemaVersion": 1,
-  "invariant": "public surfaces survive only when they are source-owned, role-owned, and not deprecated compatibility aliases",
-  "requiredAlgorithmicChecks": ["public-api", "convergence-roles", "client-boundaries"],
+  "invariant": "public surfaces survive only when they are source-owned, module-bucket-owned, distribution-owned, and not deprecated compatibility aliases",
+  "requiredAlgorithmicChecks": [
+    "public-api",
+    "module-buckets",
+    "distribution-units",
+    "client-boundaries"
+  ],
   "deprecatedExports": {
     "policy": "forbidden",
     "reason": "this repo has no real users; deprecated public exports are compatibility shims"
@@ -10,17 +15,17 @@
   "retainedProjectionVocabulary": [
     {
       "export": "@agent-os/kernel:SafeLedgerPayload",
-      "role": "projection-sink",
+      "moduleBucket": "projection",
       "reason": "browser-safe projection payload; not the Recorded payload truth vocabulary"
     },
     {
       "export": "@agent-os/kernel:SafeLedgerPayloadShape",
-      "role": "projection-sink",
+      "moduleBucket": "projection",
       "reason": "shape helper for SafeLedgerPayload projection sinks"
     },
     {
       "export": "@agent-os/ag-ui:AG_UI_WIRE_COMPATIBILITY",
-      "role": "projection-sink",
+      "moduleBucket": "projection",
       "reason": "versioned wire projection contract, not a legacy compatibility shim"
     }
   ]
