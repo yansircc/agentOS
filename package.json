@@ -28,7 +28,7 @@
     "effect-manifests:check": "bun run agentos -- check effect-manifests",
     "check": "bun run agentos -- check default",
     "check:runtime": "vp run --cache -r test:runtime",
-    "check:release": "bun run check:structural && bun run typecheck && bun run test && bun run check:distribution && bun run test:internal-consumer && rm -rf /tmp/agentos-release-scan && mkdir -p /tmp/agentos-release-scan && effect-skill-scan . --strict --json --profile --evidence /tmp/agentos-release-scan",
+    "check:release": "bun run check:structural && bun run typecheck && bun run test && bun run check:distribution && bun run test:internal-consumer && rm -rf /tmp/agentos-release-scan && mkdir -p /tmp/agentos-release-scan && effect-skill-scan . --strict --output gate-json --evidence /tmp/agentos-release-scan",
     "check:full": "bun run check:release && bun run docs:site:check && bun run check:runtime",
     "docs:project": "bun run agentos -- generate site",
     "docs:project:watch": "bun run agentos -- generate site --watch",

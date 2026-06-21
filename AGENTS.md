@@ -232,8 +232,15 @@ Default gates:
 bun run check
 bun run typecheck
 bun run test
-effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile
+rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan
+effect-skill-scan /Users/yansir/code/52/agentOS --strict --output gate-json --evidence /tmp/agentos-effect-scan
 git diff --check
+```
+
+If you need the old large scanner payload for profile/reference routing, use:
+
+```sh
+effect-skill-scan /Users/yansir/code/52/agentOS --strict --output raw-json --profile
 ```
 
 If a change touches runtime harness code, Durable Object behavior, storage,

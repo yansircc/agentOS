@@ -130,6 +130,10 @@ Start at
 bun run check
 bun run typecheck
 bun run test
-effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile
+rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan
+effect-skill-scan /Users/yansir/code/52/agentOS --strict --output gate-json --evidence /tmp/agentos-effect-scan
 git diff --check
 ```
+
+Use `effect-skill-scan /Users/yansir/code/52/agentOS --strict --output raw-json --profile`
+only when you need the large raw scanner payload.

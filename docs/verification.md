@@ -11,13 +11,18 @@ bun run effect-manifests:check
 bun run agentos -- check guard public-api
 bun run typecheck
 bun run test
-effect-skill-scan /Users/yansir/code/52/agentOS --strict --json --profile
+rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan
+effect-skill-scan /Users/yansir/code/52/agentOS --strict --output gate-json --evidence /tmp/agentos-effect-scan
 git diff --check
 ```
 
 `bun run check` includes formatting, generated docs validation, public API
 intent validation, typecheck, and package tests. The explicit commands are
 still useful when isolating failures.
+
+Use `effect-skill-scan /Users/yansir/code/52/agentOS --strict --output raw-json --profile`
+only when you need the large raw scanner payload for profile/reference routing
+or debugging.
 
 ## Release Gate
 
