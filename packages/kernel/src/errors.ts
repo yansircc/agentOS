@@ -152,9 +152,9 @@ export const CORE_CLAIMED_PREFIXES = CORE_CLAIMED_EVENT_NAMESPACES.flatMap(
   (namespace) => namespace.kindPrefixes,
 );
 
-export const coreClaimedEventNamespacePrefixes = (packageId: string): ReadonlyArray<string> =>
-  CORE_CLAIMED_EVENT_NAMESPACES.find((namespace) => namespace.packageId === packageId)
-    ?.kindPrefixes ?? [];
+export const coreClaimedEventNamespacePrefixes = (ownerId: string): ReadonlyArray<string> =>
+  CORE_CLAIMED_EVENT_NAMESPACES.find((namespace) => namespace.ownerId === ownerId)?.kindPrefixes ??
+  [];
 
 export const isCoreClaimedEventKind = (event: string): boolean =>
   CORE_CLAIMED_PREFIXES.some((p) => event.startsWith(p));

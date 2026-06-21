@@ -27,6 +27,11 @@
       "sourcePackageNames": ["@agent-os/deploy"]
     },
     {
+      "ownerId": "@agent-os/dynamic-worker",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/dynamic-worker"]
+    },
+    {
       "ownerId": "@agent-os/git-carrier",
       "status": "active",
       "sourcePackageNames": ["@agent-os/git-carrier"]

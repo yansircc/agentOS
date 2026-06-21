@@ -78,6 +78,7 @@ import {
   projectDecisionGate,
 } from "@agent-os/decision-gate";
 
+const WORKSPACE_OP_OWNER_ID = "@agent-os/workspace-op";
 const scope = "submit-runtime-events";
 const traceContext = {
   traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
@@ -630,7 +631,7 @@ describe("submit-agent runtime event writes", () => {
               kind: "workspace_op.requested",
               boundaryPackage: boundaryPackage(
                 defineBoundaryContract({
-                  ownerId: "@agent-os/workspace-op",
+                  ownerId: WORKSPACE_OP_OWNER_ID,
                   sourcePackageName: "@agent-os/workspace-op",
                   kindPrefixes: ["workspace_op."],
                   roles: ["generator", "reader"],
@@ -647,7 +648,7 @@ describe("submit-agent runtime event writes", () => {
                   effectAuthorityContracts: [],
                   materialRequirements: [],
                   settlement: defineSettlementContract({
-                    settlementId: "@agent-os/workspace-op",
+                    settlementId: WORKSPACE_OP_OWNER_ID,
                     anchorKinds: ["external_receipt"],
                     rejectionKinds: ["provider_rejected"],
                     indeterminateKinds: [],
@@ -2300,7 +2301,7 @@ describe("submit-agent runtime event writes", () => {
                 kind: "workspace_op.requested",
                 boundaryPackage: boundaryPackage(
                   defineBoundaryContract({
-                    ownerId: "@agent-os/workspace-op",
+                    ownerId: WORKSPACE_OP_OWNER_ID,
                     sourcePackageName: "@agent-os/workspace-op",
                     kindPrefixes: ["workspace_op."],
                     roles: ["generator", "reader"],
@@ -2317,7 +2318,7 @@ describe("submit-agent runtime event writes", () => {
                     effectAuthorityContracts: [],
                     materialRequirements: [],
                     settlement: defineSettlementContract({
-                      settlementId: "@agent-os/workspace-op",
+                      settlementId: WORKSPACE_OP_OWNER_ID,
                       anchorKinds: ["external_receipt"],
                       rejectionKinds: ["provider_rejected"],
                       indeterminateKinds: [],

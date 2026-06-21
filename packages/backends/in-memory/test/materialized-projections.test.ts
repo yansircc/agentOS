@@ -18,6 +18,8 @@ import { projectionScopeKey, runtimeEventIdentity, truthIdentity } from "./ident
 const payload = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
+const WORKSPACE_OP_FACT_OWNER = "@agent-os/workspace-op";
+
 const runWorkflowProjection = (version = 1): AnyMaterializedProjectionDefinition =>
   defineProjection({
     kind: "run.workflow",
@@ -127,7 +129,7 @@ describe("in-memory materialized projections", () => {
     const scope = "projection-owner-parity";
     const ownerIdentity = {
       ...truthIdentity(scope),
-      factOwnerRef: "@agent-os/workspace-op",
+      factOwnerRef: WORKSPACE_OP_FACT_OWNER,
     };
     const projectionIdentitySpec = runtimeEventIdentity(scope);
     const { backend, runtime } = makeRuntime(scope);

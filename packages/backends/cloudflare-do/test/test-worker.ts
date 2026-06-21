@@ -762,27 +762,25 @@ type CapabilityResult =
 
 const capabilityOrReject = (
   capabilities: ReadonlyMap<string, ExtensionCapability>,
-  packageId: string,
+  ownerId: string,
 ): CapabilityResult => {
-  const cap = capabilities.get(packageId);
+  const cap = capabilities.get(ownerId);
   if (cap !== undefined) return { ok: true, capability: cap };
   return {
     ok: false,
     error: new CapabilityRejected({
       event: "*",
       capability:
-        packageId === "@agent-os/image"
-          ? `extension:${packageId}:boundary`
-          : `extension:${packageId}`,
+        ownerId === "@agent-os/image" ? `extension:${ownerId}:boundary` : `extension:${ownerId}`,
     }),
   };
 };
 
 const capabilityPromise = (
   capabilities: ReadonlyMap<string, ExtensionCapability>,
-  packageId: string,
+  ownerId: string,
 ): Promise<ExtensionCapability> => {
-  const result = capabilityOrReject(capabilities, packageId);
+  const result = capabilityOrReject(capabilities, ownerId);
   return result.ok ? Promise.resolve(result.capability) : Promise.reject(result.error);
 };
 
@@ -993,7 +991,7 @@ export const facadeIntent = defineTool({
       const projected = yield* ctx.awaitProjection({
         kind: "facade.intent.projection",
         identity: { label: args.label },
-        factOwnerRef: facadeIntentBoundaryPackage.packageId,
+        factOwnerRef: facadeIntentBoundaryPackage.ownerId,
         maxAttempts: 1,
       });
       return {
@@ -1237,11 +1235,11 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
     [FACADE_INTENT_COMMAND_EVENT]: async ({ data, capabilities }) => {
       const payload = Predicate.isObject(data) ? data : {};
       if (typeof payload.label !== "string") return;
-      const capability = capabilities.get(facadeIntentBoundaryPackage.packageId);
+      const capability = capabilities.get(facadeIntentBoundaryPackage.ownerId);
       if (capability === undefined) {
         throw new CapabilityRejected({
           event: "facade.intent.requested",
-          capability: `extension:${facadeIntentBoundaryPackage.packageId}`,
+          capability: `extension:${facadeIntentBoundaryPackage.ownerId}`,
         });
       }
       await capability.commit({
@@ -1253,7 +1251,7 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   declaredIntents: [
     {
       kind: "facade.intent.requested",
-      boundaryPackageId: facadeIntentBoundaryPackage.packageId,
+      boundaryOwnerId: facadeIntentBoundaryPackage.ownerId,
     },
   ],
   projections: [facadeIntentProjection],

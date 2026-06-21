@@ -81,7 +81,7 @@ export const makeCommitters = <const T extends EventPayloadMap>(
 export class ExtensionCapabilityConflict extends Data.TaggedError(
   "agent_os.extension_capability_conflict",
 )<{
-  readonly packageId: string;
+  readonly ownerId: string;
   readonly kindPrefix: string;
   readonly claimedBy: string;
 }> {}
@@ -113,32 +113,32 @@ export const validateExtensionDeclarations = (
   const seen: Array<{ readonly owner: string; readonly prefix: string }> =
     CORE_CLAIMED_EVENT_NAMESPACES.flatMap((namespace) =>
       namespace.kindPrefixes.map((prefix) => ({
-        owner: namespace.packageId,
+        owner: namespace.ownerId,
         prefix,
       })),
     );
-  const packageIds = new Set<string>();
+  const ownerIds = new Set<string>();
   const out: string[] = [];
 
   for (const declaration of declarations) {
-    if (packageIds.has(declaration.packageId)) {
+    if (ownerIds.has(declaration.ownerId)) {
       return {
         ok: false,
         error: new ExtensionCapabilityConflict({
-          packageId: declaration.packageId,
+          ownerId: declaration.ownerId,
           kindPrefix: "*",
-          claimedBy: declaration.packageId,
+          claimedBy: declaration.ownerId,
         }),
       };
     }
-    packageIds.add(declaration.packageId);
+    ownerIds.add(declaration.ownerId);
 
     for (const prefix of declaration.kindPrefixes) {
       if (prefix.length === 0) {
         return {
           ok: false,
           error: new ExtensionCapabilityConflict({
-            packageId: declaration.packageId,
+            ownerId: declaration.ownerId,
             kindPrefix: prefix,
             claimedBy: "empty-prefix",
           }),
@@ -149,13 +149,13 @@ export const validateExtensionDeclarations = (
         return {
           ok: false,
           error: new ExtensionCapabilityConflict({
-            packageId: declaration.packageId,
+            ownerId: declaration.ownerId,
             kindPrefix: prefix,
             claimedBy: conflict.owner,
           }),
         };
       }
-      seen.push({ owner: declaration.packageId, prefix });
+      seen.push({ owner: declaration.ownerId, prefix });
       out.push(prefix);
     }
   }

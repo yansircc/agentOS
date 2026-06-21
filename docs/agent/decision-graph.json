@@ -197,11 +197,11 @@
         },
         {
           "prefix": "workspace_op.",
-          "owner": "unknown carrier",
+          "owner": "@agent-os/workspace-op",
           "declarations": [
             {
               "prefix": "workspace_op.",
-              "owner": "unknown carrier",
+              "owner": "@agent-os/workspace-op",
               "filePath": "packages/carriers/workspace-op/src/definition.ts"
             }
           ]
@@ -316,22 +316,22 @@
         },
         {
           "prefix": "workspace_job.",
-          "owner": "unknown carrier",
+          "owner": "@agent-os/workspace-job",
           "declarations": [
             {
               "prefix": "workspace_job.",
-              "owner": "unknown carrier",
+              "owner": "@agent-os/workspace-job",
               "filePath": "packages/carriers/workspace-job/src/definition.ts"
             }
           ]
         },
         {
           "prefix": "workspace_op.",
-          "owner": "unknown carrier",
+          "owner": "@agent-os/workspace-op",
           "declarations": [
             {
               "prefix": "workspace_op.",
-              "owner": "unknown carrier",
+              "owner": "@agent-os/workspace-op",
               "filePath": "packages/carriers/workspace-op/src/definition.ts"
             }
           ]

@@ -17,8 +17,10 @@ import {
 
 import type { DynamicWorkerProviderFailure } from "./types";
 
+const DYNAMIC_WORKER_OWNER_ID = "@agent-os/dynamic-worker";
+
 export const dynamicWorkerSettlementContract = defineSettlementContract({
-  settlementId: "@agent-os/dynamic-worker",
+  settlementId: DYNAMIC_WORKER_OWNER_ID,
   anchorKinds: ["carrier_proof"],
   rejectionKinds: ["policy_denied", "resource_denied", "provider_rejected"],
   indeterminateKinds: ["provider_pending", "reconcile_required", "witness_unavailable"],

@@ -6,7 +6,7 @@ import { makePreClaim } from "@agent-os/kernel/effect-claim";
 import type { LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
 import type { ExtensionCapability } from "@agent-os/kernel/extensions";
 import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
-import { agentRunStartedEvent } from "@agent-os/runtime-protocol";
+import { agentRunStartedEvent, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import { createSseHttpTextResponse, decodeSseHttpEvents } from "@agent-os/sse-http";
 import {
   WORKSPACE_OP_FACT_OWNER,
@@ -50,7 +50,7 @@ const ledgerEvent = (): LedgerEvent => {
     kind: event.kind,
     scopeRef: event.scopeRef,
     effectAuthorityRef: event.effectAuthorityRef,
-    factOwnerRef: "@agent-os/runtime",
+    factOwnerRef: RUNTIME_FACT_OWNER,
     payload: event.payload,
   };
 };
@@ -655,7 +655,7 @@ describe("Cloudflare DO workspace host helpers", () => {
       kindPrefixes: ["workspace_op."],
     });
     expect(install.declaredIntents).toEqual([
-      { kind: WORKSPACE_OP_KIND.REQUESTED, boundaryPackageId: WORKSPACE_OP_FACT_OWNER },
+      { kind: WORKSPACE_OP_KIND.REQUESTED, boundaryOwnerId: WORKSPACE_OP_FACT_OWNER },
     ]);
     expect(install.projections.map((projection) => projection.kind)).toEqual([
       WORKSPACE_OP_PROJECTION_KIND,

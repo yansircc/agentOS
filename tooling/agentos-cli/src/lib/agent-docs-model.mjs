@@ -6,6 +6,8 @@ import { sourceTsdocRecordsForPackage } from "./public-api-model.mjs";
 const repoRoot = process.cwd();
 const sourceRoots = ["packages"];
 const writerNames = new Set(["append", "insertEvent", "logLedgerEvent", "commit", "commitEvents"]);
+const runtimeProtocolOwnerId = "@agent-os/runtime-protocol";
+const backendProtocolOwnerId = "@agent-os/backend-protocol";
 
 const toRepoPath = (file) =>
   (path.isAbsolute(file) ? path.relative(repoRoot, file) : file).split(path.sep).join("/");
@@ -189,18 +191,13 @@ const variableNamespaceDeclarations = (sourceFile, name) => {
       return initializer.elements.flatMap((element) => {
         const namespace = objectLiteral(element);
         if (namespace === undefined) return [];
-        const packageId = literalValue(
-          objectProperty(namespace, "packageId", constants),
-          constants,
-        );
+        const ownerId = literalValue(objectProperty(namespace, "ownerId", constants), constants);
         const prefixesNode = objectProperty(namespace, "kindPrefixes", constants);
         const prefixes = arrayLiteralStrings(
           prefixesNode === undefined ? undefined : unwrapExpression(prefixesNode),
           constants,
         );
-        return packageId === undefined || prefixes.length === 0
-          ? []
-          : [{ owner: packageId, prefixes }];
+        return ownerId === undefined || prefixes.length === 0 ? [] : [{ owner: ownerId, prefixes }];
       });
     }
   }
@@ -254,18 +251,18 @@ const collectDeclarations = (sourceFile, filePath, vocabularyByPackage) => {
     if (ts.isReturnStatement(node)) {
       const spec = objectLiteral(node.expression);
       if (spec) {
-        const packageIdNode = objectProperty(spec, "packageId", constants);
+        const ownerIdNode = objectProperty(spec, "ownerId", constants);
         const prefixesNode = objectProperty(spec, "kindPrefixes", constants);
         const versionNode = objectProperty(spec, "version", constants);
-        const packageId =
-          packageIdNode === undefined ? undefined : literalValue(packageIdNode, constants);
+        const ownerId =
+          ownerIdNode === undefined ? undefined : literalValue(ownerIdNode, constants);
         const prefixes = arrayLiteralStrings(prefixesNode, constants);
         const version =
           versionNode === undefined ? undefined : literalValue(versionNode, constants);
-        if (packageId !== undefined && version !== undefined && prefixes.length > 0) {
+        if (ownerId !== undefined && version !== undefined && prefixes.length > 0) {
           const packageValues = vocabularyByPackage.get(sourcePackageRoot(filePath)) ?? [];
           declarations.push({
-            owner: packageId,
+            owner: ownerId,
             filePath,
             prefixes,
             events: packageValues.filter((value) =>
@@ -280,17 +277,15 @@ const collectDeclarations = (sourceFile, filePath, vocabularyByPackage) => {
       if (callName === "defineCarrier") {
         const spec = objectLiteral(node.arguments[0]);
         if (spec) {
-          const packageIdNode = objectProperty(spec, "packageId", constants);
+          const ownerIdNode = objectProperty(spec, "ownerId", constants);
           const prefixNode = objectProperty(spec, "prefix", constants);
           const eventsNode = objectProperty(spec, "events", constants);
-          const packageId =
-            packageIdNode === undefined
-              ? "unknown carrier"
-              : literalValue(packageIdNode, constants);
+          const ownerId =
+            ownerIdNode === undefined ? "unknown carrier" : literalValue(ownerIdNode, constants);
           const prefix = prefixNode === undefined ? undefined : literalValue(prefixNode, constants);
           if (prefix !== undefined) {
             declarations.push({
-              owner: packageId ?? "unknown carrier",
+              owner: ownerId ?? "unknown carrier",
               filePath,
               prefixes: [prefix],
               events: carrierEventKinds(eventsNode, prefix, constants),
@@ -301,17 +296,15 @@ const collectDeclarations = (sourceFile, filePath, vocabularyByPackage) => {
       if (callName === "defineBoundaryContract") {
         const spec = objectLiteral(node.arguments[0]);
         if (spec) {
-          const packageIdNode = objectProperty(spec, "packageId", constants);
+          const ownerIdNode = objectProperty(spec, "ownerId", constants);
           const prefixesNode = objectProperty(spec, "kindPrefixes", constants);
           const eventsNode = objectProperty(spec, "events", constants);
-          const packageId =
-            packageIdNode === undefined
-              ? "unknown boundary"
-              : literalValue(packageIdNode, constants);
+          const ownerId =
+            ownerIdNode === undefined ? "unknown boundary" : literalValue(ownerIdNode, constants);
           const prefixes = arrayLiteralStrings(prefixesNode, constants);
           if (prefixes.length > 0) {
             declarations.push({
-              owner: packageId ?? "unknown boundary",
+              owner: ownerId ?? "unknown boundary",
               filePath,
               prefixes,
               events: boundaryEventKinds(eventsNode, constants),
@@ -322,17 +315,15 @@ const collectDeclarations = (sourceFile, filePath, vocabularyByPackage) => {
       if (callName === "eventNamespace") {
         const spec = objectLiteral(node.arguments[0]);
         if (spec) {
-          const packageIdNode = objectProperty(spec, "packageId", constants);
+          const ownerIdNode = objectProperty(spec, "ownerId", constants);
           const prefixesNode = objectProperty(spec, "kindPrefixes", constants);
-          const packageId =
-            packageIdNode === undefined
-              ? "unknown namespace"
-              : literalValue(packageIdNode, constants);
+          const ownerId =
+            ownerIdNode === undefined ? "unknown namespace" : literalValue(ownerIdNode, constants);
           const prefixes = arrayLiteralStrings(prefixesNode, constants);
           if (prefixes.length > 0) {
             const packageValues = vocabularyByPackage.get(sourcePackageRoot(filePath)) ?? [];
             declarations.push({
-              owner: packageId ?? "unknown namespace",
+              owner: ownerId ?? "unknown namespace",
               filePath,
               prefixes,
               events: packageValues.filter((value) =>
@@ -361,7 +352,7 @@ const collectReservedDeclarations = (parsed) => {
       ? []
       : variableNamespaceDeclarations(kernel.sourceFile, "CORE_CLAIMED_EVENT_NAMESPACES");
   const backendPrefixes =
-    namespaceDeclarations.find((namespace) => namespace.owner === "@agent-os/backend-protocol")
+    namespaceDeclarations.find((namespace) => namespace.owner === backendProtocolOwnerId)
       ?.prefixes ??
     (backendProtocol === undefined
       ? []
@@ -370,7 +361,7 @@ const collectReservedDeclarations = (parsed) => {
     namespaceDeclarations.length === 0
       ? [
           {
-            owner: "@agent-os/runtime-protocol",
+            owner: runtimeProtocolOwnerId,
             prefixes:
               kernel === undefined
                 ? []
@@ -379,9 +370,7 @@ const collectReservedDeclarations = (parsed) => {
                   ),
           },
         ]
-      : namespaceDeclarations.filter(
-          (namespace) => namespace.owner !== "@agent-os/backend-protocol",
-        );
+      : namespaceDeclarations.filter((namespace) => namespace.owner !== backendProtocolOwnerId);
   return [
     ...coreNamespaces.flatMap((namespace) => {
       const events = parsed.flatMap(({ sourceFile }) =>
@@ -402,7 +391,7 @@ const collectReservedDeclarations = (parsed) => {
       ? []
       : [
           {
-            owner: "@agent-os/backend-protocol",
+            owner: backendProtocolOwnerId,
             filePath: backendProtocol.file,
             prefixes: backendPrefixes,
             events: ownedProtocolEvents(backendProtocol.sourceFile, backendPrefixes),

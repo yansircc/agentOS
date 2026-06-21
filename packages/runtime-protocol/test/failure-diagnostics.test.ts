@@ -6,6 +6,7 @@ import {
   agentRunAbortedEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   projectFailureDiagnostics,
+  RUNTIME_FACT_OWNER,
   toolRejectedEvent,
   type RuntimeEventCommitSpec,
 } from "../src";
@@ -38,7 +39,7 @@ const ledgerEvent = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => (
   kind: spec.kind,
   scopeRef: spec.scopeRef,
   effectAuthorityRef: spec.effectAuthorityRef,
-  factOwnerRef: "@agent-os/runtime",
+  factOwnerRef: RUNTIME_FACT_OWNER,
   payload: spec.payload,
 });
 

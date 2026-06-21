@@ -9,6 +9,9 @@ const namespace = (packageId: string, kindPrefixes: ReadonlyArray<string>): Even
   version: "0.1.0",
 });
 
+const BACKEND_PROTOCOL_OWNER_ID = "@agent-os/backend-protocol";
+const RUNTIME_PROTOCOL_OWNER_ID = "@agent-os/runtime-protocol";
+
 describe("extension declarations", () => {
   it("reports the source owner for core backend and runtime namespaces", () => {
     expect(validateExtensionDeclarations([namespace("@agent-os/proof", ["quota."])])).toMatchObject(
@@ -16,9 +19,9 @@ describe("extension declarations", () => {
         ok: false,
         error: {
           _tag: "agent_os.extension_capability_conflict",
-          packageId: "@agent-os/proof",
+          ownerId: "@agent-os/proof",
           kindPrefix: "quota.",
-          claimedBy: "@agent-os/backend-protocol",
+          claimedBy: BACKEND_PROTOCOL_OWNER_ID,
         },
       },
     );
@@ -29,9 +32,9 @@ describe("extension declarations", () => {
       ok: false,
       error: {
         _tag: "agent_os.extension_capability_conflict",
-        packageId: "@agent-os/proof",
+        ownerId: "@agent-os/proof",
         kindPrefix: "runtime.",
-        claimedBy: "@agent-os/runtime-protocol",
+        claimedBy: RUNTIME_PROTOCOL_OWNER_ID,
       },
     });
   });
@@ -46,7 +49,7 @@ describe("extension declarations", () => {
       ok: false,
       error: {
         _tag: "agent_os.extension_capability_conflict",
-        packageId: "@agent-os/proof",
+        ownerId: "@agent-os/proof",
         kindPrefix: "*",
         claimedBy: "@agent-os/proof",
       },

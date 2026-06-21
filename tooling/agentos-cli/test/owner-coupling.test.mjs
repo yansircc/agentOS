@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ownerCouplingFindingsForSource } from "../src/check/algorithmic-checks.mjs";
+import {
+  ownerCouplingFindingsForSource,
+  ownerIdentityBoundaryFindingsForSource,
+} from "../src/check/algorithmic-checks.mjs";
 
 const packageNames = {
   sourcePackageNames: new Set(["@agent-os/runtime", "@agent-os/workspace-op"]),
@@ -50,4 +53,32 @@ void test("owner-coupling scanner ignores package metadata outside identity sink
   );
 
   assert.deepEqual(findings, []);
+});
+
+void test("owner identity boundary permits package metadata fields but rejects identity sinks", () => {
+  const findings = ownerIdentityBoundaryFindingsForSource(
+    [
+      "const distribution = {",
+      '  packageId: "@agent-os/runtime",',
+      "  sourcePackageName: record.packageJson.name,",
+      "};",
+      "const carrier = {",
+      "  factOwnerRef: contract.packageId,",
+      "  boundaryOwnerId: boundaryPackage.packageId,",
+      "  settlementId: spec.sourcePackageName,",
+      "};",
+      "",
+    ].join("\n"),
+    "fixture.ts",
+    packageNames,
+  );
+
+  assert.deepEqual(
+    findings.map((finding) => [finding.sink, finding.source]),
+    [
+      ["factOwnerRef", "packageId"],
+      ["boundaryOwnerId", "packageId"],
+      ["settlementId", "sourcePackageName"],
+    ],
+  );
 });

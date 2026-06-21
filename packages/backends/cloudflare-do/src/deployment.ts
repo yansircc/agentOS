@@ -19,7 +19,7 @@ export interface CloudflareAgentEnv {}
 
 export interface AgentDeclaredIntent {
   readonly kind: string;
-  readonly boundaryPackageId: string;
+  readonly boundaryOwnerId: string;
 }
 
 export interface AgentEventHandlerRegistration {

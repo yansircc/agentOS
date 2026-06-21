@@ -38,7 +38,7 @@ export interface CloudflareWorkspaceOperationInstall {
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
   readonly declaredIntents: ReadonlyArray<{
     readonly kind: string;
-    readonly boundaryPackageId: string;
+    readonly boundaryOwnerId: string;
   }>;
   readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   readonly eventHandlers: CloudflareWorkspaceOperationProviderHandlers["eventHandlers"];
@@ -235,7 +235,7 @@ export const installCloudflareWorkspaceOperationProvider = (
     declaredIntents: [
       {
         kind: WORKSPACE_OP_KIND.REQUESTED,
-        boundaryPackageId: boundaryPackage.packageId,
+        boundaryOwnerId: boundaryPackage.ownerId,
       },
     ],
     projections: [workspaceOperationMaterializedProjection()],

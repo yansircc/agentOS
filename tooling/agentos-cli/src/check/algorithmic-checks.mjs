@@ -484,11 +484,21 @@ const checkModuleGraphOracle = () => {
 
 const ownerCouplingSinkProperties = new Set([
   "boundaryOwner",
+  "boundaryOwnerId",
   "boundaryPackageId",
   "claimedBy",
   "factOwnerRef",
   "owner",
   "packageId",
+  "settlementId",
+]);
+const ownerIdentityBoundarySinkProperties = new Set([
+  "boundaryOwner",
+  "boundaryOwnerId",
+  "boundaryPackageId",
+  "claimedBy",
+  "factOwnerRef",
+  "owner",
   "settlementId",
 ]);
 const packageMetadataNames = new Set(["packageId", "sourcePackageName", "publicPackageName"]);
@@ -554,7 +564,7 @@ const packageMetadataSource = (expression, packageNames) => {
   return undefined;
 };
 
-export const ownerCouplingFindingsForSource = (content, file, packageNames) => {
+const packageMetadataFindingsForSource = (content, file, packageNames, sinkProperties) => {
   const sourceFile = ts.createSourceFile(
     file,
     content,
@@ -579,7 +589,7 @@ export const ownerCouplingFindingsForSource = (content, file, packageNames) => {
     if (ts.isPropertyAssignment(node)) {
       const sink = ownerCouplingPropertyName(node.name);
       const source = packageMetadataSource(node.initializer, packageNames);
-      if (sink !== undefined && source !== undefined && ownerCouplingSinkProperties.has(sink)) {
+      if (sink !== undefined && source !== undefined && sinkProperties.has(sink)) {
         record(node.initializer, sink, source);
       }
     }
@@ -602,6 +612,17 @@ export const ownerCouplingFindingsForSource = (content, file, packageNames) => {
   visit(sourceFile);
   return findings;
 };
+
+export const ownerCouplingFindingsForSource = (content, file, packageNames) =>
+  packageMetadataFindingsForSource(content, file, packageNames, ownerCouplingSinkProperties);
+
+export const ownerIdentityBoundaryFindingsForSource = (content, file, packageNames) =>
+  packageMetadataFindingsForSource(
+    content,
+    file,
+    packageNames,
+    ownerIdentityBoundarySinkProperties,
+  );
 
 const ownerCouplingScanFiles = () =>
   [
@@ -629,6 +650,23 @@ const checkOwnerCoupling = (args = []) => {
     return;
   }
   failIfAny("owner coupling", lines);
+};
+
+const checkOwnerIdentityBoundary = (args = []) => {
+  if (args.length > 0) {
+    throw new Error(`owner-identity-boundary: unexpected argument(s): ${args.join(" ")}`);
+  }
+  const packageNames = ownerCouplingPackageNames();
+  const findings = ownerCouplingScanFiles().flatMap((file) =>
+    ownerIdentityBoundaryFindingsForSource(read(file), file, packageNames),
+  );
+  failIfAny(
+    "owner identity boundary",
+    findings.map(
+      (finding) =>
+        `${finding.file}:${finding.line}:${finding.column}: owner-identity-boundary: ${finding.sink} reads ${finding.source} via ${finding.expression}`,
+    ),
+  );
 };
 
 const ownerIdRegistryPath = "architecture/owner-ids.json";
@@ -2796,6 +2834,7 @@ const checkerById = new Map([
   ["module-graph-oracle", checkModuleGraphOracle],
   ["module-buckets", checkModuleBuckets],
   ["owner-coupling", checkOwnerCoupling],
+  ["owner-identity-boundary", checkOwnerIdentityBoundary],
   ["owner-ids", checkOwnerIds],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],

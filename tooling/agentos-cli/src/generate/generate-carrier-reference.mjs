@@ -144,18 +144,18 @@ const validateCarrier = (carrier, pkg) => {
     !Array.isArray(carrier.boundaryContract.kindPrefixes) ||
     carrier.boundaryContract.kindPrefixes.length === 0
   ) {
-    failures.push(`${carrier.packageId}: missing kind prefixes`);
+    failures.push(`${carrier.ownerId}: missing kind prefixes`);
   }
   if (
     !isRecord(carrier.boundaryContract.events) ||
     Object.keys(carrier.boundaryContract.events).length === 0
   ) {
-    failures.push(`${carrier.packageId}: missing boundary events`);
+    failures.push(`${carrier.ownerId}: missing boundary events`);
   }
   if (
     carrier.boundaryContract.settlement?.settlementId !== carrier.settlementContract.settlementId
   ) {
-    failures.push(`${carrier.packageId}: settlement contract mismatch`);
+    failures.push(`${carrier.ownerId}: settlement contract mismatch`);
   }
 };
 
@@ -211,7 +211,7 @@ const namespaceEventKinds = (entries, prefixes) => {
 
 const discoverCarriers = async () => {
   const carriers = [];
-  const seenPackageIds = new Set();
+  const seenOwnerIds = new Set();
   const seenEventKinds = new Set();
   const carrierPackages = surface.packages.filter((pkg) =>
     pkg.path.startsWith("packages/carriers/"),
@@ -220,18 +220,18 @@ const discoverCarriers = async () => {
   for (const pkg of carrierPackages) {
     const entries = await carrierModuleEntries(pkg);
     const exportedCarriers = [];
-    const seenCarrierIds = new Set();
+    const seenCarrierOwnerIds = new Set();
     for (const entry of entries) {
-      if (!isCarrier(entry.value) || seenCarrierIds.has(entry.value.packageId)) continue;
-      seenCarrierIds.add(entry.value.packageId);
+      if (!isCarrier(entry.value) || seenCarrierOwnerIds.has(entry.value.ownerId)) continue;
+      seenCarrierOwnerIds.add(entry.value.ownerId);
       exportedCarriers.push({ exportName: entry.exportName, carrier: entry.value });
     }
     const exportedNamespaces = [];
-    const seenNamespaceIds = new Set();
+    const seenNamespaceOwnerIds = new Set();
     for (const entry of entries) {
       const namespace = exportedNamespace(entry, pkg.version ?? "0.2.9");
-      if (namespace === undefined || seenNamespaceIds.has(namespace.packageId)) continue;
-      seenNamespaceIds.add(namespace.packageId);
+      if (namespace === undefined || seenNamespaceOwnerIds.has(namespace.ownerId)) continue;
+      seenNamespaceOwnerIds.add(namespace.ownerId);
       exportedNamespaces.push({
         exportName: entry.exportName,
         namespace,
@@ -256,14 +256,14 @@ const discoverCarriers = async () => {
       const entry = exportedCarriers[0];
       validateCarrier(entry.carrier, pkg);
 
-      if (seenPackageIds.has(entry.carrier.packageId)) {
-        failures.push(`${entry.carrier.packageId}: duplicate carrier packageId`);
+      if (seenOwnerIds.has(entry.carrier.ownerId)) {
+        failures.push(`${entry.carrier.ownerId}: duplicate carrier ownerId`);
       }
-      seenPackageIds.add(entry.carrier.packageId);
+      seenOwnerIds.add(entry.carrier.ownerId);
 
       for (const eventKind of Object.keys(entry.carrier.boundaryContract.events)) {
         if (seenEventKinds.has(eventKind)) {
-          failures.push(`${entry.carrier.packageId}: duplicate event kind ${eventKind}`);
+          failures.push(`${entry.carrier.ownerId}: duplicate event kind ${eventKind}`);
         }
         seenEventKinds.add(eventKind);
       }
@@ -274,13 +274,13 @@ const discoverCarriers = async () => {
 
     const entry = exportedNamespaces[0];
     validateNamespace(entry.namespace, pkg);
-    if (seenPackageIds.has(entry.namespace.packageId)) {
-      failures.push(`${entry.namespace.packageId}: duplicate carrier packageId`);
+    if (seenOwnerIds.has(entry.namespace.ownerId)) {
+      failures.push(`${entry.namespace.ownerId}: duplicate carrier ownerId`);
     }
-    seenPackageIds.add(entry.namespace.packageId);
+    seenOwnerIds.add(entry.namespace.ownerId);
     for (const eventKind of entry.events) {
       if (seenEventKinds.has(eventKind)) {
-        failures.push(`${entry.namespace.packageId}: duplicate event kind ${eventKind}`);
+        failures.push(`${entry.namespace.ownerId}: duplicate event kind ${eventKind}`);
       }
       seenEventKinds.add(eventKind);
     }

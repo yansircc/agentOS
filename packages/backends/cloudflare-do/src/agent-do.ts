@@ -304,20 +304,18 @@ const declaredToolIntents = (
   const boundaryPackages = new Map<string, BoundaryPackage>();
   for (const extension of extensions) {
     if (isBoundaryPackage(extension)) {
-      boundaryPackages.set(extension.packageId, extension);
+      boundaryPackages.set(extension.ownerId, extension);
     }
   }
 
   return declaredIntents.map((intent) => {
-    const boundaryPackage = boundaryPackages.get(intent.boundaryPackageId);
+    const boundaryPackage = boundaryPackages.get(intent.boundaryOwnerId);
     if (boundaryPackage === undefined) {
-      return rejectAgentConfig(
-        `declared intent ${intent.kind} references unbound boundary package`,
-      );
+      return rejectAgentConfig(`declared intent ${intent.kind} references unbound boundary owner`);
     }
     if (!extensionOwnsEvent(boundaryPackage, intent.kind)) {
       return rejectAgentConfig(
-        `declared intent ${intent.kind} is not owned by ${intent.boundaryPackageId}`,
+        `declared intent ${intent.kind} is not owned by ${intent.boundaryOwnerId}`,
       );
     }
     return {
@@ -527,7 +525,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     if (!validation.ok) return capabilities;
     for (const declaration of validation.declarations) {
       if (isBoundaryPackage(declaration)) {
-        capabilities.set(declaration.packageId, this.makeExtensionCapability(declaration));
+        capabilities.set(declaration.ownerId, this.makeExtensionCapability(declaration));
       }
     }
     return capabilities;
@@ -558,7 +556,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       return Promise.reject(
         new CapabilityRejected({
           event,
-          capability: `extension:${pkg.packageId}`,
+          capability: `extension:${pkg.ownerId}`,
         }),
       );
     }
@@ -612,7 +610,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       return Promise.reject(
         new CapabilityRejected({
           event,
-          capability: `extension:${pkg.packageId}`,
+          capability: `extension:${pkg.ownerId}`,
         }),
       );
     }

@@ -56,6 +56,8 @@ const structuredResponse = (args: Record<string, unknown>) => ({
   usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
 });
 
+const DECISION_GATE_FACT_OWNER = "@agent-os/decision-gate";
+
 const makeRuntime = (
   scope: string,
   options: Omit<InMemoryRuntimeLayerOptions, "identity" | "scope"> = {},
@@ -205,7 +207,7 @@ describe("in-memory runtime backend", () => {
           ts: 12,
           kind: "decision_gate.consumed",
           ...truthIdentity(scope),
-          factOwnerRef: "@agent-os/decision-gate",
+          factOwnerRef: DECISION_GATE_FACT_OWNER,
           payload: {
             gateRef: "gate:1",
             decisionRef: "decision:1",

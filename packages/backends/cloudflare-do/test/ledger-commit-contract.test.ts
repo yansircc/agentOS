@@ -48,7 +48,8 @@ const truthIdentity = (scopeId: string): BackendProtocolTruthIdentity => ({
 });
 
 const runtimeOwner = { factOwnerRef: RUNTIME_FACT_OWNER };
-const decisionGateOwner = { factOwnerRef: "@agent-os/decision-gate" };
+const DECISION_GATE_FACT_OWNER = "@agent-os/decision-gate";
+const decisionGateOwner = { factOwnerRef: DECISION_GATE_FACT_OWNER };
 
 describe("cloudflare-do ledger commit primitive", () => {
   it.effect("applies projections over final symbolic payloads before bus fire", () =>

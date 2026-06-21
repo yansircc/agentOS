@@ -13,6 +13,7 @@ import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { EventQueryOptions } from "@agent-os/kernel/types";
+import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
 import {
   STREAM_OWNER_COMMAND_EVENT,
   STREAM_OWNER_FACT_OWNER,
@@ -183,7 +184,7 @@ describe("ledger event stream — contract", () => {
           kind: "snapshot.one",
           scopeRef: identity.scopeRef,
           effectAuthorityRef: identity.effectAuthorityRef,
-          factOwnerRef: "@agent-os/runtime",
+          factOwnerRef: RUNTIME_FACT_OWNER,
           payload: { value: 1 },
         },
         {
@@ -192,7 +193,7 @@ describe("ledger event stream — contract", () => {
           kind: "snapshot.two",
           scopeRef: identity.scopeRef,
           effectAuthorityRef: identity.effectAuthorityRef,
-          factOwnerRef: "@agent-os/runtime",
+          factOwnerRef: RUNTIME_FACT_OWNER,
           payload: { value: 2 },
         },
       ]);

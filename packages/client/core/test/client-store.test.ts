@@ -6,6 +6,7 @@ import {
   agentRunResumedEvent,
   agentRunStartedEvent,
   decodeRuntimeLedgerEvent,
+  RUNTIME_FACT_OWNER,
   type RuntimeEventCommitSpec,
   type RuntimeLedgerEvent,
 } from "@agent-os/runtime-protocol";
@@ -31,7 +32,7 @@ const runtimeEvent = (id: number, spec: RuntimeEventCommitSpec): RuntimeLedgerEv
     ts: id * 10,
     kind: spec.kind,
     scopeRef: spec.scopeRef,
-    factOwnerRef: "@agent-os/runtime",
+    factOwnerRef: RUNTIME_FACT_OWNER,
     effectAuthorityRef: spec.effectAuthorityRef,
     payload: spec.payload,
   } satisfies LedgerEvent);
