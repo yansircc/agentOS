@@ -17,12 +17,8 @@
   },
   "dependencies": {
     "@agent-os/attached-stream": "workspace:*",
-    "@agent-os/backend-protocol": "workspace:*",
-    "@agent-os/kernel": "workspace:*",
-    "@agent-os/llm-protocol": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "@agent-os/runtime": "workspace:*",
-    "@agent-os/runtime-protocol": "workspace:*",
-    "@agent-os/telemetry-protocol": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

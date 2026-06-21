@@ -4,8 +4,8 @@ import {
   type AuthorityRef,
   type FactOwnerRef,
   type ScopeRef,
-} from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/effect-claim";
+import type { LedgerEvent } from "@agent-os/core/types";
 import type { RuntimeStorageError } from "./ledger";
 
 export type ProjectionStatus = "current" | "needs_rebuild";

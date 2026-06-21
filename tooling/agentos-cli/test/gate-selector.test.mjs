@@ -20,7 +20,7 @@ void test("affected selector routes runtime package changes to runtime proof", (
 });
 
 void test("affected selector uses reverse dependency closure", () => {
-  const result = deriveAffectedGates({ changedPaths: ["packages/kernel/src/index.ts"] });
+  const result = deriveAffectedGates({ changedPaths: ["packages/core/src/index.ts"] });
   assert.equal(result.mode, "affected");
   assert.ok(result.affectedPackages.includes("@agent-os/backend-node-postgres"));
   assert.ok(result.proofClasses.includes("runtime"));

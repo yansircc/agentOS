@@ -4,13 +4,13 @@ import {
   DurableTriggerCommitReturnedThenable,
   SqlError,
   UnregisteredDurableTriggerKind,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 import type {
   EventHandler,
   EventQueryOptions,
   LedgerEvent,
   LedgerEventRpc,
-} from "@agent-os/kernel/types";
+} from "@agent-os/core/types";
 import {
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
@@ -23,8 +23,8 @@ import {
   type BackendProtocolTruthIdentity,
   type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
-} from "@agent-os/backend-protocol";
-import { fireBackendEventHandlers } from "@agent-os/backend-protocol/reference";
+} from "@agent-os/core/backend-protocol";
+import { fireBackendEventHandlers } from "@agent-os/core/backend-protocol/reference";
 import {
   applyProjectionEvent,
   getProjection,
@@ -45,14 +45,17 @@ import {
   type TriggerTx,
   UnregisteredProjectionKind,
 } from "@agent-os/runtime";
-import { assertRuntimeLedgerTransitions, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
-import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
+import {
+  assertRuntimeLedgerTransitions,
+  RUNTIME_FACT_OWNER,
+} from "@agent-os/core/runtime-protocol";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 import {
   authorityRefKey,
   scopeRefKey,
   type AuthorityRef,
   type ScopeRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;

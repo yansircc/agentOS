@@ -1,8 +1,8 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { safeLedgerEvent } from "@agent-os/kernel";
-import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { safeLedgerEvent } from "@agent-os/core";
+import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
+import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   chatIngestedEvent,
   llmRequestedEvent,
@@ -18,7 +18,7 @@ import {
   RUNTIME_FACT_OWNER,
   type InputRequestDescriptor,
   type RuntimeEventCommitSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import { settleToolExecuted, settleToolPolicyRejected } from "@agent-os/runtime";
 import {
   AG_UI_WIRE_COMPATIBILITY,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { validateExtensionDeclarations, type EventNamespace } from "@agent-os/kernel/extensions";
+import { validateExtensionDeclarations, type EventNamespace } from "@agent-os/core/extensions";
 
 const namespace = ({
   ownerId,

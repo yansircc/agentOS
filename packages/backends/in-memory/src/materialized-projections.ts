@@ -3,7 +3,7 @@ import {
   isBackendProtocolEventIdentity,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import {
   MaterializedProjections,
   UnregisteredProjectionKind,

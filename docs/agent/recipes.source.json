@@ -41,13 +41,10 @@
         "primitive.kernel.AuthorityRef",
         "primitive.runtime.Ledger"
       ],
-      "commands": [
-        "bun run --cwd packages/kernel test",
-        "bun run --cwd packages/backends/protocol test"
-      ],
+      "commands": ["bun run --cwd packages/core test", "bun run --cwd packages/core test"],
       "evidence": [
-        "packages/kernel/test/effect-claim.test.ts",
-        "packages/backends/protocol/test/contract/runtime-backend-contract.ts"
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
       ],
       "next": ["recipe.projection-reader", "recipe.streaming-chatbot"]
     },
@@ -112,12 +109,12 @@
         "primitive.kernel.BoundaryContract"
       ],
       "commands": [
-        "bun run --cwd packages/kernel test",
+        "bun run --cwd packages/core test",
         "bun run --cwd packages/execution-domains/workspace-env test"
       ],
       "evidence": [
-        "packages/kernel/test/agent-schema.test.ts",
-        "packages/kernel/test/tools.test.ts",
+        "packages/core/test/kernel/agent-schema.test.ts",
+        "packages/core/test/kernel/tools.test.ts",
         "packages/execution-domains/workspace-env/test/workspace-env.test.ts"
       ],
       "next": ["recipe.provider-material-binding", "recipe.full-small-agent-app"]

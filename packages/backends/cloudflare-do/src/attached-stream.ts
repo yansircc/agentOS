@@ -7,11 +7,11 @@ import {
   runSynchronousAttachedStreamCommit,
   type AttachedStreamTx,
 } from "@agent-os/runtime";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 import { EventBus } from "./ledger/event-bus";
 import { selectLedgerEvents } from "./ledger/ledger";
 import { canonicalLedgerPayload, commitLedgerTransaction } from "./ledger/commit";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 export const AttachedStreamsLive = (
   ctx: DurableObjectState,

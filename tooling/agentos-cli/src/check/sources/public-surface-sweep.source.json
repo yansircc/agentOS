@@ -14,12 +14,12 @@
   "retiredPackages": ["@agent-os/ag-ui-react", "@agent-os/ag-ui-svelte"],
   "retainedProjectionVocabulary": [
     {
-      "export": "@agent-os/kernel:SafeLedgerPayload",
+      "export": "@agent-os/core:SafeLedgerPayload",
       "moduleBucket": "projection",
       "reason": "browser-safe projection payload; not the Recorded payload truth vocabulary"
     },
     {
-      "export": "@agent-os/kernel:SafeLedgerPayloadShape",
+      "export": "@agent-os/core:SafeLedgerPayloadShape",
       "moduleBucket": "projection",
       "reason": "shape helper for SafeLedgerPayload projection sinks"
     },

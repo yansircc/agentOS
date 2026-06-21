@@ -3,13 +3,13 @@ import {
   defineAgentSchema,
   type AgentSchema,
   type AgentSchemaSpec,
-} from "@agent-os/kernel/agent-schema";
+} from "@agent-os/core/agent-schema";
 import {
   defineTool,
   deterministicToolExecution,
   type Tool,
   type ToolAdmitter,
-} from "@agent-os/kernel/tools";
+} from "@agent-os/core/tools";
 
 export const SummarySchema = defineAgentSchema(Schema.Struct({ summary: Schema.String }));
 

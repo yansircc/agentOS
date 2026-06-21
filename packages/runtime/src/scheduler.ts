@@ -1,5 +1,5 @@
 import { Context, Effect } from "effect";
-import type { JsonStringifyError, UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
+import type { JsonStringifyError, UnregisteredDurableTriggerKind } from "@agent-os/core/errors";
 import type { RuntimeStorageError } from "./ledger";
 
 export class Scheduler extends Context.Service<

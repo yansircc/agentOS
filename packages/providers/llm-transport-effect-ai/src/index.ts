@@ -35,7 +35,7 @@ import {
 import { Data, Effect, Layer, Schema } from "effect";
 import * as Redacted from "effect/Redacted";
 import type * as Scope from "effect/Scope";
-import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/llm-protocol";
+import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/core/llm-protocol";
 import type {
   LlmMessage,
   LlmOutputItem,
@@ -47,24 +47,24 @@ import type {
   LlmToolCall,
   LlmUsage,
   LlmWireDescriptor,
-} from "@agent-os/llm-protocol";
+} from "@agent-os/core/llm-protocol";
 import {
   credentialMaterialRef,
   endpointMaterialRef,
   materialRefKey,
-} from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/material-ref";
 import {
   RefResolutionFailed,
   RefResolverService,
   type ResolvedMaterialService,
-} from "@agent-os/kernel/ref-resolver";
-import { openLive } from "@agent-os/kernel/live-edge";
+} from "@agent-os/core/ref-resolver";
+import { openLive } from "@agent-os/core/live-edge";
 import {
   ProviderHttpFailure,
   ProviderOutputDecodeError,
   UpstreamFailure,
-} from "@agent-os/kernel/errors";
-import type { ToolDefinition } from "@agent-os/kernel/tools";
+} from "@agent-os/core/errors";
+import type { ToolDefinition } from "@agent-os/core/tools";
 
 const ANTHROPIC_DEFAULT_VERSION = "2023-06-01";
 

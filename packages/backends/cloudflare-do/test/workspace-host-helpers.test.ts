@@ -2,11 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "@effect/vitest";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import type { LedgerEvent, LedgerEventRpc } from "@agent-os/core/types";
+import type { ExtensionCapability } from "@agent-os/core/extensions";
 import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
-import { agentRunStartedEvent, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { agentRunStartedEvent, RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { createSseHttpTextResponse, decodeSseHttpEvents } from "@agent-os/sse-http";
 import {
   WORKSPACE_OP_FACT_OWNER,

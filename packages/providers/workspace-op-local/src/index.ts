@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import type { PreClaim } from "@agent-os/kernel/effect-claim";
+import type { PreClaim } from "@agent-os/core/effect-claim";
 import {
   rejectWorkspaceOperation,
   settleWorkspaceOperationCompleted,

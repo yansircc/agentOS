@@ -3,8 +3,8 @@ import type {
   PreClaim,
   RejectedClaim,
   RejectionRef,
-} from "@agent-os/kernel/effect-claim";
-import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/effect-claim";
+import { symbolicSettlementRef } from "@agent-os/core/settlement-contract";
 import { workspaceOpCarrier } from "./definition";
 
 export const workspaceOpSettlementRef = (...parts: ReadonlyArray<string | number>): string =>

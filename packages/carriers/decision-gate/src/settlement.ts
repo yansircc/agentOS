@@ -1,10 +1,5 @@
-import type {
-  AdmitVerdict,
-  LivedClaim,
-  PreClaim,
-  RejectionRef,
-} from "@agent-os/kernel/effect-claim";
-import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
+import type { AdmitVerdict, LivedClaim, PreClaim, RejectionRef } from "@agent-os/core/effect-claim";
+import { symbolicSettlementRef } from "@agent-os/core/settlement-contract";
 
 import { decisionGateCarrier } from "./definition";
 import type { DecisionGateProjection } from "./events";

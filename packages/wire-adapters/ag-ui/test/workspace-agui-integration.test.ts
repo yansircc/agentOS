@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "@effect/vitest";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { ToolProjectionRow, ToolProjectionWaitSpec } from "@agent-os/kernel/tools";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import type { ToolProjectionRow, ToolProjectionWaitSpec } from "@agent-os/core/tools";
 import { settleToolExecuted, settleToolExecutionRejected } from "@agent-os/runtime";
 import {
   makeCloudflareWorkspaceEnv,
@@ -29,7 +29,7 @@ import {
   toolExecutedEvent,
   toolRejectedEvent,
   type RuntimeEventCommitSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   agUiRunAgentInputToSubmitInput,
   decodeAgUiRecordedLedgerEvent,

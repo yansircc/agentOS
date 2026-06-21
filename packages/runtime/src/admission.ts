@@ -1,6 +1,6 @@
 import { Context, Effect } from "effect";
-import type { JsonStringifyError, UpstreamFailure } from "@agent-os/kernel/errors";
-import type { AttemptResult, AttemptSpec, InvalidateSpec } from "@agent-os/runtime-protocol";
+import type { JsonStringifyError, UpstreamFailure } from "@agent-os/core/errors";
+import type { AttemptResult, AttemptSpec, InvalidateSpec } from "@agent-os/core/runtime-protocol";
 import type { RuntimeStorageError } from "./ledger";
 
 export class Admission extends Context.Service<

@@ -15,7 +15,7 @@ import {
   EffectSqliteDoReadLive,
   selectLedgerEventsWithEffectSql,
 } from "../src/storage/effect-sqlite-do";
-import type { EventHandler } from "@agent-os/kernel/types";
+import type { EventHandler } from "@agent-os/core/types";
 
 import type { TestAgentDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";

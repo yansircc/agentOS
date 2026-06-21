@@ -1,11 +1,11 @@
 import { Clock, Effect, Option, Schema } from "effect";
-import { ToolError } from "@agent-os/kernel/errors";
+import { ToolError } from "@agent-os/core/errors";
 import {
   defineTool,
   externalToolExecution,
   withToolWriteRequirement,
   type Tool,
-} from "@agent-os/kernel/tools";
+} from "@agent-os/core/tools";
 
 import { failureToToolResult, truncateUtf8 } from "./output";
 import { runSandbox } from "./run";

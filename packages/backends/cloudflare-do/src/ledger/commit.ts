@@ -1,8 +1,11 @@
-import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import { JsonStringifyError, SqlError } from "@agent-os/kernel/errors";
+import type { FactOwnerRef } from "@agent-os/core/effect-claim";
+import type { LedgerEvent } from "@agent-os/core/types";
+import { JsonStringifyError, SqlError } from "@agent-os/core/errors";
 import { Effect } from "effect";
-import { assertRuntimeLedgerTransitions, RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import {
+  assertRuntimeLedgerTransitions,
+  RUNTIME_FACT_OWNER,
+} from "@agent-os/core/runtime-protocol";
 import { applyRegisteredMaterializedProjectionEvents } from "../materialized-projections";
 import type { EventBusService } from "./event-bus";
 import {
@@ -13,7 +16,7 @@ import {
   truthIdentityFromCommitSpec,
   type LedgerEventSqlRow,
 } from "./identity";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 
 export type LedgerEventRef = {
   readonly key: string;

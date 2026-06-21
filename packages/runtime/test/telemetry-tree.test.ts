@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import type { LivedClaim } from "@agent-os/kernel/effect-claim";
-import { canonicalTelemetryEventTreeJson } from "@agent-os/telemetry-protocol";
+import type { LedgerEvent } from "@agent-os/core/types";
+import type { LivedClaim } from "@agent-os/core/effect-claim";
+import { canonicalTelemetryEventTreeJson } from "@agent-os/core/telemetry-protocol";
 import { projectTelemetryEventTree } from "../src/telemetry-tree";
 import {
   agentRunCompletedEvent,
@@ -10,7 +10,7 @@ import {
   llmResponseEvent,
   toolExecutedEvent,
   type RuntimeEventCommitSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 const scope = "telemetry-tree";
 const runtimeIdentity = {

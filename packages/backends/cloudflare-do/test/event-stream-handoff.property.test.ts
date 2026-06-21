@@ -10,7 +10,7 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vite-plus/test";
 
 import { selectHandoffEvents } from "../src/ledger/stream";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 
 const eventIdentity = (scopeId: string) => ({
   scopeRef: { kind: "conversation" as const, scopeId },

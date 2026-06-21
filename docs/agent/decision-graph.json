@@ -25,7 +25,7 @@
             {
               "prefix": "agent.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -36,7 +36,7 @@
             {
               "prefix": "chat.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -47,7 +47,7 @@
             {
               "prefix": "llm.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -58,7 +58,7 @@
             {
               "prefix": "tool.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         }
@@ -76,8 +76,8 @@
       "allowedPrimitivePackages": [
         "@agent-os/ag-ui",
         "@agent-os/backend-cloudflare-do",
-        "@agent-os/runtime",
-        "@agent-os/runtime-protocol"
+        "@agent-os/core",
+        "@agent-os/runtime"
       ],
       "forbiddenWrites": [
         {
@@ -131,7 +131,7 @@
         {
           "primitive": "primitive.runtime.SubmitResult",
           "tests": [
-            "packages/runtime-protocol/test/runtime-events.test.ts",
+            "packages/core/test/runtime-protocol/runtime-events.test.ts",
             "packages/runtime/test/submit-agent-runtime-events.test.ts"
           ]
         },
@@ -169,7 +169,7 @@
             {
               "prefix": "agent.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -180,7 +180,7 @@
             {
               "prefix": "llm.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -191,7 +191,7 @@
             {
               "prefix": "tool.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -288,7 +288,7 @@
             {
               "prefix": "agent.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -299,7 +299,7 @@
             {
               "prefix": "llm.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -310,7 +310,7 @@
             {
               "prefix": "tool.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         },
@@ -438,7 +438,7 @@
         "add a product tool with schema, admission, and execution domain",
         "route effectful tool execution through declared tool authority"
       ],
-      "coordinationPackage": "@agent-os/kernel",
+      "coordinationPackage": "@agent-os/core",
       "coordinationCapabilityKind": "kernel",
       "sourceFactPrefixes": ["tool."],
       "sourceFactOwners": [
@@ -449,7 +449,7 @@
             {
               "prefix": "tool.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         }
@@ -461,7 +461,7 @@
         "primitive.kernel.ToolContract",
         "primitive.kernel.defineProductTool"
       ],
-      "allowedPrimitivePackages": ["@agent-os/kernel"],
+      "allowedPrimitivePackages": ["@agent-os/core"],
       "forbiddenWrites": [
         {
           "actor": "product",
@@ -499,23 +499,23 @@
       "testEvidence": [
         {
           "primitive": "primitive.kernel.AgentSchema",
-          "tests": ["packages/kernel/test/agent-schema.test.ts"]
+          "tests": ["packages/core/test/kernel/agent-schema.test.ts"]
         },
         {
           "primitive": "primitive.kernel.ExecutionDomain",
-          "tests": ["packages/kernel/test/tools.test.ts"]
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
         },
         {
           "primitive": "primitive.kernel.Tool",
-          "tests": ["packages/kernel/test/tools.test.ts"]
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
         },
         {
           "primitive": "primitive.kernel.ToolContract",
-          "tests": ["packages/kernel/test/tools.test.ts"]
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
         },
         {
           "primitive": "primitive.kernel.defineProductTool",
-          "tests": ["packages/kernel/test/tools.test.ts"]
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
         }
       ]
     },
@@ -536,7 +536,7 @@
             {
               "prefix": "agent.",
               "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/kernel/src/errors.ts"
+              "filePath": "packages/core/src/errors.ts"
             }
           ]
         }

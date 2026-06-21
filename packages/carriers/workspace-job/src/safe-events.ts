@@ -1,7 +1,7 @@
 import { Predicate } from "effect";
-import type { SafeLedgerEvent, SafeLedgerPayloadShape, SafeLedgerValue } from "@agent-os/kernel";
-import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/kernel";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { SafeLedgerEvent, SafeLedgerPayloadShape, SafeLedgerValue } from "@agent-os/core";
+import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/core";
+import type { LedgerEvent } from "@agent-os/core/types";
 import { WORKSPACE_JOB_FACT_OWNER, WORKSPACE_JOB_KIND } from "./definition";
 
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>

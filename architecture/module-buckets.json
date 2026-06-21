@@ -81,31 +81,31 @@
     {
       "id": "kernel-axioms",
       "match": "prefix",
-      "value": "packages/kernel/",
+      "value": "packages/core/",
       "bucket": "axioms"
     },
     {
       "id": "runtime-protocol-axioms",
       "match": "prefix",
-      "value": "packages/runtime-protocol/",
+      "value": "packages/core/src/runtime-protocol/",
       "bucket": "axioms"
     },
     {
       "id": "telemetry-protocol-axioms",
       "match": "prefix",
-      "value": "packages/telemetry-protocol/",
+      "value": "packages/core/src/telemetry-protocol/",
       "bucket": "axioms"
     },
     {
       "id": "llm-protocol-axioms",
       "match": "prefix",
-      "value": "packages/llm-protocol/",
+      "value": "packages/core/src/llm-protocol/",
       "bucket": "axioms"
     },
     {
       "id": "backend-protocol-axioms",
       "match": "prefix",
-      "value": "packages/backends/protocol/",
+      "value": "packages/core/src/backend-protocol/",
       "bucket": "axioms"
     },
     {

@@ -5,7 +5,10 @@
       "id": "invariant.algebra.type-or-boot-proof",
       "statement": "Already-clear algebra must become type-proof or boot-proof.",
       "docs": "docs/README.md",
-      "tests": ["packages/kernel/test/effect-claim.test.ts", "packages/kernel/test/tools.test.ts"]
+      "tests": [
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/kernel/tools.test.ts"
+      ]
     },
     {
       "id": "invariant.ledger.single-commit-source",
@@ -21,7 +24,7 @@
       "statement": "Every algebra has one code source; projections and docs derive from that source.",
       "docs": "docs/verification.md",
       "tests": [
-        "packages/runtime-protocol/test/runtime-events.test.ts",
+        "packages/core/test/runtime-protocol/runtime-events.test.ts",
         "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       ]
     },
@@ -30,8 +33,8 @@
       "statement": "Runtime validation is only for unknown external input, not internally constructed states.",
       "docs": "docs/README.md",
       "tests": [
-        "packages/kernel/test/effect-claim.test.ts",
-        "packages/runtime-protocol/test/runtime-events.test.ts"
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/runtime-protocol/runtime-events.test.ts"
       ]
     },
     {
@@ -48,7 +51,7 @@
       "statement": "For each scopeRef and effectAuthorityRef, ledger facts are the only durable truth and observable state is recomputed from those facts.",
       "docs": "docs/concepts/durable-truth.md",
       "tests": [
-        "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
         "packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts",
         "packages/backends/in-memory/test/backend-protocol-contract.test.ts"
       ]

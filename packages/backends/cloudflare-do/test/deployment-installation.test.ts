@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, ManagedRuntime } from "effect";
-import { endpointMaterialRef } from "@agent-os/kernel/material-ref";
+import { endpointMaterialRef } from "@agent-os/core/material-ref";
 import { Ledger } from "@agent-os/runtime";
 import {
   defineAgentBindings,
@@ -13,7 +13,7 @@ import {
   projectInstallationReceipt,
   RUNTIME_FACT_OWNER,
   type DeploymentSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   materializeCloudflareAgentDeployment,
   type CloudflareAgentDeploymentSpec,

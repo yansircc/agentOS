@@ -1,15 +1,11 @@
 import { Effect, Layer } from "effect";
-import { SqlError } from "@agent-os/kernel/errors";
+import { SqlError } from "@agent-os/core/errors";
 import {
   backendProtocolTruthIdentityKey,
   SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolTruthIdentity,
-} from "@agent-os/backend-protocol";
-import {
-  RefResolverLive,
-  type RefResolver,
-  RefResolverService,
-} from "@agent-os/kernel/ref-resolver";
+} from "@agent-os/core/backend-protocol";
+import { RefResolverLive, type RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
 import {
   Admission,
   AttachedStreamRegistry,
@@ -34,7 +30,7 @@ import {
   type AnyMaterializedProjectionDefinition,
   type RuntimeStorageError,
 } from "@agent-os/runtime";
-import { LlmTransport } from "@agent-os/llm-protocol";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   createInMemoryBackendState,
   type InMemoryBackendState,

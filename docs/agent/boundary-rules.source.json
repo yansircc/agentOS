@@ -560,7 +560,7 @@
       "constraints": {
         "forbiddenEdges": [
           {
-            "fromPackageNames": ["@agent-os/kernel"],
+            "fromPackageNames": ["@agent-os/core"],
             "forbiddenTargetPackagePathPrefixes": ["packages", "tooling"]
           },
           {
@@ -742,7 +742,7 @@
       "invariantId": "invariant.d10.namespace-integrity",
       "kind": "repo-boundary",
       "diagnostics": ["live edge and boundary contract surfaces stay closed"],
-      "paths": ["packages/kernel/src", "packages/**/src"],
+      "paths": ["packages/core/src", "packages/**/src"],
       "commandGroup": "all",
       "acceptance": {
         "engine": "algorithmic",
@@ -800,7 +800,7 @@
       "diagnostics": [
         "failure diagnostics are projected from protocol categories, not SubmitResult"
       ],
-      "paths": ["packages/runtime-protocol/test/failure-diagnostics.test.ts"],
+      "paths": ["packages/core/runtime-protocol/test/failure-diagnostics.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
         "engine": "proofClass",
@@ -809,13 +809,13 @@
     },
     {
       "id": "tool-witness-single-source",
-      "owner": "@agent-os/kernel",
+      "owner": "@agent-os/core",
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "kind": "package-test",
       "diagnostics": ["tool replay witness is derived from execution domain law"],
       "paths": [
-        "packages/kernel/test/tools.test.ts",
-        "packages/runtime-protocol/test/runtime-events.test.ts"
+        "packages/core/test/tools.test.ts",
+        "packages/core/runtime-protocol/test/runtime-events.test.ts"
       ],
       "commandGroup": "package-owned",
       "acceptance": {
@@ -925,7 +925,7 @@
       "invariantId": "invariant.d10.truth-identity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/protocol/src"],
+      "paths": ["packages/core/src/backend-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -938,7 +938,7 @@
       "invariantId": "invariant.d10.truth-identity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/protocol/src"],
+      "paths": ["packages/core/src/backend-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1017,7 +1017,7 @@
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/runtime-protocol/src"],
+      "paths": ["packages/core/src/runtime-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1030,7 +1030,7 @@
       "invariantId": "invariant.ledger.single-commit-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/protocol/src"],
+      "paths": ["packages/core/src/backend-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1104,11 +1104,11 @@
     },
     {
       "id": "tool-execution-access-requirements",
-      "owner": "@agent-os/kernel",
+      "owner": "@agent-os/core",
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/kernel/src/tools.ts"],
+      "paths": ["packages/core/src/tools.ts"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1131,11 +1131,11 @@
     },
     {
       "id": "tool-mutation-boundary",
-      "owner": "@agent-os/kernel",
+      "owner": "@agent-os/core",
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/kernel/src"],
+      "paths": ["packages/core/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1148,7 +1148,7 @@
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/runtime-protocol/src"],
+      "paths": ["packages/core/src/runtime-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1161,7 +1161,7 @@
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/runtime-protocol/src"],
+      "paths": ["packages/core/src/runtime-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1187,7 +1187,7 @@
       "invariantId": "invariant.d10.truth-identity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/protocol/src"],
+      "paths": ["packages/core/src/backend-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1200,7 +1200,7 @@
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/llm-protocol/src"],
+      "paths": ["packages/core/src/llm-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1213,7 +1213,7 @@
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/runtime-protocol/src"],
+      "paths": ["packages/core/src/runtime-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1226,7 +1226,7 @@
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/telemetry-protocol", "packages/wire-adapters/telemetry-otlp"],
+      "paths": ["packages/core/src/telemetry-protocol", "packages/wire-adapters/telemetry-otlp"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1265,7 +1265,7 @@
       "invariantId": "invariant.ledger.single-commit-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/protocol/src"],
+      "paths": ["packages/core/src/backend-protocol"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",

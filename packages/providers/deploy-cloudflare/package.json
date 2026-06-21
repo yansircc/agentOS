@@ -16,8 +16,8 @@
     "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "dependencies": {
+    "@agent-os/core": "workspace:*",
     "@agent-os/deploy": "workspace:*",
-    "@agent-os/kernel": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

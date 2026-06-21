@@ -1,6 +1,6 @@
 import { Clock, Effect, Layer } from "effect";
 import { Ledger, recordLedgerPortEvents, runtimeStorageOrJsonError } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { InMemoryBackendState } from "./state";
 
 export const InMemoryLedgerLive = (state: InMemoryBackendState): Layer.Layer<Ledger> =>

@@ -1,7 +1,7 @@
-import type { QuotaState, QuotaStateSpec, ResourceState } from "@agent-os/kernel/types";
+import type { QuotaState, QuotaStateSpec, ResourceState } from "@agent-os/core/types";
 import { Effect } from "effect";
-import { ABORT, SqlError } from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { ABORT, SqlError } from "@agent-os/core/errors";
+import type { LedgerEvent } from "@agent-os/core/types";
 import { type AttemptKey, type CapabilityLease, projectLease } from "./admission";
 import { loadAdmissionRows } from "./admission/payload";
 import {
@@ -19,15 +19,15 @@ import {
   type RejectedClaim,
   type RejectionRef,
   type ScopeRef,
-} from "@agent-os/kernel/effect-claim";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/effect-claim";
+import { validateTerminalClaim } from "@agent-os/core/settlement-contract";
 import {
   dispatchSettlementContract,
   projectQuotaState as projectProtocolQuotaState,
   projectResourceState as projectProtocolResourceState,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { toolSettlementContract } from "@agent-os/runtime";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 
 const abortKinds = new Set<string>(Object.values(ABORT));
 

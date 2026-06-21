@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { EXECUTION_IDENTITY_VERSION, type SubmitSpec } from "@agent-os/runtime-protocol";
+import { EXECUTION_IDENTITY_VERSION, type SubmitSpec } from "@agent-os/core/runtime-protocol";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
 
 const executionIdentity = {

@@ -6,8 +6,8 @@ import {
   TriggerPump,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import { commitDurableTriggerIntent } from "../src/due-work";
 import { EventBus } from "../src/ledger";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
@@ -15,7 +15,7 @@ import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
   runImgGenPressureContract,
   type ImgGenPressureDriver,
-} from "../../protocol/test/contract/img-gen-pressure-contract";
+} from "../../../core/test/backend-protocol/contract/img-gen-pressure-contract";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureDriver => {
   const scope = "img-gen-pressure";

@@ -10,20 +10,20 @@ import {
   openAIChat,
 } from "../src/facade-lowering";
 import { cloudflareAgentMountPort, mountCloudflareAgent } from "../src/mount";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
+import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   defineTool,
   externalToolExecution,
   deterministicToolExecution,
   withToolWriteRequirement,
-} from "@agent-os/kernel/tools";
+} from "@agent-os/core/tools";
 import { Effect, Schema } from "effect";
 import {
   defineAgentBindings,
   defineAgentManifest,
   lowerSubmitRunInput,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import type { DispatchTargetNamespace } from "../src/dispatch";
 import { httpDispatchTarget, providerDispatchTarget, queueDispatchTarget } from "../src/dispatch";
 

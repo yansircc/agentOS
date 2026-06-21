@@ -1,7 +1,7 @@
-import type { LlmRoute } from "@agent-os/llm-protocol";
-import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
-import type { MaterialRef } from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+import type { LlmRoute } from "@agent-os/core/llm-protocol";
+import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/core/material-ref";
+import type { MaterialRef } from "@agent-os/core/material-ref";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
 import type {
   TurnDoneFrame,
   TurnErrorFrame,

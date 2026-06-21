@@ -1,5 +1,5 @@
 import { Predicate } from "effect";
-import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
+import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/core/projection";
 
 export interface TurnTextDeltaFrame {
   readonly kind: "text_delta";

@@ -1,5 +1,5 @@
 import type { Effect as EffectType } from "effect";
-import type { PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 
 import type {
   WorkspaceSessionBackedUpPayload,

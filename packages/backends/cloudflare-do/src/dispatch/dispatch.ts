@@ -21,10 +21,13 @@ import {
   UnsupportedScopeRef,
   UnregisteredDurableTriggerKind,
   isCoreClaimedEventKind,
-} from "@agent-os/kernel/errors";
-import { InvalidTraceContext, validateOptionalTraceContext } from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/errors";
+import {
+  InvalidTraceContext,
+  validateOptionalTraceContext,
+} from "@agent-os/core/telemetry-protocol";
 import { EventBus } from "../ledger";
-import { materialRefKey } from "@agent-os/kernel/material-ref";
+import { materialRefKey } from "@agent-os/core/material-ref";
 import {
   Dispatch,
   DurableTriggerRegistry,
@@ -40,7 +43,7 @@ import {
   makePreClaim,
   isAuthorityRef,
   isScopeRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_EVENT_KINDS,
@@ -65,16 +68,16 @@ import {
   type DispatchReceiver,
   type DispatchRequestedPayload,
   type DispatchTargetAdapter,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { findAccepted, type InboundAcceptedPayload } from "./receiver";
 import { commitDurableTriggerIntent, ensureDueWorkSchema } from "../due-work";
 import { commitLedgerTransaction, type LedgerPayloadContext } from "../ledger/commit";
 import { cloudflareRouteKeyFromScopeRef } from "../ledger/identity";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 // Re-export the receiver constant so callers that historically reached
 // for it from "./dispatch" keep working.
-export { DISPATCH_INBOUND_ACCEPTED } from "@agent-os/backend-protocol";
+export { DISPATCH_INBOUND_ACCEPTED } from "@agent-os/core/backend-protocol";
 
 export interface DispatchTargetNamespace {
   readonly idFromName: (name: string) => DurableObjectId;

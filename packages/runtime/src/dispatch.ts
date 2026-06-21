@@ -8,10 +8,10 @@ import type {
   ScopeMissingError,
   UnregisteredDurableTriggerKind,
   UnsupportedScopeRef,
-} from "@agent-os/kernel/errors";
-import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
-import type { InvalidTraceContext } from "@agent-os/telemetry-protocol";
-import type { DispatchEnvelope, DispatchReceiverResult } from "@agent-os/backend-protocol";
+} from "@agent-os/core/errors";
+import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/core/types";
+import type { InvalidTraceContext } from "@agent-os/core/telemetry-protocol";
+import type { DispatchEnvelope, DispatchReceiverResult } from "@agent-os/core/backend-protocol";
 import type { RuntimeStorageError } from "./ledger";
 
 export class Dispatch extends Context.Service<

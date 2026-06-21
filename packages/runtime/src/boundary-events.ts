@@ -1,8 +1,8 @@
 import { Context, Effect } from "effect";
-import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
-import type { JsonStringifyError } from "@agent-os/kernel/errors";
-import type { RecordedLedgerEvent } from "@agent-os/kernel/types";
-import type { RuntimeEventCommitSpec } from "@agent-os/runtime-protocol";
+import type { BoundaryContract } from "@agent-os/core/boundary-contract";
+import type { JsonStringifyError } from "@agent-os/core/errors";
+import type { RecordedLedgerEvent } from "@agent-os/core/types";
+import type { RuntimeEventCommitSpec } from "@agent-os/core/runtime-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import type { RuntimeStorageError } from "./ledger";
 

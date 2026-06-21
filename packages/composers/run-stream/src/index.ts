@@ -5,12 +5,12 @@ import {
   type TurnStreamFrame,
   type TurnStreamProjection,
 } from "@agent-os/turn-stream";
-import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
-import { decodeRecordedLedgerEventOption, type RecordedLedgerEvent } from "@agent-os/kernel/types";
-import { decodeSubmitResult, type SubmitResult } from "@agent-os/runtime-protocol";
+import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/core/projection";
+import { decodeRecordedLedgerEventOption, type RecordedLedgerEvent } from "@agent-os/core/types";
+import { decodeSubmitResult, type SubmitResult } from "@agent-os/core/runtime-protocol";
 
-export { decodeRecordedLedgerEvent as decodeRunStreamRecordedLedgerEvent } from "@agent-os/kernel/types";
-export type { SubmitResult } from "@agent-os/runtime-protocol";
+export { decodeRecordedLedgerEvent as decodeRunStreamRecordedLedgerEvent } from "@agent-os/core/types";
+export type { SubmitResult } from "@agent-os/core/runtime-protocol";
 
 export type RunStreamRecordedLedgerEvent = RecordedLedgerEvent;
 

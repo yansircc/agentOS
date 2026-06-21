@@ -10,7 +10,7 @@ import { Cause, Effect, Exit, Option, Schema } from "effect";
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
-import { llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
+import { llmWireDescriptorFingerprint } from "@agent-os/core/llm-protocol";
 
 import { Ledger } from "../../src/ledger";
 import { Admission, makeAdmissionSchemaSpec } from "../../src/admission";

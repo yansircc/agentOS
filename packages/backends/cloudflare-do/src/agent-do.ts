@@ -18,7 +18,7 @@ import type {
   RunTrace,
   ScheduledEventSpec,
   StreamEventsOptions,
-} from "@agent-os/kernel/types";
+} from "@agent-os/core/types";
 /**
  * Cloudflare Durable Object adapter.
  *
@@ -58,7 +58,7 @@ import {
   SqlError,
   TriggerFactoryError,
   UnsupportedScopeRef,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 import type {
   AttachedStreamCancelResult,
   AttachedStreamStartSpec,
@@ -79,7 +79,7 @@ import type {
   SubmitRunInput,
   SubmitSpec,
   SubmitToolIntent,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   Admission,
   AttachedStreams,
@@ -101,12 +101,12 @@ import {
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
-import { LlmTransport } from "@agent-os/llm-protocol";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   lowerSubmitRunInput,
   manifestTruthIdentity,
   RUNTIME_FACT_OWNER,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
   QUOTA_EVENT_KIND,
@@ -114,18 +114,14 @@ import {
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
   type DispatchReceiverResult,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
 import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
 import { Scheduler } from "./scheduler";
 import { Resources } from "./resources";
-import { isMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { isMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import { AdmissionLive } from "./admission";
-import {
-  RefResolverLive,
-  RefResolverService,
-  type RefResolver,
-} from "@agent-os/kernel/ref-resolver";
+import { RefResolverLive, RefResolverService, type RefResolver } from "@agent-os/core/ref-resolver";
 import {
   type BoundaryPackage,
   type ExtensionDeclaration,
@@ -136,8 +132,8 @@ import {
   isBoundaryPackage,
   rejectClaimedAppEvent,
   validateExtensionDeclarations,
-} from "@agent-os/kernel/extensions";
-import { isScopeRef } from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/extensions";
+import { isScopeRef } from "@agent-os/core/effect-claim";
 import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
 import {
   projectRunsPage,

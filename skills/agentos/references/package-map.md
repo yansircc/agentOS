@@ -4,13 +4,9 @@
 
 | Need                                    | Package                                  |
 | --------------------------------------- | ---------------------------------------- |
-| Pure agentOS algebra                    | `@agent-os/kernel`                       |
+| Neutral agentOS substrate algebra       | `@agent-os/core`                         |
 | Runtime Effect Tag contracts            | `@agent-os/runtime`                      |
-| Runtime protocol algebra                | `@agent-os/runtime-protocol`             |
-| Telemetry protocol algebra              | `@agent-os/telemetry-protocol`           |
 | Telemetry OTLP wire mapping             | `@agent-os/telemetry-otlp`               |
-| LLM protocol algebra                    | `@agent-os/llm-protocol`                 |
-| Backend protocol algebra                | `@agent-os/backend-protocol`             |
 | Cloudflare DO backend                   | `@agent-os/backend-cloudflare-do`        |
 | Node/Postgres backend interpreter       | `@agent-os/backend-node-postgres`        |
 | Resource lifecycle carrier              | `@agent-os/resource-carrier`             |

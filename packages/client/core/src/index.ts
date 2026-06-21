@@ -8,7 +8,7 @@ import {
   type RecordedInputRequestRef,
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 export type AgentClientListener = () => void;
 export type AgentClientUnsubscribe = () => void;

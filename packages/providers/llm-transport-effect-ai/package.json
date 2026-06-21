@@ -16,8 +16,7 @@
     "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "dependencies": {
-    "@agent-os/kernel": "workspace:*",
-    "@agent-os/llm-protocol": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "@effect/ai-anthropic": "catalog:",
     "effect": "catalog:"
   },

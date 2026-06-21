@@ -4,7 +4,7 @@ import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src
 import {
   runImgGenPressureContract,
   type ImgGenPressureDriver,
-} from "../../protocol/test/contract/img-gen-pressure-contract";
+} from "../../../core/test/backend-protocol/contract/img-gen-pressure-contract";
 import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
 import { runtimeEventIdentity, truthIdentity } from "./identity";
 

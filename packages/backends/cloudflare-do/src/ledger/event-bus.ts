@@ -1,5 +1,5 @@
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
+import type { LedgerEvent } from "@agent-os/core/types";
+import { backendProtocolTruthIdentityKey } from "@agent-os/core/backend-protocol";
 /**
  * EventBus — module-private reactive dispatcher.
  *
@@ -12,9 +12,9 @@ import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
  */
 
 import { Context, Effect, Layer } from "effect";
-import type { EventHandler } from "@agent-os/kernel/types";
-import { fireBackendEventHandlers } from "@agent-os/backend-protocol/reference";
-import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
+import type { EventHandler } from "@agent-os/core/types";
+import { fireBackendEventHandlers } from "@agent-os/core/backend-protocol/reference";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 
 export interface EventBusSubscription {
   readonly unsubscribe: () => void;

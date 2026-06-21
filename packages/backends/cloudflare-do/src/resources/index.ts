@@ -10,5 +10,5 @@
  */
 
 export { Resources } from "@agent-os/runtime";
-export type { ResourceProjection } from "@agent-os/backend-protocol";
+export type { ResourceProjection } from "@agent-os/core/backend-protocol";
 export { ResourcesLive } from "./resources";

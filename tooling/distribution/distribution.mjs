@@ -1191,7 +1191,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
     path.join(dir, "smoke.mjs"),
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
-      `import { ABORT } from "${publicSpecifier("@agent-os/kernel")}";`,
+      `import { ABORT } from "${publicSpecifier("@agent-os/core")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { projectTurnStream } from "${publicSpecifier("@agent-os/turn-stream")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/ops-api")}";`,
@@ -1204,7 +1204,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
       `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/backend-cloudflare-do")}";`,
       `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/llm-transport-effect-ai")}";`,
-      `import { defineAgentBindings } from "${publicSpecifier("@agent-os/runtime-protocol")}";`,
+      `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
       "});",
@@ -1263,13 +1263,13 @@ const assertPeerFailure = () => {
   fs.writeFileSync(
     path.join(dir, "index.ts"),
     `import { makePreClaim } from "${publicSpecifier(
-      "@agent-os/kernel/effect-claim",
+      "@agent-os/core/effect-claim",
     )}";\nvoid makePreClaim;\n`,
   );
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
     `import { makePreClaim } from "${publicSpecifier(
-      "@agent-os/kernel/effect-claim",
+      "@agent-os/core/effect-claim",
     )}";\nvoid makePreClaim;\n`,
   );
   writeJson(path.join(dir, "tsconfig.json"), {
@@ -1303,12 +1303,12 @@ const assertPeerFailure = () => {
 
 const negativeContractTests = () => {
   const records = publishedRecords();
-  const kernel = records.find((record) => record.packageJson.name === "@agent-os/kernel");
+  const core = records.find((record) => record.packageJson.name === "@agent-os/core");
   const turnStream = records.find((record) => record.packageJson.name === "@agent-os/turn-stream");
   const cloudflare = records.find(
     (record) => record.packageJson.name === "@agent-os/backend-cloudflare-do",
   );
-  if (kernel === undefined || turnStream === undefined || cloudflare === undefined) {
+  if (core === undefined || turnStream === undefined || cloudflare === undefined) {
     fail("negative test fixtures missing expected packages");
   }
   const assertFails = (label, fn) => {

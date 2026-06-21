@@ -1,10 +1,10 @@
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { TraceContext } from "@agent-os/telemetry-protocol";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import type { TraceContext } from "@agent-os/core/telemetry-protocol";
 import type {
   BackendProtocolDispatchTarget,
   DispatchTargetAdapter,
   DurableTriggerRetryPolicy,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 
 export interface DispatchRequestedPayload {
   readonly target: BackendProtocolDispatchTarget;

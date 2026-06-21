@@ -6,12 +6,12 @@ import type {
   PreClaim,
   RejectedClaim,
   ScopeRef,
-} from "@agent-os/kernel/effect-claim";
-import { makeOperationRef, makePreClaim, validateEffectClaim } from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
+import { makeOperationRef, makePreClaim, validateEffectClaim } from "@agent-os/core/effect-claim";
 import {
   validateIndeterminateClaim,
   validateTerminalClaim,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 import {
   WORKSPACE_JOB_EVENTS,
   WORKSPACE_JOB_FACT_OWNER,

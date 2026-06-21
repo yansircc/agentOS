@@ -16,8 +16,7 @@
     "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "dependencies": {
-    "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime-protocol": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "@agent-os/sse-http": "workspace:*",
     "@agent-os/workspace-job": "workspace:*",
     "@agent-os/workspace-op": "workspace:*",

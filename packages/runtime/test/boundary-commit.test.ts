@@ -4,17 +4,17 @@ import { Effect, Result } from "effect";
 import {
   defineBoundaryContract,
   type BoundaryEventContract,
-} from "@agent-os/kernel/boundary-contract";
-import type { EffectClaim } from "@agent-os/kernel/effect-claim";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
-import { materialRequirement } from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/boundary-contract";
+import type { EffectClaim } from "@agent-os/core/effect-claim";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
+import { materialRequirement } from "@agent-os/core/material-ref";
 import {
   defineSettlementContract,
   settleIndeterminate,
   settleLived,
   settleRejected,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 import { commitBoundaryEvent, validateBoundaryEventPayload } from "../src/boundary-commit";
 
 const emptyPayload = {

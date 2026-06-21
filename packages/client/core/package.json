@@ -16,10 +16,10 @@
     "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "dependencies": {
-    "@agent-os/runtime-protocol": "workspace:*"
+    "@agent-os/core": "workspace:*"
   },
   "devDependencies": {
-    "@agent-os/kernel": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"

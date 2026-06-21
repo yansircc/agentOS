@@ -1,12 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Result } from "effect";
-import { defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
-import {
-  defineSettlementContract,
-  settleIndeterminate,
-} from "@agent-os/kernel/settlement-contract";
+import { defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
+import { defineSettlementContract, settleIndeterminate } from "@agent-os/core/settlement-contract";
 import { BoundaryEvents } from "../src/boundary-events";
 import { commitBoundaryEvent } from "../src/boundary-commit";
 import { WitnessPort, makeWitnessPort } from "../src/witness-port";

@@ -8,18 +8,18 @@ import {
   type LivedClaim,
   type RejectedClaim,
   type ScopeRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 import {
   validateBoundaryPayload,
   type BoundaryContract,
   type BoundaryEventContract,
-} from "@agent-os/kernel/boundary-contract";
-import type { JsonStringifyError } from "@agent-os/kernel/errors";
+} from "@agent-os/core/boundary-contract";
+import type { JsonStringifyError } from "@agent-os/core/errors";
 import {
   validateIndeterminateClaim,
   validateTerminalClaim,
-} from "@agent-os/kernel/settlement-contract";
-import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/settlement-contract";
+import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/core/types";
 import type { RuntimeStorageError } from "./ledger";
 
 type BoundaryCommitIssue =

@@ -33,7 +33,10 @@
         "docs/packages/sandbox.md",
         "docs/README.md"
       ],
-      "tests": ["packages/kernel/test/effect-claim.test.ts", "packages/kernel/test/tools.test.ts"]
+      "tests": [
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/kernel/tools.test.ts"
+      ]
     },
     {
       "invariant": "invariant.ledger.single-commit-source",
@@ -93,7 +96,7 @@
         "docs/verification.md"
       ],
       "tests": [
-        "packages/runtime-protocol/test/runtime-events.test.ts",
+        "packages/core/test/runtime-protocol/runtime-events.test.ts",
         "tooling/agentos-cli/src/check/algorithmic-checks.mjs"
       ]
     },
@@ -130,11 +133,10 @@
         "docs/concepts/agent-schema.md",
         "docs/concepts/carriers-and-material.md",
         "docs/packages/backend-node-postgres.md",
-        "docs/packages/backend-protocol.md",
+        "docs/packages/core.md",
         "docs/packages/deploy-cloudflare.md",
         "docs/packages/dynamic-worker.md",
         "docs/packages/image-resource-settlement.md",
-        "docs/packages/llm-protocol.md",
         "docs/packages/llm-transport-effect-ai.md",
         "docs/packages/runtime.md",
         "docs/packages/sandbox.md",
@@ -142,8 +144,8 @@
         "docs/README.md"
       ],
       "tests": [
-        "packages/kernel/test/effect-claim.test.ts",
-        "packages/runtime-protocol/test/runtime-events.test.ts"
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/runtime-protocol/runtime-events.test.ts"
       ]
     },
     {
@@ -217,11 +219,11 @@
         "docs/concepts/materialized-projections.md",
         "docs/concepts/tool-execution-domain.md",
         "docs/packages/backend-cloudflare-do.md",
-        "docs/packages/runtime-protocol.md",
+        "docs/packages/core.md",
         "docs/tutorials/streaming-chatbot.md"
       ],
       "tests": [
-        "packages/backends/protocol/test/contract/runtime-backend-contract.ts",
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
         "packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts",
         "packages/backends/in-memory/test/backend-protocol-contract.test.ts"
       ]

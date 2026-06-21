@@ -10,11 +10,11 @@ import type {
   RunToolCall,
   RunTrace,
   RunTurn,
-} from "@agent-os/kernel/types";
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import { ABORT, reasonOf, type AbortKind } from "@agent-os/kernel/abort";
-import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/kernel/projection";
-import { textFromLlmOutputItems } from "@agent-os/llm-protocol";
+} from "@agent-os/core/types";
+import type { LedgerEvent } from "@agent-os/core/types";
+import { ABORT, reasonOf, type AbortKind } from "@agent-os/core/abort";
+import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/core/projection";
+import { textFromLlmOutputItems } from "@agent-os/core/llm-protocol";
 import {
   continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,
@@ -25,7 +25,7 @@ import {
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
   type SubmitResult,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 export const RUN_BEARING_KINDS: ReadonlyArray<string> = [
   RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,

@@ -1,4 +1,4 @@
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 /**
  * Internal Cloudflare-only Effect SQL facade.
  *
@@ -10,11 +10,11 @@ import type { LedgerEvent } from "@agent-os/kernel/types";
 import { layer as sqliteDoLayer } from "@effect/sql-sqlite-do/SqliteClient";
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
-import { SqlError } from "@agent-os/kernel/errors";
-import type { EventQueryOptions } from "@agent-os/kernel/types";
+import { SqlError } from "@agent-os/core/errors";
+import type { EventQueryOptions } from "@agent-os/core/types";
 import { ledgerEventFromRow, ledgerIdentityKeys, type LedgerEventSqlRow } from "../ledger/identity";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 
 interface EffectSqlLedgerEventRow {
   readonly id: number;

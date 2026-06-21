@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, lived, pre, rejected } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived, pre, rejected } from "@agent-os/core/carrier";
 
 export const WORKSPACE_OP_EVENT_PREFIX = "workspace_op.";
 export const WORKSPACE_OP_FACT_OWNER = "@agent-os/workspace-op";

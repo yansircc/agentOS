@@ -4,7 +4,7 @@ import {
   projectQuotaGrantUsage,
   QUOTA_EVENT_KIND,
   type GrantResult,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemoryQuotaLive = (state: InMemoryBackendState): Layer.Layer<Quota> =>

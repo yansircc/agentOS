@@ -342,10 +342,10 @@ const collectDeclarations = (sourceFile, filePath, vocabularyByPackage) => {
 
 const collectReservedDeclarations = (parsed) => {
   const kernel = parsed.find(({ file }) =>
-    file.endsWith(path.join("packages", "kernel", "src", "errors.ts")),
+    file.endsWith(path.join("packages", "core", "src", "errors.ts")),
   );
   const backendProtocol = parsed.find(({ file }) =>
-    file.endsWith(path.join("packages", "backends", "protocol", "src", "index.ts")),
+    file.endsWith(path.join("packages", "core", "src", "backend-protocol", "index.ts")),
   );
   const namespaceDeclarations =
     kernel === undefined

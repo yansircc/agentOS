@@ -1,6 +1,6 @@
 import { Schema } from "effect";
-import { defineCarrier, event, indeterminate, lived, rejected } from "@agent-os/kernel/carrier";
-import { materialRequirement, type EffectAuthorityContract } from "@agent-os/kernel/material-ref";
+import { defineCarrier, event, indeterminate, lived, rejected } from "@agent-os/core/carrier";
+import { materialRequirement, type EffectAuthorityContract } from "@agent-os/core/material-ref";
 
 export const RESOURCE_EVENT_PREFIX = "resource.";
 

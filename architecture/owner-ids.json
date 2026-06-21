@@ -14,7 +14,7 @@
     {
       "ownerId": "@agent-os/backend-protocol",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/backend-protocol"]
+      "sourcePackageNames": ["@agent-os/core"]
     },
     {
       "ownerId": "@agent-os/decision-gate",
@@ -49,12 +49,12 @@
     {
       "ownerId": "@agent-os/runtime",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/runtime-protocol"]
+      "sourcePackageNames": ["@agent-os/core"]
     },
     {
       "ownerId": "@agent-os/runtime-protocol",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/runtime-protocol"]
+      "sourcePackageNames": ["@agent-os/core"]
     },
     {
       "ownerId": "@agent-os/staging-artifact",

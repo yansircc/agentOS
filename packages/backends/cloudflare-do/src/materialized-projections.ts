@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   MaterializedProjectionRegistry,
   MaterializedProjections,
@@ -26,7 +26,7 @@ import {
 import type {
   BackendProtocolEventIdentity,
   BackendProtocolProjectionKey,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 1000;

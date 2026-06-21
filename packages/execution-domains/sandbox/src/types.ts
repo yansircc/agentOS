@@ -1,6 +1,6 @@
 import { Data } from "effect";
 import type { Effect as EffectType } from "effect";
-import type { ToolAdmitter } from "@agent-os/kernel/tools";
+import type { ToolAdmitter } from "@agent-os/core/tools";
 
 export const SANDBOX_MAX_TIMEOUT_MS = 60_000;
 export const DEFAULT_MAX_OUTPUT_BYTES = 16_384;

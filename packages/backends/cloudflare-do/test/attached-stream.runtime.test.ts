@@ -4,7 +4,7 @@ import {
   decodeAttachedStreamMessage,
   type AttachedStreamOutboundFrame,
 } from "@agent-os/attached-stream";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import type { AgentAttachedStreamCancelSpec, AgentAttachedStreamSpec } from "../src";
 import type { AttachedStreamTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";

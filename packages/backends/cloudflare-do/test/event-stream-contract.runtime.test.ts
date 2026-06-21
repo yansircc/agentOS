@@ -1,5 +1,5 @@
-import type { LedgerEventRpc, StreamEventsOptions } from "@agent-os/kernel/types";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { LedgerEventRpc, StreamEventsOptions } from "@agent-os/core/types";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 /**
  * Ledger event stream — deterministic contract tests.
  *
@@ -12,8 +12,8 @@ import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
 
 import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { EventQueryOptions } from "@agent-os/kernel/types";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import type { EventQueryOptions } from "@agent-os/core/types";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import {
   STREAM_OWNER_COMMAND_EVENT,
   STREAM_OWNER_FACT_OWNER,

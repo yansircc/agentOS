@@ -1,7 +1,7 @@
 import { Predicate } from "effect";
-import type { LivedClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
-import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import type { LivedClaim, PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
+import { validateEffectClaim } from "@agent-os/core/effect-claim";
+import { validateTerminalClaim } from "@agent-os/core/settlement-contract";
 import {
   WORKSPACE_OP_EVENTS,
   WORKSPACE_OP_KIND,

@@ -1,19 +1,22 @@
 import { Effect, Option, Predicate } from "effect";
-import { externalResourceMaterialRef, type MaterialRef } from "@agent-os/kernel/material-ref";
+import { externalResourceMaterialRef, type MaterialRef } from "@agent-os/core/material-ref";
 import {
   defineTool,
   withToolWriteRequirement,
   type ExecutionDomain,
   type Tool,
   type ToolAdmitter,
-} from "@agent-os/kernel/tools";
-import { ToolError } from "@agent-os/kernel/errors";
+} from "@agent-os/core/tools";
+import { ToolError } from "@agent-os/core/errors";
 import type {
   AgentSubmitBindings,
   SubmitToolContext,
   SubmitToolIntent,
-} from "@agent-os/runtime-protocol";
-import { receiptBackedToolResult, type ReceiptBackedToolResult } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
+import {
+  receiptBackedToolResult,
+  type ReceiptBackedToolResult,
+} from "@agent-os/core/runtime-protocol";
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,

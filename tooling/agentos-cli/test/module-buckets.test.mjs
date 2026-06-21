@@ -23,7 +23,7 @@ void test("module bucket architecture source is valid", () => {
 void test("module bucket classifier marks product paths as ejection candidates", () => {
   assert.equal(moduleBucketForPath("tooling/ops-api/src/index.ts"), "adapter");
   assert.equal(moduleBucketForPath("tooling/ops-htmx/src/index.ts"), "product");
-  assert.equal(moduleBucketForPath("packages/kernel/src/index.ts"), "axioms");
+  assert.equal(moduleBucketForPath("packages/core/src/index.ts"), "axioms");
   assert.equal(moduleBucketForPath("packages/runtime/src/ledger.ts"), "ledger");
   assert.equal(moduleBucketForPath("packages/runtime/src/continuation.ts"), "projection");
   assert.equal(moduleBucketForPath("packages/runtime/src/submit-agent.ts"), "adapter");
@@ -39,7 +39,7 @@ void test("module bucket classifier marks product paths as ejection candidates",
 });
 
 void test("module ambient classifier keeps ambient as a module fact", () => {
-  assert.equal(moduleAmbientForPath("packages/kernel/src/index.ts"), "neutral");
+  assert.equal(moduleAmbientForPath("packages/core/src/index.ts"), "neutral");
   assert.equal(moduleAmbientForPath("packages/client/core/src/index.ts"), "neutral");
   assert.equal(moduleAmbientForPath("packages/client/react/src/index.ts"), "browser");
   assert.equal(moduleAmbientForPath("packages/wire-adapters/ag-ui/src/index.ts"), "neutral");
@@ -57,7 +57,7 @@ void test("module ambient classifier keeps ambient as a module fact", () => {
 void test("module bucket scanner reports downstream bucket and ambient imports", () => {
   const findings = moduleBucketFindingsForEdges([
     {
-      fromFile: "packages/kernel/src/index.ts",
+      fromFile: "packages/core/src/index.ts",
       toFile: "packages/providers/deploy-cloudflare/src/index.ts",
       specifier: "@agent-os/deploy-cloudflare",
     },

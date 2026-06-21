@@ -17,10 +17,7 @@
     "test:runtime": "vp test run --configLoader runner --config vitest.runtime.config.ts"
   },
   "dependencies": {
-    "@agent-os/backend-protocol": "workspace:*",
-    "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime-protocol": "workspace:*",
-    "@agent-os/telemetry-protocol": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

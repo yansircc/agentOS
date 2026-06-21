@@ -1,16 +1,16 @@
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   dispatchTargetDelivered,
   type DispatchReceiver,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import {
   DurableTriggerCommitReturnedThenable,
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 import {
   Admission,
   Dispatch,
@@ -32,8 +32,8 @@ import {
   agentRunStartedEvent,
   makeAdmissionSchemaSpec,
   runtimeHistoryCompactedEvent,
-} from "@agent-os/runtime-protocol";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/runtime-protocol";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   createInMemoryBackendState,
   createInMemoryRuntimeBackend,

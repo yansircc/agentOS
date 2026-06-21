@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
@@ -1546,7 +1547,7 @@ export const moduleBucketNegativeFixtureFailures = () => {
   const failures = [];
   const edgeFindings = moduleBucketFindingsForEdges([
     {
-      fromFile: "packages/kernel/src/index.ts",
+      fromFile: "packages/core/src/index.ts",
       toFile: "packages/providers/deploy-cloudflare/src/index.ts",
       specifier: "@agent-os/deploy-cloudflare",
     },
@@ -3458,6 +3459,98 @@ const checkDocsSiteBuild = () => {
   failIfAny("docs site build", failures);
 };
 
+const checkDogfoodSmoke = (args = []) => {
+  if (args.length !== 2 || args[0] !== "--batch") {
+    throw new Error("dogfood-smoke: expected --batch <batch>");
+  }
+  const batch = args[1];
+  if (batch !== "core") {
+    throw new Error(`dogfood-smoke: unsupported batch ${batch}`);
+  }
+
+  const failures = [];
+  const records = workspacePackageRecords();
+  const packageNames = new Set(records.map((record) => record.name));
+  for (const retiredName of [
+    "@agent-os/kernel",
+    "@agent-os/runtime-protocol",
+    "@agent-os/llm-protocol",
+    "@agent-os/telemetry-protocol",
+    "@agent-os/backend-protocol",
+  ]) {
+    if (packageNames.has(retiredName)) {
+      failures.push(`${retiredName}: retired neutral package remains in workspace`);
+    }
+  }
+  if (!packageNames.has("@agent-os/core")) {
+    failures.push("@agent-os/core: core package is missing from workspace");
+  }
+
+  const sourceAliases = readJson("tsconfig.source-paths.json").compilerOptions?.paths ?? {};
+  for (const specifier of Object.keys(sourceAliases)) {
+    if (
+      specifier === "@agent-os/kernel" ||
+      specifier.startsWith("@agent-os/kernel/") ||
+      specifier === "@agent-os/runtime-protocol" ||
+      specifier === "@agent-os/llm-protocol" ||
+      specifier === "@agent-os/telemetry-protocol" ||
+      specifier === "@agent-os/backend-protocol" ||
+      specifier.startsWith("@agent-os/backend-protocol/")
+    ) {
+      failures.push(`${specifier}: retired neutral source alias remains`);
+    }
+  }
+
+  const surfaceNames = new Set(
+    (readJson("docs/surface.json").packages ?? []).map((pkg) => pkg.name),
+  );
+  for (const retiredName of [
+    "@agent-os/kernel",
+    "@agent-os/runtime-protocol",
+    "@agent-os/llm-protocol",
+    "@agent-os/telemetry-protocol",
+    "@agent-os/backend-protocol",
+  ]) {
+    if (surfaceNames.has(retiredName)) {
+      failures.push(`${retiredName}: retired neutral package remains in docs/surface.json`);
+    }
+  }
+
+  if (failures.length === 0) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-core-dogfood-"));
+    const scopeDir = path.join(dir, "node_modules", "@agent-os");
+    fs.mkdirSync(scopeDir, { recursive: true });
+    fs.symlinkSync(path.join(repoRoot, "packages", "core"), path.join(scopeDir, "core"));
+    fs.symlinkSync(
+      path.join(repoRoot, "node_modules", "effect"),
+      path.join(dir, "node_modules", "effect"),
+    );
+    fs.writeFileSync(path.join(dir, "package.json"), '{"type":"module"}\n');
+    const code = [
+      'import { ABORT } from "@agent-os/core";',
+      'import { defineAgentBindings } from "@agent-os/core/runtime-protocol";',
+      'import { LLM_WIRE_DESCRIPTOR_VERSION } from "@agent-os/core/llm-protocol";',
+      'import { TRACE_CONTEXT_VERSION } from "@agent-os/core/telemetry-protocol";',
+      'import { DISPATCH_INBOUND_ACCEPTED } from "@agent-os/core/backend-protocol";',
+      "const bindings = defineAgentBindings({ handlers: {} });",
+      "if (!ABORT || !bindings || !LLM_WIRE_DESCRIPTOR_VERSION || !TRACE_CONTEXT_VERSION || !DISPATCH_INBOUND_ACCEPTED) throw new Error('missing core import');",
+    ].join("\n");
+    try {
+      execFileSync("bun", ["--eval", code], {
+        cwd: dir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      failures.push(
+        `core dogfood import failed: ${error.stderr?.toString() || error.message || error}`,
+      );
+    }
+  }
+
+  failIfAny("dogfood smoke core", failures);
+};
+
 const checkBoundaryProjection = () => runCommand("vp check", { cwd: repoRoot });
 
 const checkerById = new Map([
@@ -3470,6 +3563,7 @@ const checkerById = new Map([
   ["convergence-public-surface", checkConvergencePublicSurface],
   ["d12-a155-substrate-absorption", checkBoundaryProjection],
   ["distribution-units", checkDistributionUnits],
+  ["dogfood-smoke", checkDogfoodSmoke],
   ["docs-site-build", checkDocsSiteBuild],
   ["event-namespaces", checkEventNamespaces],
   ["limit-registry", checkLimitRegistry],
@@ -3489,6 +3583,7 @@ const checkerById = new Map([
 ]);
 const checkerIdsWithArgs = new Set([
   "distribution-units",
+  "dogfood-smoke",
   "module-buckets",
   "owner-coupling",
   "owner-identity-boundary",

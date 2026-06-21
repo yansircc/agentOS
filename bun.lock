@@ -27,14 +27,10 @@
       "dependencies": {
         "@agent-os/ag-ui": "workspace:*",
         "@agent-os/attached-stream": "workspace:*",
-        "@agent-os/backend-protocol": "workspace:*",
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/llm-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/ops-api": "workspace:*",
         "@agent-os/runtime": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
         "@agent-os/sse-http": "workspace:*",
-        "@agent-os/telemetry-protocol": "workspace:*",
         "@agent-os/workspace-env": "workspace:*",
         "@agent-os/workspace-env-cloudflare": "workspace:*",
         "@agent-os/workspace-op": "workspace:*",
@@ -62,12 +58,8 @@
       "version": "0.5.16",
       "dependencies": {
         "@agent-os/attached-stream": "workspace:*",
-        "@agent-os/backend-protocol": "workspace:*",
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/llm-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/runtime": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
-        "@agent-os/telemetry-protocol": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -84,10 +76,7 @@
       "name": "@agent-os/backend-node-postgres",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/backend-protocol": "workspace:*",
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
-        "@agent-os/telemetry-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -101,29 +90,11 @@
         "effect": "^4.0.0-beta.84",
       },
     },
-    "packages/backends/protocol": {
-      "name": "@agent-os/backend-protocol",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/telemetry-protocol": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
     "packages/carriers/decision-gate": {
       "name": "@agent-os/decision-gate",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -139,7 +110,7 @@
       "name": "@agent-os/deploy",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -155,7 +126,7 @@
       "name": "@agent-os/git-carrier",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -171,7 +142,7 @@
       "name": "@agent-os/image",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
@@ -188,7 +159,7 @@
       "name": "@agent-os/resource-carrier",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -204,7 +175,7 @@
       "name": "@agent-os/staging-artifact",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -220,7 +191,7 @@
       "name": "@agent-os/verification",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -236,7 +207,7 @@
       "name": "@agent-os/workspace-job",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "effect": "catalog:",
@@ -252,7 +223,7 @@
       "name": "@agent-os/workspace-op",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -268,7 +239,7 @@
       "name": "@agent-os/workspace-session",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
@@ -285,10 +256,10 @@
       "name": "@agent-os/client",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
@@ -330,13 +301,16 @@
     "packages/composers/agent-authoring": {
       "name": "@agent-os/agent-authoring",
       "version": "0.5.16",
+      "bin": {
+        "agentos": "./bin/build-cli.ts",
+      },
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/workspace-env": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@types/node": "catalog:",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
@@ -370,8 +344,7 @@
       "name": "@agent-os/run-stream",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/turn-stream": "workspace:*",
         "effect": "catalog:",
       },
@@ -389,7 +362,7 @@
       "name": "@agent-os/turn-stream",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -406,8 +379,7 @@
       "version": "0.5.16",
       "dependencies": {
         "@agent-os/client": "workspace:*",
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/workspace-env": "workspace:*",
       },
       "devDependencies": {
@@ -420,8 +392,7 @@
       "name": "@agent-os/workspace-binding",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/workspace-env": "workspace:*",
         "@agent-os/workspace-op": "workspace:*",
         "effect": "catalog:",
@@ -435,11 +406,27 @@
         "effect": "^4.0.0-beta.84",
       },
     },
+    "packages/core": {
+      "name": "@agent-os/core",
+      "version": "0.5.16",
+      "devDependencies": {
+        "@effect/language-service": "catalog:",
+        "@effect/vitest": "catalog:",
+        "effect": "catalog:",
+        "fast-check": "catalog:",
+        "typescript": "catalog:",
+        "vite-plus": "catalog:",
+        "vitest": "catalog:",
+      },
+      "peerDependencies": {
+        "effect": "^4.0.0-beta.84",
+      },
+    },
     "packages/execution-domains/sandbox": {
       "name": "@agent-os/sandbox",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
@@ -474,7 +461,7 @@
       "name": "@agent-os/workspace-env",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -512,7 +499,7 @@
         "@agent-os/workspace-env": "workspace:*",
       },
       "devDependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@effect/language-service": "catalog:",
         "@types/node": "^24.12.4",
         "typescript": "catalog:",
@@ -520,46 +507,12 @@
         "vitest": "catalog:",
       },
     },
-    "packages/kernel": {
-      "name": "@agent-os/kernel",
-      "version": "0.5.16",
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "@effect/vitest": "catalog:",
-        "effect": "catalog:",
-        "fast-check": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/llm-protocol": {
-      "name": "@agent-os/llm-protocol",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
     "packages/providers/deploy-cloudflare": {
       "name": "@agent-os/deploy-cloudflare",
       "version": "0.5.16",
       "dependencies": {
+        "@agent-os/core": "workspace:*",
         "@agent-os/deploy": "workspace:*",
-        "@agent-os/kernel": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -578,7 +531,7 @@
       "name": "@agent-os/dynamic-worker",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
@@ -611,8 +564,7 @@
       "name": "@agent-os/llm-transport-effect-ai",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/llm-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@effect/ai-anthropic": "catalog:",
         "effect": "catalog:",
       },
@@ -630,8 +582,7 @@
       "name": "@agent-os/llm-transport-http",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/llm-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/turn-stream": "workspace:*",
         "effect": "catalog:",
       },
@@ -649,7 +600,7 @@
       "name": "@agent-os/resource-cloudflare",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/resource-carrier": "workspace:*",
       },
       "devDependencies": {
@@ -667,7 +618,7 @@
       "name": "@agent-os/tenant-material",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -683,7 +634,7 @@
       "name": "@agent-os/workspace-op-local",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/workspace-env": "workspace:*",
         "@agent-os/workspace-op": "workspace:*",
       },
@@ -702,7 +653,7 @@
       "name": "@agent-os/workspace-session-cloudflare",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/workspace-session": "workspace:*",
       },
       "devDependencies": {
@@ -721,53 +672,14 @@
       "version": "0.5.16",
       "dependencies": {
         "@agent-os/attached-stream": "workspace:*",
-        "@agent-os/backend-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/decision-gate": "workspace:*",
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/llm-protocol": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
-        "@agent-os/telemetry-protocol": "workspace:*",
         "@agent-os/workspace-job": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/runtime-protocol": {
-      "name": "@agent-os/runtime-protocol",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/llm-protocol": "workspace:*",
-        "@agent-os/telemetry-protocol": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/telemetry-protocol": {
-      "name": "@agent-os/telemetry-protocol",
-      "version": "0.5.16",
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "@effect/vitest": "catalog:",
-        "effect": "catalog:",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
@@ -793,8 +705,7 @@
       "name": "@agent-os/ag-ui",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/sse-http": "workspace:*",
         "@agent-os/workspace-job": "workspace:*",
         "@agent-os/workspace-op": "workspace:*",
@@ -818,12 +729,11 @@
       "name": "@agent-os/telemetry-otlp",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/telemetry-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/runtime": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
         "@effect/vitest": "catalog:",
         "effect": "catalog:",
         "typescript": "catalog:",
@@ -854,8 +764,7 @@
       "name": "@agent-os/ops-api",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
+        "@agent-os/core": "workspace:*",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
@@ -868,9 +777,8 @@
       "name": "@agent-os/ops-htmx",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         "@agent-os/ops-api": "workspace:*",
-        "@agent-os/runtime-protocol": "workspace:*",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
@@ -890,6 +798,7 @@
     "@effect/language-service": "^0.86.2",
     "@effect/sql-sqlite-do": "^4.0.0-beta.84",
     "@effect/vitest": "^4.0.0-beta.84",
+    "@types/node": "^24.12.4",
     "@types/react": "^19.2.16",
     "effect": "^4.0.0-beta.84",
     "fast-check": "^4.8.0",
@@ -915,8 +824,6 @@
 
     "@agent-os/backend-node-postgres": ["@agent-os/backend-node-postgres@workspace:packages/backends/node-postgres"],
 
-    "@agent-os/backend-protocol": ["@agent-os/backend-protocol@workspace:packages/backends/protocol"],
-
     "@agent-os/client": ["@agent-os/client@workspace:packages/client/core"],
 
     "@agent-os/client-react": ["@agent-os/client-react@workspace:packages/client/react"],
@@ -924,6 +831,8 @@
     "@agent-os/client-svelte": ["@agent-os/client-svelte@workspace:packages/client/svelte"],
 
     "@agent-os/config": ["@agent-os/config@workspace:packages/composers/config"],
+
+    "@agent-os/core": ["@agent-os/core@workspace:packages/core"],
 
     "@agent-os/decision-gate": ["@agent-os/decision-gate@workspace:packages/carriers/decision-gate"],
 
@@ -941,10 +850,6 @@
 
     "@agent-os/image-resource-settlement": ["@agent-os/image-resource-settlement@workspace:packages/providers/image-resource-settlement"],
 
-    "@agent-os/kernel": ["@agent-os/kernel@workspace:packages/kernel"],
-
-    "@agent-os/llm-protocol": ["@agent-os/llm-protocol@workspace:packages/llm-protocol"],
-
     "@agent-os/llm-transport-effect-ai": ["@agent-os/llm-transport-effect-ai@workspace:packages/providers/llm-transport-effect-ai"],
 
     "@agent-os/llm-transport-http": ["@agent-os/llm-transport-http@workspace:packages/providers/llm-transport-http"],
@@ -961,8 +866,6 @@
 
     "@agent-os/runtime": ["@agent-os/runtime@workspace:packages/runtime"],
 
-    "@agent-os/runtime-protocol": ["@agent-os/runtime-protocol@workspace:packages/runtime-protocol"],
-
     "@agent-os/sandbox": ["@agent-os/sandbox@workspace:packages/execution-domains/sandbox"],
 
     "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/execution-domains/sandbox-cloudflare"],
@@ -972,8 +875,6 @@
     "@agent-os/staging-artifact": ["@agent-os/staging-artifact@workspace:packages/carriers/staging-artifact"],
 
     "@agent-os/telemetry-otlp": ["@agent-os/telemetry-otlp@workspace:packages/wire-adapters/telemetry-otlp"],
-
-    "@agent-os/telemetry-protocol": ["@agent-os/telemetry-protocol@workspace:packages/telemetry-protocol"],
 
     "@agent-os/tenant-material": ["@agent-os/tenant-material@workspace:packages/providers/tenant-material"],
 

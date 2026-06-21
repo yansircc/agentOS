@@ -4,20 +4,20 @@ import {
   ResourceInsufficient,
   ResourceReservationClosed,
   ResourceReservationNotFound,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 import {
   Resources,
   runtimeStorageError,
   runtimeStorageOrJsonError,
   type RuntimeStorageError,
 } from "@agent-os/runtime";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import {
   emptyResourceProjection,
   projectResourceEvents,
   RESOURCE_EVENT_KIND,
   type ProjectedResourceState,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 const positiveAmount = (amount: number): Effect.Effect<void, InvalidResourceAmount> =>

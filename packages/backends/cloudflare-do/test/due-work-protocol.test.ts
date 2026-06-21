@@ -1,7 +1,7 @@
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
-import { UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
+import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
+import { UnregisteredDurableTriggerKind } from "@agent-os/core/errors";
 import {
   DurableTriggerRegistry,
   Dispatch,
@@ -9,13 +9,13 @@ import {
   makeDurableTriggerRegistry,
   scheduledEventTrigger,
 } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import {
   DISPATCH_MAX_ATTEMPTS,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolEventIdentity,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { type DispatchTargetRegistry } from "../src/dispatch";
 import {
   commitDurableTriggerIntent,

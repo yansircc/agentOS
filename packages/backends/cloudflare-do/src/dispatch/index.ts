@@ -10,7 +10,7 @@
  */
 
 export { Dispatch } from "@agent-os/runtime";
-export type { DispatchEnvelope, DispatchReceiver } from "@agent-os/backend-protocol";
+export type { DispatchEnvelope, DispatchReceiver } from "@agent-os/core/backend-protocol";
 export {
   DispatchLive,
   DISPATCH_INBOUND_ACCEPTED,

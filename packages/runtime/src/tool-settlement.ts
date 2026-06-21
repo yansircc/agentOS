@@ -4,9 +4,9 @@ import {
   type PreClaim,
   type RejectedClaim,
   type RejectionRef,
-} from "@agent-os/kernel/effect-claim";
-import type { ToolError } from "@agent-os/kernel/errors";
-import type { ToolContract } from "@agent-os/kernel/tools";
+} from "@agent-os/core/effect-claim";
+import type { ToolError } from "@agent-os/core/errors";
+import type { ToolContract } from "@agent-os/core/tools";
 import {
   defineSettlementContract,
   isSymbolicSettlementValue,
@@ -14,7 +14,7 @@ import {
   settleRejected,
   symbolicSettlementRef,
   validateTerminalClaim,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 import { publicRuntimeCauseReason } from "./failure-classification";
 
 export const toolSettlementContract = defineSettlementContract({

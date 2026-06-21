@@ -1,7 +1,10 @@
 import { Option } from "effect";
-import type { LlmRoute } from "@agent-os/llm-protocol";
-import { llmRouteMaterialRefs } from "@agent-os/llm-protocol";
-import { defineAgentSubmitBindings, type AgentSubmitBindings } from "@agent-os/runtime-protocol";
+import type { LlmRoute } from "@agent-os/core/llm-protocol";
+import { llmRouteMaterialRefs } from "@agent-os/core/llm-protocol";
+import {
+  defineAgentSubmitBindings,
+  type AgentSubmitBindings,
+} from "@agent-os/core/runtime-protocol";
 import {
   bindingMaterialRef,
   credentialMaterialRef,
@@ -14,15 +17,15 @@ import {
   type EndpointMaterialRef,
   type ExternalResourceMaterialRef,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+} from "@agent-os/core/material-ref";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
 import {
   validateExecutionDomainRegistry,
   type ExecutionDomainDeclaration,
   type ExecutionDomainRegistryIssue,
   type Tool,
-} from "@agent-os/kernel/tools";
-import type { DispatchTargetAdapter } from "@agent-os/backend-protocol";
+} from "@agent-os/core/tools";
+import type { DispatchTargetAdapter } from "@agent-os/core/backend-protocol";
 import { durableObjectDispatchTarget } from "./dispatch";
 import type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";
 

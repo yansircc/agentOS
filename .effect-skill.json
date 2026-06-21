@@ -19,12 +19,6 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/backends/protocol",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
       "path": "packages/carriers/decision-gate",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -145,6 +139,12 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
+      "path": "packages/core",
+      "shape": ["library"],
+      "dependencyOwner": "package-local",
+      "dependencyOwnerReason": "core owns neutral substrate algebra and protocol dependency declarations"
+    },
+    {
       "path": "packages/execution-domains/sandbox",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -170,18 +170,6 @@
     },
     {
       "path": "packages/execution-domains/workspace-env-local",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/kernel",
-      "shape": ["library"],
-      "dependencyOwner": "package-local",
-      "dependencyOwnerReason": "kernel owns platform-free algebra dependency declarations"
-    },
-    {
-      "path": "packages/llm-protocol",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -245,18 +233,6 @@
       "shape": ["library"],
       "dependencyOwner": "package-local",
       "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
-    },
-    {
-      "path": "packages/runtime-protocol",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/telemetry-protocol",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
       "path": "packages/transports/sse-http",

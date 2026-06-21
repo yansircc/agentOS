@@ -3,8 +3,8 @@ import {
   JsonStringifyError,
   SqlError,
   UnregisteredDurableTriggerKind,
-} from "@agent-os/kernel/errors";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/errors";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   durableProcessLifecycleState,
   durableTriggerDuePayload,
@@ -12,7 +12,7 @@ import {
   scheduledEventIntentPayload,
   type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { getDurableTrigger, type TriggerRegistry } from "@agent-os/runtime";
 import {
   commitLedgerTransaction,
@@ -21,7 +21,7 @@ import {
 } from "./ledger/commit";
 import type { EventBusService } from "./ledger/event-bus";
 import { sqlText } from "./storage/sql-row";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 export interface DueWorkRow {
   readonly id: number;

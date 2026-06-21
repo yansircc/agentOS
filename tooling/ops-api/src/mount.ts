@@ -9,7 +9,7 @@
  * Durable Object stub or chooses a ledger identity.
  */
 
-import type { AttemptKey, CapabilityLease } from "@agent-os/runtime-protocol";
+import type { AttemptKey, CapabilityLease } from "@agent-os/core/runtime-protocol";
 import type {
   EventQueryOptions,
   LedgerEventRpc,
@@ -21,7 +21,7 @@ import type {
   RunStatusKind,
   RunTrace,
   StreamEventsOptions,
-} from "@agent-os/kernel/types";
+} from "@agent-os/core/types";
 
 import { decodeAttemptKey } from "./encoding";
 import { jsonOk, opsError } from "./errors";

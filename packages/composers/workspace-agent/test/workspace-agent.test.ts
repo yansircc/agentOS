@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { recordedValue } from "@agent-os/kernel/recorded-value";
-import type { Derived, Recordable, Recorded } from "@agent-os/kernel";
+import { recordedValue } from "@agent-os/core/recorded-value";
+import type { Derived, Recordable, Recorded } from "@agent-os/core";
 import {
   WORKSPACE_AGENT_COMMAND,
   WORKSPACE_AGENT_PROJECTION,

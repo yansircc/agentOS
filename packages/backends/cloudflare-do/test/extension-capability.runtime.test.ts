@@ -1,8 +1,8 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
-import type { LedgerEventRpc } from "@agent-os/kernel/types";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { LedgerEventRpc } from "@agent-os/core/types";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import {
   EXTENSION_COMMAND_EVENT,
   EXTENSION_RESULT_EVENT,

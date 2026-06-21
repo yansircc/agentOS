@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, lived, none, pre } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived, none, pre } from "@agent-os/core/carrier";
 
 export const DECISION_GATE_EVENT_PREFIX = "decision_gate.";
 

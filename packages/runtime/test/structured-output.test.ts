@@ -3,7 +3,7 @@ import {
   ProviderHttpFailure,
   ProviderOutputDecodeError,
   UpstreamFailure,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 
 import {
   classifyStructuredCallFailure,

@@ -1,4 +1,4 @@
-import type { Derived, Recordable, Recorded } from "@agent-os/kernel";
+import type { Derived, Recordable, Recorded } from "@agent-os/core";
 import type {
   AgentClientCommandOptions,
   AgentClientCommandSpec,
@@ -12,7 +12,7 @@ import type {
   RuntimeLedgerEvent,
   SubmitResult,
   SubmitRunInput,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import type { WorkspaceEnv } from "@agent-os/workspace-env";
 
 export const WORKSPACE_AGENT_PROJECTION_SCHEMA = {

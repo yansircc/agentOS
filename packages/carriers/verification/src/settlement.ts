@@ -1,5 +1,5 @@
-import type { AnchorRef, LivedClaim, PreClaim } from "@agent-os/kernel/effect-claim";
-import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
+import type { AnchorRef, LivedClaim, PreClaim } from "@agent-os/core/effect-claim";
+import { symbolicSettlementRef } from "@agent-os/core/settlement-contract";
 import { verificationCarrier } from "./definition";
 
 export const verificationSettlementRef = (...parts: ReadonlyArray<string | number>): string =>

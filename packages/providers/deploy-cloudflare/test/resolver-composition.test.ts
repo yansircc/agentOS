@@ -5,14 +5,14 @@ import type {
   DeployReconcileRequiredPayload,
   DeployRollbackRecordedPayload,
 } from "@agent-os/deploy";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   credentialMaterialRef,
   externalResourceMaterialRef,
   materialRefKey,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+} from "@agent-os/core/material-ref";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
 
 import {
   CloudflareWorkerBundleResolutionFailure,

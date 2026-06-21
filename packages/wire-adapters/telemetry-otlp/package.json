@@ -16,12 +16,11 @@
     "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "dependencies": {
-    "@agent-os/telemetry-protocol": "workspace:*"
+    "@agent-os/core": "workspace:*"
   },
   "devDependencies": {
-    "@agent-os/kernel": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "@agent-os/runtime": "workspace:*",
-    "@agent-os/runtime-protocol": "workspace:*",
     "@effect/vitest": "catalog:",
     "effect": "catalog:",
     "typescript": "catalog:",

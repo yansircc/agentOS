@@ -40,7 +40,7 @@
     {
       "tag": "agent_os.missing_submit_run_binding",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/runtime-protocol.md",
+      "docs": "docs/packages/core.md",
       "fix": "Provide the framework-owned LLM route binding before lowering app-authored SubmitRunInput; adapters must not synthesize route defaults."
     },
     {
@@ -124,7 +124,7 @@
     {
       "tag": "agent_os.backend_protocol_parse_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/backend-protocol.md",
+      "docs": "docs/packages/core.md",
       "fix": "Decode backend protocol payloads at the protocol boundary and reject malformed external input before it reaches runtime logic."
     },
     {
@@ -148,7 +148,7 @@
     {
       "tag": "agent_os.dispatch_payload_parse_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/backend-protocol.md",
+      "docs": "docs/packages/core.md",
       "fix": "Decode dispatch payloads through the backend protocol parser before committing inbound or outbound dispatch facts."
     },
     {

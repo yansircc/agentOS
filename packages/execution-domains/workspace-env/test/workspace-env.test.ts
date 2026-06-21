@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { deterministicToolInvocation, unsafeRunToolByName } from "@agent-os/kernel";
+import { deterministicToolInvocation, unsafeRunToolByName } from "@agent-os/core";
 
 import {
   createWorkspaceEnv,

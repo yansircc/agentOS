@@ -1,4 +1,4 @@
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   projectWorkspaceJob,
   type WorkspaceJobFailure,
@@ -12,7 +12,7 @@ import {
   projectFailureDiagnostics,
   type FailureDiagnostic,
   type FailureDiagnosticEnvelope,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 export interface WorkspaceJobObservabilityRequest {
   readonly runId: string;

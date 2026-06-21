@@ -8,29 +8,29 @@ import { BoundaryEventsLive } from "../src/boundary-events";
 import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
 import { QuotaLive } from "../src/quota";
-import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
-import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
-import { ToolError } from "@agent-os/kernel/errors";
-import { LlmTransport } from "@agent-os/llm-protocol";
+import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
+import { ToolError } from "@agent-os/core/errors";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   MaterializedProjectionRegistry,
   internalSubmitSpec,
   submitAgentEffect,
   type InternalSubmitSpec,
 } from "@agent-os/runtime";
-import type { SubmitSpec } from "@agent-os/runtime-protocol";
-import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/kernel/tools";
+import type { SubmitSpec } from "@agent-os/core/runtime-protocol";
+import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/core/tools";
 import {
   credentialMaterialRef,
   materialRefKey,
   materialRequirement,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
-import type { EventHandler } from "@agent-os/kernel/types";
+} from "@agent-os/core/material-ref";
+import type { EventHandler } from "@agent-os/core/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 import { allowToolAdmitter, makeLookupTool } from "./_tool-fixture";
 import { testEventIdentity } from "./_identity";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 
 interface TestEnv {

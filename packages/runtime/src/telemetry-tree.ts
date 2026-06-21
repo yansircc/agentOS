@@ -1,6 +1,6 @@
-import { authorityRefKey, factOwnerKey, scopeRefKey } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import { ABORT } from "@agent-os/kernel/abort";
+import { authorityRefKey, factOwnerKey, scopeRefKey } from "@agent-os/core/effect-claim";
+import type { LedgerEvent } from "@agent-os/core/types";
+import { ABORT } from "@agent-os/core/abort";
 import { Effect } from "effect";
 import {
   InvalidTraceContext,
@@ -12,13 +12,13 @@ import {
   type TelemetryEventTree,
   type TelemetryOutcome,
   type TraceContext,
-} from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/telemetry-protocol";
 import {
   decodeRuntimeLedgerEvent,
   isRuntimeAbortEventKind,
   RUNTIME_EVENT_KIND,
   type RuntimeLedgerEvent,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

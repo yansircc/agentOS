@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test"; // eff-ignore EFF200 reason="repo tests use vite-plus; this test only adapts the new Effect constructor"
 import { Effect, Exit } from "effect";
-import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+import { credentialMaterialRef, endpointMaterialRef } from "@agent-os/core/material-ref";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
 
 import {
   createTenantCredentialResolver,

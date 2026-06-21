@@ -2,8 +2,8 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
-import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
-import { AGENT_MANIFEST_PROJECTION_TARGETS } from "@agent-os/runtime-protocol";
+import { credentialMaterialRef } from "@agent-os/core/material-ref";
+import { AGENT_MANIFEST_PROJECTION_TARGETS } from "@agent-os/core/runtime-protocol";
 import { FACADE_INTENT_COMMAND_EVENT, type FacadeSubmitTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 

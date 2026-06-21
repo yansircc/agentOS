@@ -1,9 +1,9 @@
 import type {
   BackendProtocolEventIdentity,
   BackendProtocolTruthIdentity,
-} from "@agent-os/backend-protocol";
-import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/backend-protocol";
+import type { AuthorityRef } from "@agent-os/core/effect-claim";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 
 export const testTruthIdentity = (
   scopeId: string,

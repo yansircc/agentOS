@@ -1,11 +1,11 @@
 import type { Effect as EffectType } from "effect";
-import type { IndeterminateClaim, PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { IndeterminateClaim, PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 import type {
   CredentialMaterialRef,
   BindingMaterialRef,
   ExternalResourceMaterialRef,
   MaterialRef,
-} from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/material-ref";
 
 import type {
   ResourceBoundPayload,

@@ -11,8 +11,8 @@
       "class": "contract",
       "owner": "@agent-os/kernel AgentSchema dialect",
       "sourcePaths": [
-        "packages/kernel/src/agent-schema.ts",
-        "packages/kernel/src/json-schema-dialect.ts"
+        "packages/core/src/agent-schema.ts",
+        "packages/core/src/json-schema-dialect.ts"
       ],
       "value": "string semantic keys are closed to pattern, minLength, and maxLength",
       "reason": "Tool argument legality is a schema contract and must be projected and locally validated from one dialect source."
@@ -31,7 +31,7 @@
       "owner": "@agent-os/runtime submit loop",
       "sourcePaths": [
         "packages/runtime/src/submit-agent.ts",
-        "packages/runtime-protocol/src/submit.ts"
+        "packages/core/src/runtime-protocol/submit.ts"
       ],
       "value": "default 5 turns",
       "overrideSurface": "SubmitSpec.budget.maxTurns",
@@ -44,7 +44,7 @@
       "sourcePaths": [
         "packages/runtime/src/submit-agent.ts",
         "packages/runtime/src/submit-retry-policy.ts",
-        "packages/runtime-protocol/src/submit.ts"
+        "packages/core/src/runtime-protocol/submit.ts"
       ],
       "value": "default 2 correction retries and 2 jittered exponential execution retries",
       "overrideSurface": "SubmitSpec.budget.toolRetryPolicy",
@@ -56,7 +56,7 @@
       "owner": "@agent-os/runtime submit loop",
       "sourcePaths": [
         "packages/runtime/src/submit-agent.ts",
-        "packages/runtime-protocol/src/submit.ts"
+        "packages/core/src/runtime-protocol/submit.ts"
       ],
       "value": "default unlimited submit time budget",
       "overrideSurface": "SubmitSpec.budget.timeMs",
@@ -68,7 +68,7 @@
       "owner": "@agent-os/runtime submit loop",
       "sourcePaths": [
         "packages/runtime/src/submit-agent.ts",
-        "packages/runtime-protocol/src/submit.ts"
+        "packages/core/src/runtime-protocol/submit.ts"
       ],
       "value": "default unlimited token budget",
       "overrideSurface": "SubmitSpec.budget.tokens",
@@ -167,7 +167,7 @@
       "id": "backend.dispatch-retry-policy",
       "class": "closed",
       "owner": "@agent-os/backend-protocol dispatch retry vocabulary",
-      "sourcePaths": ["packages/backends/protocol/src/index.ts"],
+      "sourcePaths": ["packages/core/src/backend-protocol/index.ts"],
       "value": "8 attempts, 1000ms initial delay, 60000ms max delay, multiplier 2",
       "reason": "Dispatch retry shape is backend-neutral protocol semantics and must stay identical across production backends until a protocol policy axis exists."
     },
@@ -256,7 +256,7 @@
       "id": "telemetry.trace-context-spec",
       "class": "closed",
       "owner": "@agent-os/telemetry-protocol trace context vocabulary",
-      "sourcePaths": ["packages/telemetry-protocol/src/index.ts"],
+      "sourcePaths": ["packages/core/src/telemetry-protocol/index.ts"],
       "value": "W3C traceparent regex; tracestate max 512 chars and 32 members",
       "reason": "Trace context shape is external protocol compliance and must not be relaxed as a DX setting."
     }

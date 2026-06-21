@@ -6,7 +6,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Predicate } from "effect";
-import { LlmTransport } from "@agent-os/llm-protocol";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   createAgentDurableObject,
   durableObjectDispatchTarget,
@@ -46,18 +46,18 @@ import {
   CapabilityRejected,
   DurableTriggerAcquireCancelled,
   ToolError,
-} from "@agent-os/kernel/errors";
-import { boundaryPackage, defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
-import { eventNamespace, type ExtensionCapability } from "@agent-os/kernel/extensions";
-import { makePreClaim, type FactOwnerRef } from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/errors";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { eventNamespace, type ExtensionCapability } from "@agent-os/core/extensions";
+import { makePreClaim, type FactOwnerRef } from "@agent-os/core/effect-claim";
 import {
   bindingMaterialRef,
   materialRefKey,
   materialRequirement,
-} from "@agent-os/kernel/material-ref";
-import { defineSettlementContract, settleLived } from "@agent-os/kernel/settlement-contract";
-import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
-import { UpstreamFailure } from "@agent-os/kernel/errors";
+} from "@agent-os/core/material-ref";
+import { defineSettlementContract, settleLived } from "@agent-os/core/settlement-contract";
+import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
+import { UpstreamFailure } from "@agent-os/core/errors";
 import type {
   DispatchToScopeSpec,
   EventQueryOptions,
@@ -68,7 +68,7 @@ import type {
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
-} from "@agent-os/kernel/types";
+} from "@agent-os/core/types";
 import type {
   BackendProtocolEventIdentity,
   BackendProtocolProjectionKey,
@@ -78,19 +78,19 @@ import type {
   DispatchTargetResult,
   GrantResult,
   ResourceProjection,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import {
   backendProtocolTruthIdentityKey,
   DISPATCH_EVENT_KINDS,
   dispatchTargetDelivered,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import {
   defineAgentBindings,
   defineAgentManifest,
   RUNTIME_FACT_OWNER,
   type LedgerCommitEventSpec,
-} from "@agent-os/runtime-protocol";
-import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/runtime-protocol";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 import { commitLedgerTransaction } from "../src/ledger/commit";
 import type { EventBusService } from "../src/ledger/event-bus";

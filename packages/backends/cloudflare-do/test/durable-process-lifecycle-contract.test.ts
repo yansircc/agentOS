@@ -6,8 +6,8 @@ import {
   TriggerPump,
   type AnyDurableTrigger,
 } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import { commitDurableTriggerIntent, selectDurableProcessLifecycle } from "../src/due-work";
 import { EventBus } from "../src/ledger";
 import { makeCloudflareBackendCoreLayer } from "../src/runtime-core";
@@ -15,7 +15,7 @@ import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
   runDurableProcessLifecycleContract,
   type DurableProcessLifecycleDriver,
-} from "../../protocol/test/contract/durable-process-lifecycle-contract";
+} from "../../../core/test/backend-protocol/contract/durable-process-lifecycle-contract";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessLifecycleDriver => {
   const scope = "durable-process-lifecycle";

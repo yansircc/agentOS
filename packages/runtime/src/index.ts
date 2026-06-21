@@ -24,7 +24,7 @@ export {
   toolExecutionRejectionKind,
   toolSettlementContract,
 } from "./tool-settlement";
-export type { Tool, ToolDefinition } from "@agent-os/kernel/tools";
+export type { Tool, ToolDefinition } from "@agent-os/core/tools";
 export * from "./trigger";
 export * from "./witness-port";
 export * from "./workspace-job";

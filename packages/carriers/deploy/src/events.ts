@@ -1,9 +1,9 @@
 import { Predicate } from "effect";
-import type { IndeterminateClaim, LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { IndeterminateClaim, LivedClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 import {
   validateIndeterminateClaim,
   validateTerminalClaim,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 import { DEPLOY_EVENTS, DEPLOY_KIND, deploySettlementContract } from "./definition";
 export { DEPLOY_EVENTS, DEPLOY_KIND } from "./definition";
 

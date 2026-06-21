@@ -1,6 +1,6 @@
 import { Effect, Exit, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   MaterializedProjections,
   ProjectionReducerReturnedThenable,

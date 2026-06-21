@@ -1,5 +1,5 @@
 import type { Effect } from "effect";
-import type { PreClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { PreClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 
 import type { StagingArtifactPublishedPayload, StagingArtifactReapedPayload } from "./events";
 

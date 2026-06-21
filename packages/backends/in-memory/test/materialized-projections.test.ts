@@ -1,6 +1,6 @@
 import { ManagedRuntime, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { backendProtocolEventIdentityKey } from "@agent-os/backend-protocol";
+import { backendProtocolEventIdentityKey } from "@agent-os/core/backend-protocol";
 import {
   Ledger,
   MaterializedProjections,

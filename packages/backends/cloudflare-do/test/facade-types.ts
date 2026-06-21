@@ -1,8 +1,8 @@
-import type { SubmitSpec } from "@agent-os/runtime-protocol";
-import { defineAgentBindings, defineAgentManifest } from "@agent-os/runtime-protocol";
-import { credentialMaterialRef } from "@agent-os/kernel/material-ref";
-import type { LlmTransport } from "@agent-os/llm-protocol";
-import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
+import type { SubmitSpec } from "@agent-os/core/runtime-protocol";
+import { defineAgentBindings, defineAgentManifest } from "@agent-os/core/runtime-protocol";
+import { credentialMaterialRef } from "@agent-os/core/material-ref";
+import type { LlmTransport } from "@agent-os/core/llm-protocol";
+import type { RefResolverService } from "@agent-os/core/ref-resolver";
 import type { Layer } from "effect";
 import { createAgentDurableObject, type CloudflareAgentEnv } from "../src";
 import { credential, defineAgentDO, endpoint, openAIChat } from "../src/facade";

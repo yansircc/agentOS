@@ -12,8 +12,8 @@ import {
   replayLlmResponseFromSnapshot,
   type LlmRequest,
   type LlmRoute,
-} from "@agent-os/llm-protocol";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+} from "@agent-os/core/llm-protocol";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
 
 const messages: ReadonlyArray<LlmTransportMessage> = [
   { role: "system", content: "be direct" },

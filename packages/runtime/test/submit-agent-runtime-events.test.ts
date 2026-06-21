@@ -9,13 +9,13 @@ import {
   type LlmResponse,
   type LlmRoute,
   type LlmWireDescriptor,
-} from "@agent-os/llm-protocol";
-import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/llm-protocol";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
 import {
   boundaryPackage,
   defineBoundaryContract,
   type BoundaryContract,
-} from "@agent-os/kernel/boundary-contract";
+} from "@agent-os/core/boundary-contract";
 import {
   defineTool,
   externalToolExecution,
@@ -24,8 +24,8 @@ import {
   resolveToolExecution,
   withToolReadRequirement,
   withToolWriteRequirement,
-} from "@agent-os/kernel/tools";
-import { ToolError } from "@agent-os/kernel/errors";
+} from "@agent-os/core/tools";
+import { ToolError } from "@agent-os/core/errors";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
 import {
@@ -61,17 +61,17 @@ import {
   RUNTIME_EVENT_KIND,
   toolReplayArtifactFromExecutedPayload,
   type SubmitSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
-import { defineSettlementContract } from "@agent-os/kernel/settlement-contract";
-import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
-import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
+import { defineSettlementContract } from "@agent-os/core/settlement-contract";
+import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
 import {
   credentialMaterialRef,
   materialRefKey,
   materialRequirement,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/material-ref";
 import {
   DECISION_GATE_KIND,
   decisionGateBoundaryContract,

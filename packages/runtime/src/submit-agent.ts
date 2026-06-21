@@ -27,8 +27,8 @@ import {
   safeStringifyPretty,
   ToolError,
   UpstreamFailure,
-} from "@agent-os/kernel/errors";
-import { ABORT, type AbortKind } from "@agent-os/kernel/abort";
+} from "@agent-os/core/errors";
+import { ABORT, type AbortKind } from "@agent-os/core/abort";
 import {
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
@@ -36,22 +36,22 @@ import {
   type LlmMessage,
   type LlmRoute,
   type LlmToolChoice,
-} from "@agent-os/llm-protocol";
-import { LlmTransport } from "@agent-os/llm-protocol";
-import type { ToolDefinition } from "@agent-os/kernel/tools";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/llm-protocol";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
+import type { ToolDefinition } from "@agent-os/core/tools";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   isMaterialRef,
   materialRefKey,
   materialRefSatisfiesRequirement,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/material-ref";
 import {
   InvalidTraceContext,
   copyTraceContext,
   validateOptionalTraceContext,
   type TraceContext,
-} from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/telemetry-protocol";
 import {
   agentRunAbortedEvent,
   agentRunCompletedEvent,
@@ -80,8 +80,8 @@ import {
   type ToolArgumentSummary,
   type ToolRejectedDiagnostics,
   type TurnRef,
-} from "@agent-os/runtime-protocol";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import type { InternalSubmitSpec } from "./internal-submit";
 import { Ledger, runtimeStorageError, type RuntimeStorageError } from "./ledger";
 import {
@@ -89,8 +89,8 @@ import {
   type RefResolutionFailed,
   type ResolvedMaterial,
   type ResolvedMaterialService,
-} from "@agent-os/kernel/ref-resolver";
-import { openLive } from "@agent-os/kernel/live-edge";
+} from "@agent-os/core/ref-resolver";
+import { openLive } from "@agent-os/core/live-edge";
 import { Quota } from "./quota-service";
 import {
   decodeToolArgs,
@@ -107,8 +107,8 @@ import {
   type ToolExecutionContextInput,
   type ToolProjectionWaitSpec,
   type ResolvedToolMaterials,
-} from "@agent-os/kernel/tools";
-import { makeAdmissionSchemaSpec } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/tools";
+import { makeAdmissionSchemaSpec } from "@agent-os/core/runtime-protocol";
 import { Admission } from "./admission";
 import { projectSubmitResult } from "./run-projector";
 import {
@@ -118,7 +118,7 @@ import {
   normalizeAdmitVerdict,
   type PreClaim,
   type RejectionRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 import {
   settleToolAdmissionRejected,
   settleToolExecuted,
@@ -133,7 +133,7 @@ import { BoundaryEvents } from "./boundary-events";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import { appendNextDriverAction, appendRuntimeDriverAction } from "./driver";
 import { MaterializedProjections, waitForProjection } from "./projection";
-import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
+import type { BoundaryContract } from "@agent-os/core/boundary-contract";
 import { normalizeSubmitToolRetryPolicy } from "./submit-retry-policy";
 
 export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;

@@ -11,20 +11,20 @@
  */
 
 import { Effect, Schema } from "effect";
-import { SqlError } from "@agent-os/kernel/errors";
+import { SqlError } from "@agent-os/core/errors";
 import { sqlText } from "../storage/sql-row";
 import type {
   AdmissionRow,
   AttemptKey,
   LedgerTruthIdentity,
   Outcome,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   LLM_STRUCTURED_EVIDENCE_EVENT,
   LLM_STRUCTURED_INVALIDATE_EVENT,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
-import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
+import type { FactOwnerRef } from "@agent-os/core/effect-claim";
 
 const AttemptKeySchema = Schema.Struct({
   routeFingerprint: Schema.String,

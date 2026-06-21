@@ -17,17 +17,17 @@ import type { HttpClientRequest } from "effect/unstable/http/HttpClientRequest";
 import type { HttpClientResponse } from "effect/unstable/http/HttpClientResponse";
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
-import { ensureAgentSchema } from "@agent-os/kernel/agent-schema";
+import { ensureAgentSchema } from "@agent-os/core/agent-schema";
 import {
   llmCallSnapshotFromResponse,
   LlmTransport,
   projectAgentSchemaForLlmTool,
   replayLlmResponseFromSnapshot,
   type LlmRequest,
-} from "@agent-os/llm-protocol";
-import type { ToolDefinition } from "@agent-os/kernel/tools";
-import { RefResolverLive, type RefResolverService } from "@agent-os/kernel/ref-resolver";
-import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/kernel/errors";
+} from "@agent-os/core/llm-protocol";
+import type { ToolDefinition } from "@agent-os/core/tools";
+import { RefResolverLive, type RefResolverService } from "@agent-os/core/ref-resolver";
+import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/core/errors";
 import {
   callEffectAiLanguageModel,
   effectAiPromptFromMessages,

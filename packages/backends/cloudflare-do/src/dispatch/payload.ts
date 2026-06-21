@@ -5,4 +5,4 @@ export {
   parseTraceContext,
   type DispatchPayloadParseResult,
   type DispatchRequestedPayload,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";

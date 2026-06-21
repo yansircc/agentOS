@@ -1,25 +1,21 @@
 import { Effect, Fiber, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { describe, expect, it } from "@effect/vitest";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   LlmTransport,
   type LlmRequest,
   type LlmResponse,
   type LlmRoute,
   type LlmWireDescriptor,
-} from "@agent-os/llm-protocol";
-import type { MaterialRef } from "@agent-os/kernel/material-ref";
-import { materialRefKey } from "@agent-os/kernel/material-ref";
-import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
-import type { ResolvedMaterial } from "@agent-os/kernel/ref-resolver";
-import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
-import type { BoundaryContract } from "@agent-os/kernel/boundary-contract";
-import {
-  defineTool,
-  externalToolExecution,
-  withToolWriteRequirement,
-} from "@agent-os/kernel/tools";
+} from "@agent-os/core/llm-protocol";
+import type { MaterialRef } from "@agent-os/core/material-ref";
+import { materialRefKey } from "@agent-os/core/material-ref";
+import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
+import type { BoundaryContract } from "@agent-os/core/boundary-contract";
+import { defineTool, externalToolExecution, withToolWriteRequirement } from "@agent-os/core/tools";
 import { commitBoundaryEvent } from "../src/boundary-commit";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
@@ -57,7 +53,7 @@ import {
   agentRunCompletedEvent,
   agentRunStartedEvent,
   type SubmitSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 const scope = "workspace-job-runtime";
 const identity = {

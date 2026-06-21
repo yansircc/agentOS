@@ -4,7 +4,7 @@ import {
   DurableTriggerCommitReturnedThenable,
   JsonStringifyError,
   UnregisteredDurableTriggerKind,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
   DurableTriggerRegistry,
@@ -20,7 +20,7 @@ import {
 import type {
   BackendProtocolEventIdentity,
   BackendProtocolTruthIdentity,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 const claimToken = (): string => crypto.randomUUID();

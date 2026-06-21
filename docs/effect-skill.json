@@ -6,10 +6,6 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     "packageOverrides": {
-      "packages/kernel": {
-        "dependencyOwner": "package-local",
-        "dependencyOwnerReason": "kernel owns platform-free algebra dependency declarations"
-      },
       "packages/runtime": {
         "dependencyOwner": "package-local",
         "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
@@ -17,6 +13,10 @@
       "packages/backends/cloudflare-do": {
         "dependencyOwner": "package-local",
         "dependencyOwnerReason": "Cloudflare DO backend owns platform adapter dependency declarations"
+      },
+      "packages/core": {
+        "dependencyOwner": "package-local",
+        "dependencyOwnerReason": "core owns neutral substrate algebra and protocol dependency declarations"
       }
     },
     "hostTooling": [
@@ -203,9 +203,6 @@
     ]
   },
   "packageManifests": {
-    "packages/kernel": {
-      "shape": ["library"]
-    },
     "packages/carriers/image": {
       "shape": ["library"]
     },
@@ -311,6 +308,9 @@
           "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
         }
       ]
+    },
+    "packages/core": {
+      "shape": ["library"]
     }
   }
 }

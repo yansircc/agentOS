@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import type { LedgerEvent } from "@agent-os/core/types";
 import { DECISION_GATE_KIND, settleDecisionGateConsumed } from "@agent-os/decision-gate";
 import {
   agentRunInterruptedEvent,
@@ -8,7 +8,7 @@ import {
   decodeRuntimeLedgerEvent,
   inputRequestRefFromInterruptedEvent,
   type RuntimeEventCommitSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   projectInputRequest,
   projectInputRequests,

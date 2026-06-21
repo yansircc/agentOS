@@ -61,7 +61,7 @@ void test("distribution manifest scanner reports package-wide install obligation
         install: "node-gyp rebuild",
       },
       dependencies: {
-        "@agent-os/kernel": "workspace:*",
+        "@agent-os/core": "workspace:*",
         sharp: "^1.0.0",
       },
       devDependencies: {

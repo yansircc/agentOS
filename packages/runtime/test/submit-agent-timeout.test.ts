@@ -8,14 +8,14 @@ import { MaterializedProjections } from "../src/projection";
 import { Quota } from "../src/quota-service";
 import { Admission } from "../src/admission";
 import { DEFAULT_LLM_CALL_TIMEOUT_MS, submitAgentEffect } from "../src/submit-agent";
-import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
-import { LlmTransport, type LlmRoute, type LlmWireDescriptor } from "@agent-os/llm-protocol";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
+import { LlmTransport, type LlmRoute, type LlmWireDescriptor } from "@agent-os/core/llm-protocol";
 import {
   RUNTIME_FACT_OWNER,
   decodeRuntimeLedgerEvent,
   type SubmitSpec,
-} from "@agent-os/runtime-protocol";
-import { RefResolverEmpty } from "@agent-os/kernel/ref-resolver";
+} from "@agent-os/core/runtime-protocol";
+import { RefResolverEmpty } from "@agent-os/core/ref-resolver";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
 
 const timeoutScope = {

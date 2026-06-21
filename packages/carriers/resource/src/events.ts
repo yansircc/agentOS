@@ -1,15 +1,15 @@
 import { Predicate } from "effect";
-import type { IndeterminateClaim, LivedClaim, RejectedClaim } from "@agent-os/kernel/effect-claim";
+import type { IndeterminateClaim, LivedClaim, RejectedClaim } from "@agent-os/core/effect-claim";
 import {
   validateIndeterminateClaim,
   validateTerminalClaim,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 import {
   isMaterialRef,
   type BindingMaterialRef,
   type ExternalResourceMaterialRef,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/material-ref";
 import { RESOURCE_EVENTS, RESOURCE_KIND, resourceSettlementContract } from "./definition";
 export { RESOURCE_EVENTS, RESOURCE_KIND } from "./definition";
 

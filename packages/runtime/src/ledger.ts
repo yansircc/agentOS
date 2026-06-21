@@ -1,12 +1,12 @@
 import { Context, Data, Effect } from "effect";
-import { JsonStringifyError } from "@agent-os/kernel/errors";
+import { JsonStringifyError } from "@agent-os/core/errors";
 import {
   decodeRecordedLedgerEvent,
   type EventQueryOptions,
   type LedgerEvent,
   type RecordedLedgerEvent,
-} from "@agent-os/kernel/types";
-import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/types";
+import type { LedgerCommitEventSpec, LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 
 export type RuntimeStorageOperation =
   | "admission"

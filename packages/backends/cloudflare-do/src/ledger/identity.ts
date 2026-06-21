@@ -9,8 +9,8 @@ import {
   type AuthorityRef,
   type FactOwnerRef,
   type ScopeRef,
-} from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/effect-claim";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
@@ -19,7 +19,7 @@ import {
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
   type BackendProtocolTruthIdentity,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { sqlText } from "../storage/sql-row";
 
 export class CloudflareLedgerSchemaError extends Data.TaggedError(

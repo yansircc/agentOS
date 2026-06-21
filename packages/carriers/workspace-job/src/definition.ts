@@ -1,12 +1,5 @@
 import { Schema } from "effect";
-import {
-  defineCarrier,
-  event,
-  indeterminate,
-  lived,
-  pre,
-  rejected,
-} from "@agent-os/kernel/carrier";
+import { defineCarrier, event, indeterminate, lived, pre, rejected } from "@agent-os/core/carrier";
 
 export const WORKSPACE_JOB_EVENT_PREFIX = "workspace_job.";
 export const WORKSPACE_JOB_FACT_OWNER = "@agent-os/workspace-job";

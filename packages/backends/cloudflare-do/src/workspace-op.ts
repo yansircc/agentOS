@@ -1,6 +1,6 @@
 import { Option, Predicate, Schema } from "effect";
-import { CapabilityRejected, type EventHandler, type LedgerEventRpc } from "@agent-os/kernel";
-import type { ExtensionCapability, ExtensionDeclaration } from "@agent-os/kernel/extensions";
+import { CapabilityRejected, type EventHandler, type LedgerEventRpc } from "@agent-os/core";
+import type { ExtensionCapability, ExtensionDeclaration } from "@agent-os/core/extensions";
 import {
   defineProjection,
   projectionIdentity,

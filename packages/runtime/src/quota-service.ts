@@ -1,7 +1,7 @@
 import { Context, Effect } from "effect";
-import type { JsonStringifyError } from "@agent-os/kernel/errors";
-import type { GrantResult } from "@agent-os/backend-protocol";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import type { JsonStringifyError } from "@agent-os/core/errors";
+import type { GrantResult } from "@agent-os/core/backend-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import type { RuntimeStorageError } from "./ledger";
 
 export class Quota extends Context.Service<

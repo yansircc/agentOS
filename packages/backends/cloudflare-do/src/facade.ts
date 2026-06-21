@@ -1,9 +1,9 @@
-import type { ExtensionDeclaration } from "@agent-os/kernel/extensions";
-import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/kernel/types";
+import type { ExtensionDeclaration } from "@agent-os/core/extensions";
+import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/core/types";
 import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
-import { type AgentManifest, type SubmitResult } from "@agent-os/runtime-protocol";
-import type { LlmTransport } from "@agent-os/llm-protocol";
-import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
+import { type AgentManifest, type SubmitResult } from "@agent-os/core/runtime-protocol";
+import type { LlmTransport } from "@agent-os/core/llm-protocol";
+import type { RefResolverService } from "@agent-os/core/ref-resolver";
 import type { Layer } from "effect";
 import {
   AgentDurableObject,

@@ -7,7 +7,7 @@ import {
   runSynchronousAttachedStreamCommit,
   type RuntimeStorageError,
 } from "@agent-os/runtime";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemoryAttachedStreamsLive = (

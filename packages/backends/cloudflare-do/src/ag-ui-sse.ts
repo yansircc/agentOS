@@ -5,7 +5,7 @@ import {
   projectLedgerSseToAgUiSse,
   type AgUiLedgerEnvelopeProjectionSpec,
 } from "@agent-os/ag-ui";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   createSseHttpResponse,
   createSseHttpTextResponse,

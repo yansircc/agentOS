@@ -8,8 +8,8 @@ import {
   settleDeployLived,
   settleDeployRejected,
 } from "../src";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/core/extensions";
 
 const deployClaim = makePreClaim({
   operationRef: "deploy:session-1:promote",

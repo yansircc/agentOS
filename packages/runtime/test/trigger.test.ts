@@ -1,12 +1,12 @@
 import { Effect, Exit } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { DurableTriggerCommitReturnedThenable } from "@agent-os/kernel";
+import { DurableTriggerCommitReturnedThenable } from "@agent-os/core";
 import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   DURABLE_TRIGGER_SCHEDULED_CANCELLED,
   SCHEDULED_EVENT_TRIGGER_KIND,
   scheduledEventIntentPayload,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import {
   runSynchronousTriggerCommit,
   makeDurableTriggerRegistry,

@@ -3,7 +3,7 @@ import type {
   SubmitToolExecutionRetryPolicy,
   SubmitToolRetryDelayPolicy,
   SubmitToolRetryPolicy,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 export interface NormalizedSubmitToolRetryPolicy {
   readonly correctionRetries: number;

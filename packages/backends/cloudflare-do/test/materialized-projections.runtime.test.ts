@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import type { LedgerEventRpc } from "@agent-os/kernel/types";
+import type { LedgerEventRpc } from "@agent-os/core/types";
 import type { MaterializedProjectionTestDO } from "./test-worker";
 import { testEventIdentity, testTruthIdentity } from "./_identity";
 

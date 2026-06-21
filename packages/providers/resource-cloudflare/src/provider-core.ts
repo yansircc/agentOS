@@ -1,5 +1,5 @@
 import { Effect, Predicate } from "effect";
-import type { PreClaim } from "@agent-os/kernel/effect-claim";
+import type { PreClaim } from "@agent-os/core/effect-claim";
 import {
   externalResourceMaterialRef,
   materialRefKey,
@@ -7,8 +7,8 @@ import {
   type CredentialMaterialRef,
   type ExternalResourceMaterialRef,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
-import { type RefResolver } from "@agent-os/kernel/ref-resolver";
+} from "@agent-os/core/material-ref";
+import { type RefResolver } from "@agent-os/core/ref-resolver";
 
 import type {
   ResourceBindRequest,

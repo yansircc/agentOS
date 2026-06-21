@@ -16,7 +16,7 @@ import type {} from "@effect/vitest";
 
 import { Ledger } from "../../src/ledger";
 import { internalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
-import { defineTool, deterministicToolExecution } from "@agent-os/kernel/tools";
+import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
 import { stubLlmTransport } from "../_stub-ai";
 import { allowToolAdmitter } from "../_tool-fixture";
 

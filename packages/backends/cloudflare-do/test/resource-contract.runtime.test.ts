@@ -4,7 +4,7 @@ import type {
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
-} from "@agent-os/kernel/types";
+} from "@agent-os/core/types";
 /**
  * Resources — deterministic contract tests.
  *
@@ -17,8 +17,8 @@ import type {
 
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { LedgerEventRpc } from "@agent-os/kernel/types";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { LedgerEventRpc } from "@agent-os/core/types";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import type { DispatchTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 

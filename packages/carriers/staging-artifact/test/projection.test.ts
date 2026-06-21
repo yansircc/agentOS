@@ -6,8 +6,8 @@ import {
   stagingArtifactSettlementRef,
   settleStagingArtifactLived,
 } from "../src";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import type { ExtensionCapability } from "@agent-os/core/extensions";
 
 const stagingClaim = makePreClaim({
   operationRef: "staging:session-1:reap",

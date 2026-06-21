@@ -1,4 +1,4 @@
-import type { EventNamespace } from "@agent-os/kernel/extensions";
+import type { EventNamespace } from "@agent-os/core/extensions";
 
 export const IMAGE_EVENT_PREFIX = "image.";
 

@@ -1,6 +1,6 @@
 import { Clock, Effect, Layer } from "effect";
-import { UnregisteredDurableTriggerKind } from "@agent-os/kernel/errors";
-import { SCHEDULED_EVENT_TRIGGER_KIND } from "@agent-os/backend-protocol";
+import { UnregisteredDurableTriggerKind } from "@agent-os/core/errors";
+import { SCHEDULED_EVENT_TRIGGER_KIND } from "@agent-os/core/backend-protocol";
 import {
   DurableTriggerRegistry,
   Scheduler,
@@ -10,7 +10,7 @@ import {
 } from "@agent-os/runtime";
 import { EventBus } from "./ledger";
 import { enqueueScheduledEvent, ensureDueWorkSchema } from "./due-work";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 export { Scheduler } from "@agent-os/runtime";
 

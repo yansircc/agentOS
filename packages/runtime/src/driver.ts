@@ -5,8 +5,8 @@ import {
   type DecisionGateConsumedPayload,
   type DecisionGateRequestedPayload,
 } from "@agent-os/decision-gate";
-import type { JsonStringifyError } from "@agent-os/kernel/errors";
-import type { RecordedLedgerEvent } from "@agent-os/kernel/types";
+import type { JsonStringifyError } from "@agent-os/core/errors";
+import type { RecordedLedgerEvent } from "@agent-os/core/types";
 import {
   decodeRuntimeLedgerEvent,
   RUNTIME_EVENT_KIND,
@@ -15,8 +15,8 @@ import {
   type RuntimeEventCommitSpecByKind,
   type RuntimeEventKind,
   type RuntimeLedgerEventByKind,
-} from "@agent-os/runtime-protocol";
-import type { LedgerCommitEventSpec } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
+import type { LedgerCommitEventSpec } from "@agent-os/core/runtime-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import { runtimeStorageError, type RuntimeStorageError } from "./ledger";
 

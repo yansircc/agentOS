@@ -1,13 +1,13 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
-import { defineAgentSchema } from "@agent-os/kernel/agent-schema";
-import { materialRequirement } from "@agent-os/kernel/material-ref";
+import { defineAgentSchema } from "@agent-os/core/agent-schema";
+import { materialRequirement } from "@agent-os/core/material-ref";
 import {
   defineTool,
   deterministicToolExecution,
   validateToolRegistry,
   type Tool,
-} from "@agent-os/kernel/tools";
+} from "@agent-os/core/tools";
 
 import { allowToolAdmitter, makeLookupTool } from "./_tool-fixture";
 

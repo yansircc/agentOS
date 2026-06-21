@@ -4,11 +4,11 @@ import {
   type PreClaim,
   type RejectedClaim,
   type RejectionRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 import {
   isSymbolicSettlementValue,
   symbolicSettlementRef,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 
 import { workspaceSessionCarrier } from "./definition";
 import type { WorkspaceSessionFailure } from "./carrier";

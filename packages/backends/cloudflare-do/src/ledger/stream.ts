@@ -1,5 +1,5 @@
-import type { LedgerEvent, StreamEventsOptions } from "@agent-os/kernel/types";
-import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
+import type { LedgerEvent, StreamEventsOptions } from "@agent-os/core/types";
+import type { FactOwnerRef } from "@agent-os/core/effect-claim";
 /**
  * Server-Sent Events stream for ledger reads — the SSE surface of
  * `Cloudflare backend.streamEvents`. Extracted from agent-do.ts as a pure
@@ -32,8 +32,8 @@ import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
 
 import { Effect, type ManagedRuntime } from "effect";
 import { Ledger } from "@agent-os/runtime";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
-import { backendProtocolTruthIdentityKey } from "@agent-os/backend-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
+import { backendProtocolTruthIdentityKey } from "@agent-os/core/backend-protocol";
 import { EventBus } from "./event-bus";
 import { eventToRpc } from "./ledger";
 

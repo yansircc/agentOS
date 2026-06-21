@@ -1,9 +1,9 @@
-import type { Authored } from "@agent-os/kernel";
-import { isAgentSchema } from "@agent-os/kernel/agent-schema";
-import { authoredValue } from "@agent-os/kernel/authored-value";
-import { isAuthorityRef, type AuthorityRef } from "@agent-os/kernel/effect-claim";
-import { isMaterialRef, type MaterialRef } from "@agent-os/kernel/material-ref";
-import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
+import type { Authored } from "@agent-os/core";
+import { isAgentSchema } from "@agent-os/core/agent-schema";
+import { authoredValue } from "@agent-os/core/authored-value";
+import { isAuthorityRef, type AuthorityRef } from "@agent-os/core/effect-claim";
+import { isMaterialRef, type MaterialRef } from "@agent-os/core/material-ref";
+import type { AgentSchemaSpec } from "@agent-os/core/agent-schema";
 import type {
   AgentExecutionDomainRef,
   AgentInstructionsRef,
@@ -15,7 +15,7 @@ import type {
   ProviderResourceId,
   WorkspaceBindingRef,
   WorkspaceTopology,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   BUILTIN_HANDLER_KINDS,
   WORKSPACE_TOPOLOGY,
@@ -24,7 +24,7 @@ import {
   workspaceProviderResourceId,
   type DeploymentSpec,
   type HandlerKind,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   WORKSPACE_TOOL_DEFAULT_DECLARATIONS,
   WORKSPACE_TOOL_EXPOSURE_PROFILES,
@@ -36,8 +36,8 @@ import {
 
 export const AUTHORING_DEFAULTS_VERSION = "framework-defaults@agentos/v1" as const;
 
-export { WORKSPACE_TOPOLOGY } from "@agent-os/runtime-protocol";
-export type { WorkspaceTopologyKind } from "@agent-os/runtime-protocol";
+export { WORKSPACE_TOPOLOGY } from "@agent-os/core/runtime-protocol";
+export type { WorkspaceTopologyKind } from "@agent-os/core/runtime-protocol";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 

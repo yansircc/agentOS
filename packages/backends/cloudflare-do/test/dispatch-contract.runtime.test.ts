@@ -2,11 +2,11 @@ import type {
   DispatchToScopeSpec,
   LedgerEventRpc,
   StreamEventsOptions,
-} from "@agent-os/kernel/types";
+} from "@agent-os/core/types";
 import type {
   BackendProtocolTruthIdentity,
   DispatchTargetAdapter,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 /**
  * dispatchToScope — deterministic contract tests.
  *
@@ -20,20 +20,20 @@ import type {
 
 import { SELF, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { DispatchToScopeResult } from "@agent-os/kernel/types";
-import { validateEffectClaim } from "@agent-os/kernel/effect-claim";
+import type { DispatchToScopeResult } from "@agent-os/core/types";
+import { validateEffectClaim } from "@agent-os/core/effect-claim";
 import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_RETRY_POLICY,
   dispatchLedgerDeliveryReceipt,
   dispatchReplaySnapshotFromDeliveredPayload,
   replayDispatchDeliveryFromSnapshot,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import {
   bindingMaterialRef,
   materialRefKey,
   type BindingMaterialRef,
-} from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/material-ref";
 import { sqlText } from "../src/storage/sql-row";
 import { cloudflareRouteKeyFromScopeRef } from "../src/ledger/identity";
 import type { DispatchTestDO } from "./test-worker";

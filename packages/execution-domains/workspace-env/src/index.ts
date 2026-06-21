@@ -12,7 +12,7 @@ import {
   type Tool,
   type ToolAccess,
   type ToolAdmitter,
-} from "@agent-os/kernel";
+} from "@agent-os/core";
 
 export class WorkspaceEnvInputError extends Error {
   override readonly name = "WorkspaceEnvInputError";

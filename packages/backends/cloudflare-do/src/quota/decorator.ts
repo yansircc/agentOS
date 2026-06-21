@@ -18,7 +18,7 @@
  *   - Cross-scope quota (currently DO scope is the partition key)
  */
 
-import type { Tool } from "@agent-os/kernel/tools";
+import type { Tool } from "@agent-os/core/tools";
 
 export interface QuotaSpec {
   /** Identifier within the DO scope. Default: tool definition's function name. */

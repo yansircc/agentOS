@@ -19,7 +19,7 @@
     "@agent-os/workspace-env": "workspace:*"
   },
   "devDependencies": {
-    "@agent-os/kernel": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "@effect/language-service": "catalog:",
     "@types/node": "^24.12.4",
     "typescript": "catalog:",

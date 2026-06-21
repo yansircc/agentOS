@@ -1,8 +1,8 @@
 import { Predicate } from "effect";
-import type { SafeLedgerEvent, SafeLedgerPayloadShape } from "@agent-os/kernel";
-import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/kernel";
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import type { SafeLedgerEvent, SafeLedgerPayloadShape } from "@agent-os/core";
+import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/core";
+import type { LedgerEvent } from "@agent-os/core/types";
+import { validateTerminalClaim } from "@agent-os/core/settlement-contract";
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,

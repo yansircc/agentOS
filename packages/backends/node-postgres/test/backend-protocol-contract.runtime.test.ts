@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "@effect/vitest";
 import { afterAll, beforeAll } from "vite-plus/test";
 import { Effect } from "effect";
-import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
-import { DISPATCH_EVENT_KINDS, DELIVERY_RETRY_TRIGGER_KIND } from "@agent-os/backend-protocol";
+import { bindingMaterialRef } from "@agent-os/core/material-ref";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
+import { DISPATCH_EVENT_KINDS, DELIVERY_RETRY_TRIGGER_KIND } from "@agent-os/core/backend-protocol";
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../src";
 import { PsqlCli } from "../src/host";
 import {
@@ -12,7 +12,7 @@ import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../protocol/test/contract/runtime-backend-contract";
+} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
 import { startPostgresRuntimeHarnessEffect, type PostgresRuntimeHarness } from "./postgres-harness";
 
 const bindingRef = bindingMaterialRef({

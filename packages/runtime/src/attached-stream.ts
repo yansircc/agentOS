@@ -6,8 +6,8 @@ import type {
   AttachedStreamOutboundFrame,
 } from "@agent-os/attached-stream";
 import { attachedStreamOutboundFrame } from "@agent-os/attached-stream";
-import type { JsonStringifyError } from "@agent-os/kernel";
-import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
+import type { JsonStringifyError } from "@agent-os/core";
+import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import type { TriggerEventSpec } from "./trigger";
 import type { RuntimeStorageError } from "./ledger";
 

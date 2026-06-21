@@ -6,9 +6,9 @@ import type {
   DispatchEnvelope,
   DispatchTargetAdapter,
   DispatchTargetResult,
-} from "@agent-os/backend-protocol";
-import type { EventHandler } from "@agent-os/kernel/types";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/backend-protocol";
+import type { EventHandler } from "@agent-os/core/types";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { cloudflareRouteKeyFromScopeRef } from "../src/ledger/identity";
 import {
   BACKEND_PROTOCOL_CONTRACT_BINDING_REF,
@@ -18,7 +18,7 @@ import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../protocol/test/contract/runtime-backend-contract";
+} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
 
 interface TestEnv {
   readonly BACKEND_PROTOCOL_CONTRACT_DO: DurableObjectNamespace<BackendProtocolContractTestDO>;

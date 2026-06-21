@@ -1,6 +1,6 @@
 import { ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import {
   DISPATCH_EVENT_KINDS,
   backendProtocolEventIdentityKey,
@@ -10,15 +10,15 @@ import {
   type BackendProtocolTruthIdentity,
   type DispatchReceiver,
   type DispatchTargetAdapter,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src";
 import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../protocol/test/contract/runtime-backend-contract";
+} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
 
 const bindingRef = bindingMaterialRef({
   provider: "test",

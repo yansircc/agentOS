@@ -16,7 +16,7 @@
  */
 
 // ── Schema types + validator ───────────────────────────────────
-export type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
+export type { AgentSchemaSpec } from "@agent-os/core/agent-schema";
 
 // ── Lease projection state + pure functions ────────────────────
 export type {
@@ -31,11 +31,11 @@ export type {
   BarrierCursor,
   AdmissionRow,
   LlmRoute,
-} from "@agent-os/runtime-protocol";
-export { decideTier, projectLease } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
+export { decideTier, projectLease } from "@agent-os/core/runtime-protocol";
 
 // ── Canonical fingerprint algebra ──────────────────────────────
-export { FINGERPRINT_ALGO_VERSION, makeAdmissionSchemaSpec } from "@agent-os/runtime-protocol";
+export { FINGERPRINT_ALGO_VERSION, makeAdmissionSchemaSpec } from "@agent-os/core/runtime-protocol";
 
 // ── Orchestration + Live layer ─────────────────────────────────
 export type {
@@ -46,6 +46,6 @@ export type {
   AttemptSpec,
   AttemptResult,
   InvalidateSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 export { Admission } from "@agent-os/runtime";
 export { AdmissionLive } from "./admission";

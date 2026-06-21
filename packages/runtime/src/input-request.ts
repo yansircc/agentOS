@@ -1,5 +1,5 @@
-import { scopeRefKey } from "@agent-os/kernel/effect-claim";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import { scopeRefKey } from "@agent-os/core/effect-claim";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   DECISION_GATE_KIND,
   projectDecisionGate,
@@ -17,7 +17,7 @@ import {
   type InputRequestRef,
   type RuntimeLedgerEventByKind,
   type SubmitResumeDecision,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 
 export type InputRequestProjection =
   | {

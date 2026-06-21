@@ -4,10 +4,10 @@ import type {
   SafeLedgerEventProjector,
   SafeLedgerPayloadShape,
   SafeLedgerValue,
-} from "@agent-os/kernel";
-import { scopeRefKey } from "@agent-os/kernel/effect-claim";
-import type { Tool } from "@agent-os/kernel/tools";
-import { decodeRecordedLedgerEvent, type RecordedLedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core";
+import { scopeRefKey } from "@agent-os/core/effect-claim";
+import type { Tool } from "@agent-os/core/tools";
+import { decodeRecordedLedgerEvent, type RecordedLedgerEvent } from "@agent-os/core/types";
 import {
   inputRequestKindFromReason,
   parseInputRequestResumePayload,
@@ -17,7 +17,7 @@ import {
   type InputRequestDescriptor,
   type SubmitRunInput,
   type SubmitResumeDecision,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   projectWorkspaceJobSafeLedgerEvent,
   WORKSPACE_JOB_FACT_OWNER,

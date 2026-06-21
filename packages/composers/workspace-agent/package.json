@@ -17,8 +17,7 @@
   },
   "dependencies": {
     "@agent-os/client": "workspace:*",
-    "@agent-os/kernel": "workspace:*",
-    "@agent-os/runtime-protocol": "workspace:*",
+    "@agent-os/core": "workspace:*",
     "@agent-os/workspace-env": "workspace:*"
   },
   "devDependencies": {

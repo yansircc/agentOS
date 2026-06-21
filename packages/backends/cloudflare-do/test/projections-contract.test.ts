@@ -6,9 +6,9 @@ import {
   projectQuotaState,
   projectResourceState,
 } from "../src/projections";
-import type { EffectClaim } from "@agent-os/kernel/effect-claim";
-import { settleDispatchInboundAccepted } from "@agent-os/backend-protocol";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { EffectClaim } from "@agent-os/core/effect-claim";
+import { settleDispatchInboundAccepted } from "@agent-os/core/backend-protocol";
+import type { LedgerEvent } from "@agent-os/core/types";
 
 const eventIdentity = (scopeId: string) => ({
   scopeRef: { kind: "conversation" as const, scopeId },

@@ -1,5 +1,5 @@
-import type { ScopeRef } from "@agent-os/kernel/effect-claim";
-import type { SubmitSpec } from "@agent-os/runtime-protocol";
+import type { ScopeRef } from "@agent-os/core/effect-claim";
+import type { SubmitSpec } from "@agent-os/core/runtime-protocol";
 
 declare const internalSubmitSpecBrand: unique symbol;
 

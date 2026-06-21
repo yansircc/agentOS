@@ -4,8 +4,8 @@ import {
   validateEffectClaim,
   type LivedClaim,
   type PreClaim,
-} from "@agent-os/kernel/effect-claim";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/effect-claim";
+import { validateTerminalClaim } from "@agent-os/core/settlement-contract";
 import {
   DECISION_GATE_EVENTS,
   DECISION_GATE_KIND,

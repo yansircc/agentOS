@@ -12,9 +12,9 @@ import { describe, expect, it } from "@effect/vitest";
 
 import { EventBusLive, Ledger, LedgerLive } from "../src/ledger";
 import { Resources, ResourcesLive } from "../src/resources";
-import type { EventHandler } from "@agent-os/kernel/types";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { EventHandler } from "@agent-os/core/types";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 

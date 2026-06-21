@@ -6,8 +6,8 @@ import {
   projectGitSubject,
   settleGitLived,
 } from "../src";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/core/extensions";
 
 const gitClaim = makePreClaim({
   operationRef: "git:session-1:commit",

@@ -1,9 +1,9 @@
-import type { ExtensionCapability, ExtensionDeclaration } from "@agent-os/kernel/extensions";
-import type { RefResolver, RefResolverService } from "@agent-os/kernel/ref-resolver";
-import type { EventHandler } from "@agent-os/kernel/types";
-import type { LlmTransport } from "@agent-os/llm-protocol";
+import type { ExtensionCapability, ExtensionDeclaration } from "@agent-os/core/extensions";
+import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
+import type { EventHandler } from "@agent-os/core/types";
+import type { LlmTransport } from "@agent-os/core/llm-protocol";
 import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
-import type { AgentManifest, DeploymentSpec } from "@agent-os/runtime-protocol";
+import type { AgentManifest, DeploymentSpec } from "@agent-os/core/runtime-protocol";
 import { Layer } from "effect";
 import { MissingLlmTransportLive } from "./llm";
 import {

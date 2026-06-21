@@ -1,8 +1,8 @@
 import { Data, Duration, Effect, Schedule } from "effect";
-import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/kernel/types";
-import type { JsonStringifyError } from "@agent-os/kernel/errors";
-import { RefResolverService } from "@agent-os/kernel/ref-resolver";
-import { LlmTransport } from "@agent-os/llm-protocol";
+import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/core/types";
+import type { JsonStringifyError } from "@agent-os/core/errors";
+import { RefResolverService } from "@agent-os/core/ref-resolver";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import type { BoundaryEvents } from "./boundary-events";
 import { BoundaryEvents as BoundaryEventsTag } from "./boundary-events";
@@ -11,8 +11,8 @@ import { Ledger, type RuntimeStorageError } from "./ledger";
 import { MaterializedProjections } from "./projection";
 import { Quota } from "./quota-service";
 import { submitAgentEffect } from "./submit-agent";
-import type { SubmitResult, SubmitSpec } from "@agent-os/runtime-protocol";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import type { SubmitResult, SubmitSpec } from "@agent-os/core/runtime-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import { internalSubmitSpec } from "./internal-submit";
 import {
   WORKSPACE_JOB_KIND,

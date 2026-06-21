@@ -5,16 +5,16 @@ import type {
   ResourceInsufficient,
   ResourceReservationClosed,
   ResourceReservationNotFound,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 import type {
   ResourceGrantResult,
   ResourceGrantSpec,
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
-} from "@agent-os/kernel/types";
-import type { ResourceProjection } from "@agent-os/backend-protocol";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/types";
+import type { ResourceProjection } from "@agent-os/core/backend-protocol";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import type { RuntimeStorageError } from "./ledger";
 
 export class Resources extends Context.Service<

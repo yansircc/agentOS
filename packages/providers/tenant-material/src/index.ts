@@ -7,8 +7,8 @@
  */
 
 import { Data, Effect } from "effect";
-import type { CredentialMaterialRef, MaterialRef } from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+import type { CredentialMaterialRef, MaterialRef } from "@agent-os/core/material-ref";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
 
 export type TenantCredentialMaterial = string | Uint8Array;
 

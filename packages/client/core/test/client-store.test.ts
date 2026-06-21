@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { LedgerEvent } from "@agent-os/kernel/types";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
   agentRunCompletedEvent,
   agentRunInterruptedEvent,
@@ -9,7 +9,7 @@ import {
   RUNTIME_FACT_OWNER,
   type RuntimeEventCommitSpec,
   type RuntimeLedgerEvent,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import {
   appendRuntimeEventsToSnapshot,
   createAgentClient,

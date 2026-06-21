@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
+import { defineCarrier, event, lived } from "@agent-os/core/carrier";
 
 export const VERIFICATION_EVENT_PREFIX = "verification.";
 

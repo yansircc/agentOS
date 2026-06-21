@@ -6,16 +6,16 @@ import {
   type LlmRequest,
   type LlmRoute,
   type LlmUsage,
-} from "@agent-os/llm-protocol";
-import type { AgentSchemaSpec } from "@agent-os/kernel/agent-schema";
-import type { TraceContext } from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/llm-protocol";
+import type { AgentSchemaSpec } from "@agent-os/core/agent-schema";
+import type { TraceContext } from "@agent-os/core/telemetry-protocol";
 import {
   ProviderHttpFailure,
   ProviderOutputDecodeError,
   UpstreamFailure,
-} from "@agent-os/kernel/errors";
-import type { RefResolutionFailed } from "@agent-os/kernel/ref-resolver";
-import type { Outcome, Stimulus } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/errors";
+import type { RefResolutionFailed } from "@agent-os/core/ref-resolver";
+import type { Outcome, Stimulus } from "@agent-os/core/runtime-protocol";
 import { publicRuntimeCauseReason } from "./failure-classification";
 
 export type StructuredDecodeResult<O = Record<string, unknown>> =

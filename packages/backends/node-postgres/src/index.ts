@@ -11,15 +11,15 @@ import {
   SqlError,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
-} from "@agent-os/kernel/errors";
+} from "@agent-os/core/errors";
 import {
   isAuthorityRef,
   isScopeRef,
   makeOperationRef,
   makePreClaim,
   type FactOwnerRef,
-} from "@agent-os/kernel/effect-claim";
-import { materialRefKey, type BindingMaterialRef } from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/effect-claim";
+import { materialRefKey, type BindingMaterialRef } from "@agent-os/core/material-ref";
 import type {
   DispatchToScopeResult,
   EventHandler,
@@ -30,7 +30,7 @@ import type {
   ResourceReservationSpec,
   ResourceReserveResult,
   ResourceReserveSpec,
-} from "@agent-os/kernel/types";
+} from "@agent-os/core/types";
 import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_EVENT_KINDS,
@@ -70,15 +70,18 @@ import {
   type GrantResult,
   type ProjectedResourceState,
   type ResourceProjection,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import {
   assertRuntimeLedgerTransitions,
   RUNTIME_FACT_OWNER,
   type LedgerCommitEventSpec,
   type LedgerTruthIdentity,
-} from "@agent-os/runtime-protocol";
-import { InvalidTraceContext, type TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
-import { validateOptionalTraceContext } from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/runtime-protocol";
+import {
+  InvalidTraceContext,
+  type TelemetryFanoutDiagnostic,
+} from "@agent-os/core/telemetry-protocol";
+import { validateOptionalTraceContext } from "@agent-os/core/telemetry-protocol";
 import {
   PsqlCli,
   quoteIdentifier,

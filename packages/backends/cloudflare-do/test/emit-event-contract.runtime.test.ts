@@ -22,7 +22,7 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 
-import type { LedgerEventRpc } from "@agent-os/kernel/types";
+import type { LedgerEventRpc } from "@agent-os/core/types";
 import type { EmitTestDO, ExtensionTestDO } from "./test-worker";
 import { testTruthIdentity } from "./_identity";
 import { sqlText } from "../src/storage/sql-row";

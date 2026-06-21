@@ -7,8 +7,8 @@ import type {
   AgentMountWarning,
   HandlerKind,
   MountedAgent,
-} from "@agent-os/runtime-protocol";
-import { mountAgent, projectAgentManifest } from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
+import { mountAgent, projectAgentManifest } from "@agent-os/core/runtime-protocol";
 
 export interface CloudflareAgentMountPort {
   readonly backend: "cloudflare-do";

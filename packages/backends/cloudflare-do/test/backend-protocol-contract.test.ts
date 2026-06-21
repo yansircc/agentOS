@@ -1,15 +1,15 @@
-import type { EventHandler, LedgerEvent } from "@agent-os/kernel/types";
+import type { EventHandler, LedgerEvent } from "@agent-os/core/types";
 import { ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/kernel/material-ref";
+import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import {
   DISPATCH_EVENT_KINDS,
   type BackendProtocolEventIdentity,
   type DispatchReceiver,
   type DispatchTargetAdapter,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { durableObjectDispatchTarget, type DispatchTargetNamespace } from "../src/dispatch";
 import { findNextDue } from "../src/due-work";
 import { EventBus } from "../src/ledger";
@@ -20,8 +20,8 @@ import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../protocol/test/contract/runtime-backend-contract";
-import type { TelemetryFanoutDiagnostic } from "@agent-os/telemetry-protocol";
+} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 
 const bindingRef = bindingMaterialRef({
   provider: "cloudflare",

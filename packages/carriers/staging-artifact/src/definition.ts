@@ -1,6 +1,6 @@
 import { Schema } from "effect";
-import { defineCarrier, event, lived } from "@agent-os/kernel/carrier";
-import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-contract";
+import { defineCarrier, event, lived } from "@agent-os/core/carrier";
+import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/core/settlement-contract";
 
 export const STAGING_EVENT_PREFIX = "staging.";
 const StagingSymbolicRef = Schema.String.pipe(

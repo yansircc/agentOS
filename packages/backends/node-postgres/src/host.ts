@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { SqlError } from "@agent-os/kernel/errors";
+import { SqlError } from "@agent-os/core/errors";
 
 export interface PsqlCliOptions {
   readonly databaseUrl: string;

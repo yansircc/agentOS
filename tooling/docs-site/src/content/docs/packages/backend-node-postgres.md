@@ -36,7 +36,7 @@ initialize its schema before use.
 
 ```ts
 import { NodePostgresBackend } from "@agent-os/backend-node-postgres";
-import { bindingMaterialRef } from "@agent-os/kernel/material-ref";
+import { bindingMaterialRef } from "@agent-os/core/material-ref";
 
 const backend = new NodePostgresBackend({
   databaseUrl: process.env.AGENTOS_NODE_POSTGRES_DATABASE_URL!,

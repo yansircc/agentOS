@@ -14,16 +14,16 @@ import { Context, Layer, ManagedRuntime, Schema } from "effect";
 
 import { EventBusLive, LedgerLive } from "../../src/ledger";
 import { CloudflareMaterializedProjectionsLive } from "../../src/materialized-projections";
-import { LlmTransport } from "@agent-os/llm-protocol";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
 import { MaterializedProjectionRegistry } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
-import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
+import { RefResolverLive } from "@agent-os/core/ref-resolver";
 import { QuotaLive } from "../../src/quota";
 import { AdmissionLive } from "../../src/admission";
 import { BoundaryEventsLive } from "../../src/boundary-events";
-import type { EventHandler } from "@agent-os/kernel/types";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
-import type { AuthorityRef } from "@agent-os/kernel/effect-claim";
+import type { EventHandler } from "@agent-os/core/types";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
+import type { AuthorityRef } from "@agent-os/core/effect-claim";
 import { structuredToolResp } from "../_stub-ai";
 
 export const SCHEMA = Schema.Struct({ summary: Schema.String });

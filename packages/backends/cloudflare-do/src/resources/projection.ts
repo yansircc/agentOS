@@ -6,11 +6,11 @@ import {
   type ResourceProtocolEventRow,
   type ResourceReservationProjection,
   type ResourceReservationStatus,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { sqlText } from "../storage/sql-row";
 import { eventIdentity, eventIdentityColumns } from "../ledger/identity";
-import type { FactOwnerRef } from "@agent-os/kernel/effect-claim";
-import type { LedgerTruthIdentity } from "@agent-os/runtime-protocol";
+import type { FactOwnerRef } from "@agent-os/core/effect-claim";
+import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 
 export type {
   ProjectedResourceState as ProjectedState,

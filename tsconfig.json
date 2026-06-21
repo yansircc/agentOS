@@ -4,53 +4,135 @@
   },
   "files": [],
   "references": [
-    { "path": "./packages/kernel" },
-    { "path": "./packages/llm-protocol" },
-    { "path": "./packages/runtime-protocol" },
-    { "path": "./packages/telemetry-protocol" },
-    { "path": "./packages/composers/agent-authoring" },
-    { "path": "./packages/composers/attached-stream" },
-    { "path": "./packages/composers/turn-stream" },
-    { "path": "./packages/composers/workspace-agent" },
-    { "path": "./packages/wire-adapters/ag-ui" },
-    { "path": "./packages/client/core" },
-    { "path": "./packages/client/react" },
-    { "path": "./packages/client/svelte" },
-    { "path": "./packages/execution-domains/workspace-env" },
-    { "path": "./packages/runtime" },
-    { "path": "./packages/backends/protocol" },
-    { "path": "./packages/carriers/decision-gate" },
-    { "path": "./packages/carriers/deploy" },
-    { "path": "./packages/carriers/git" },
-    { "path": "./packages/carriers/image" },
-    { "path": "./packages/carriers/resource" },
-    { "path": "./packages/execution-domains/sandbox" },
-    { "path": "./packages/carriers/staging-artifact" },
-    { "path": "./packages/providers/tenant-material" },
-    { "path": "./packages/carriers/verification" },
-    { "path": "./packages/carriers/workspace-job" },
-    { "path": "./packages/carriers/workspace-op" },
-    { "path": "./packages/carriers/workspace-session" },
-    { "path": "./packages/providers/dynamic-worker" },
-    { "path": "./packages/providers/deploy-cloudflare" },
-    { "path": "./packages/providers/llm-transport-effect-ai" },
-    { "path": "./packages/providers/llm-transport-http" },
-    { "path": "./packages/providers/image-resource-settlement" },
-    { "path": "./packages/providers/resource-cloudflare" },
-    { "path": "./packages/providers/workspace-op-local" },
-    { "path": "./packages/execution-domains/sandbox-cloudflare" },
-    { "path": "./packages/execution-domains/workspace-env-cloudflare" },
-    { "path": "./packages/execution-domains/workspace-env-local" },
-    { "path": "./packages/providers/workspace-session-cloudflare" },
-    { "path": "./packages/composers/run-stream" },
-    { "path": "./packages/composers/workspace-binding" },
-    { "path": "./packages/transports/sse-http" },
-    { "path": "./packages/wire-adapters/telemetry-otlp" },
-    { "path": "./packages/backends/cloudflare-do" },
-    { "path": "./packages/backends/node-postgres" },
-    { "path": "./packages/backends/in-memory" },
-    { "path": "./tooling/ops-api" },
-    { "path": "./tooling/ops-htmx" }
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/composers/agent-authoring"
+    },
+    {
+      "path": "./packages/composers/attached-stream"
+    },
+    {
+      "path": "./packages/composers/turn-stream"
+    },
+    {
+      "path": "./packages/composers/workspace-agent"
+    },
+    {
+      "path": "./packages/wire-adapters/ag-ui"
+    },
+    {
+      "path": "./packages/client/core"
+    },
+    {
+      "path": "./packages/client/react"
+    },
+    {
+      "path": "./packages/client/svelte"
+    },
+    {
+      "path": "./packages/execution-domains/workspace-env"
+    },
+    {
+      "path": "./packages/runtime"
+    },
+    {
+      "path": "./packages/carriers/decision-gate"
+    },
+    {
+      "path": "./packages/carriers/deploy"
+    },
+    {
+      "path": "./packages/carriers/git"
+    },
+    {
+      "path": "./packages/carriers/image"
+    },
+    {
+      "path": "./packages/carriers/resource"
+    },
+    {
+      "path": "./packages/execution-domains/sandbox"
+    },
+    {
+      "path": "./packages/carriers/staging-artifact"
+    },
+    {
+      "path": "./packages/providers/tenant-material"
+    },
+    {
+      "path": "./packages/carriers/verification"
+    },
+    {
+      "path": "./packages/carriers/workspace-job"
+    },
+    {
+      "path": "./packages/carriers/workspace-op"
+    },
+    {
+      "path": "./packages/carriers/workspace-session"
+    },
+    {
+      "path": "./packages/providers/dynamic-worker"
+    },
+    {
+      "path": "./packages/providers/deploy-cloudflare"
+    },
+    {
+      "path": "./packages/providers/llm-transport-effect-ai"
+    },
+    {
+      "path": "./packages/providers/llm-transport-http"
+    },
+    {
+      "path": "./packages/providers/image-resource-settlement"
+    },
+    {
+      "path": "./packages/providers/resource-cloudflare"
+    },
+    {
+      "path": "./packages/providers/workspace-op-local"
+    },
+    {
+      "path": "./packages/execution-domains/sandbox-cloudflare"
+    },
+    {
+      "path": "./packages/execution-domains/workspace-env-cloudflare"
+    },
+    {
+      "path": "./packages/execution-domains/workspace-env-local"
+    },
+    {
+      "path": "./packages/providers/workspace-session-cloudflare"
+    },
+    {
+      "path": "./packages/composers/run-stream"
+    },
+    {
+      "path": "./packages/composers/workspace-binding"
+    },
+    {
+      "path": "./packages/transports/sse-http"
+    },
+    {
+      "path": "./packages/wire-adapters/telemetry-otlp"
+    },
+    {
+      "path": "./packages/backends/cloudflare-do"
+    },
+    {
+      "path": "./packages/backends/node-postgres"
+    },
+    {
+      "path": "./packages/backends/in-memory"
+    },
+    {
+      "path": "./tooling/ops-api"
+    },
+    {
+      "path": "./tooling/ops-htmx"
+    }
   ],
   "include": []
 }

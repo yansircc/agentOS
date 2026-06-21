@@ -38,8 +38,8 @@ set by claim authors.
 ## Minimal Shape
 
 ```ts
-import { defineBoundaryContract } from "@agent-os/kernel/boundary-contract";
-import { defineSettlementContract } from "@agent-os/kernel/settlement-contract";
+import { defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { defineSettlementContract } from "@agent-os/core/settlement-contract";
 
 const settlement = defineSettlementContract({
   settlementId: "@agent-os/example",

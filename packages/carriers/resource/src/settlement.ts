@@ -6,11 +6,11 @@ import type {
   PreClaim,
   RejectedClaim,
   RejectionRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 import {
   isSymbolicSettlementValue,
   symbolicSettlementRef,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 
 import { resourceCarrierDefinition } from "./definition";
 import type { ResourceFailure } from "./carrier";

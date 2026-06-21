@@ -1,9 +1,9 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import type { ToolProjectionWaitSpec } from "@agent-os/kernel/tools";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import type { ToolProjectionWaitSpec } from "@agent-os/core/tools";
 import { createWorkspaceEnv, type WorkspaceEnvBackend } from "@agent-os/workspace-env";
-import { receiptBackedToolResultFromUnknown } from "@agent-os/runtime-protocol";
+import { receiptBackedToolResultFromUnknown } from "@agent-os/core/runtime-protocol";
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,

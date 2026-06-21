@@ -8,9 +8,9 @@ import type {
   RunStatus,
   RunTrace,
   StreamEventsOptions,
-} from "@agent-os/kernel/types";
-import type { AttemptKey, CapabilityLease } from "@agent-os/runtime-protocol";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+} from "@agent-os/core/types";
+import type { AttemptKey, CapabilityLease } from "@agent-os/core/runtime-protocol";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import type { AgentDOIntrospection, ResolvedScope } from "@agent-os/ops-api";
 import { cloudflareDefaultTruthIdentityFromRoutingScope } from "./ledger/identity";
 

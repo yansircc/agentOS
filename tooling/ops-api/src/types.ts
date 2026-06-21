@@ -6,8 +6,8 @@
  * ops-api ships no default implementation.
  */
 
-import type { AttemptKey } from "@agent-os/runtime-protocol";
-import type { RunListPage, RunListSpec, RunStatus, RunSummary } from "@agent-os/kernel/types";
+import type { AttemptKey } from "@agent-os/core/runtime-protocol";
+import type { RunListPage, RunListSpec, RunStatus, RunSummary } from "@agent-os/core/types";
 
 // ============================================================
 // Scope resolution

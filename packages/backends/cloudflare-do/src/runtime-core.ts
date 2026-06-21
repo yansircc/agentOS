@@ -1,4 +1,4 @@
-import type { EventHandler } from "@agent-os/kernel/types";
+import type { EventHandler } from "@agent-os/core/types";
 import { Effect, Layer } from "effect";
 import {
   AttachedStreamRegistry,
@@ -17,7 +17,7 @@ import {
   type AnyMaterializedProjectionDefinition,
   type RuntimeStorageError,
 } from "@agent-os/runtime";
-import { SqlError, TriggerFactoryError } from "@agent-os/kernel/errors";
+import { SqlError, TriggerFactoryError } from "@agent-os/core/errors";
 import {
   Dispatch,
   DispatchLive,
@@ -37,7 +37,7 @@ import {
 import { AttachedStreamsLive } from "./attached-stream";
 import { BoundaryEventsLive } from "./boundary-events";
 import { CloudflareMaterializedProjectionsLive } from "./materialized-projections";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 export type CloudflareBackendCoreServices =
   | EventBus

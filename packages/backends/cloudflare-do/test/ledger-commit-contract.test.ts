@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import type { LedgerEvent } from "@agent-os/kernel/types";
-import { DISPATCH_INBOUND_ACCEPTED } from "@agent-os/backend-protocol";
+import type { LedgerEvent } from "@agent-os/core/types";
+import { DISPATCH_INBOUND_ACCEPTED } from "@agent-os/core/backend-protocol";
 import {
   defineProjection,
   makeProjectionRegistryResult,
@@ -15,9 +15,9 @@ import {
   agentRunStartedEvent,
   RUNTIME_FACT_OWNER,
   runtimeHistoryCompactedEvent,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import type { AnyMaterializedProjectionDefinition, ProjectionRegistry } from "@agent-os/runtime";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import type { EventBusService } from "../src/ledger/event-bus";
 import {
   commitLedgerTransaction,

@@ -1,7 +1,7 @@
 import { Effect, Layer } from "effect";
-import { UpstreamFailure } from "@agent-os/kernel/errors";
-import { LlmTransport } from "@agent-os/llm-protocol";
-import type { RefResolverService } from "@agent-os/kernel/ref-resolver";
+import { UpstreamFailure } from "@agent-os/core/errors";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
+import type { RefResolverService } from "@agent-os/core/ref-resolver";
 
 export type {
   LlmMessage,
@@ -11,13 +11,13 @@ export type {
   LlmRoute,
   LlmToolCall,
   LlmUsage,
-} from "@agent-os/llm-protocol";
-export type { ToolDefinition } from "@agent-os/kernel/tools";
+} from "@agent-os/core/llm-protocol";
+export type { ToolDefinition } from "@agent-os/core/tools";
 export {
   llmOutputItemsFromTextAndToolCalls,
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
-} from "@agent-os/llm-protocol";
+} from "@agent-os/core/llm-protocol";
 
 const missingLlmTransport = () =>
   new UpstreamFailure({ cause: { reason: "cloudflare_do_llm_transport_unbound" } });

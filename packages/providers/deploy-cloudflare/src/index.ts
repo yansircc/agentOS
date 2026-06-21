@@ -22,8 +22,8 @@ import {
   type EndpointMaterialRef,
   type ExternalResourceMaterialRef,
   type MaterialRef,
-} from "@agent-os/kernel/material-ref";
-import type { RefResolver } from "@agent-os/kernel/ref-resolver";
+} from "@agent-os/core/material-ref";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
 
 export interface CloudflareWorkerBindingRef {
   readonly name: string;

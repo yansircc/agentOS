@@ -1,4 +1,4 @@
-import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/kernel/types";
+import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/core/types";
 /**
  * Ledger — module-private append-only event log on DO SQLite.
  *
@@ -16,7 +16,7 @@ import {
   runtimeStorageOrJsonError,
   type RuntimeStorageError,
 } from "@agent-os/runtime";
-import { RUNTIME_FACT_OWNER } from "@agent-os/runtime-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { EventBus } from "./event-bus";
 import { commitLedgerTransaction, ensureLedgerSchema } from "./commit";
 import {
@@ -25,7 +25,7 @@ import {
   truthIdentityFromCommitSpec,
   type LedgerEventSqlRow,
 } from "./identity";
-import type { BackendProtocolTruthIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 
 const DEFAULT_EVENT_LIMIT = 1000;
 const MAX_EVENT_LIMIT = 1000;

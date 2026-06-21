@@ -1,5 +1,5 @@
 import { Clock, Duration, Effect } from "effect";
-import { resolveRuntimeScope } from "@agent-os/kernel/runtime-scope";
+import { resolveRuntimeScope } from "@agent-os/core/runtime-scope";
 
 import { validateDynamicWorkerRequest } from "./policy";
 import {

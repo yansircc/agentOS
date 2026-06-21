@@ -3,7 +3,7 @@ import {
   isIndeterminateRef,
   type IndeterminateRef,
   type OperationRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 
 export interface WitnessRequest {
   readonly operationRef: OperationRef;

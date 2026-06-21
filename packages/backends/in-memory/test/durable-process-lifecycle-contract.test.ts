@@ -5,7 +5,7 @@ import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../src
 import {
   runDurableProcessLifecycleContract,
   type DurableProcessLifecycleDriver,
-} from "../../protocol/test/contract/durable-process-lifecycle-contract";
+} from "../../../core/test/backend-protocol/contract/durable-process-lifecycle-contract";
 import { runtimeEventIdentity, truthIdentity } from "./identity";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessLifecycleDriver => {

@@ -1,6 +1,6 @@
 import { Cause, Effect, Exit, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/core/effect-claim";
 
 import {
   CloudflareWorkerDeployResolutionFailure,

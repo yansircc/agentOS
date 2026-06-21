@@ -8,15 +8,18 @@ import {
   UnregisteredDurableTriggerKind,
   UnsupportedScopeRef,
   isCoreClaimedEventKind,
-} from "@agent-os/kernel/errors";
-import { InvalidTraceContext, validateOptionalTraceContext } from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/errors";
+import {
+  InvalidTraceContext,
+  validateOptionalTraceContext,
+} from "@agent-os/core/telemetry-protocol";
 import {
   isAuthorityRef,
   isScopeRef,
   makeOperationRef,
   makePreClaim,
-} from "@agent-os/kernel/effect-claim";
-import { materialRefKey } from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/effect-claim";
+import { materialRefKey } from "@agent-os/core/material-ref";
 import {
   Dispatch,
   DurableTriggerRegistry,
@@ -52,7 +55,7 @@ import {
   type DispatchEnvelope,
   type DispatchRequestedPayload as ProtocolDispatchRequestedPayload,
   type DispatchTargetAdapter,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 import { decodeOk, finiteNumberField, recordOf, type DecodeResult } from "./decode";
 import type { DispatchRequestedPayload, InMemoryDispatchTargetRegistry } from "./dispatch-types";

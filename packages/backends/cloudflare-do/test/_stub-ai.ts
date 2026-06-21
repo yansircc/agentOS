@@ -12,8 +12,8 @@ import {
   type LlmResponse,
   type LlmRoute,
   type LlmWireDescriptor,
-} from "@agent-os/llm-protocol";
-import { UpstreamFailure } from "@agent-os/kernel/errors";
+} from "@agent-os/core/llm-protocol";
+import { UpstreamFailure } from "@agent-os/core/errors";
 
 const DEFAULT_USAGE = {
   promptTokens: 10,

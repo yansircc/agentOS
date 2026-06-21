@@ -1,5 +1,5 @@
-import type { LivedClaim, PreClaim } from "@agent-os/kernel/effect-claim";
-import { symbolicSettlementRef } from "@agent-os/kernel/settlement-contract";
+import type { LivedClaim, PreClaim } from "@agent-os/core/effect-claim";
+import { symbolicSettlementRef } from "@agent-os/core/settlement-contract";
 import { gitCarrier } from "./definition";
 
 export const gitSettlementRef = (...parts: ReadonlyArray<string | number>): string =>

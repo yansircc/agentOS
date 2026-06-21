@@ -1,6 +1,6 @@
 import { Schema } from "effect";
-import { defineCarrier, event, indeterminate, lived, rejected } from "@agent-os/kernel/carrier";
-import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/kernel/settlement-contract";
+import { defineCarrier, event, indeterminate, lived, rejected } from "@agent-os/core/carrier";
+import { SYMBOLIC_SETTLEMENT_VALUE_PATTERN } from "@agent-os/core/settlement-contract";
 
 export const DEPLOY_EVENT_PREFIX = "deploy.";
 const DeploySymbolicRef = Schema.String.pipe(

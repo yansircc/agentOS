@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 
 import { Effect } from "effect";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
+import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   bindingMaterialRef,
   credentialMaterialRef,
   externalResourceMaterialRef,
   materialRefKey,
-} from "@agent-os/kernel/material-ref";
+} from "@agent-os/core/material-ref";
 import {
   makeCloudflareD1ResourceCarrier,
   makeCloudflareKVNamespaceResourceCarrier,

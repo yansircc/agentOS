@@ -40,13 +40,13 @@ import {
   type DecodedOutput,
   type InvalidateSpec,
   type Outcome,
-} from "@agent-os/runtime-protocol";
-import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/llm-protocol";
+} from "@agent-os/core/runtime-protocol";
+import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/core/llm-protocol";
 import { EventBus } from "../ledger";
-import { JsonStringifyError, UpstreamFailure } from "@agent-os/kernel/errors";
+import { JsonStringifyError, UpstreamFailure } from "@agent-os/core/errors";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { loadAdmissionRows } from "./payload";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 const reconstructOutcomeFromLease = (
   lease: CapabilityLease & { status: "unsupported" },

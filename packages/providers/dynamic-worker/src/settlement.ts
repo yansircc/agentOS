@@ -5,7 +5,7 @@ import type {
   PreClaim,
   RejectedClaim,
   RejectionRef,
-} from "@agent-os/kernel/effect-claim";
+} from "@agent-os/core/effect-claim";
 import {
   defineSettlementContract,
   isSymbolicSettlementValue,
@@ -13,7 +13,7 @@ import {
   settleLived,
   settleRejected,
   symbolicSettlementRef,
-} from "@agent-os/kernel/settlement-contract";
+} from "@agent-os/core/settlement-contract";
 
 import type { DynamicWorkerProviderFailure } from "./types";
 

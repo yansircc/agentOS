@@ -1,4 +1,4 @@
-import type { LedgerEventRpc } from "@agent-os/kernel/types";
+import type { LedgerEventRpc } from "@agent-os/core/types";
 import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
 import {
   createCloudflareLedgerAgUiHistorySseResponse,

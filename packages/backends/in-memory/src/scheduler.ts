@@ -2,7 +2,7 @@ import { Clock, Effect, Layer } from "effect";
 import {
   SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolTruthIdentity,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import { DurableTriggerRegistry, Scheduler, runtimeStorageOrJsonError } from "@agent-os/runtime";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 

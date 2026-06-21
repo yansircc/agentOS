@@ -1,12 +1,12 @@
 import { Effect, Exit } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import type { Recorded } from "@agent-os/kernel";
-import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/kernel/types";
+import type { Recorded } from "@agent-os/core";
+import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
 import {
   RUNTIME_EVENT_KIND,
   agentRunStartedEvent,
   type RuntimeEventCommitSpec,
-} from "@agent-os/runtime-protocol";
+} from "@agent-os/core/runtime-protocol";
 import { appendRuntimeDriverAction } from "../src/driver";
 
 const identity = {

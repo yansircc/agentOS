@@ -5,8 +5,8 @@ import {
   JsonStringifyError,
   SqlError,
   UnregisteredDurableTriggerKind,
-} from "@agent-os/kernel/errors";
-import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core/errors";
+import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
   DurableTriggerRegistry,
@@ -41,7 +41,7 @@ import {
   type LedgerTransactionBuilder,
 } from "./ledger/commit";
 import { ledgerEventFromRow, type LedgerEventSqlRow } from "./ledger/identity";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 const failTriggerTransaction = (kind: string): never => {
   throw new UnregisteredDurableTriggerKind({ kind });

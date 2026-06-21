@@ -10,9 +10,9 @@ import {
   settleResourceLived,
   settleResourceRejected,
 } from "../src";
-import { makePreClaim } from "@agent-os/kernel/effect-claim";
-import { makeCommitters, type ExtensionCapability } from "@agent-os/kernel/extensions";
-import { bindingMaterialRef, externalResourceMaterialRef } from "@agent-os/kernel/material-ref";
+import { makePreClaim } from "@agent-os/core/effect-claim";
+import { makeCommitters, type ExtensionCapability } from "@agent-os/core/extensions";
+import { bindingMaterialRef, externalResourceMaterialRef } from "@agent-os/core/material-ref";
 
 const accountRef = externalResourceMaterialRef({
   provider: "resource-provider",

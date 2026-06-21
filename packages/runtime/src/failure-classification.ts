@@ -1,5 +1,5 @@
 import { Predicate } from "effect";
-import { isSymbolicSettlementValue } from "@agent-os/kernel/settlement-contract";
+import { isSymbolicSettlementValue } from "@agent-os/core/settlement-contract";
 
 const symbolicReasonOr = (value: string, fallback: string): string =>
   isSymbolicSettlementValue(value) ? value : fallback;

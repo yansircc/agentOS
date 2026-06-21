@@ -112,14 +112,14 @@
       "assertions": [
         {
           "failureCondition": "agent-manifest-intent-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/runtime-protocol/test/manifest.test.ts: \"rejects function-valued fields in AgentManifest at mount time\"; packages/runtime-protocol/test/manifest.test.ts: \"keeps extension handler kinds closed by manifest extension declarations\"",
+          "negativeWitness": "packages/core/runtime-protocol/test/manifest.test.ts: \"rejects function-valued fields in AgentManifest at mount time\"; packages/core/runtime-protocol/test/manifest.test.ts: \"keeps extension handler kinds closed by manifest extension declarations\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime-protocol/test/manifest.test.ts",
+              "file": "packages/core/runtime-protocol/test/manifest.test.ts",
               "name": "rejects function-valued fields in AgentManifest at mount time"
             },
             {
-              "file": "packages/runtime-protocol/test/manifest.test.ts",
+              "file": "packages/core/runtime-protocol/test/manifest.test.ts",
               "name": "keeps extension handler kinds closed by manifest extension declarations"
             }
           ]
@@ -436,10 +436,10 @@
       "assertions": [
         {
           "failureCondition": "dispatch-delivery-receipt-authority: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"settles outbound delivery against target-owned receipts\"",
+          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"settles outbound delivery against target-owned receipts\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
               "name": "settles outbound delivery against target-owned receipts"
             }
           ]
@@ -460,10 +460,10 @@
       "assertions": [
         {
           "failureCondition": "dispatch-idempotency-receipt: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"receipt-before-terminal proof ties terminal delivery to idempotency receipt\"",
+          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"receipt-before-terminal proof ties terminal delivery to idempotency receipt\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
               "name": "receipt-before-terminal proof ties terminal delivery to idempotency receipt"
             }
           ]
@@ -521,14 +521,14 @@
       "assertions": [
         {
           "failureCondition": "effectful-tool-replay-receipt: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/runtime-protocol/test/runtime-events.test.ts: \"replays receipt-backed external tool execution from the receipt artifact\"; packages/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
+          "negativeWitness": "packages/core/runtime-protocol/test/runtime-events.test.ts: \"replays receipt-backed external tool execution from the receipt artifact\"; packages/core/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
               "name": "replays receipt-backed external tool execution from the receipt artifact"
             },
             {
-              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
               "name": "validates receipt-backed bridge results before runtime logs tool.executed"
             }
           ]
@@ -624,14 +624,14 @@
       "assertions": [
         {
           "failureCondition": "failure diagnostics are projected from protocol categories, not SubmitResult",
-          "negativeWitness": "packages/runtime-protocol/test/failure-diagnostics.test.ts: \"folds structured tool rejection diagnostics without exposing raw args\"; packages/runtime-protocol/test/failure-diagnostics.test.ts: \"classifies missing receipt-backed execution path without hard-coded consumer owner\"",
+          "negativeWitness": "packages/core/runtime-protocol/test/failure-diagnostics.test.ts: \"folds structured tool rejection diagnostics without exposing raw args\"; packages/core/runtime-protocol/test/failure-diagnostics.test.ts: \"classifies missing receipt-backed execution path without hard-coded consumer owner\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime-protocol/test/failure-diagnostics.test.ts",
+              "file": "packages/core/runtime-protocol/test/failure-diagnostics.test.ts",
               "name": "folds structured tool rejection diagnostics without exposing raw args"
             },
             {
-              "file": "packages/runtime-protocol/test/failure-diagnostics.test.ts",
+              "file": "packages/core/runtime-protocol/test/failure-diagnostics.test.ts",
               "name": "classifies missing receipt-backed execution path without hard-coded consumer owner"
             }
           ]
@@ -671,14 +671,14 @@
       "assertions": [
         {
           "failureCondition": "intent-settlement-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/runtime-protocol/test/intent.test.ts: \"detects overlap between intent and settlement vocabularies\"; packages/runtime-protocol/test/intent.test.ts: \"rejects fake-generic mutation and state lifecycle names\"",
+          "negativeWitness": "packages/core/runtime-protocol/test/intent.test.ts: \"detects overlap between intent and settlement vocabularies\"; packages/core/runtime-protocol/test/intent.test.ts: \"rejects fake-generic mutation and state lifecycle names\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime-protocol/test/intent.test.ts",
+              "file": "packages/core/runtime-protocol/test/intent.test.ts",
               "name": "detects overlap between intent and settlement vocabularies"
             },
             {
-              "file": "packages/runtime-protocol/test/intent.test.ts",
+              "file": "packages/core/runtime-protocol/test/intent.test.ts",
               "name": "rejects fake-generic mutation and state lifecycle names"
             }
           ]
@@ -891,10 +891,10 @@
       "assertions": [
         {
           "failureCondition": "replay-dispatch-snapshot: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot\"",
+          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
               "name": "replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot"
             }
           ]
@@ -915,14 +915,14 @@
       "assertions": [
         {
           "failureCondition": "replay-llm-snapshot: post-migration verdict must reject violations owned by @agent-os/llm-protocol",
-          "negativeWitness": "packages/llm-protocol/test/llm-protocol.test.ts: \"replay mode live LLM provider adapter not called when call snapshot is present\"; packages/llm-protocol/test/llm-protocol.test.ts: \"snapshots an LLM call without route fields and replays the response\"",
+          "negativeWitness": "packages/core/llm-protocol/test/llm-protocol.test.ts: \"replay mode live LLM provider adapter not called when call snapshot is present\"; packages/core/llm-protocol/test/llm-protocol.test.ts: \"snapshots an LLM call without route fields and replays the response\"",
           "packageWitnesses": [
             {
-              "file": "packages/llm-protocol/test/llm-protocol.test.ts",
+              "file": "packages/core/llm-protocol/test/llm-protocol.test.ts",
               "name": "replay mode live LLM provider adapter not called when call snapshot is present"
             },
             {
-              "file": "packages/llm-protocol/test/llm-protocol.test.ts",
+              "file": "packages/core/llm-protocol/test/llm-protocol.test.ts",
               "name": "snapshots an LLM call without route fields and replays the response"
             }
           ]
@@ -943,14 +943,14 @@
       "assertions": [
         {
           "failureCondition": "replay-tool-snapshot: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/runtime-protocol/test/runtime-events.test.ts: \"replay mode tool execute not called: deterministic tool result replays from snapshot\"; packages/runtime-protocol/test/runtime-events.test.ts: \"does not build a raw result snapshot for an external tool without a receipt\"",
+          "negativeWitness": "packages/core/runtime-protocol/test/runtime-events.test.ts: \"replay mode tool execute not called: deterministic tool result replays from snapshot\"; packages/core/runtime-protocol/test/runtime-events.test.ts: \"does not build a raw result snapshot for an external tool without a receipt\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
               "name": "replay mode tool execute not called: deterministic tool result replays from snapshot"
             },
             {
-              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
               "name": "does not build a raw result snapshot for an external tool without a receipt"
             }
           ]
@@ -990,10 +990,10 @@
       "assertions": [
         {
           "failureCondition": "resource-quota-protocol-ownership: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"owns quota payload codecs, idempotent grant usage, and malformed fact failure\"",
+          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"owns quota payload codecs, idempotent grant usage, and malformed fact failure\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
               "name": "owns quota payload codecs, idempotent grant usage, and malformed fact failure"
             }
           ]
@@ -1014,10 +1014,10 @@
       "assertions": [
         {
           "failureCondition": "resource-reservation-concurrency: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/backends/protocol/test/dispatch-payload.test.ts: \"owns resource payload codecs and projection fold\"",
+          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"owns resource payload codecs and projection fold\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
               "name": "owns resource payload codecs and projection fold"
             }
           ]
@@ -1123,10 +1123,10 @@
       "assertions": [
         {
           "failureCondition": "telemetry-neutral: post-migration verdict must reject violations owned by @agent-os/telemetry-protocol",
-          "negativeWitness": "packages/telemetry-protocol/test/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
+          "negativeWitness": "packages/core/telemetry-protocol/test/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
           "packageWitnesses": [
             {
-              "file": "packages/telemetry-protocol/test/telemetry-event-tree.test.ts",
+              "file": "packages/core/telemetry-protocol/test/telemetry-event-tree.test.ts",
               "name": "canonicalizes timing, generated ids, and backend host ids while preserving semantics"
             },
             {
@@ -1170,7 +1170,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-tool-execution-access-requirements.mjs"
       },
-      "owner": "@agent-os/kernel",
+      "owner": "@agent-os/core",
       "ruleId": "tool-execution-access-requirements",
       "target": {
         "kind": "proofClass",
@@ -1179,14 +1179,14 @@
       "assertions": [
         {
           "failureCondition": "tool-execution-access-requirements: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "packages/kernel/test/tools.test.ts: \"rejects access-mismatched and write snapshot replay laws\"; packages/kernel/test/tools.test.ts: \"rejects host declarations without an env allowlist\"",
+          "negativeWitness": "packages/core/test/tools.test.ts: \"rejects access-mismatched and write snapshot replay laws\"; packages/core/test/tools.test.ts: \"rejects host declarations without an env allowlist\"",
           "packageWitnesses": [
             {
-              "file": "packages/kernel/test/tools.test.ts",
+              "file": "packages/core/test/tools.test.ts",
               "name": "rejects access-mismatched and write snapshot replay laws"
             },
             {
-              "file": "packages/kernel/test/tools.test.ts",
+              "file": "packages/core/test/tools.test.ts",
               "name": "rejects host declarations without an env allowlist"
             }
           ]
@@ -1198,7 +1198,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-tool-mutation-boundary.mjs"
       },
-      "owner": "@agent-os/kernel",
+      "owner": "@agent-os/core",
       "ruleId": "tool-mutation-boundary",
       "target": {
         "kind": "proofClass",
@@ -1207,14 +1207,14 @@
       "assertions": [
         {
           "failureCondition": "tool-mutation-boundary: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "packages/kernel/test/tools.test.ts: \"keeps execution out of the claim contract\"; packages/kernel/test/tools.test.ts: \"rejects LLM tool-call envelopes at type level\"",
+          "negativeWitness": "packages/core/test/tools.test.ts: \"keeps execution out of the claim contract\"; packages/core/test/tools.test.ts: \"rejects LLM tool-call envelopes at type level\"",
           "packageWitnesses": [
             {
-              "file": "packages/kernel/test/tools.test.ts",
+              "file": "packages/core/test/tools.test.ts",
               "name": "keeps execution out of the claim contract"
             },
             {
-              "file": "packages/kernel/test/tools.test.ts",
+              "file": "packages/core/test/tools.test.ts",
               "name": "rejects LLM tool-call envelopes at type level"
             }
           ]
@@ -1226,7 +1226,7 @@
         "kind": "package-test",
         "id": "tool-witness-single-source"
       },
-      "owner": "@agent-os/kernel",
+      "owner": "@agent-os/core",
       "ruleId": "tool-witness-single-source",
       "target": {
         "kind": "proofClass",
@@ -1235,14 +1235,14 @@
       "assertions": [
         {
           "failureCondition": "tool replay witness is derived from execution domain law",
-          "negativeWitness": "packages/kernel/test/tools.test.ts: \"resolves replay witness only from the domain law\"; packages/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
+          "negativeWitness": "packages/core/test/tools.test.ts: \"resolves replay witness only from the domain law\"; packages/core/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
           "packageWitnesses": [
             {
-              "file": "packages/kernel/test/tools.test.ts",
+              "file": "packages/core/test/tools.test.ts",
               "name": "resolves replay witness only from the domain law"
             },
             {
-              "file": "packages/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
               "name": "validates receipt-backed bridge results before runtime logs tool.executed"
             }
           ]

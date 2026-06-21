@@ -1,6 +1,6 @@
 import { Predicate } from "effect";
-import type { LivedClaim } from "@agent-os/kernel/effect-claim";
-import { validateTerminalClaim } from "@agent-os/kernel/settlement-contract";
+import type { LivedClaim } from "@agent-os/core/effect-claim";
+import { validateTerminalClaim } from "@agent-os/core/settlement-contract";
 import { GIT_EVENTS, GIT_KIND, gitSettlementContract } from "./definition";
 export { GIT_EVENTS, GIT_KIND } from "./definition";
 

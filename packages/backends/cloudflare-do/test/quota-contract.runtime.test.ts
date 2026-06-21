@@ -20,23 +20,23 @@ import { AdmissionLive } from "../src/admission";
 import { BoundaryEventsLive } from "../src/boundary-events";
 import { EventBusLive } from "../src/ledger";
 import { Ledger, LedgerLive } from "../src/ledger";
-import { RefResolverLive } from "@agent-os/kernel/ref-resolver";
+import { RefResolverLive } from "@agent-os/core/ref-resolver";
 import { QuotaLive } from "../src/quota";
 import { withQuota } from "../src/quota";
-import { ToolError } from "@agent-os/kernel/errors";
-import { LlmTransport } from "@agent-os/llm-protocol";
+import { ToolError } from "@agent-os/core/errors";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   MaterializedProjectionRegistry,
   internalSubmitSpec,
   submitAgentEffect,
   type InternalSubmitSpec,
 } from "@agent-os/runtime";
-import type { SubmitSpec } from "@agent-os/runtime-protocol";
-import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/kernel/tools";
-import type { EventHandler } from "@agent-os/kernel/types";
+import type { SubmitSpec } from "@agent-os/core/runtime-protocol";
+import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/core/tools";
+import type { EventHandler } from "@agent-os/core/types";
 import { finalTextResp, stubLlmTransport, toolCallResp } from "./_stub-ai";
 import { testEventIdentity } from "./_identity";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import { CloudflareMaterializedProjectionsLive } from "../src/materialized-projections";
 
 interface TestEnv {

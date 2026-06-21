@@ -5,15 +5,15 @@ import {
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
   type JsonStringifyError,
-} from "@agent-os/kernel";
-import type { EventQueryOptions, LedgerEvent } from "@agent-os/kernel/types";
+} from "@agent-os/core";
+import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import {
   DURABLE_TRIGGER_SCHEDULED_CANCELLED,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   SCHEDULED_EVENT_TRIGGER_KIND,
   parseScheduledEventIntentPayload,
   type ScheduledEventIntentPayload,
-} from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
 import type { RuntimeStorageError } from "./ledger";
 
 export interface TriggerEventSpec {

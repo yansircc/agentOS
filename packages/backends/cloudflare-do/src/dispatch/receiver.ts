@@ -14,8 +14,8 @@
  */
 
 import { Predicate } from "effect";
-import type { TraceContext } from "@agent-os/telemetry-protocol";
-import type { LivedClaim } from "@agent-os/kernel/effect-claim";
+import type { TraceContext } from "@agent-os/core/telemetry-protocol";
+import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { sqlText } from "../storage/sql-row";
 import { projectionIdentityColumns } from "../ledger/identity";
 import {
@@ -24,8 +24,8 @@ import {
   parseDispatchLivedClaim,
   parseTraceContext,
   type DispatchPayloadParseResult,
-} from "@agent-os/backend-protocol";
-import type { BackendProtocolEventIdentity } from "@agent-os/backend-protocol";
+} from "@agent-os/core/backend-protocol";
+import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
 export interface InboundAcceptedPayload {
   readonly sourceScope: string;

@@ -4,7 +4,7 @@ import path from "node:path";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "@effect/vitest";
 import { createWorkspaceTools } from "@agent-os/workspace-env";
-import { deterministicToolInvocation, unsafeRunToolByName } from "@agent-os/kernel";
+import { deterministicToolInvocation, unsafeRunToolByName } from "@agent-os/core";
 
 import { makeLocalWorkspaceEnv, makeTemporaryLocalWorkspaceEnv } from "../src";
 

@@ -5,7 +5,7 @@ import type {
   TelemetryEventTree,
   TelemetryOutcome,
   TraceContext,
-} from "@agent-os/telemetry-protocol";
+} from "@agent-os/core/telemetry-protocol";
 
 export const OTLP_GENAI_SEMCONV_MAPPING_VERSION = "agent-os-otlp-genai-v1";
 
