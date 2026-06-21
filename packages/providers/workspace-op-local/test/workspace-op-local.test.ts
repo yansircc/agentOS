@@ -103,6 +103,35 @@ describe("@agent-os/workspace-op-local", () => {
     expect("content" in first.payload).toBe(false);
   });
 
+  it("treats cwd-prefixed absolute paths as workspace-relative paths", async () => {
+    const state = workspace();
+    const provider = createWorkspaceOperationLocalProvider({ env: state.env });
+    const result = await provider.execute({
+      id: 8,
+      payload: {
+        requestedBy: "@agent-os/workspace-binding",
+        workspaceRef: "workspace:test",
+        toolName: "write_file",
+        path: "/workspace/app.py",
+        content: "print('ok')\n",
+        claim: { ...claim, operationRef: "tool:run-1:call-cwd-path" },
+      },
+    });
+
+    expect(state.files.get("/workspace/app.py")).toBe("print('ok')\n");
+    expect(state.files.has("/workspace/workspace/app.py")).toBe(false);
+    expect(result).toMatchObject({
+      ok: true,
+      payload: {
+        path: "app.py",
+      },
+      result: {
+        kind: "write_file",
+        path: "app.py",
+      },
+    });
+  });
+
   it("bounds shell output to provider result previews and hashes", async () => {
     const state = workspace();
     const provider = createWorkspaceOperationLocalProvider({ env: state.env, maxOutputBytes: 8 });
@@ -133,5 +162,29 @@ describe("@agent-os/workspace-op-local", () => {
     if (!result.ok) expect.fail("expected completed shell operation");
     expect("stdout" in result.payload).toBe(false);
     expect("stderr" in result.payload).toBe(false);
+  });
+
+  it("treats cwd-prefixed shell cwd as workspace root", async () => {
+    const state = workspace();
+    const provider = createWorkspaceOperationLocalProvider({ env: state.env });
+    const result = await provider.execute({
+      id: 9,
+      payload: {
+        requestedBy: "@agent-os/workspace-binding",
+        workspaceRef: "workspace:test",
+        toolName: "run_shell",
+        command: "pwd",
+        cwd: "/workspace",
+        claim: { ...claim, operationRef: "tool:run-1:call-cwd-shell" },
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      payload: {
+        toolName: "run_shell",
+        cwd: ".",
+      },
+    });
   });
 });

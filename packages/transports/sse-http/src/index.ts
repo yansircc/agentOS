@@ -66,6 +66,9 @@ export const parseSseHttpEventBlock = (block: string): SseHttpEvent => {
   return { event, data: data.join("\n") };
 };
 
+const eventBlockHasData = (block: string): boolean =>
+  block.split(/\r?\n/).some((line) => line.startsWith("data:"));
+
 export async function* decodeSseHttpEvents(
   chunks: AsyncIterable<SseHttpChunk>,
 ): AsyncGenerator<SseHttpEvent> {
@@ -78,6 +81,7 @@ export async function* decodeSseHttpEvents(
       if (boundary < 0) return;
       const block = buffer.slice(0, boundary);
       buffer = buffer.slice(boundary + 2);
+      if (!eventBlockHasData(block)) continue;
       yield parseSseHttpEventBlock(block);
     }
   };

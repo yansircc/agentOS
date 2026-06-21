@@ -258,6 +258,7 @@ const receiptBackedWorkspaceTool = (
           );
           const row = yield* ctx.awaitProjection<WorkspaceOperationProjection>({
             kind: WORKSPACE_OP_PROJECTION_KIND,
+            effectAuthorityRef: tool.contract.effectAuthorityRef,
             factOwnerRef: WORKSPACE_OP_FACT_OWNER,
             identity: { requestedEventId: emitted.id },
             ready: (candidate) =>
@@ -309,6 +310,7 @@ export const bindWorkspaceToolsForRuntime = (
   const tools = createWorkspaceTools(options.env, {
     authority: options.authority,
     admit: options.admit,
+    requiredMaterials: [],
     ...(options.authorityId === undefined ? {} : { authorityId: options.authorityId }),
     ...(options.authorityVersion === undefined
       ? {}

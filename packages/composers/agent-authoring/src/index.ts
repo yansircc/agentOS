@@ -461,6 +461,15 @@ const digestText = (text: string): string => {
   return `fnv1a32:${hash.toString(16).padStart(8, "0")}:${text.length}`;
 };
 
+const digestHex64 = (text: string): string => {
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= BigInt(text.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(16).padStart(16, "0");
+};
+
 const stripAgentPrefix = (path: string): string =>
   path.startsWith("agent/") ? path.slice("agent/".length) : path;
 
@@ -1417,6 +1426,7 @@ export interface NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest
     readonly topology: AgentOsConfigWorkspaceTopology;
     readonly bindingRef: WorkspaceBindingRef;
     readonly providerResourceId: ProviderResourceId;
+    readonly cloudflareSandboxId: string;
   };
   readonly origins: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
   readonly provenance: StaticTargetProvenance;
@@ -2018,6 +2028,36 @@ const validateManifestToolReferences = <K extends HandlerKind>(
   return issues;
 };
 
+const cloudflareSandboxIdPrefix = (
+  deploymentNamespace: string,
+  workspaceBindingRef: WorkspaceBindingRef,
+  scopeRef: { readonly kind: string; readonly scopeId: string },
+): string =>
+  `${deploymentNamespace}-${workspaceBindingRef}-${scopeRef.kind}-${scopeRef.scopeId}`
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+const cloudflareWorkspaceSandboxId = (input: {
+  readonly deploymentNamespace: string;
+  readonly workspaceBindingRef: WorkspaceBindingRef;
+  readonly scopeRef: { readonly kind: string; readonly scopeId: string };
+  readonly providerResourceId: ProviderResourceId;
+}): string => {
+  const digest = digestHex64(input.providerResourceId);
+  const suffix = `-${digest}`;
+  const rawPrefix = cloudflareSandboxIdPrefix(
+    input.deploymentNamespace,
+    input.workspaceBindingRef,
+    input.scopeRef,
+  );
+  const prefix = rawPrefix.length === 0 ? "agentos-sandbox" : rawPrefix;
+  const prefixBudget = 63 - suffix.length;
+  const shortenedPrefix = prefix.slice(0, prefixBudget).replace(/-+$/g, "") || "agentos-sandbox";
+  return `${shortenedPrefix}${suffix}`;
+};
+
 export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   config: AgentOsConfigV1,
   compiled: CompiledAgentManifest<K>,
@@ -2049,6 +2089,12 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     workspaceBindingRef: bindingRef,
     topology,
     scopeRef: scopeRef.value,
+  });
+  const cloudflareSandboxId = cloudflareWorkspaceSandboxId({
+    deploymentNamespace: value.deployment.id,
+    workspaceBindingRef: bindingRef,
+    scopeRef: scopeRef.value,
+    providerResourceId,
   });
   const manifestWithWorkspaceMaterial = addWorkspaceMaterial(
     workspaceDefaults.manifest,
@@ -2090,6 +2136,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     "/deployment/codec": workspaceMacroOrigin("/deployment/codec"),
     "/deployment/providerStrategy": `derived:/llm/route`,
     "/workspace/providerResourceId": `derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope`,
+    "/workspace/cloudflareSandboxId": `derived:/workspace/providerResourceId`,
   };
   return {
     ok: true,
@@ -2116,6 +2163,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         root: value.workspace.root,
         topology,
         providerResourceId,
+        cloudflareSandboxId,
       },
       origins,
       provenance: {
@@ -2272,16 +2320,32 @@ type AgentOSTargetEnv = {
   readonly SANDBOX_TRANSPORT?: SandboxTransport;
   readonly OPENROUTER_KEY?: string;
   readonly OPENROUTER_ENDPOINT?: string;
+  readonly OPENROUTER_DEFAULT_TEXT_MODEL?: string;
 };
+
+type GeneratedTargetFailure = {
+  readonly ok: false;
+  readonly message: string;
+};
+
+type GeneratedTargetResult<Value> =
+  | { readonly ok: true; readonly value: Value }
+  | GeneratedTargetFailure;
+
+const targetFailure = (message: string): GeneratedTargetFailure => ({ ok: false, message });
+
+const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
+  Promise.reject(Error(failure.message));
 
 const generatedWorkspaceToolNames = ${workspaceToolArray};
 const generatedCustomTools = ${customToolRecord};
+const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
 
 const workspaceNamespaceFor = (env: AgentOSTargetEnv): DurableObjectNamespace<Sandbox> =>
   env[${jsString(normalized.workspace.binding)}] as DurableObjectNamespace<Sandbox>;
 
 const workspaceSandboxFor = (env: AgentOSTargetEnv): Sandbox =>
-  getSandbox(workspaceNamespaceFor(env), ${jsString(normalized.workspace.providerResourceId)}, {
+  getSandbox(workspaceNamespaceFor(env), generatedWorkspaceSandboxId, {
     normalizeId: true,
     sleepAfter: "10m",
     transport: env.SANDBOX_TRANSPORT ?? "rpc",
@@ -2363,6 +2427,11 @@ const workspaceOperationInstallFor = (env: AgentOSTargetEnv) =>
 const openRouterEndpoint = (env: AgentOSTargetEnv): string =>
   env.OPENROUTER_ENDPOINT ?? "https://openrouter.ai/api/v1";
 
+const openRouterDefaultTextModel = (env: AgentOSTargetEnv): string | null =>
+  env.OPENROUTER_DEFAULT_TEXT_MODEL === undefined || env.OPENROUTER_DEFAULT_TEXT_MODEL.length === 0
+    ? null
+    : env.OPENROUTER_DEFAULT_TEXT_MODEL;
+
 const materialValue = (
   env: AgentOSTargetEnv,
   ref: { readonly kind: string; readonly ref: string },
@@ -2375,7 +2444,37 @@ const materialValue = (
       ? null
       : env.OPENROUTER_KEY;
   }
+  if (ref.kind === "model" && ref.ref === ${jsString(normalized.llm.modelRef)}) {
+    return openRouterDefaultTextModel(env);
+  }
   return null;
+};
+
+const requiredStringMaterial = (
+  kind: string,
+  ref: string,
+  value: NonNullable<unknown> | null,
+): GeneratedTargetResult<string> => {
+  if (typeof value === "string" && value.length > 0) return { ok: true, value };
+  return targetFailure(\`missing \${kind} material: \${ref}\`);
+};
+
+const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonNullable<AgentSubmitBindings["llmRoutes"]>["default"]> => {
+  const modelId = requiredStringMaterial(
+    "model",
+    ${jsString(normalized.llm.modelRef)},
+    materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} }),
+  );
+  if (!modelId.ok) return modelId;
+  return {
+    ok: true,
+    value: {
+      kind: "openai-chat-compatible",
+      endpointRef: ${jsString(normalized.llm.endpointRef)},
+      credentialRef: ${jsString(normalized.llm.credentialRef)},
+      modelId: modelId.value,
+    },
+  };
 };
 
 const generatedWorkspaceBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindings =>
@@ -2390,21 +2489,21 @@ const generatedWorkspaceBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindin
         shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
       });
 
-const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindings => {
+const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {
   const workspaceBindings = generatedWorkspaceBindingsFor(env);
+  const route = generatedLlmRouteFor(env);
+  if (!route.ok) return route;
   return {
-    ...workspaceBindings,
-    llmRoutes: {
-      default: {
-        kind: "openai-chat-compatible",
-        endpointRef: ${jsString(normalized.llm.endpointRef)},
-        credentialRef: ${jsString(normalized.llm.credentialRef)},
-        modelId: ${jsString(normalized.llm.modelRef)},
+    ok: true,
+    value: {
+      ...workspaceBindings,
+      llmRoutes: {
+        default: route.value,
       },
-    },
-    tools: {
-      ...(workspaceBindings.tools ?? {}),
-      ...generatedCustomTools,
+      tools: {
+        ...(workspaceBindings.tools ?? {}),
+        ...generatedCustomTools,
+      },
     },
   };
 };
@@ -2459,14 +2558,17 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
   }
 
   override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
-    return this.submitWithBindings(spec, generatedSubmitBindingsFor(this.targetEnv));
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.submitWithBindings(spec, bindings.value)
+      : rejectTargetFailure(bindings);
   }
 
   submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
-    return this.submitWithBindings(
-      submitSpecFromRunInput(input),
-      generatedSubmitBindingsFor(this.targetEnv),
-    );
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.submitWithBindings(submitSpecFromRunInput(input), bindings.value)
+      : rejectTargetFailure(bindings);
   }
 
   readWorkspaceState(
@@ -2577,10 +2679,11 @@ const renderSvelteKitRemote = (
 ): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
 ${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
-${renderNamedImport(["Schema"], modules.effect)}
+${renderNamedImport(["Result", "Schema"], modules.effect)}
 ${renderNamedImport(["WORKSPACE_AGENT_COMMAND"], modules.workspaceAgentHost)}
 ${renderNamedImport(["decodeRuntimeLedgerEvent", "manifestTruthIdentity"], modules.runtimeProtocol)}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
+${renderTypeImport(["SseHttpEvent"], modules.sseHttp)}
 ${renderTypeImport(
   ["AgentManifest", "RuntimeLedgerEvent", "SubmitResult", "SubmitRunInput"],
   modules.runtimeProtocol,
@@ -2736,6 +2839,31 @@ const runtimeEventFromLedger = (
   return decoded._tag === "runtime" ? decoded.event : null;
 };
 
+const jsonValueFromString = (data: string): GeneratedResult<unknown> =>
+  Result.match(
+    Result.try({
+      try: () => JSON.parse(data) as unknown,
+      catch: () => "invalid ledger stream event: malformed JSON",
+    }),
+    {
+      onFailure: (message) => fail(502, message),
+      onSuccess: (value) => ({ ok: true, value }),
+    },
+  );
+
+const ledgerEventFromSse = (
+  event: SseHttpEvent,
+): GeneratedResult<Parameters<typeof decodeRuntimeLedgerEvent>[0] | null> => {
+  if (event.event !== "ledger") return { ok: true, value: null };
+  if (event.data.trim().length === 0) {
+    return fail(502, "invalid ledger stream event: empty data");
+  }
+  const parsed = jsonValueFromString(event.data);
+  return parsed.ok
+    ? { ok: true, value: parsed.value as Parameters<typeof decodeRuntimeLedgerEvent>[0] }
+    : parsed;
+};
+
 const emptyRuntimeEvents = (): AsyncIterable<RuntimeLedgerEvent> => ({
   [Symbol.asyncIterator]() {
     return {
@@ -2753,7 +2881,10 @@ const runtimeEventsFromSse = (response: Response): AsyncIterable<RuntimeLedgerEv
       const next = (): Promise<IteratorResult<RuntimeLedgerEvent>> =>
         iterator.next().then((result) => {
           if (result.done === true) return { done: true, value: undefined };
-          const runtimeEvent = runtimeEventFromLedger(JSON.parse(result.value.data));
+          const ledgerEvent = ledgerEventFromSse(result.value);
+          if (!ledgerEvent.ok) return rejectFailure(ledgerEvent);
+          if (ledgerEvent.value === null) return next();
+          const runtimeEvent = runtimeEventFromLedger(ledgerEvent.value);
           return runtimeEvent === null ? next() : { done: false, value: runtimeEvent };
         });
       return {
@@ -2941,6 +3072,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       root: normalized.workspace.root,
       topology: normalized.workspace.topology,
       providerResourceId: normalized.workspace.providerResourceId,
+      cloudflareSandboxId: normalized.workspace.cloudflareSandboxId,
     },
   };
   const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [

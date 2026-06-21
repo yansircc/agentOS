@@ -427,8 +427,9 @@ const normalizedRelativePath = (
  * Normalizes agent-facing workspace tool paths.
  *
  * Tool paths are workspace-virtual: `src/a.ts`, `./src/a.ts`, and
- * `/src/a.ts` all name the same workspace path. Paths that include the host
- * workspace root are rejected at this boundary.
+ * `/src/a.ts` all name the same workspace path. When an environment exposes a
+ * concrete cwd such as `/workspace`, paths under that cwd name the same
+ * workspace-relative files.
  */
 export const normalizeWorkspaceToolPath = (
   input: string,
@@ -445,7 +446,8 @@ export const normalizeWorkspaceToolPath = (
     if (options.cwd !== undefined) {
       const cwd = normalizeAbsolutePath(options.cwd);
       if (absolute === cwd || isInside(cwd, absolute)) {
-        return failInput(`${label} must be workspace-virtual, not host-absolute`);
+        normalized = absolute === cwd ? "." : absolute.slice(cwd.length + 1);
+        return normalizedRelativePath(normalized, label, { allowRoot: options.allowRoot });
       }
     }
     normalized = absolute === "/" ? "." : absolute.slice(1);

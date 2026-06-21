@@ -74,6 +74,7 @@ describe("@agent-os/workspace-binding", () => {
       access: "read",
       domain: env.domain,
     });
+    expect(bindings.tools!.read_file!.contract.requiredMaterials).toEqual([]);
     expect("diagnostics" in bindings).toBe(false);
     expect("pathPolicy" in bindings).toBe(false);
     expect("externalExecutor" in bindings).toBe(false);
@@ -113,6 +114,8 @@ describe("@agent-os/workspace-binding", () => {
     expect(bindings.executionDomains).toEqual([
       { domain: env.domain, replay: { access: "write", witness: "receipt" } },
     ]);
+    expect(bindings.materials?.workspace).toEqual(workspaceEnvMaterialRef(env));
+    expect(bindings.tools!.write_file!.contract.requiredMaterials).toEqual([]);
     expect("externalExecutor" in bindings).toBe(false);
     expect(bindings.toolIntents).toEqual([
       expect.objectContaining({ kind: WORKSPACE_OP_KIND.REQUESTED }),
@@ -176,6 +179,7 @@ describe("@agent-os/workspace-binding", () => {
           awaitProjection: <State>(spec: ToolProjectionWaitSpec<State>) =>
             Effect.sync(() => {
               expect(spec.kind).toBe(WORKSPACE_OP_PROJECTION_KIND);
+              expect(spec.effectAuthorityRef).toEqual(claim.effectAuthorityRef);
               expect(spec.factOwnerRef).toBe(WORKSPACE_OP_FACT_OWNER);
               expect(spec.identity).toEqual({ requestedEventId: 99 });
               return {

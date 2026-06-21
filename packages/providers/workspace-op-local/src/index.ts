@@ -99,11 +99,11 @@ const truncateUtf8 = (
   return { text, bytes, truncated: false };
 };
 
-const requirePath = (request: WorkspaceOperationRequestedPayload): string => {
+const requirePath = (env: WorkspaceEnv, request: WorkspaceOperationRequestedPayload): string => {
   if (request.path === undefined || request.path.length === 0) {
     return failWorkspaceOperationLocalProvider(`${request.toolName} requires path`);
   }
-  return normalizeWorkspaceToolPath(request.path);
+  return normalizeWorkspaceToolPath(request.path, { cwd: env.cwd });
 };
 
 const requireString = (
@@ -222,7 +222,7 @@ export const createWorkspaceOperationLocalProvider = (
         let completed: WorkspaceOperationCompletedPayload;
         switch (request.toolName) {
           case "write_file": {
-            const path = requirePath(request);
+            const path = requirePath(options.env, request);
             const content = requireString(request, "content");
             const bytes = utf8Bytes(content);
             if (bytes > maxFileBytes) {
@@ -248,7 +248,7 @@ export const createWorkspaceOperationLocalProvider = (
             break;
           }
           case "edit_file": {
-            const path = requirePath(request);
+            const path = requirePath(options.env, request);
             const oldString = requireString(request, "oldString");
             const newString = request.newString ?? "";
             const result = await editWorkspaceFile(options.env, {
@@ -279,7 +279,7 @@ export const createWorkspaceOperationLocalProvider = (
             break;
           }
           case "delete_path": {
-            const path = requirePath(request);
+            const path = requirePath(options.env, request);
             await options.env.rm(path, {
               recursive: request.recursive ?? false,
               force: request.force ?? false,
@@ -313,7 +313,10 @@ export const createWorkspaceOperationLocalProvider = (
             const cwd =
               request.cwd === undefined
                 ? "."
-                : normalizeWorkspaceToolPath(request.cwd, { allowRoot: true });
+                : normalizeWorkspaceToolPath(request.cwd, {
+                    allowRoot: true,
+                    cwd: options.env.cwd,
+                  });
             const result = await options.env.exec(command, {
               cwd,
               timeoutMs: positiveNumberOr(request.timeoutMs, execTimeoutMs),

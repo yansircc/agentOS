@@ -112,9 +112,12 @@ describe("@agent-os/workspace-env", () => {
     expect(() => normalizeWorkspaceToolPath("")).toThrow("required");
     expect(() => normalizeWorkspaceToolPath("..\u0000/x")).toThrow("NUL");
     expect(() => normalizeWorkspaceToolPath("../x")).toThrow("cannot escape");
-    expect(() =>
-      normalizeWorkspaceToolPath("/workspace/input/editor.json", { cwd: "/workspace" }),
-    ).toThrow("host-absolute");
+    expect(normalizeWorkspaceToolPath("/workspace/input/editor.json", { cwd: "/workspace" })).toBe(
+      "input/editor.json",
+    );
+    expect(normalizeWorkspaceToolPath("/workspace", { cwd: "/workspace", allowRoot: true })).toBe(
+      ".",
+    );
   });
 
   it("declares workspace tool specs as the generator for tool names and access", () => {
@@ -419,7 +422,7 @@ describe("@agent-os/workspace-env", () => {
     }),
   );
 
-  it.effect("rejects host absolute workspace tool paths before actuator resolution", () =>
+  it.effect("maps cwd-prefixed absolute workspace tool paths before actuator resolution", () =>
     Effect.gen(function* () {
       const { env } = workspace();
       const tools = createWorkspaceTools(env, {
@@ -427,20 +430,16 @@ describe("@agent-os/workspace-env", () => {
         admit: allowToolAdmitter,
       });
 
-      const result = yield* Effect.result(
-        unsafeRunToolByName(
-          tools,
-          deterministicToolInvocation("write_file", {
-            path: "/workspace/src/host-path.txt",
-            content: "nope",
-          }),
-        ),
+      const result = yield* unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("write_file", {
+          path: "/workspace/src/cwd-path.txt",
+          content: "ok",
+        }),
       );
 
-      expect(result._tag).toBe("Failure");
-      if (result._tag === "Failure") {
-        expect(String(result.failure.cause)).toContain("host-absolute");
-      }
+      expect(result).toEqual({ path: "src/cwd-path.txt", bytesWritten: 2 });
+      expect(yield* Effect.promise(() => env.readFile("src/cwd-path.txt"))).toBe("ok");
     }),
   );
 

@@ -447,6 +447,11 @@ describe("agent authored tree compiler", () => {
       "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger",
     );
     expect(normalized.value.workspace.providerResourceId).not.toBe("workspace-ledger");
+    expect(normalized.value.workspace.cloudflareSandboxId).toMatch(/^[a-z0-9-]{1,63}$/);
+    expect(normalized.value.workspace.cloudflareSandboxId).not.toBe(
+      normalized.value.workspace.providerResourceId,
+    );
+    expect(normalized.value.workspace.cloudflareSandboxId.length).toBeLessThanOrEqual(63);
     expect(normalized.value.origins["/deployment/id"]).toBe(
       "author:agentos.config.jsonc#/deployment/id",
     );
@@ -456,6 +461,9 @@ describe("agent authored tree compiler", () => {
     expect(normalized.value.origins["/deployment/backend"]).toBe("derived:/target/kind");
     expect(normalized.value.origins["/workspace/providerResourceId"]).toBe(
       "derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope",
+    );
+    expect(normalized.value.origins["/workspace/cloudflareSandboxId"]).toBe(
+      "derived:/workspace/providerResourceId",
     );
     expect(normalized.value.provenance.manifest["/tools/read_file/bindingRef"]).toBe(
       "macro(workspace@1)#/tools/read_file/bindingRef",
@@ -1060,10 +1068,23 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain(
       'const generatedWorkspaceToolNames = ["delete_path", "edit_file", "glob_files", "grep_files", "list_files", "read_file", "run_shell", "write_file"] as const;',
     );
+    expect(target).toContain(
+      `const generatedWorkspaceSandboxId = "${normalized.value.workspace.cloudflareSandboxId}";`,
+    );
     expect(target).toContain("bindWorkspaceToolsForRuntime({");
     expect(target).toContain("toolNames: generatedWorkspaceToolNames");
     expect(target).toContain('mutationPolicy: "receipt-backed"');
     expect(target).toContain('shellPolicy: "receipt-backed"');
+    expect(target).toContain("readonly OPENROUTER_DEFAULT_TEXT_MODEL?: string;");
+    expect(target).toContain('ref.kind === "model" && ref.ref === "openrouter-default-text-model"');
+    expect(target).toContain("const modelId = requiredStringMaterial(");
+    expect(target).toContain("if (!modelId.ok) return modelId;");
+    expect(target).toContain("modelId: modelId.value");
+    expect(target).toContain(
+      'materialValue(env, { kind: "model", ref: "openrouter-default-text-model" })',
+    );
+    expect(target).not.toContain('modelId: "openrouter-default-text-model"');
+    expect(target).not.toContain("throw new TypeError");
     expect(target).toContain("installCloudflareWorkspaceOperationProvider({");
     expect(target).toContain("workspaceOperationInstallFor(env).extensions");
     expect(target).toContain("override submit(spec: AgentSubmitSpec): Promise<SubmitResult>");
@@ -1074,7 +1095,8 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain("readWorkspaceFile(");
     expect(target).toContain("resetWorkspace(): Promise<WorkspaceAgentMutationCommandOutput>");
     expect(target).toContain("destroyWorkspace(): Promise<WorkspaceAgentMutationCommandOutput>");
-    expect(target).toContain(
+    expect(target).toContain("getSandbox(workspaceNamespaceFor(env), generatedWorkspaceSandboxId");
+    expect(target).not.toContain(
       'getSandbox(workspaceNamespaceFor(env), "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger"',
     );
     expect(target).toContain(
@@ -1096,6 +1118,7 @@ describe("agent authored tree compiler", () => {
     expect(remote).toContain(
       'import { decodeSseHttpEvents, responseToSseHttpChunks } from "@agent-os/sse-http";',
     );
+    expect(remote).toContain('import type { SseHttpEvent } from "@agent-os/sse-http";');
     expect(remote).toContain("const fail = (status: number, message: string): GeneratedFailure =>");
     expect(remote).toContain(
       "const rejectFailure = (failure: GeneratedFailure): Promise<never> =>",
@@ -1108,6 +1131,20 @@ describe("agent authored tree compiler", () => {
     expect(remote).toContain("runtime.submitRunInput(submitInput.value.input)");
     expect(remote).toContain("runtime.readWorkspaceState(readStateInput.value)");
     expect(remote).toContain("iterator.return(undefined)");
+    expect(remote).toContain('import { Result, Schema } from "effect";');
+    expect(remote).toContain(
+      "const jsonValueFromString = (data: string): GeneratedResult<unknown>",
+    );
+    expect(remote).toContain("Result.try({");
+    expect(remote).toContain("const ledgerEventFromSse = (");
+    expect(remote).toContain('if (event.event !== "ledger") return { ok: true, value: null };');
+    expect(remote).toContain('return fail(502, "invalid ledger stream event: empty data");');
+    expect(remote).toContain('catch: () => "invalid ledger stream event: malformed JSON"');
+    expect(remote).toContain("onFailure: (message) => fail(502, message)");
+    expect(remote).toContain("const ledgerEvent = ledgerEventFromSse(result.value);");
+    expect(remote).not.toContain("runtimeEventFromLedger(JSON.parse(result.value.data))");
+    expect(remote).not.toContain("try {");
+    expect(remote).not.toContain("} catch");
     expect(remote).toContain("runtime.readWorkspaceFile(readFileInput.value)");
     expect(remote).toContain("export const runEventStream = query.live(");
     expect(remote).toContain('platformEnv["AGENT_OS"] as DurableObjectNamespace');
@@ -1122,6 +1159,7 @@ describe("agent authored tree compiler", () => {
         readonly root?: string;
         readonly topology?: unknown;
         readonly providerResourceId?: string;
+        readonly cloudflareSandboxId?: string;
       };
     }>(linked, ".agentos/generated/deployment.json");
     expect(deployment.workspace).toEqual({
@@ -1134,6 +1172,7 @@ describe("agent authored tree compiler", () => {
       },
       providerResourceId:
         "agentos-provider-resource:workspace:v1:web-cursor-demo:Sandbox:per_scope:workspace-per-scope-v1:session%3Aworkspace-ledger",
+      cloudflareSandboxId: normalized.value.workspace.cloudflareSandboxId,
     });
 
     const client = generatedText(linked, ".agentos/generated/client.ts");

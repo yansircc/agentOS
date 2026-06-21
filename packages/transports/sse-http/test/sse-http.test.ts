@@ -43,6 +43,18 @@ describe("@agent-os/sse-http", () => {
     ]);
   });
 
+  it("does not surface comment heartbeats as events", async () => {
+    async function* chunks(): AsyncGenerator<string> {
+      yield ": keepalive\n\n";
+      yield 'event: ledger\ndata: {"id":1}\n\n';
+      yield ": another keepalive\n\n";
+    }
+
+    await expect(collectAsync(decodeSseHttpEvents(chunks()))).resolves.toEqual([
+      { event: "ledger", data: '{"id":1}' },
+    ]);
+  });
+
   it("creates a Web Fetch SSE response from encoded chunks", async () => {
     const response = createSseHttpResponse(["event: one\ndata: 1\n\n"]);
     expect(response.headers.get("content-type")).toBe(SSE_HTTP_CONTENT_TYPE);
