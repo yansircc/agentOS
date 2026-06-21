@@ -14,9 +14,9 @@ views from projections.
 | Client core        | `@agent-os/client`                         | App UI/headless code   | transport-neutral store and typed command invoker  |
 | Framework bridge   | `@agent-os/client-react` / `client-svelte` | App UI authors         | framework reactivity over canonical client state   |
 | Workspace preset   | `@agent-os/workspace-agent`                | Generated target host  | workspace projections, commands, generated mount   |
-| Backend mount      | `@agent-os/backend-cloudflare-do`          | Backend authors        | Durable Object factory, manifest mount             |
+| Backend mount      | `@agent-os/runtime/cloudflare`             | Backend authors        | Durable Object factory, manifest mount             |
 | Runtime substrate  | `@agent-os/runtime`                        | Backend authors        | Effect Tags, submit protocol, projections          |
-| Backend protocol   | `@agent-os/backend-protocol`               | Backend authors        | shared dispatch/scheduler/resource/quota semantics |
+| Backend protocol   | `@agent-os/core/backend-protocol`          | Backend authors        | shared dispatch/scheduler/resource/quota semantics |
 | Carriers/providers | `@agent-os/*` carrier/provider packages    | Domain package authors | boundary packages, provider materializers          |
 | Composers/tooling  | `@agent-os/run-stream`, tooling packages   | Ops and UI authors     | projections, manifests, install-time registries    |
 

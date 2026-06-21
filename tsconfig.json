@@ -80,9 +80,6 @@
       "path": "./packages/providers/deploy-cloudflare"
     },
     {
-      "path": "./packages/providers/llm-transport-effect-ai"
-    },
-    {
       "path": "./packages/providers/llm-transport-http"
     },
     {
@@ -114,18 +111,6 @@
     },
     {
       "path": "./packages/transports/sse-http"
-    },
-    {
-      "path": "./packages/wire-adapters/telemetry-otlp"
-    },
-    {
-      "path": "./packages/backends/cloudflare-do"
-    },
-    {
-      "path": "./packages/backends/node-postgres"
-    },
-    {
-      "path": "./packages/backends/in-memory"
     },
     {
       "path": "./tooling/ops-api"

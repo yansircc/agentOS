@@ -17,11 +17,36 @@
     "./run-projector": {
       "types": "./src/run-projector.ts",
       "default": "./src/run-projector.ts"
+    },
+    "./cloudflare": {
+      "types": "./src/cloudflare/index.ts",
+      "default": "./src/cloudflare/index.ts"
+    },
+    "./cloudflare/do-rpc": {
+      "types": "./src/cloudflare/do-rpc.ts",
+      "default": "./src/cloudflare/do-rpc.ts"
+    },
+    "./in-memory": {
+      "types": "./src/in-memory/index.ts",
+      "default": "./src/in-memory/index.ts"
+    },
+    "./node": {
+      "types": "./src/node/index.ts",
+      "default": "./src/node/index.ts"
+    },
+    "./llm-effect-ai": {
+      "types": "./src/llm-effect-ai/index.ts",
+      "default": "./src/llm-effect-ai/index.ts"
+    },
+    "./telemetry-otlp": {
+      "types": "./src/telemetry-otlp/index.ts",
+      "default": "./src/telemetry-otlp/index.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
+    "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'",
+    "test:runtime": "vp test run --configLoader runner --config vitest.cloudflare.config.ts && vp test run --configLoader runner --config vitest.node.config.ts"
   },
   "dependencies": {
     "@agent-os/attached-stream": "workspace:*",
@@ -31,13 +56,33 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
+    "@effect/ai-anthropic": "catalog:",
     "@effect/language-service": "catalog:",
+    "@effect/sql-sqlite-do": "catalog:",
     "@effect/vitest": "catalog:",
+    "@types/node": "^24.12.4",
+    "fast-check": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@cloudflare/workers-types": "^4.20251201.0",
+    "@effect/ai-anthropic": "^4.0.0-beta.84",
+    "@effect/sql-sqlite-do": "^4.0.0-beta.84",
     "effect": "^4.0.0-beta.84"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    },
+    "@effect/ai-anthropic": {
+      "optional": true
+    },
+    "@effect/sql-sqlite-do": {
+      "optional": true
+    }
   }
 }

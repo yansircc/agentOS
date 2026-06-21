@@ -960,12 +960,12 @@ describe("agent authored tree compiler", () => {
       { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
       {
         kind: "target-runtime",
-        source: "@agent-os/backend-cloudflare-do",
+        source: "@agent-os/runtime/cloudflare",
         imports: ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
       },
       {
         kind: "provider-runtime",
-        source: "@agent-os/llm-transport-effect-ai",
+        source: "@agent-os/runtime/llm-effect-ai",
         imports: ["OpenAiCompatibleLlmTransportLive"],
       },
       {
@@ -1058,10 +1058,10 @@ describe("agent authored tree compiler", () => {
     expect(target).toContain('import semanticDeclarations from "./manifest.json";');
     expect(target).toContain('import deploymentProvenance from "./deployment.json";');
     expect(target).toContain(
-      'import { createAgentDurableObject, installCloudflareWorkspaceOperationProvider } from "@agent-os/backend-cloudflare-do";',
+      'import { createAgentDurableObject, installCloudflareWorkspaceOperationProvider } from "@agent-os/runtime/cloudflare";',
     );
     expect(target).toContain(
-      'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/llm-transport-effect-ai";',
+      'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/runtime/llm-effect-ai";',
     );
     expect(target).toContain(
       'import { bindWorkspaceToolsForRuntime } from "@agent-os/workspace-binding";',
@@ -1123,7 +1123,7 @@ describe("agent authored tree compiler", () => {
     const remote = generatedText(linked, ".agentos/generated/sveltekit.remote.ts");
     expect(remote).toContain('import { command, getRequestEvent, query } from "$app/server";');
     expect(remote).toContain(
-      'import { durableObjectRpcClient } from "@agent-os/backend-cloudflare-do/do-rpc";',
+      'import { durableObjectRpcClient } from "@agent-os/runtime/cloudflare/do-rpc";',
     );
     expect(remote).toContain(
       'import { decodeSseHttpEvents, responseToSseHttpChunks } from "@agent-os/sse-http";',
@@ -1219,7 +1219,7 @@ describe("agent authored tree compiler", () => {
     if (!publicLinked.ok) expect.fail(JSON.stringify(publicLinked.issues));
     expect(publicLinked.value.moduleGraph).toContainEqual({
       kind: "target-runtime",
-      source: "@yansirplus/backend-cloudflare-do",
+      source: "@yansirplus/runtime/cloudflare",
       imports: ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
     });
     expect(publicLinked.value.moduleGraph).toContainEqual({
@@ -1228,7 +1228,7 @@ describe("agent authored tree compiler", () => {
       imports: ["clientReadable", "selectClientReadable"],
     });
     expect(generatedText(publicLinked, ".agentos/generated/target.ts")).toContain(
-      'import { createAgentDurableObject, installCloudflareWorkspaceOperationProvider } from "@yansirplus/backend-cloudflare-do";',
+      'import { createAgentDurableObject, installCloudflareWorkspaceOperationProvider } from "@yansirplus/runtime/cloudflare";',
     );
     const publicClient = generatedText(publicLinked, ".agentos/generated/client.ts");
     expect(publicClient).toContain(

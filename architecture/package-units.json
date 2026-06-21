@@ -61,32 +61,33 @@
         {
           "subpath": "./cloudflare",
           "moduleBuckets": ["ledger", "adapter"],
-          "optionalPeers": ["@cloudflare/workers-types", "@effect/sql-sqlite-do"]
+          "optionalPeers": [
+            "@agent-os/ag-ui",
+            "@agent-os/ops-api",
+            "@agent-os/sse-http",
+            "@agent-os/workspace-env",
+            "@agent-os/workspace-env-cloudflare",
+            "@agent-os/workspace-op",
+            "@agent-os/workspace-op-local",
+            "@cloudflare/workers-types",
+            "@effect/ai-anthropic",
+            "@effect/sql-sqlite-do"
+          ]
         },
         {
-          "subpath": "./node-postgres",
+          "subpath": "./cloudflare/do-rpc",
+          "moduleBuckets": ["adapter"],
+          "optionalPeers": ["@cloudflare/workers-types"]
+        },
+        {
+          "subpath": "./in-memory",
           "moduleBuckets": ["ledger", "adapter"],
           "optionalPeers": []
         },
         {
-          "subpath": "./workspace-env-cloudflare",
-          "moduleBuckets": ["adapter"],
-          "optionalPeers": ["@cloudflare/workers-types"]
-        },
-        {
-          "subpath": "./workspace-env-local",
-          "moduleBuckets": ["adapter"],
+          "subpath": "./node",
+          "moduleBuckets": ["ledger", "adapter"],
           "optionalPeers": []
-        },
-        {
-          "subpath": "./resource-cloudflare",
-          "moduleBuckets": ["adapter"],
-          "optionalPeers": ["@cloudflare/workers-types"]
-        },
-        {
-          "subpath": "./deploy-cloudflare",
-          "moduleBuckets": ["adapter"],
-          "optionalPeers": ["@cloudflare/workers-types"]
         },
         {
           "subpath": "./llm-effect-ai",
@@ -95,7 +96,7 @@
         },
         {
           "subpath": "./telemetry-otlp",
-          "moduleBuckets": ["projection", "adapter"],
+          "moduleBuckets": ["projection"],
           "optionalPeers": []
         }
       ]

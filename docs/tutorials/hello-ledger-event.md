@@ -22,7 +22,7 @@ the same event through `Ledger.events`.
    ```ts
    import { Effect } from "effect";
    import { Ledger } from "@agent-os/runtime";
-   import { InMemoryBackendState, InMemoryLedgerLive } from "@agent-os/backend-in-memory";
+   import { InMemoryBackendState, InMemoryLedgerLive } from "@agent-os/runtime/in-memory";
 
    const scope = "tutorial:hello";
    const state = new InMemoryBackendState();

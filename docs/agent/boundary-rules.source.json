@@ -573,7 +573,7 @@
             ],
             "forbiddenTargetPackagePathPrefixes": [
               "packages/runtime",
-              "packages/backends",
+              "packages/runtime/src",
               "packages/carriers",
               "packages/composers",
               "packages/execution-domains",
@@ -588,7 +588,7 @@
           {
             "fromPackageNames": ["@agent-os/runtime"],
             "forbiddenTargetPackagePathPrefixes": [
-              "packages/backends",
+              "packages/runtime/src",
               "packages/composers",
               "packages/execution-domains",
               "packages/providers",
@@ -659,7 +659,7 @@
       "invariantId": "invariant.ledger.single-commit-source",
       "kind": "repo-boundary",
       "diagnostics": ["transactionSync must remain sync-only substrate"],
-      "paths": ["packages/backends/**/src/**/*.ts"],
+      "paths": ["packages/runtime/src/{cloudflare,in-memory,node}/**/*.ts"],
       "commandGroup": "all",
       "acceptance": {
         "engine": "algorithmic",
@@ -709,11 +709,11 @@
     },
     {
       "id": "cloudflare-profile",
-      "owner": "@agent-os/backend-cloudflare-do",
+      "owner": "@agent-os/runtime/cloudflare",
       "invariantId": "invariant.workspace-job.host-workspace-lifecycle",
       "kind": "profile",
       "diagnostics": ["Cloudflare profile composes host helpers without taking carrier truth"],
-      "paths": ["packages/backends/cloudflare-do"],
+      "paths": ["packages/runtime/src/cloudflare"],
       "commandGroup": "all",
       "acceptance": {
         "engine": "proofClass",
@@ -756,7 +756,7 @@
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": ["production backend set must stay declared once"],
-      "paths": ["package.json", "packages/backends"],
+      "paths": ["package.json", "packages/runtime/src"],
       "commandGroup": "all",
       "acceptance": {
         "engine": "algorithmic",
@@ -895,11 +895,11 @@
     },
     {
       "id": "facade-handler-capability-boundary",
-      "owner": "@agent-os/backend-cloudflare-do",
+      "owner": "@agent-os/runtime/cloudflare",
       "invariantId": "invariant.d10.truth-identity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/cloudflare-do/src"],
+      "paths": ["packages/runtime/src/cloudflare"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -947,11 +947,11 @@
     },
     {
       "id": "node-postgres-runtime-import-boundary",
-      "owner": "@agent-os/backend-node-postgres",
+      "owner": "@agent-os/runtime/node",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/node-postgres/src"],
+      "paths": ["packages/runtime/src/node"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -960,11 +960,11 @@
     },
     {
       "id": "node-postgres-effect-governance",
-      "owner": "@agent-os/backend-node-postgres",
+      "owner": "@agent-os/runtime/node",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/node-postgres/src"],
+      "paths": ["packages/runtime/src/node"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -973,11 +973,11 @@
     },
     {
       "id": "backend-provider-axis-boundary",
-      "owner": "packages/backends",
+      "owner": "packages/runtime/src",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends", "packages/providers"],
+      "paths": ["packages/runtime/src", "packages/providers"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -990,7 +990,7 @@
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends"],
+      "paths": ["packages/runtime/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "algorithmic",
@@ -1039,11 +1039,11 @@
     },
     {
       "id": "telemetry-otlp-tree-parity",
-      "owner": "@agent-os/telemetry-otlp",
+      "owner": "@agent-os/runtime/telemetry-otlp",
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/wire-adapters/telemetry-otlp"],
+      "paths": ["packages/runtime/src/telemetry-otlp"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1170,11 +1170,11 @@
     },
     {
       "id": "facade-run-scoped-bindings",
-      "owner": "@agent-os/backend-cloudflare-do",
+      "owner": "@agent-os/runtime/cloudflare",
       "invariantId": "invariant.d10.truth-identity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/backends/cloudflare-do/src"],
+      "paths": ["packages/runtime/src/cloudflare"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1226,7 +1226,7 @@
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/core/src/telemetry-protocol", "packages/wire-adapters/telemetry-otlp"],
+      "paths": ["packages/core/src/telemetry-protocol", "packages/runtime/src/telemetry-otlp"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",

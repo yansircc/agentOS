@@ -22,8 +22,8 @@
       "docs": "docs/boundary-contract.md",
       "fix": "Commit through the owning BoundaryContract with matching event vocabulary, scopeRef, effectAuthorityRef, and claim identity.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/extension-capability.runtime.test.ts",
-        "packages/runtime/src/boundary-commit.ts"
+        "packages/runtime/src/boundary-commit.ts",
+        "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts"
       ]
     },
     {
@@ -32,11 +32,11 @@
       "docs": "docs/boundary-contract.md",
       "fix": "Register the extension capability that owns the event prefix before committing or dispatching the fact.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
-        "packages/backends/cloudflare-do/test/emit-event-contract.runtime.test.ts",
-        "packages/backends/cloudflare-do/test/extension-capability.runtime.test.ts",
-        "packages/backends/cloudflare-do/test/facade-submit.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts",
+        "packages/runtime/test/cloudflare/emit-event-contract.runtime.test.ts",
+        "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts",
+        "packages/runtime/test/cloudflare/facade-submit.runtime.test.ts"
       ]
     },
     {
@@ -44,7 +44,7 @@
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Use the Cloudflare D10 ledger schema with structured scopeRef, effectAuthorityRef, factOwnerRef, and identity keys; old scope columns and malformed identity specs fail closed.",
-      "sourceFiles": ["packages/backends/cloudflare-do/src/ledger/identity.ts"]
+      "sourceFiles": ["packages/runtime/src/cloudflare/ledger/identity.ts"]
     },
     {
       "tag": "agent_os.cloudflare_worker_bundle_resolution_failure",
@@ -63,11 +63,11 @@
     {
       "tag": "agent_os.dispatch_binding_ref_malformed",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Use a valid binding MaterialRef for dispatch targets and reject malformed target refs at the backend boundary.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts"
       ]
     },
     {
@@ -83,20 +83,20 @@
     {
       "tag": "agent_os.dispatch_scope_mismatch",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Dispatch only to the exact target scopeRef and effectAuthorityRef; do not reuse a scope-wide derived key as truth.",
       "sourceFiles": ["packages/core/src/errors.ts"]
     },
     {
       "tag": "agent_os.dispatch_target_not_found",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Register or resolve the dispatch target binding before enqueueing delivery.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
-        "packages/backends/in-memory/src/dispatch.ts",
-        "packages/backends/node-postgres/src/index.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/src/in-memory/dispatch.ts",
+        "packages/runtime/src/node/index.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts"
       ]
     },
     {
@@ -119,8 +119,8 @@
       "docs": "docs/concepts/durable-process-algebra.md",
       "fix": "Keep trigger commit callbacks synchronous inside the backend transaction and move asynchronous work after durable commit.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/trigger-facade.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/trigger-facade.runtime.test.ts"
       ]
     },
     {
@@ -167,59 +167,59 @@
     {
       "tag": "agent_os.effect_ai_aborted",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Propagate Effect AI aborts through LlmTransport and let submit own terminal runtime facts.",
-      "sourceFiles": ["packages/providers/llm-transport-effect-ai/src/index.ts"]
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
     },
     {
       "tag": "agent_os.effect_ai_json_encode_failed",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Encode structured provider payloads through the Effect AI transport adapter and fail before committing runtime evidence.",
-      "sourceFiles": ["packages/providers/llm-transport-effect-ai/src/index.ts"]
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
     },
     {
       "tag": "agent_os.effect_ai_missing_usage",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Keep provider usage accounting in the LlmTransport output schema and reject responses that cannot produce runtime usage evidence.",
-      "sourceFiles": ["packages/providers/llm-transport-effect-ai/src/index.ts"]
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
     },
     {
       "tag": "agent_os.effect_ai_prompt_error",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Build prompts at the provider adapter boundary and surface prompt construction failures before submit records terminal facts.",
-      "sourceFiles": ["packages/providers/llm-transport-effect-ai/src/index.ts"]
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
     },
     {
       "tag": "agent_os.effect_ai_provider_executed_tool_rejected",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Disable provider-executed tool paths for agentOS tools; tool execution must flow through runtime admission and ledger settlement.",
-      "sourceFiles": ["packages/providers/llm-transport-effect-ai/src/index.ts"]
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
     },
     {
       "tag": "agent_os.effect_ai_tool_handler_called",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Treat provider-side tool handler invocation as an adapter violation; runtime owns tool calls and settlements.",
-      "sourceFiles": ["packages/providers/llm-transport-effect-ai/src/index.ts"]
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
     },
     {
       "tag": "agent_os.effect_ai_unsupported_output_part",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Map provider output parts through the runtime output-item algebra and reject parts without a runtime representation.",
-      "sourceFiles": ["packages/providers/llm-transport-effect-ai/src/index.ts"]
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
     },
     {
       "tag": "agent_os.effect_ai_unsupported_route",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Choose a route supported by the Effect AI transport adapter or add an explicit adapter branch for the provider.",
       "sourceFiles": [
-        "packages/providers/llm-transport-effect-ai/src/index.ts",
+        "packages/runtime/src/llm-effect-ai/index.ts",
         "packages/runtime/src/structured-output.ts"
       ]
     },
@@ -229,8 +229,8 @@
       "docs": "docs/boundary-contract.md",
       "fix": "Declare one owner for each extension capability and event namespace; remove duplicate capability declarations.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/extension-declarations.test.ts",
-        "packages/core/src/extensions.ts"
+        "packages/core/src/extensions.ts",
+        "packages/runtime/test/cloudflare/extension-declarations.test.ts"
       ]
     },
     {
@@ -298,9 +298,9 @@
     {
       "tag": "agent_os.postgres_harness_error",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/backend-node-postgres.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Start and clean up the runtime contract Postgres harness at the test boundary, mapping Docker, psql, and config failures into the harness error channel.",
-      "sourceFiles": ["packages/backends/node-postgres/test/postgres-harness.ts"]
+      "sourceFiles": ["packages/runtime/test/node/postgres-harness.ts"]
     },
     {
       "tag": "agent_os.projection_application_error",
@@ -387,10 +387,10 @@
       "docs": "docs/packages/resource-carrier.md",
       "fix": "Grant or release resources through the resource ledger before attempting a reservation that would exceed available capacity.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/resource-contract.runtime.test.ts",
-        "packages/backends/cloudflare-do/test/resources-in-memory-runtime.test.ts",
         "packages/core/src/errors.ts",
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts",
+        "packages/runtime/test/cloudflare/resources-in-memory-runtime.test.ts"
       ]
     },
     {
@@ -399,9 +399,9 @@
       "docs": "docs/packages/resource-carrier.md",
       "fix": "Do not consume or release a reservation after its terminal resource fact has already been committed.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/resource-contract.runtime.test.ts",
         "packages/core/src/errors.ts",
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts"
       ]
     },
     {
@@ -424,12 +424,12 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Map backend storage failures into the runtime-owned storage error at the runtime service boundary; keep backend-specific storage errors inside backend adapters.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/admission/attempt-structured.runtime.test.ts",
-        "packages/backends/cloudflare-do/test/materialized-projections.runtime.test.ts",
-        "packages/backends/cloudflare-do/test/quota-contract.runtime.test.ts",
-        "packages/backends/in-memory/test/runtime-tags.test.ts",
         "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
-        "packages/runtime/src/ledger.ts"
+        "packages/runtime/src/ledger.ts",
+        "packages/runtime/test/cloudflare/admission/attempt-structured.runtime.test.ts",
+        "packages/runtime/test/cloudflare/materialized-projections.runtime.test.ts",
+        "packages/runtime/test/cloudflare/quota-contract.runtime.test.ts",
+        "packages/runtime/test/in-memory/runtime-tags.test.ts"
       ]
     },
     {
@@ -460,8 +460,8 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Resolve the structured scopeRef before runtime or backend operations; do not fall back to an implicit scope.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/emit-event-contract.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/emit-event-contract.runtime.test.ts"
       ]
     },
     {
@@ -470,17 +470,17 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Keep SQL writes inside the backend-owned ledger commit primitive and return typed SqlError at the backend boundary.",
       "sourceFiles": [
-        "packages/backends/in-memory/test/runtime-tags.test.ts",
-        "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/in-memory/runtime-tags.test.ts",
+        "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts"
       ]
     },
     {
       "tag": "agent_os.stream_identity_error",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Stream only with an exact scopeRef and effectAuthorityRef identity and reject malformed stream identity input.",
-      "sourceFiles": ["packages/backends/cloudflare-do/src/agent-do.ts"]
+      "sourceFiles": ["packages/runtime/src/cloudflare/agent-do.ts"]
     },
     {
       "tag": "agent_os.tenant_credential_resolver_configuration_error",
@@ -495,8 +495,8 @@
       "docs": "docs/concepts/durable-process-algebra.md",
       "fix": "Keep durable trigger factory output synchronous, typed, and registered before scheduling or claiming trigger work.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/trigger-facade.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/trigger-facade.runtime.test.ts"
       ]
     },
     {
@@ -505,8 +505,8 @@
       "docs": "docs/concepts/durable-process-algebra.md",
       "fix": "Register the durable trigger kind before scheduling, claiming, or dispatching due work.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/test/trigger-facade.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/trigger-facade.runtime.test.ts"
       ]
     },
     {
@@ -522,9 +522,9 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Use a backend-supported scopeRef kind or add an explicit backend adapter branch for that scope kind.",
       "sourceFiles": [
-        "packages/backends/cloudflare-do/src/agent-do.ts",
-        "packages/backends/cloudflare-do/test/dispatch-contract.runtime.test.ts",
-        "packages/core/src/errors.ts"
+        "packages/core/src/errors.ts",
+        "packages/runtime/src/cloudflare/agent-do.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts"
       ]
     },
     {

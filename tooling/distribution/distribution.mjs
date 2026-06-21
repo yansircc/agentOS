@@ -22,7 +22,7 @@ const publicPackageScopePlaceholder = "__AGENTOS_PUBLIC_PACKAGE_SCOPE__";
 
 const runtimePackageRoots = ["packages", "tooling"];
 const cloudflarePackageNames = new Set([
-  "@agent-os/backend-cloudflare-do",
+  "@agent-os/runtime",
   "@agent-os/resource-cloudflare",
   "@agent-os/sandbox-cloudflare",
   "@agent-os/workspace-env-cloudflare",
@@ -62,6 +62,27 @@ const fixtureTempRoot = () => {
 const mkdtempFixture = (prefix) => fs.mkdtempSync(path.join(fixtureTempRoot(), prefix));
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+
+const packageUnits = () => readJson(path.join(repoRoot, "architecture", "package-units.json"));
+
+const packageUnitForRecord = (record) =>
+  (packageUnits().packageUnits ?? []).find(
+    (unit) => unit.targetSourcePackageName === record.packageJson.name,
+  );
+
+const packageUnitOptionalPeers = (record) =>
+  new Set(
+    (packageUnitForRecord(record)?.publicSubpaths ?? []).flatMap((subpath) =>
+      Array.isArray(subpath.optionalPeers) ? subpath.optionalPeers : [],
+    ),
+  );
+
+const projectedDependencyRange = (name, value, rootCatalog) => {
+  if (isSourcePackageName(name)) return packageVersion();
+  if (value === "catalog:") return rootCatalog[name];
+  if (value === "workspace:*") return packageVersion();
+  return value;
+};
 
 const writeJson = (file, value) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -424,6 +445,7 @@ const assertSourceManifests = () => {
   const issues = [];
   for (const record of publishedRecords()) {
     const pkg = record.packageJson;
+    const unitOptionalPeers = packageUnitOptionalPeers(record);
     if (pkg.private !== true) {
       issues.push(`${record.packagePath}: source package must stay private`);
     }
@@ -436,13 +458,13 @@ const assertSourceManifests = () => {
       );
     }
     const workersPeer = pkg.peerDependencies?.["@cloudflare/workers-types"];
-    if (cloudflarePackageNames.has(pkg.name)) {
+    if (cloudflarePackageNames.has(pkg.name) && pkg.name !== "@agent-os/runtime") {
       if (workersPeer !== rootCatalog["@cloudflare/workers-types"]) {
         issues.push(
           `${record.packagePath}: Cloudflare package must peer depend on @cloudflare/workers-types ${rootCatalog["@cloudflare/workers-types"]}`,
         );
       }
-    } else if (workersPeer !== undefined) {
+    } else if (workersPeer !== undefined && !unitOptionalPeers.has("@cloudflare/workers-types")) {
       issues.push(
         `${record.packagePath}: non-Cloudflare package must not peer depend on @cloudflare/workers-types`,
       );
@@ -725,7 +747,7 @@ const projectedDependencies = (record) => {
       dependencies[publicPackageName(name)] = version;
       continue;
     }
-    dependencies[name] = value === "catalog:" ? rootCatalog[name] : value;
+    dependencies[name] = projectedDependencyRange(name, value, rootCatalog);
     if (dependencies[name] === undefined)
       fail(`${record.packagePath}: missing catalog value for ${name}`);
   }
@@ -734,7 +756,19 @@ const projectedDependencies = (record) => {
 
 const projectedPeerDependencies = (record) => {
   const rootCatalog = catalog();
-  const peers = { ...record.packageJson.peerDependencies };
+  const peers = {};
+  const sourcePeers = new Map(Object.entries(record.packageJson.peerDependencies ?? {}));
+  for (const name of packageUnitOptionalPeers(record)) {
+    if (!sourcePeers.has(name)) {
+      sourcePeers.set(name, isSourcePackageName(name) ? "workspace:*" : "catalog:");
+    }
+  }
+  for (const [name, value] of sourcePeers) {
+    const projectedName = isSourcePackageName(name) ? publicPackageName(name) : name;
+    peers[projectedName] = projectedDependencyRange(name, value, rootCatalog);
+    if (peers[projectedName] === undefined)
+      fail(`${record.packagePath}: missing peer projection value for ${name}`);
+  }
   if (packageImportsEffect(record)) {
     peers.effect = rootCatalog.effect;
   }
@@ -742,6 +776,20 @@ const projectedPeerDependencies = (record) => {
     peers["@cloudflare/workers-types"] = rootCatalog["@cloudflare/workers-types"];
   }
   return Object.keys(peers).length === 0 ? undefined : peers;
+};
+
+const projectedPeerDependenciesMeta = (record) => {
+  const entries = new Map(Object.entries(record.packageJson.peerDependenciesMeta ?? {}));
+  for (const name of packageUnitOptionalPeers(record)) {
+    if (!entries.has(name)) entries.set(name, { optional: true });
+  }
+  if (entries.size === 0) return undefined;
+  return Object.fromEntries(
+    [...entries.entries()].map(([name, value]) => [
+      isSourcePackageName(name) ? publicPackageName(name) : name,
+      value,
+    ]),
+  );
 };
 
 const generatedManifest = (record) => {
@@ -770,6 +818,7 @@ const generatedManifest = (record) => {
     ],
     dependencies: projectedDependencies(record),
     peerDependencies: projectedPeerDependencies(record),
+    peerDependenciesMeta: projectedPeerDependenciesMeta(record),
   };
   return Object.fromEntries(Object.entries(manifest).filter(([, value]) => value !== undefined));
 };
@@ -1202,8 +1251,8 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
     path.join(dir, "cf-entry.ts"),
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
-      `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/backend-cloudflare-do")}";`,
-      `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/llm-transport-effect-ai")}";`,
+      `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
+      `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai")}";`,
       `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
@@ -1305,9 +1354,7 @@ const negativeContractTests = () => {
   const records = publishedRecords();
   const core = records.find((record) => record.packageJson.name === "@agent-os/core");
   const turnStream = records.find((record) => record.packageJson.name === "@agent-os/turn-stream");
-  const cloudflare = records.find(
-    (record) => record.packageJson.name === "@agent-os/backend-cloudflare-do",
-  );
+  const cloudflare = records.find((record) => record.packageJson.name === "@agent-os/runtime");
   if (core === undefined || turnStream === undefined || cloudflare === undefined) {
     fail("negative test fixtures missing expected packages");
   }

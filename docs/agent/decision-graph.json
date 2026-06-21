@@ -73,12 +73,7 @@
         "primitive.runtime.projectRunStatus",
         "primitive.runtime.projectRunTrace"
       ],
-      "allowedPrimitivePackages": [
-        "@agent-os/ag-ui",
-        "@agent-os/backend-cloudflare-do",
-        "@agent-os/core",
-        "@agent-os/runtime"
-      ],
+      "allowedPrimitivePackages": ["@agent-os/ag-ui", "@agent-os/core", "@agent-os/runtime"],
       "forbiddenWrites": [
         {
           "actor": "product",
@@ -108,7 +103,7 @@
       "docs": [
         "docs/concepts/ag-ui-wire-adapter.md",
         "docs/concepts/durable-truth.md",
-        "docs/packages/backend-cloudflare-do.md",
+        "docs/packages/runtime.md",
         "docs/tutorials/streaming-chatbot.md"
       ],
       "testEvidence": [
@@ -122,11 +117,11 @@
         },
         {
           "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
-          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         },
         {
           "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
-          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         },
         {
           "primitive": "primitive.runtime.SubmitResult",
@@ -215,7 +210,7 @@
       ],
       "allowedPrimitivePackages": [
         "@agent-os/agent-authoring",
-        "@agent-os/backend-cloudflare-do",
+        "@agent-os/runtime",
         "@agent-os/workspace-agent"
       ],
       "forbiddenWrites": [
@@ -248,7 +243,7 @@
       "docs": [
         "docs/concepts/ag-ui-wire-adapter.md",
         "docs/guides/build-natural-language-workspace-agent.md",
-        "docs/packages/backend-cloudflare-do.md",
+        "docs/packages/runtime.md",
         "docs/packages/workspace-job.md",
         "docs/verification.md"
       ],
@@ -267,7 +262,7 @@
         },
         {
           "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
-          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         }
       ]
     },
@@ -277,7 +272,7 @@
         "run a workspace job and stream observable result to UI",
         "consume workspace-job failure observability without reading raw ledger payload"
       ],
-      "coordinationPackage": "@agent-os/backend-cloudflare-do",
+      "coordinationPackage": "@agent-os/runtime",
       "coordinationCapabilityKind": "profile",
       "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_job.", "workspace_op."],
       "sourceFactOwners": [
@@ -346,11 +341,7 @@
         "primitive.runtime.projectWorkspaceJobObservability",
         "primitive.runtime.runWorkspaceJobEffect"
       ],
-      "allowedPrimitivePackages": [
-        "@agent-os/ag-ui",
-        "@agent-os/backend-cloudflare-do",
-        "@agent-os/runtime"
-      ],
+      "allowedPrimitivePackages": ["@agent-os/ag-ui", "@agent-os/runtime"],
       "forbiddenWrites": [
         {
           "actor": "product",
@@ -398,7 +389,7 @@
         "docs/boundary-contract.md",
         "docs/concepts/ag-ui-wire-adapter.md",
         "docs/concepts/durable-truth.md",
-        "docs/packages/backend-cloudflare-do.md",
+        "docs/packages/runtime.md",
         "docs/packages/workspace-job.md"
       ],
       "testEvidence": [
@@ -408,19 +399,19 @@
         },
         {
           "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
-          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         },
         {
           "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
-          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         },
         {
           "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
-          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         },
         {
           "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
-          "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         },
         {
           "primitive": "primitive.runtime.projectWorkspaceJobObservability",

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "agent-os-core-test",
+  "main": "./test/cloudflare/test-worker.ts",
+  "compatibility_date": "2026-04-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT_DO",
+        "class_name": "TestAgentDO",
+      },
+      {
+        "name": "EMIT_DO",
+        "class_name": "EmitTestDO",
+      },
+      {
+        "name": "DISPATCH_DO",
+        "class_name": "DispatchTestDO",
+      },
+      {
+        "name": "STREAM_DO",
+        "class_name": "StreamTestDO",
+      },
+      {
+        "name": "EXTENSION_DO",
+        "class_name": "ExtensionTestDO",
+      },
+      {
+        "name": "FACADE_SUBMIT_DO",
+        "class_name": "FacadeSubmitTestDO",
+      },
+      {
+        "name": "TRIGGER_FACADE_DO",
+        "class_name": "TriggerFacadeTestDO",
+      },
+      {
+        "name": "TRIGGER_FACTORY_ERROR_DO",
+        "class_name": "TriggerFactoryErrorTestDO",
+      },
+      {
+        "name": "TRIGGER_BOUNDARY_DO",
+        "class_name": "TriggerBoundaryTestDO",
+      },
+      {
+        "name": "TRIGGER_TESTING_DRAIN_DO",
+        "class_name": "TriggerTestingDrainTestDO",
+      },
+      {
+        "name": "TRIGGER_CANCEL_DO",
+        "class_name": "TriggerCancelTestDO",
+      },
+      {
+        "name": "ATTACHED_STREAM_DO",
+        "class_name": "AttachedStreamTestDO",
+      },
+      {
+        "name": "MATERIALIZED_PROJECTION_DO",
+        "class_name": "MaterializedProjectionTestDO",
+      },
+      {
+        "name": "BACKEND_PROTOCOL_CONTRACT_DO",
+        "class_name": "BackendProtocolContractTestDO",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "TestAgentDO",
+        "EmitTestDO",
+        "DispatchTestDO",
+        "StreamTestDO",
+        "ExtensionTestDO",
+        "FacadeSubmitTestDO",
+        "TriggerFacadeTestDO",
+        "TriggerFactoryErrorTestDO",
+        "TriggerBoundaryTestDO",
+        "TriggerTestingDrainTestDO",
+        "TriggerCancelTestDO",
+        "AttachedStreamTestDO",
+        "MaterializedProjectionTestDO",
+        "BackendProtocolContractTestDO",
+      ],
+    },
+  ],
+}

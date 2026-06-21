@@ -10,7 +10,12 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "types": ["vitest/globals"],
+    "types": [
+      "@cloudflare/workers-types",
+      "@cloudflare/vitest-pool-workers",
+      "@cloudflare/vitest-pool-workers/types",
+      "vitest/globals"
+    ],
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": false
   },
@@ -18,6 +23,8 @@
     "src/**/*",
     "test/**/*",
     "vitest.config.ts",
+    "vitest.cloudflare.config.ts",
+    "vitest.node.config.ts",
     "../../tooling/types/vite-plus-test-config/index.d.ts"
   ],
   "extends": "../../tsconfig.source-paths.json"

@@ -8,11 +8,7 @@
     "packageOverrides": {
       "packages/runtime": {
         "dependencyOwner": "package-local",
-        "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
-      },
-      "packages/backends/cloudflare-do": {
-        "dependencyOwner": "package-local",
-        "dependencyOwnerReason": "Cloudflare DO backend owns platform adapter dependency declarations"
+        "dependencyOwnerReason": "runtime owns backend-neutral runtime and optional subpath adapter dependency declarations"
       },
       "packages/core": {
         "dependencyOwner": "package-local",
@@ -51,26 +47,26 @@
         "rules": ["EFF024", "EFF025"]
       },
       {
-        "path": "packages/backends/cloudflare-do/src/attached-stream-wire.ts",
-        "owner": "@agent-os/backend-cloudflare-do/attached-stream-wire",
+        "path": "packages/runtime/src/cloudflare/attached-stream-wire.ts",
+        "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
         "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
         "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
       },
       {
-        "path": "packages/backends/cloudflare-do/src/agent-do.ts",
-        "owner": "@agent-os/backend-cloudflare-do",
+        "path": "packages/runtime/src/cloudflare/agent-do.ts",
+        "owner": "@agent-os/runtime/cloudflare",
         "reason": "terminal Cloudflare Durable Object facade owns streamEvents missing-scope Response construction",
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/backends/cloudflare-do/src/workspace-job-facade.ts",
-        "owner": "@agent-os/backend-cloudflare-do/workspace-job-facade",
+        "path": "packages/runtime/src/cloudflare/workspace-job-facade.ts",
+        "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
         "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/backends/cloudflare-do/src/ledger/stream.ts",
-        "owner": "@agent-os/backend-cloudflare-do",
+        "path": "packages/runtime/src/cloudflare/ledger/stream.ts",
+        "owner": "@agent-os/runtime/cloudflare",
         "reason": "terminal ledger SSE adapter owns Response construction",
         "rules": ["EFF402"]
       },
@@ -87,56 +83,56 @@
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/backends/cloudflare-do/src/storage/sql-row.ts",
-        "owner": "@agent-os/backend-cloudflare-do-storage",
+        "path": "packages/runtime/src/cloudflare/storage/sql-row.ts",
+        "owner": "@agent-os/runtime/cloudflare-storage",
         "reason": "SQLite row adapter owns fail-fast host column shape assertion",
         "rules": ["EFF025"]
       },
       {
-        "path": "packages/backends/cloudflare-do/src/trigger-pump.ts",
-        "owner": "@agent-os/backend-cloudflare-do/durable-trigger",
+        "path": "packages/runtime/src/cloudflare/trigger-pump.ts",
+        "owner": "@agent-os/runtime/cloudflare/durable-trigger",
         "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
         "rules": ["EFF025"]
       },
       {
-        "path": "packages/backends/cloudflare-do/src/materialized-projections.ts",
-        "owner": "@agent-os/backend-cloudflare-do/materialized-projections",
+        "path": "packages/runtime/src/cloudflare/materialized-projections.ts",
+        "owner": "@agent-os/runtime/cloudflare/materialized-projections",
         "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
         "rules": ["EFF025"]
       },
       {
-        "path": "packages/backends/node-postgres/src/host.ts",
-        "owner": "@agent-os/backend-node-postgres/psql-host-adapter",
+        "path": "packages/runtime/src/node/host.ts",
+        "owner": "@agent-os/runtime/node/psql-host-adapter",
         "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
         "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
       },
       {
-        "path": "packages/backends/cloudflare-do/test/_in-memory-do.ts",
-        "owner": "@agent-os/backend-cloudflare-do-tests",
+        "path": "packages/runtime/test/cloudflare/_in-memory-do.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
         "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
         "rules": ["EFF001", "EFF025"]
       },
       {
-        "path": "packages/backends/cloudflare-do/test/admission/attempt-structured.runtime.test.ts",
-        "owner": "@agent-os/backend-cloudflare-do-tests",
+        "path": "packages/runtime/test/cloudflare/admission/attempt-structured.runtime.test.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
         "reason": "test HTTP fixture owns provider Response construction",
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/backends/cloudflare-do/test/do-rpc.test.ts",
-        "owner": "@agent-os/backend-cloudflare-do-tests",
+        "path": "packages/runtime/test/cloudflare/do-rpc.test.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
         "reason": "Durable Object RPC typed-client contract test owns Response construction to prove sync Response-returning stub methods are exposed as Promise<Response>",
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts",
-        "owner": "@agent-os/backend-cloudflare-do-tests",
+        "path": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
         "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/backends/cloudflare-do/test/test-worker.ts",
-        "owner": "@agent-os/backend-cloudflare-do-tests",
+        "path": "packages/runtime/test/cloudflare/test-worker.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
         "reason": "Cloudflare worker test adapter owns Response construction",
         "rules": ["EFF402"]
       },
@@ -216,96 +212,85 @@
       "shape": ["library"]
     },
     "packages/runtime": {
-      "shape": ["library"]
-    },
-    "packages/backends/in-memory": {
-      "shape": ["library"]
-    },
-    "packages/backends/cloudflare-do": {
       "shape": ["library"],
       "allowedAdapters": [
         {
-          "path": "src/attached-stream-wire.ts",
-          "owner": "@agent-os/backend-cloudflare-do/attached-stream-wire",
-          "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
-          "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
-        },
-        {
-          "path": "src/agent-do.ts",
-          "owner": "@agent-os/backend-cloudflare-do/cf-do",
+          "path": "src/cloudflare/agent-do.ts",
+          "owner": "@agent-os/runtime/cloudflare/cf-do",
           "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
           "rules": ["EFF025", "EFF402"]
         },
         {
-          "path": "src/workspace-job-facade.ts",
-          "owner": "@agent-os/backend-cloudflare-do/workspace-job-facade",
-          "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
-          "rules": ["EFF402"]
+          "path": "src/cloudflare/attached-stream-wire.ts",
+          "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
+          "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
+          "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
         },
         {
-          "path": "src/dispatch/payload.ts",
-          "owner": "@agent-os/backend-cloudflare-do/dispatch",
+          "path": "src/cloudflare/dispatch/payload.ts",
+          "owner": "@agent-os/runtime/cloudflare/dispatch",
           "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",
           "rules": ["EFF025"]
         },
         {
-          "path": "src/dispatch/receiver.ts",
-          "owner": "@agent-os/backend-cloudflare-do/dispatch",
+          "path": "src/cloudflare/dispatch/receiver.ts",
+          "owner": "@agent-os/runtime/cloudflare/dispatch",
           "reason": "dispatch inbound projection parsing runs inside synchronous transactionSync and must fail the transaction on malformed ledger wire data",
           "rules": ["EFF025"]
         },
         {
-          "path": "src/trigger-pump.ts",
-          "owner": "@agent-os/backend-cloudflare-do/durable-trigger",
-          "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
-          "rules": ["EFF025"]
-        },
-        {
-          "path": "src/materialized-projections.ts",
-          "owner": "@agent-os/backend-cloudflare-do/materialized-projections",
-          "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
-          "rules": ["EFF025"]
-        },
-        {
-          "path": "src/ledger/stream.ts",
-          "owner": "@agent-os/backend-cloudflare-do/http-stream",
+          "path": "src/cloudflare/ledger/stream.ts",
+          "owner": "@agent-os/runtime/cloudflare/http-stream",
           "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
           "rules": ["EFF402"]
         },
         {
-          "path": "test/_in-memory-do.ts",
-          "owner": "@agent-os/backend-cloudflare-do/test-runtime",
+          "path": "src/cloudflare/materialized-projections.ts",
+          "owner": "@agent-os/runtime/cloudflare/materialized-projections",
+          "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
+          "rules": ["EFF025"]
+        },
+        {
+          "path": "src/cloudflare/trigger-pump.ts",
+          "owner": "@agent-os/runtime/cloudflare/durable-trigger",
+          "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
+          "rules": ["EFF025"]
+        },
+        {
+          "path": "src/cloudflare/workspace-job-facade.ts",
+          "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
+          "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "src/node/host.ts",
+          "owner": "@agent-os/runtime/node/psql-host-adapter",
+          "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
+          "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
+        },
+        {
+          "path": "test/cloudflare/_in-memory-do.ts",
+          "owner": "@agent-os/runtime/cloudflare/test-runtime",
           "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",
           "rules": ["EFF001", "EFF025"]
         },
         {
-          "path": "test/workspace-host-helpers.test.ts",
-          "owner": "@agent-os/backend-cloudflare-do/test-host-helpers",
-          "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
+          "path": "test/cloudflare/admission/attempt-structured.runtime.test.ts",
+          "owner": "@agent-os/runtime/cloudflare/test-provider",
+          "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
           "rules": ["EFF402"]
         },
         {
-          "path": "test/test-worker.ts",
-          "owner": "@agent-os/backend-cloudflare-do/test-worker",
+          "path": "test/cloudflare/test-worker.ts",
+          "owner": "@agent-os/runtime/cloudflare/test-worker",
           "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
           "rules": ["EFF402"]
         },
         {
-          "path": "test/admission/attempt-structured.runtime.test.ts",
-          "owner": "@agent-os/backend-cloudflare-do/test-provider",
-          "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
+          "path": "test/cloudflare/workspace-host-helpers.test.ts",
+          "owner": "@agent-os/runtime/cloudflare/test-host-helpers",
+          "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
           "rules": ["EFF402"]
-        }
-      ]
-    },
-    "packages/backends/node-postgres": {
-      "shape": ["library"],
-      "allowedAdapters": [
-        {
-          "path": "src/host.ts",
-          "owner": "@agent-os/backend-node-postgres/psql-host-adapter",
-          "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
-          "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
         }
       ]
     },

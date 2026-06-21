@@ -9,7 +9,7 @@
     {
       "ownerId": "@agent-os/backend-cloudflare-do",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/backend-cloudflare-do"]
+      "sourcePackageNames": ["@agent-os/runtime"]
     },
     {
       "ownerId": "@agent-os/backend-protocol",
@@ -49,7 +49,7 @@
     {
       "ownerId": "@agent-os/runtime",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/core"]
+      "sourcePackageNames": ["@agent-os/runtime"]
     },
     {
       "ownerId": "@agent-os/runtime-protocol",

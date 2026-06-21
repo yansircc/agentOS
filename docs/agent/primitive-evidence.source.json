@@ -165,7 +165,7 @@
     {
       "primitive": "primitive.runtime.MaterializedProjections",
       "tests": [
-        "packages/backends/cloudflare-do/test/materialized-projections.runtime.test.ts",
+        "packages/runtime/test/cloudflare/materialized-projections.runtime.test.ts",
         "packages/runtime/test/projection.test.ts"
       ]
     },
@@ -231,31 +231,31 @@
     },
     {
       "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver",
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider",
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     }
   ]
 }

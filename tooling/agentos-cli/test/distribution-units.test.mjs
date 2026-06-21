@@ -10,6 +10,7 @@ import {
   distributionManifestFindings,
   distributionUnitNegativeFixtureFailures,
   distributionUnitRegistryFindings,
+  packageUnitOptionalPeerAllowsEdge,
   packageUnitsRegistryFindings,
 } from "../src/check/algorithmic-checks.mjs";
 
@@ -122,6 +123,61 @@ void test("optional peer locality is a subpath fact, not a hard package split", 
       ["optional-peer", "info", "react"],
       ["optional-peer-locality", "info", "react"],
     ],
+  );
+});
+
+void test("package import DAG allows only declared subpath optional peer edges", () => {
+  const registry = {
+    packageUnits: [
+      {
+        targetSourcePackageName: "@agent-os/runtime",
+        publicSubpaths: [
+          {
+            subpath: ".",
+            optionalPeers: [],
+          },
+          {
+            subpath: "./cloudflare",
+            optionalPeers: ["@agent-os/sse-http"],
+          },
+        ],
+      },
+    ],
+  };
+  const to = { name: "@agent-os/sse-http", path: "packages/transports/sse-http" };
+
+  assert.equal(
+    packageUnitOptionalPeerAllowsEdge({
+      registry,
+      edge: {
+        from: record,
+        to,
+        file: "packages/runtime/src/cloudflare/ag-ui-sse.ts",
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    packageUnitOptionalPeerAllowsEdge({
+      registry,
+      edge: {
+        from: record,
+        to,
+        file: "packages/runtime/src/index.ts",
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    packageUnitOptionalPeerAllowsEdge({
+      registry,
+      edge: {
+        from: record,
+        to: { name: "@agent-os/ops-api", path: "tooling/ops-api" },
+        file: "packages/runtime/src/cloudflare/ops-api.ts",
+      },
+    }),
+    false,
   );
 });
 

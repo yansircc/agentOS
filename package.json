@@ -4,7 +4,6 @@
   "workspaces": [
     "packages/core",
     "packages/runtime",
-    "packages/backends/*",
     "packages/client/*",
     "packages/carriers/*",
     "packages/execution-domains/*",
@@ -71,9 +70,19 @@
   "agentos": {
     "backendNeutralityStatus": "backend-neutral",
     "backendNeutrality": {
-      "productionBackendPackages": [
-        "packages/backends/cloudflare-do",
-        "packages/backends/node-postgres"
+      "productionRuntimeProfiles": [
+        {
+          "id": "cloudflare-worker",
+          "sourcePackageName": "@agent-os/runtime",
+          "subpath": "@agent-os/runtime/cloudflare",
+          "contractTest": "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts"
+        },
+        {
+          "id": "node",
+          "sourcePackageName": "@agent-os/runtime",
+          "subpath": "@agent-os/runtime/node",
+          "contractTest": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts"
+        }
       ]
     },
     "boundaryGuard": {

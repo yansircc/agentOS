@@ -64,8 +64,8 @@
         "docs/packages/resource-carrier.md"
       ],
       "tests": [
-        "packages/backends/cloudflare-do/test/ledger-commit-contract.test.ts",
-        "packages/backends/in-memory/test/commit-fanout-contract.test.ts"
+        "packages/runtime/test/cloudflare/ledger-commit-contract.test.ts",
+        "packages/runtime/test/in-memory/commit-fanout-contract.test.ts"
       ]
     },
     {
@@ -92,7 +92,7 @@
         "docs/concepts/agent-schema.md",
         "docs/concepts/materialized-projections.md",
         "docs/guides/build-natural-language-workspace-agent.md",
-        "docs/packages/llm-transport-effect-ai.md",
+        "docs/packages/runtime.md",
         "docs/verification.md"
       ],
       "tests": [
@@ -132,12 +132,10 @@
         "docs/boundary-contract.md",
         "docs/concepts/agent-schema.md",
         "docs/concepts/carriers-and-material.md",
-        "docs/packages/backend-node-postgres.md",
         "docs/packages/core.md",
         "docs/packages/deploy-cloudflare.md",
         "docs/packages/dynamic-worker.md",
         "docs/packages/image-resource-settlement.md",
-        "docs/packages/llm-transport-effect-ai.md",
         "docs/packages/runtime.md",
         "docs/packages/sandbox.md",
         "docs/packages/tenant-material.md",
@@ -218,14 +216,14 @@
         "docs/concepts/durable-truth.md",
         "docs/concepts/materialized-projections.md",
         "docs/concepts/tool-execution-domain.md",
-        "docs/packages/backend-cloudflare-do.md",
         "docs/packages/core.md",
+        "docs/packages/runtime.md",
         "docs/tutorials/streaming-chatbot.md"
       ],
       "tests": [
         "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
-        "packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts",
-        "packages/backends/in-memory/test/backend-protocol-contract.test.ts"
+        "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts",
+        "packages/runtime/test/in-memory/backend-protocol-contract.test.ts"
       ]
     },
     {
@@ -244,7 +242,7 @@
       "docs": ["docs/boundary-contract.md", "docs/concepts/durable-truth.md"],
       "tests": [
         "packages/runtime/test/boundary-commit.test.ts",
-        "packages/backends/cloudflare-do/test/extension-capability.runtime.test.ts"
+        "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts"
       ]
     },
     {
@@ -275,10 +273,10 @@
         "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse"
       ],
       "errors": [],
-      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/packages/backend-cloudflare-do.md"],
+      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/packages/runtime.md"],
       "tests": [
         "tooling/agentos-cli/src/check/algorithmic-checks.mjs",
-        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },
     {
@@ -286,10 +284,10 @@
       "statement": "Only the workspace-op carrier constructs workspace_op.* terminal payloads; host providers execute requested facts and commit through the carrier boundary capability.",
       "primitives": ["primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider"],
       "errors": [],
-      "docs": ["docs/packages/backend-cloudflare-do.md", "docs/packages/workspace-op.md"],
+      "docs": ["docs/packages/runtime.md", "docs/packages/workspace-op.md"],
       "tests": [
         "packages/carriers/workspace-op/test/workspace-op.test.ts",
-        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },
     {
@@ -300,8 +298,8 @@
         "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver"
       ],
       "errors": [],
-      "docs": ["docs/packages/backend-cloudflare-do.md"],
-      "tests": ["packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"]
+      "docs": ["docs/packages/runtime.md"],
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "invariant": "invariant.workspace-job.verified-terminal",
@@ -316,11 +314,11 @@
         "agent_os.workspace_job_run_id_mismatch",
         "agent_os.workspace_job_verifier_failed"
       ],
-      "docs": ["docs/packages/backend-cloudflare-do.md", "docs/packages/workspace-job.md"],
+      "docs": ["docs/packages/runtime.md", "docs/packages/workspace-job.md"],
       "tests": [
         "packages/carriers/workspace-job/test/workspace-job.test.ts",
         "packages/runtime/test/workspace-job.test.ts",
-        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },
     {
@@ -331,11 +329,11 @@
         "primitive.runtime.projectWorkspaceJobObservability"
       ],
       "errors": [],
-      "docs": ["docs/packages/backend-cloudflare-do.md", "docs/packages/workspace-job.md"],
+      "docs": ["docs/packages/runtime.md", "docs/packages/workspace-job.md"],
       "tests": [
         "packages/carriers/workspace-job/test/workspace-job.test.ts",
         "packages/runtime/test/workspace-job.test.ts",
-        "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     }
   ]

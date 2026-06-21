@@ -1,3 +1,83 @@
 {
-  "shape": ["library"]
+  "shape": ["library"],
+  "allowedAdapters": [
+    {
+      "path": "src/cloudflare/agent-do.ts",
+      "owner": "@agent-os/runtime/cloudflare/cf-do",
+      "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
+      "rules": ["EFF025", "EFF402"]
+    },
+    {
+      "path": "src/cloudflare/attached-stream-wire.ts",
+      "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
+      "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
+      "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
+    },
+    {
+      "path": "src/cloudflare/dispatch/payload.ts",
+      "owner": "@agent-os/runtime/cloudflare/dispatch",
+      "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/cloudflare/dispatch/receiver.ts",
+      "owner": "@agent-os/runtime/cloudflare/dispatch",
+      "reason": "dispatch inbound projection parsing runs inside synchronous transactionSync and must fail the transaction on malformed ledger wire data",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/cloudflare/ledger/stream.ts",
+      "owner": "@agent-os/runtime/cloudflare/http-stream",
+      "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "src/cloudflare/materialized-projections.ts",
+      "owner": "@agent-os/runtime/cloudflare/materialized-projections",
+      "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/cloudflare/trigger-pump.ts",
+      "owner": "@agent-os/runtime/cloudflare/durable-trigger",
+      "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/cloudflare/workspace-job-facade.ts",
+      "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
+      "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "src/node/host.ts",
+      "owner": "@agent-os/runtime/node/psql-host-adapter",
+      "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
+      "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
+    },
+    {
+      "path": "test/cloudflare/_in-memory-do.ts",
+      "owner": "@agent-os/runtime/cloudflare/test-runtime",
+      "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",
+      "rules": ["EFF001", "EFF025"]
+    },
+    {
+      "path": "test/cloudflare/admission/attempt-structured.runtime.test.ts",
+      "owner": "@agent-os/runtime/cloudflare/test-provider",
+      "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "test/cloudflare/test-worker.ts",
+      "owner": "@agent-os/runtime/cloudflare/test-worker",
+      "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "test/cloudflare/workspace-host-helpers.test.ts",
+      "owner": "@agent-os/runtime/cloudflare/test-host-helpers",
+      "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
+      "rules": ["EFF402"]
+    }
+  ]
 }

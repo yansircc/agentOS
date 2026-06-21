@@ -28,10 +28,7 @@ void test("module bucket classifier marks product paths as ejection candidates",
   assert.equal(moduleBucketForPath("packages/runtime/src/continuation.ts"), "projection");
   assert.equal(moduleBucketForPath("packages/runtime/src/submit-agent.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/client/core/src/index.ts"), "projection");
-  assert.equal(
-    moduleBucketForPath("packages/backends/cloudflare-do/src/ledger/ledger.ts"),
-    "adapter",
-  );
+  assert.equal(moduleBucketForPath("packages/runtime/src/cloudflare/ledger/ledger.ts"), "adapter");
   assert.equal(
     moduleBucketForPath("packages/carriers/workspace-op/src/safe-events.ts"),
     "projection",
@@ -47,9 +44,9 @@ void test("module ambient classifier keeps ambient as a module fact", () => {
     moduleAmbientForPath("packages/providers/workspace-op-local/src/index.ts"),
     "neutral",
   );
-  assert.equal(moduleAmbientForPath("packages/backends/node-postgres/src/index.ts"), "node");
+  assert.equal(moduleAmbientForPath("packages/runtime/src/node/index.ts"), "node");
   assert.equal(
-    moduleAmbientForPath("packages/backends/cloudflare-do/src/index.ts"),
+    moduleAmbientForPath("packages/runtime/src/cloudflare/index.ts"),
     "cloudflare-worker",
   );
 });
@@ -63,8 +60,8 @@ void test("module bucket scanner reports downstream bucket and ambient imports",
     },
     {
       fromFile: "packages/client/core/src/index.ts",
-      toFile: "packages/backends/node-postgres/src/index.ts",
-      specifier: "@agent-os/backend-node-postgres",
+      toFile: "packages/runtime/src/node/index.ts",
+      specifier: "@agent-os/runtime/node",
     },
   ]);
 

@@ -22,7 +22,7 @@ quota, and resources through `@agent-os/ops-api`.
 
    ```ts
    import { mountOpsApi } from "@agent-os/ops-api";
-   import { cloudflareAgentDoOpsStubFor } from "@agent-os/backend-cloudflare-do";
+   import { cloudflareAgentDoOpsStubFor } from "@agent-os/runtime/cloudflare";
    ```
 
 2. Define a scope resolver. It owns routing from an ops scope string to a
@@ -30,7 +30,7 @@ quota, and resources through `@agent-os/ops-api`.
    and truth identity selection:
 
    ```ts
-   import type { CloudflareAgentDOResolvedScope } from "@agent-os/backend-cloudflare-do";
+   import type { CloudflareAgentDOResolvedScope } from "@agent-os/runtime/cloudflare";
 
    const scopeResolver = {
      async list() {

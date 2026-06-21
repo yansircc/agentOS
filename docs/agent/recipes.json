@@ -64,11 +64,11 @@
       ],
       "commands": [
         "bun run --cwd packages/runtime test",
-        "bun run --cwd packages/backends/in-memory test"
+        "bun run --cwd packages/runtime/src/in-memory test"
       ],
       "evidence": [
         "packages/runtime/test/projection.test.ts",
-        "packages/backends/in-memory/test/materialized-projections.test.ts"
+        "packages/runtime/test/in-memory/materialized-projections.test.ts"
       ],
       "next": ["recipe.durable-trigger-cancel", "recipe.full-small-agent-app"]
     },

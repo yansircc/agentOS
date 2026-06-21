@@ -12,7 +12,7 @@ void test("affected selector fails closed for global surfaces and unknown paths"
 
 void test("affected selector routes runtime package changes to runtime proof", () => {
   const result = deriveAffectedGates({
-    changedPaths: ["packages/backends/node-postgres/src/index.ts"],
+    changedPaths: ["packages/runtime/src/node/index.ts"],
   });
   assert.equal(result.mode, "affected");
   assert.ok(result.proofClasses.includes("runtime"));
@@ -22,7 +22,7 @@ void test("affected selector routes runtime package changes to runtime proof", (
 void test("affected selector uses reverse dependency closure", () => {
   const result = deriveAffectedGates({ changedPaths: ["packages/core/src/index.ts"] });
   assert.equal(result.mode, "affected");
-  assert.ok(result.affectedPackages.includes("@agent-os/backend-node-postgres"));
+  assert.ok(result.affectedPackages.includes("@agent-os/runtime"));
   assert.ok(result.proofClasses.includes("runtime"));
 });
 

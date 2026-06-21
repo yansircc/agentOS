@@ -39,8 +39,8 @@
     {
       "id": "neutral",
       "ambient": "neutral",
-      "packageUnits": ["core"],
-      "selectedSubpaths": ["@yansirplus/core"],
+      "packageUnits": ["core", "runtime"],
+      "selectedSubpaths": ["@yansirplus/core", "@yansirplus/runtime"],
       "forbiddenSpecifiers": ["node:", "cloudflare:", "react", "svelte"]
     },
     {
@@ -49,9 +49,7 @@
       "packageUnits": ["runtime"],
       "selectedSubpaths": [
         "@yansirplus/runtime/cloudflare",
-        "@yansirplus/runtime/workspace-env-cloudflare",
-        "@yansirplus/runtime/resource-cloudflare",
-        "@yansirplus/runtime/deploy-cloudflare"
+        "@yansirplus/runtime/cloudflare/do-rpc"
       ],
       "forbiddenSpecifiers": ["node:fs", "node:child_process", "pg"]
     },
@@ -59,11 +57,7 @@
       "id": "node",
       "ambient": "node",
       "packageUnits": ["runtime", "cli"],
-      "selectedSubpaths": [
-        "@yansirplus/runtime/node-postgres",
-        "@yansirplus/runtime/workspace-env-local",
-        "@yansirplus/cli"
-      ],
+      "selectedSubpaths": ["@yansirplus/runtime/node", "@yansirplus/cli"],
       "forbiddenSpecifiers": ["cloudflare:"]
     },
     {

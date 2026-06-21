@@ -1,24 +1,6 @@
 {
   "packages": [
     {
-      "path": "packages/backends/cloudflare-do",
-      "shape": ["library"],
-      "dependencyOwner": "package-local",
-      "dependencyOwnerReason": "Cloudflare DO backend owns platform adapter dependency declarations"
-    },
-    {
-      "path": "packages/backends/in-memory",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/backends/node-postgres",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
       "path": "packages/carriers/decision-gate",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -193,12 +175,6 @@
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
     },
     {
-      "path": "packages/providers/llm-transport-effect-ai",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
       "path": "packages/providers/llm-transport-http",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
@@ -232,7 +208,7 @@
       "path": "packages/runtime",
       "shape": ["library"],
       "dependencyOwner": "package-local",
-      "dependencyOwnerReason": "runtime owns backend-neutral runtime dependency declarations"
+      "dependencyOwnerReason": "runtime owns backend-neutral runtime and optional subpath adapter dependency declarations"
     },
     {
       "path": "packages/transports/sse-http",
@@ -242,12 +218,6 @@
     },
     {
       "path": "packages/wire-adapters/ag-ui",
-      "shape": ["library"],
-      "dependencyOwner": "workspace-root",
-      "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
-    },
-    {
-      "path": "packages/wire-adapters/telemetry-otlp",
       "shape": ["library"],
       "dependencyOwner": "workspace-root",
       "dependencyOwnerReason": "workspace root owns cataloged Effect and test dependencies"
@@ -309,26 +279,26 @@
       "rules": ["EFF024", "EFF025"]
     },
     {
-      "path": "packages/backends/cloudflare-do/src/attached-stream-wire.ts",
-      "owner": "@agent-os/backend-cloudflare-do/attached-stream-wire",
+      "path": "packages/runtime/src/cloudflare/attached-stream-wire.ts",
+      "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
       "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
       "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
     },
     {
-      "path": "packages/backends/cloudflare-do/src/agent-do.ts",
-      "owner": "@agent-os/backend-cloudflare-do",
+      "path": "packages/runtime/src/cloudflare/agent-do.ts",
+      "owner": "@agent-os/runtime/cloudflare",
       "reason": "terminal Cloudflare Durable Object facade owns streamEvents missing-scope Response construction",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backends/cloudflare-do/src/workspace-job-facade.ts",
-      "owner": "@agent-os/backend-cloudflare-do/workspace-job-facade",
+      "path": "packages/runtime/src/cloudflare/workspace-job-facade.ts",
+      "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
       "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backends/cloudflare-do/src/ledger/stream.ts",
-      "owner": "@agent-os/backend-cloudflare-do",
+      "path": "packages/runtime/src/cloudflare/ledger/stream.ts",
+      "owner": "@agent-os/runtime/cloudflare",
       "reason": "terminal ledger SSE adapter owns Response construction",
       "rules": ["EFF402"]
     },
@@ -345,56 +315,56 @@
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backends/cloudflare-do/src/storage/sql-row.ts",
-      "owner": "@agent-os/backend-cloudflare-do-storage",
+      "path": "packages/runtime/src/cloudflare/storage/sql-row.ts",
+      "owner": "@agent-os/runtime/cloudflare-storage",
       "reason": "SQLite row adapter owns fail-fast host column shape assertion",
       "rules": ["EFF025"]
     },
     {
-      "path": "packages/backends/cloudflare-do/src/trigger-pump.ts",
-      "owner": "@agent-os/backend-cloudflare-do/durable-trigger",
+      "path": "packages/runtime/src/cloudflare/trigger-pump.ts",
+      "owner": "@agent-os/runtime/cloudflare/durable-trigger",
       "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
       "rules": ["EFF025"]
     },
     {
-      "path": "packages/backends/cloudflare-do/src/materialized-projections.ts",
-      "owner": "@agent-os/backend-cloudflare-do/materialized-projections",
+      "path": "packages/runtime/src/cloudflare/materialized-projections.ts",
+      "owner": "@agent-os/runtime/cloudflare/materialized-projections",
       "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
       "rules": ["EFF025"]
     },
     {
-      "path": "packages/backends/node-postgres/src/host.ts",
-      "owner": "@agent-os/backend-node-postgres/psql-host-adapter",
+      "path": "packages/runtime/src/node/host.ts",
+      "owner": "@agent-os/runtime/node/psql-host-adapter",
       "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
       "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
     },
     {
-      "path": "packages/backends/cloudflare-do/test/_in-memory-do.ts",
-      "owner": "@agent-os/backend-cloudflare-do-tests",
+      "path": "packages/runtime/test/cloudflare/_in-memory-do.ts",
+      "owner": "@agent-os/runtime/cloudflare-tests",
       "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
       "rules": ["EFF001", "EFF025"]
     },
     {
-      "path": "packages/backends/cloudflare-do/test/admission/attempt-structured.runtime.test.ts",
-      "owner": "@agent-os/backend-cloudflare-do-tests",
+      "path": "packages/runtime/test/cloudflare/admission/attempt-structured.runtime.test.ts",
+      "owner": "@agent-os/runtime/cloudflare-tests",
       "reason": "test HTTP fixture owns provider Response construction",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backends/cloudflare-do/test/do-rpc.test.ts",
-      "owner": "@agent-os/backend-cloudflare-do-tests",
+      "path": "packages/runtime/test/cloudflare/do-rpc.test.ts",
+      "owner": "@agent-os/runtime/cloudflare-tests",
       "reason": "Durable Object RPC typed-client contract test owns Response construction to prove sync Response-returning stub methods are exposed as Promise<Response>",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts",
-      "owner": "@agent-os/backend-cloudflare-do-tests",
+      "path": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+      "owner": "@agent-os/runtime/cloudflare-tests",
       "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
       "rules": ["EFF402"]
     },
     {
-      "path": "packages/backends/cloudflare-do/test/test-worker.ts",
-      "owner": "@agent-os/backend-cloudflare-do-tests",
+      "path": "packages/runtime/test/cloudflare/test-worker.ts",
+      "owner": "@agent-os/runtime/cloudflare-tests",
       "reason": "Cloudflare worker test adapter owns Response construction",
       "rules": ["EFF402"]
     },

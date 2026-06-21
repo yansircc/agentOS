@@ -22,7 +22,7 @@
     {
       "tag": "agent_os.postgres_harness_error",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/backend-node-postgres.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Start and clean up the runtime contract Postgres harness at the test boundary, mapping Docker, psql, and config failures into the harness error channel."
     },
     {
@@ -142,7 +142,7 @@
     {
       "tag": "agent_os.dispatch_binding_ref_malformed",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Use a valid binding MaterialRef for dispatch targets and reject malformed target refs at the backend boundary."
     },
     {
@@ -154,13 +154,13 @@
     {
       "tag": "agent_os.dispatch_scope_mismatch",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Dispatch only to the exact target scopeRef and effectAuthorityRef; do not reuse a scope-wide derived key as truth."
     },
     {
       "tag": "agent_os.dispatch_target_not_found",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Register or resolve the dispatch target binding before enqueueing delivery."
     },
     {
@@ -214,49 +214,49 @@
     {
       "tag": "agent_os.effect_ai_aborted",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Propagate Effect AI aborts through LlmTransport and let submit own terminal runtime facts."
     },
     {
       "tag": "agent_os.effect_ai_json_encode_failed",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Encode structured provider payloads through the Effect AI transport adapter and fail before committing runtime evidence."
     },
     {
       "tag": "agent_os.effect_ai_missing_usage",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Keep provider usage accounting in the LlmTransport output schema and reject responses that cannot produce runtime usage evidence."
     },
     {
       "tag": "agent_os.effect_ai_prompt_error",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Build prompts at the provider adapter boundary and surface prompt construction failures before submit records terminal facts."
     },
     {
       "tag": "agent_os.effect_ai_provider_executed_tool_rejected",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Disable provider-executed tool paths for agentOS tools; tool execution must flow through runtime admission and ledger settlement."
     },
     {
       "tag": "agent_os.effect_ai_tool_handler_called",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Treat provider-side tool handler invocation as an adapter violation; runtime owns tool calls and settlements."
     },
     {
       "tag": "agent_os.effect_ai_unsupported_output_part",
       "invariants": ["invariant.algebra.single-code-source"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Map provider output parts through the runtime output-item algebra and reject parts without a runtime representation."
     },
     {
       "tag": "agent_os.effect_ai_unsupported_route",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Choose a route supported by the Effect AI transport adapter or add an explicit adapter branch for the provider."
     },
     {
@@ -376,7 +376,7 @@
     {
       "tag": "agent_os.stream_identity_error",
       "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Stream only with an exact scopeRef and effectAuthorityRef identity and reject malformed stream identity input."
     },
     {

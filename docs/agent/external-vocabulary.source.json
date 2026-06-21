@@ -22,7 +22,7 @@
     {
       "id": "external.effect-ai",
       "name": "Effect AI",
-      "docs": "docs/packages/llm-transport-effect-ai.md",
+      "docs": "docs/packages/runtime.md",
       "mapsTo": ["primitive.llm_protocol.LlmTransport", "primitive.runtime.SubmitSpec"],
       "notes": [
         "Effect AI is provider transport, not ledger truth or admission evidence ownership."
@@ -31,7 +31,7 @@
     {
       "id": "external.cloudflare-durable-object",
       "name": "Cloudflare Durable Object",
-      "docs": "docs/packages/backend-cloudflare-do.md",
+      "docs": "docs/packages/runtime.md",
       "mapsTo": ["primitive.runtime.Ledger", "primitive.runtime.MaterializedProjections"],
       "notes": [
         "The Durable Object adapter owns storage and transaction shape while preserving the backend protocol contract."

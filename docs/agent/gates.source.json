@@ -39,18 +39,11 @@
   },
   "packageOverrides": [
     {
-      "path": "packages/backends/node-postgres",
-      "fastProof": "none",
-      "proofClasses": ["runtime"],
-      "affectedProofClasses": ["runtime"],
-      "reason": "Postgres conformance starts an external Postgres runtime harness."
-    },
-    {
-      "path": "packages/backends/cloudflare-do",
+      "path": "packages/runtime",
       "fastProof": "test",
       "proofClasses": ["test", "runtime"],
       "affectedProofClasses": ["runtime"],
-      "reason": "Durable Object conformance requires the Workers runtime pool."
+      "reason": "Runtime contains Cloudflare, in-memory, and Node profile subpaths; profile conformance includes Workers runtime and Postgres harness proof."
     },
     {
       "path": "packages/execution-domains/sandbox-cloudflare",

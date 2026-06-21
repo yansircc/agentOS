@@ -336,7 +336,49 @@ const packageMatchesConstraint = (record, names = [], pathPrefixes = []) =>
   names.includes(record.name) ||
   pathPrefixes.some((prefix) => packagePathMatches(record.path, prefix));
 
+const sourceFileMatchesPublicSubpath = (packagePath, subpath, sourceFile) => {
+  if (typeof packagePath !== "string" || typeof subpath !== "string") return false;
+  if (subpath === "." || !subpath.startsWith("./")) return false;
+  const sourceBase = `${packagePath}/src/${subpath.slice(2)}`;
+  return (
+    sourceFile === `${sourceBase}.ts` ||
+    sourceFile === `${sourceBase}.tsx` ||
+    sourceFile === `${sourceBase}/index.ts` ||
+    sourceFile === `${sourceBase}/index.tsx` ||
+    sourceFile.startsWith(`${sourceBase}/`)
+  );
+};
+
+export const packageUnitOptionalPeerAllowsEdge = ({ registry, edge }) => {
+  if (!isRecord(registry) || !Array.isArray(registry.packageUnits)) return false;
+  const fromName = edge.from?.name;
+  const fromPath = edge.from?.path;
+  const toName = edge.to?.name;
+  const sourceFile = edge.file ?? edge.fromFile;
+  if (
+    typeof fromName !== "string" ||
+    typeof fromPath !== "string" ||
+    typeof toName !== "string" ||
+    typeof sourceFile !== "string"
+  ) {
+    return false;
+  }
+
+  return registry.packageUnits.filter(isRecord).some((unit) => {
+    if (unit.targetSourcePackageName !== fromName) return false;
+    if (!Array.isArray(unit.publicSubpaths)) return false;
+    return unit.publicSubpaths.filter(isRecord).some((subpath) => {
+      const optionalPeers = Array.isArray(subpath.optionalPeers) ? subpath.optionalPeers : [];
+      return (
+        optionalPeers.includes(toName) &&
+        sourceFileMatchesPublicSubpath(fromPath, subpath.subpath, sourceFile)
+      );
+    });
+  });
+};
+
 const checkForbiddenPackageEdges = ({ ruleId, constraints, edges, failures }) => {
+  const packageUnits = packageUnitsRegistry();
   for (const edge of edges) {
     for (const constraint of constraints.forbiddenEdges ?? []) {
       if (
@@ -364,6 +406,7 @@ const checkForbiddenPackageEdges = ({ ruleId, constraints, edges, failures }) =>
           constraint.forbiddenTargetPackagePathPrefixes ?? [],
         )
       ) {
+        if (packageUnitOptionalPeerAllowsEdge({ registry: packageUnits, edge })) continue;
         failures.push(
           `${edge.file}: ${ruleId}: ${edge.from.name} must not import downstream package ${edge.specifier} (${edge.to.path})`,
         );
@@ -1553,8 +1596,8 @@ export const moduleBucketNegativeFixtureFailures = () => {
     },
     {
       fromFile: "packages/client/core/src/index.ts",
-      toFile: "packages/backends/node-postgres/src/index.ts",
-      specifier: "@agent-os/backend-node-postgres",
+      toFile: "packages/runtime/src/node/index.ts",
+      specifier: "@agent-os/runtime/node",
     },
   ]);
   const edgeKinds = edgeFindings.map((finding) => finding.kind);
@@ -2541,6 +2584,346 @@ const checkDistributionUnits = (args = []) => {
   ]);
 };
 
+const packageUnitsRegistry = () => readJson(packageUnitsRegistryPath);
+const distributionRootsRegistry = () => readJson(distributionRootsRegistryPath);
+
+const sourceSpecifierForPublicSubpath = (unit, publicSpecifier) => {
+  if (
+    typeof publicSpecifier !== "string" ||
+    typeof unit.publicPackageName !== "string" ||
+    typeof unit.targetSourcePackageName !== "string" ||
+    (publicSpecifier !== unit.publicPackageName &&
+      !publicSpecifier.startsWith(`${unit.publicPackageName}/`))
+  ) {
+    return undefined;
+  }
+  return `${unit.targetSourcePackageName}${publicSpecifier.slice(unit.publicPackageName.length)}`;
+};
+
+const subpathForSourceSpecifier = (unit, sourceSpecifier) => {
+  if (
+    typeof sourceSpecifier !== "string" ||
+    typeof unit.targetSourcePackageName !== "string" ||
+    (sourceSpecifier !== unit.targetSourcePackageName &&
+      !sourceSpecifier.startsWith(`${unit.targetSourcePackageName}/`))
+  ) {
+    return undefined;
+  }
+  const suffix = sourceSpecifier.slice(unit.targetSourcePackageName.length);
+  return suffix.length === 0 ? "." : `.${suffix}`;
+};
+
+const specifierMatchesPackage = (specifier, packageName) =>
+  specifier === packageName || specifier.startsWith(`${packageName}/`);
+
+const specifierMatchesForbidden = (specifier, forbidden) =>
+  forbidden.endsWith(":")
+    ? specifier.startsWith(forbidden)
+    : specifier === forbidden || specifier.startsWith(`${forbidden}/`);
+
+const graphSourceByFile = (graph) =>
+  new Map(
+    graph.files.map((entry) => [
+      entry.file,
+      fs.readFileSync(path.join(repoRoot, entry.file), "utf8"),
+    ]),
+  );
+
+const exportEntriesBySubpath = (record) => {
+  const manifest = readJson(`${record.path}/package.json`);
+  return new Map(
+    distributionExportEntries(record, manifest).map((entry) => [entry.subpath, entry]),
+  );
+};
+
+const packageUnitRecordsBySourceName = (records) =>
+  new Map(records.map((record) => [record.name, record]));
+
+const checkSubpathNoLeak = () => {
+  const records = graphWorkspacePackageRecords(repoRoot).filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const recordsByName = packageUnitRecordsBySourceName(records);
+  const graph = sourceModuleGraph(repoRoot, records);
+  const sourceByFile = graphSourceByFile(graph);
+  const failures = [];
+  for (const unit of packageUnitsRegistry().packageUnits ?? []) {
+    if (!isRecord(unit) || typeof unit.targetSourcePackageName !== "string") continue;
+    const record = recordsByName.get(unit.targetSourcePackageName);
+    if (record === undefined) continue;
+    const entriesBySubpath = exportEntriesBySubpath(record);
+    const rootEntry = entriesBySubpath.get(".");
+    if (rootEntry === undefined) {
+      failures.push(`${unit.id}: package root export is missing`);
+      continue;
+    }
+    const samePackageEdges = graph.edges.filter(
+      (edge) => edge.from.name === record.name && edge.to.name === record.name,
+    );
+    const rootClosure = distributionClosureForRoots(rootEntry.targets, samePackageEdges);
+    const subpathOnlyPeers = new Set(
+      (unit.publicSubpaths ?? [])
+        .filter((subpath) => isRecord(subpath) && subpath.subpath !== ".")
+        .flatMap((subpath) =>
+          Array.isArray(subpath.optionalPeers)
+            ? subpath.optionalPeers.filter((peer) => typeof peer === "string")
+            : [],
+        ),
+    );
+    for (const file of [...rootClosure].sort(compare)) {
+      const source = sourceByFile.get(file);
+      if (source === undefined) continue;
+      for (const importRecord of importSpecifierRecords(source, file)) {
+        for (const peer of subpathOnlyPeers) {
+          if (specifierMatchesPackage(importRecord.specifier, peer)) {
+            failures.push(
+              `${String(file)}:${importRecord.line}:${importRecord.column}: subpath-no-leak: root closure imports subpath-only peer ${String(peer)} via ${importRecord.specifier}`,
+            );
+          }
+        }
+      }
+    }
+    for (const subpath of (unit.publicSubpaths ?? []).filter(
+      (entry) => isRecord(entry) && entry.subpath !== ".",
+    )) {
+      const entry = entriesBySubpath.get(subpath.subpath);
+      if (entry === undefined) {
+        continue;
+      }
+      for (const target of entry.targets) {
+        if (rootClosure.has(target)) {
+          failures.push(
+            `${target}: subpath-no-leak: package root closure reaches ${unit.id} ${subpath.subpath}`,
+          );
+        }
+      }
+    }
+  }
+  failIfAny("subpath no leak", failures);
+};
+
+const profileTypeNames = (ambient) => {
+  if (ambient === "cloudflare-worker") return ["@cloudflare/workers-types"];
+  if (ambient === "node") return ["node"];
+  return [];
+};
+
+const profileCacheDir = (batch, profileId) =>
+  path.join(repoRoot, ".cache", "profile-verification", batch, profileId);
+
+const profileEntrySource = (specifiers) =>
+  specifiers
+    .map((specifier, index) => [
+      `import * as profile${index} from ${JSON.stringify(specifier)};`,
+      `void profile${index};`,
+    ])
+    .flat()
+    .join("\n") + "\n";
+
+const runProfileTypecheck = ({ batch, profile, sourceSpecifiers }) => {
+  const dir = profileCacheDir(batch, profile.id);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const entryPath = path.join(dir, "entry.ts");
+  const configPath = path.join(dir, "tsconfig.json");
+  fs.writeFileSync(entryPath, profileEntrySource(sourceSpecifiers));
+  const sourcePathConfig = readJson("tsconfig.source-paths.json").compilerOptions ?? {};
+  const baseUrl = path.relative(dir, repoRoot).split(path.sep).join("/") || ".";
+  fs.writeFileSync(
+    configPath,
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          ...sourcePathConfig,
+          baseUrl,
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          strict: true,
+          skipLibCheck: true,
+          noEmit: true,
+          types: profileTypeNames(profile.ambient),
+        },
+        include: ["entry.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  try {
+    execFileSync(path.join(repoRoot, "node_modules", ".bin", "tsc"), ["-p", configPath], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return [];
+  } catch (error) {
+    return [
+      `${profile.id}: profile-verification typecheck failed\n${error.stdout ?? ""}${error.stderr ?? ""}`,
+    ];
+  }
+};
+
+const absoluteFiles = (dir) => {
+  if (!fs.existsSync(dir)) return [];
+  const files = [];
+  const visit = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const target = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        visit(target);
+        continue;
+      }
+      if (entry.isFile()) files.push(target);
+    }
+  };
+  visit(dir);
+  return files.sort(compare);
+};
+
+const relativeImportFrom = (fromDir, targetFile) => {
+  const relative = path
+    .relative(fromDir, path.join(repoRoot, targetFile))
+    .split(path.sep)
+    .join("/");
+  return relative.startsWith(".") ? relative : `./${relative}`;
+};
+
+const runProfileBundle = ({ batch, profile, bundleFiles, forbiddenSpecifiers }) => {
+  const dir = profileCacheDir(batch, profile.id);
+  fs.mkdirSync(dir, { recursive: true });
+  const entryPath = path.join(dir, "entry.ts");
+  const outDir = path.join(dir, "bundle");
+  fs.writeFileSync(
+    entryPath,
+    profileEntrySource(bundleFiles.map((file) => relativeImportFrom(dir, file))),
+  );
+  fs.rmSync(outDir, { recursive: true, force: true });
+  const args = [
+    "build",
+    entryPath,
+    "--outdir",
+    outDir,
+    "--target",
+    profile.ambient === "node" ? "node" : "browser",
+  ];
+  if (profile.ambient === "cloudflare-worker") args.push("--external", "cloudflare:*");
+  if (profile.ambient !== "node") args.push("--external", "node:*");
+  try {
+    execFileSync("bun", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    return [
+      `${profile.id}: profile-verification bundle failed\n${error.stdout ?? ""}${error.stderr ?? ""}`,
+    ];
+  }
+  const failures = [];
+  for (const file of absoluteFiles(outDir).filter((entry) => entry.endsWith(".js"))) {
+    const text = fs.readFileSync(file, "utf8");
+    for (const forbidden of forbiddenSpecifiers) {
+      if (text.includes(forbidden)) {
+        failures.push(
+          `${toRepoPath(file)}: profile-verification bundle contains forbidden specifier ${forbidden}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
+
+const selectedSourceSpecifiersForProfileUnit = ({ profile, unit }) =>
+  (profile.selectedSubpaths ?? [])
+    .map((specifier) => sourceSpecifierForPublicSubpath(unit, specifier))
+    .filter((specifier) => typeof specifier === "string");
+
+const profileVerificationFindings = ({ batch }) => {
+  const packageUnits = packageUnitsRegistry().packageUnits ?? [];
+  const roots = distributionRootsRegistry();
+  const unitIds =
+    batch === "runtime"
+      ? new Set(["runtime"])
+      : new Set(packageUnits.filter(isRecord).map((unit) => unit.id));
+  const units = packageUnits.filter((unit) => isRecord(unit) && unitIds.has(unit.id));
+  const records = graphWorkspacePackageRecords(repoRoot).filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const recordsByName = packageUnitRecordsBySourceName(records);
+  const graph = sourceModuleGraph(repoRoot, records);
+  const sourceByFile = graphSourceByFile(graph);
+  const failures = [];
+  for (const unit of units) {
+    const record = recordsByName.get(unit.targetSourcePackageName);
+    if (record === undefined) {
+      failures.push(`${unit.id}: source package ${unit.targetSourcePackageName} is missing`);
+      continue;
+    }
+    const entriesBySubpath = exportEntriesBySubpath(record);
+    for (const profile of roots.targetProfiles ?? []) {
+      if (!isRecord(profile) || !(profile.packageUnits ?? []).includes(unit.id)) continue;
+      const sourceSpecifiers = selectedSourceSpecifiersForProfileUnit({ profile, unit });
+      if (sourceSpecifiers.length === 0) {
+        failures.push(`${profile.id}:${unit.id}: profile selects no subpath for package unit`);
+        continue;
+      }
+      const rootFiles = [];
+      for (const specifier of sourceSpecifiers) {
+        const subpath = subpathForSourceSpecifier(unit, specifier);
+        const entry = subpath === undefined ? undefined : entriesBySubpath.get(subpath);
+        if (entry === undefined) {
+          failures.push(`${profile.id}:${specifier}: selected subpath is not exported`);
+          continue;
+        }
+        rootFiles.push(...entry.targets);
+      }
+      const closure = distributionClosureForRoots(rootFiles, graph.edges);
+      const allowedAmbients = allowedAmbientImports().get(profile.ambient) ?? new Set();
+      for (const file of [...closure].sort(compare)) {
+        const ambient = moduleAmbientForPath(file);
+        if (!allowedAmbients.has(ambient)) {
+          failures.push(
+            `${String(file)}: profile-verification:${profile.id}: ${profile.ambient} profile links ${ambient} module`,
+          );
+        }
+        const source = sourceByFile.get(file);
+        if (source === undefined) continue;
+        for (const importRecord of importSpecifierRecords(source, file)) {
+          for (const forbidden of profile.forbiddenSpecifiers ?? []) {
+            if (specifierMatchesForbidden(importRecord.specifier, forbidden)) {
+              failures.push(
+                `${String(file)}:${importRecord.line}:${importRecord.column}: profile-verification:${profile.id}: forbidden specifier ${importRecord.specifier}`,
+              );
+            }
+          }
+        }
+      }
+      failures.push(
+        ...runProfileTypecheck({ batch, profile, sourceSpecifiers }),
+        ...runProfileBundle({
+          batch,
+          profile,
+          bundleFiles: rootFiles,
+          forbiddenSpecifiers: profile.forbiddenSpecifiers ?? [],
+        }),
+      );
+    }
+  }
+  return failures;
+};
+
+const checkProfileVerification = (args = []) => {
+  if (args.length !== 2 || args[0] !== "--batch") {
+    throw new Error("profile-verification: expected --batch <batch>");
+  }
+  const batch = args[1];
+  if (batch !== "runtime") {
+    throw new Error(`profile-verification: unsupported batch ${batch}`);
+  }
+  failIfAny("profile verification", profileVerificationFindings({ batch }));
+};
+
 const clientSectionBody = (source, heading) => {
   const start = source.indexOf(`## ${heading}`);
   if (start === -1) return "";
@@ -3047,20 +3430,34 @@ const checkBackendNeutrality = () => {
   if (!["boundary-prepared", "backend-neutral"].includes(status)) {
     failures.push("package.json must declare agentos.backendNeutralityStatus");
   }
-  const backends = rootPackage.agentos?.backendNeutrality?.productionBackendPackages;
-  if (!Array.isArray(backends))
-    failures.push("package.json must declare agentos.backendNeutrality.productionBackendPackages");
-  if (status === "backend-neutral" && Array.isArray(backends) && backends.length < 2) {
-    failures.push("backend-neutral status requires at least 2 production backends");
+  const profiles = rootPackage.agentos?.backendNeutrality?.productionRuntimeProfiles;
+  if (!Array.isArray(profiles)) {
+    failures.push("package.json must declare agentos.backendNeutrality.productionRuntimeProfiles");
   }
-  for (const backend of backends ?? []) {
-    if (!fs.existsSync(path.join(repoRoot, backend, "src")))
-      failures.push(`${backend}: missing src`);
-    if (
-      !fs.existsSync(path.join(repoRoot, backend, "test/backend-protocol-contract.test.ts")) &&
-      !fs.existsSync(path.join(repoRoot, backend, "test/backend-protocol-contract.runtime.test.ts"))
-    ) {
-      failures.push(`${backend}: missing backend protocol contract test`);
+  if (status === "backend-neutral" && Array.isArray(profiles) && profiles.length < 2) {
+    failures.push("backend-neutral status requires at least 2 production runtime profiles");
+  }
+  for (const [index, profile] of (profiles ?? []).entries()) {
+    const label = `package.json:agentos.backendNeutrality.productionRuntimeProfiles[${index}]`;
+    if (!isRecord(profile)) {
+      failures.push(`${label}: profile must be an object`);
+      continue;
+    }
+    if (typeof profile.id !== "string" || profile.id.length === 0) {
+      failures.push(`${label}: id must be a non-empty string`);
+    }
+    if (profile.sourcePackageName !== "@agent-os/runtime") {
+      failures.push(`${label}: sourcePackageName must be @agent-os/runtime`);
+    }
+    if (typeof profile.subpath !== "string" || !profile.subpath.startsWith("@agent-os/runtime/")) {
+      failures.push(`${label}: subpath must be an @agent-os/runtime/* subpath`);
+    }
+    if (typeof profile.contractTest !== "string" || profile.contractTest.length === 0) {
+      failures.push(`${label}: contractTest must be a non-empty path`);
+      continue;
+    }
+    if (!fs.existsSync(path.join(repoRoot, profile.contractTest))) {
+      failures.push(`${profile.contractTest}: missing backend protocol contract test`);
     }
   }
   failIfAny("backend neutrality", failures);
@@ -3464,59 +3861,86 @@ const checkDogfoodSmoke = (args = []) => {
     throw new Error("dogfood-smoke: expected --batch <batch>");
   }
   const batch = args[1];
-  if (batch !== "core") {
+  if (batch !== "core" && batch !== "runtime") {
     throw new Error(`dogfood-smoke: unsupported batch ${batch}`);
   }
 
   const failures = [];
   const records = workspacePackageRecords();
   const packageNames = new Set(records.map((record) => record.name));
-  for (const retiredName of [
-    "@agent-os/kernel",
-    "@agent-os/runtime-protocol",
-    "@agent-os/llm-protocol",
-    "@agent-os/telemetry-protocol",
-    "@agent-os/backend-protocol",
-  ]) {
+  const retiredNames =
+    batch === "core"
+      ? [
+          "@agent-os/kernel",
+          "@agent-os/runtime-protocol",
+          "@agent-os/llm-protocol",
+          "@agent-os/telemetry-protocol",
+          "@agent-os/backend-protocol",
+        ]
+      : [
+          "@agent-os/backend-cloudflare-do",
+          "@agent-os/backend-in-memory",
+          "@agent-os/backend-node-postgres",
+          "@agent-os/llm-transport-effect-ai",
+          "@agent-os/telemetry-otlp",
+        ];
+  for (const retiredName of retiredNames) {
     if (packageNames.has(retiredName)) {
-      failures.push(`${retiredName}: retired neutral package remains in workspace`);
+      failures.push(`${retiredName}: retired ${batch} package remains in workspace`);
     }
   }
   if (!packageNames.has("@agent-os/core")) {
     failures.push("@agent-os/core: core package is missing from workspace");
   }
+  if (batch === "runtime" && !packageNames.has("@agent-os/runtime")) {
+    failures.push("@agent-os/runtime: runtime package is missing from workspace");
+  }
 
   const sourceAliases = readJson("tsconfig.source-paths.json").compilerOptions?.paths ?? {};
   for (const specifier of Object.keys(sourceAliases)) {
-    if (
-      specifier === "@agent-os/kernel" ||
-      specifier.startsWith("@agent-os/kernel/") ||
-      specifier === "@agent-os/runtime-protocol" ||
-      specifier === "@agent-os/llm-protocol" ||
-      specifier === "@agent-os/telemetry-protocol" ||
-      specifier === "@agent-os/backend-protocol" ||
-      specifier.startsWith("@agent-os/backend-protocol/")
-    ) {
-      failures.push(`${specifier}: retired neutral source alias remains`);
+    if (retiredNames.some((name) => specifier === name || specifier.startsWith(`${name}/`))) {
+      failures.push(`${specifier}: retired ${batch} source alias remains`);
     }
   }
 
   const surfaceNames = new Set(
     (readJson("docs/surface.json").packages ?? []).map((pkg) => pkg.name),
   );
-  for (const retiredName of [
-    "@agent-os/kernel",
-    "@agent-os/runtime-protocol",
-    "@agent-os/llm-protocol",
-    "@agent-os/telemetry-protocol",
-    "@agent-os/backend-protocol",
-  ]) {
+  for (const retiredName of retiredNames) {
     if (surfaceNames.has(retiredName)) {
-      failures.push(`${retiredName}: retired neutral package remains in docs/surface.json`);
+      failures.push(`${retiredName}: retired ${batch} package remains in docs/surface.json`);
     }
   }
 
-  if (failures.length === 0) {
+  if (batch === "runtime" && failures.length === 0) {
+    const runtimeUnit = (packageUnitsRegistry().packageUnits ?? []).find(
+      (unit) => isRecord(unit) && unit.id === "runtime",
+    );
+    if (runtimeUnit === undefined) {
+      failures.push("runtime dogfood: package unit runtime is missing");
+    } else {
+      for (const profile of distributionRootsRegistry().targetProfiles ?? []) {
+        if (!isRecord(profile) || !(profile.packageUnits ?? []).includes("runtime")) continue;
+        const sourceSpecifiers = selectedSourceSpecifiersForProfileUnit({
+          profile,
+          unit: runtimeUnit,
+        });
+        if (sourceSpecifiers.length === 0) {
+          failures.push(`${profile.id}: runtime dogfood selects no runtime subpath`);
+          continue;
+        }
+        failures.push(
+          ...runProfileTypecheck({
+            batch: "runtime-dogfood",
+            profile,
+            sourceSpecifiers,
+          }),
+        );
+      }
+    }
+  }
+
+  if (batch === "core" && failures.length === 0) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-core-dogfood-"));
     const scopeDir = path.join(dir, "node_modules", "@agent-os");
     fs.mkdirSync(scopeDir, { recursive: true });
@@ -3548,7 +3972,7 @@ const checkDogfoodSmoke = (args = []) => {
     }
   }
 
-  failIfAny("dogfood smoke core", failures);
+  failIfAny(`dogfood smoke ${batch}`, failures);
 };
 
 const checkBoundaryProjection = () => runCommand("vp check", { cwd: repoRoot });
@@ -3574,10 +3998,12 @@ const checkerById = new Map([
   ["owner-coupling", checkOwnerCoupling],
   ["owner-identity-boundary", checkOwnerIdentityBoundary],
   ["owner-ids", checkOwnerIds],
+  ["profile-verification", checkProfileVerification],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],
   ["spike-hygiene", checkSpikeHygiene],
+  ["subpath-no-leak", checkSubpathNoLeak],
   ["substrate-import-dag", checkSubstrateImportDag],
   ["transaction-sync", checkTransactionSync],
 ]);
@@ -3587,6 +4013,7 @@ const checkerIdsWithArgs = new Set([
   "module-buckets",
   "owner-coupling",
   "owner-identity-boundary",
+  "profile-verification",
 ]);
 
 export const listAlgorithmicCheckers = () => [...checkerById.keys()].sort(compare);

@@ -206,7 +206,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-backend-provider-axis-boundary.mjs"
       },
-      "owner": "packages/backends",
+      "owner": "packages/runtime/src",
       "ruleId": "backend-provider-axis-boundary",
       "target": {
         "kind": "proofClass",
@@ -214,19 +214,19 @@
       },
       "assertions": [
         {
-          "failureCondition": "backend-provider-axis-boundary: post-migration verdict must reject violations owned by packages/backends",
-          "negativeWitness": "packages/backends/in-memory/test/backend-protocol-contract.test.ts: \"in-memory backend protocol driver\"; packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts: \"cloudflare-do backend protocol driver\"; packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts: \"node-postgres backend protocol driver\"",
+          "failureCondition": "backend-provider-axis-boundary: post-migration verdict must reject violations owned by packages/runtime/src",
+          "negativeWitness": "packages/runtime/test/in-memory/backend-protocol-contract.test.ts: \"in-memory backend protocol driver\"; packages/runtime/test/cloudflare/backend-protocol-contract.test.ts: \"cloudflare-do backend protocol driver\"; packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"node-postgres backend protocol driver\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/in-memory/test/backend-protocol-contract.test.ts",
+              "file": "packages/runtime/test/in-memory/backend-protocol-contract.test.ts",
               "name": "in-memory backend protocol driver"
             },
             {
-              "file": "packages/backends/cloudflare-do/test/backend-protocol-contract.test.ts",
+              "file": "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts",
               "name": "cloudflare-do backend protocol driver"
             },
             {
-              "file": "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts",
+              "file": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts",
               "name": "node-postgres backend protocol driver"
             }
           ]
@@ -295,7 +295,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/cloudflare-profile.mjs"
       },
-      "owner": "@agent-os/backend-cloudflare-do",
+      "owner": "@agent-os/runtime/cloudflare",
       "ruleId": "cloudflare-profile",
       "target": {
         "kind": "proofClass",
@@ -304,14 +304,14 @@
       "assertions": [
         {
           "failureCondition": "Cloudflare profile composes host helpers without taking carrier truth",
-          "negativeWitness": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts: \"installs a workspace-job profile over sanitized projection and existing host helpers\"; packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts: \"creates workspace-job responses only from the projection reader\"",
+          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"installs a workspace-job profile over sanitized projection and existing host helpers\"; packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"creates workspace-job responses only from the projection reader\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts",
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
               "name": "installs a workspace-job profile over sanitized projection and existing host helpers"
             },
             {
-              "file": "packages/backends/cloudflare-do/test/workspace-host-helpers.test.ts",
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
               "name": "creates workspace-job responses only from the projection reader"
             }
           ]
@@ -559,7 +559,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-facade-handler-capability-boundary.mjs"
       },
-      "owner": "@agent-os/backend-cloudflare-do",
+      "owner": "@agent-os/runtime/cloudflare",
       "ruleId": "facade-handler-capability-boundary",
       "target": {
         "kind": "proofClass",
@@ -567,15 +567,15 @@
       },
       "assertions": [
         {
-          "failureCondition": "facade-handler-capability-boundary: post-migration verdict must reject violations owned by @agent-os/backend-cloudflare-do",
-          "negativeWitness": "packages/backends/cloudflare-do/test/facade.test.ts: \"fails before submit when external tools reference undeclared domains\"; packages/backends/cloudflare-do/test/facade.test.ts: \"passes lowering when external tool domains are declared\"",
+          "failureCondition": "facade-handler-capability-boundary: post-migration verdict must reject violations owned by @agent-os/runtime/cloudflare",
+          "negativeWitness": "packages/runtime/test/cloudflare/facade.test.ts: \"fails before submit when external tools reference undeclared domains\"; packages/runtime/test/cloudflare/facade.test.ts: \"passes lowering when external tool domains are declared\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "file": "packages/runtime/test/cloudflare/facade.test.ts",
               "name": "fails before submit when external tools reference undeclared domains"
             },
             {
-              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "file": "packages/runtime/test/cloudflare/facade.test.ts",
               "name": "passes lowering when external tool domains are declared"
             }
           ]
@@ -587,7 +587,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-facade-run-scoped-bindings.mjs"
       },
-      "owner": "@agent-os/backend-cloudflare-do",
+      "owner": "@agent-os/runtime/cloudflare",
       "ruleId": "facade-run-scoped-bindings",
       "target": {
         "kind": "proofClass",
@@ -595,15 +595,15 @@
       },
       "assertions": [
         {
-          "failureCondition": "facade-run-scoped-bindings: post-migration verdict must reject violations owned by @agent-os/backend-cloudflare-do",
-          "negativeWitness": "packages/backends/cloudflare-do/test/facade.test.ts: \"lowers bindings into RefResolver and dispatch targets by MaterialRef shape\"; packages/backends/cloudflare-do/test/facade.test.ts: \"preserves non-default LLM routes for submit lowering\"",
+          "failureCondition": "facade-run-scoped-bindings: post-migration verdict must reject violations owned by @agent-os/runtime/cloudflare",
+          "negativeWitness": "packages/runtime/test/cloudflare/facade.test.ts: \"lowers bindings into RefResolver and dispatch targets by MaterialRef shape\"; packages/runtime/test/cloudflare/facade.test.ts: \"preserves non-default LLM routes for submit lowering\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "file": "packages/runtime/test/cloudflare/facade.test.ts",
               "name": "lowers bindings into RefResolver and dispatch targets by MaterialRef shape"
             },
             {
-              "file": "packages/backends/cloudflare-do/test/facade.test.ts",
+              "file": "packages/runtime/test/cloudflare/facade.test.ts",
               "name": "preserves non-default LLM routes for submit lowering"
             }
           ]
@@ -709,7 +709,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-node-postgres-effect-governance.mjs"
       },
-      "owner": "@agent-os/backend-node-postgres",
+      "owner": "@agent-os/runtime/node",
       "ruleId": "node-postgres-effect-governance",
       "target": {
         "kind": "proofClass",
@@ -717,15 +717,15 @@
       },
       "assertions": [
         {
-          "failureCondition": "node-postgres-effect-governance: post-migration verdict must reject violations owned by @agent-os/backend-node-postgres",
-          "negativeWitness": "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts: \"node-postgres event+due atomicity\"; packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts: \"rolls back outbound dispatch event when delivery due-work insert fails\"",
+          "failureCondition": "node-postgres-effect-governance: post-migration verdict must reject violations owned by @agent-os/runtime/node",
+          "negativeWitness": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"node-postgres event+due atomicity\"; packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"rolls back outbound dispatch event when delivery due-work insert fails\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts",
+              "file": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts",
               "name": "node-postgres event+due atomicity"
             },
             {
-              "file": "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts",
+              "file": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts",
               "name": "rolls back outbound dispatch event when delivery due-work insert fails"
             }
           ]
@@ -737,7 +737,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-node-postgres-runtime-import-boundary.mjs"
       },
-      "owner": "@agent-os/backend-node-postgres",
+      "owner": "@agent-os/runtime/node",
       "ruleId": "node-postgres-runtime-import-boundary",
       "target": {
         "kind": "proofClass",
@@ -745,15 +745,15 @@
       },
       "assertions": [
         {
-          "failureCondition": "node-postgres-runtime-import-boundary: post-migration verdict must reject violations owned by @agent-os/backend-node-postgres",
-          "negativeWitness": "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts: \"node-postgres backend protocol driver\"; packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts: \"rolls back scheduled intent event when due-work insert fails\"",
+          "failureCondition": "node-postgres-runtime-import-boundary: post-migration verdict must reject violations owned by @agent-os/runtime/node",
+          "negativeWitness": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"node-postgres backend protocol driver\"; packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"rolls back scheduled intent event when due-work insert fails\"",
           "packageWitnesses": [
             {
-              "file": "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts",
+              "file": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts",
               "name": "node-postgres backend protocol driver"
             },
             {
-              "file": "packages/backends/node-postgres/test/backend-protocol-contract.runtime.test.ts",
+              "file": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts",
               "name": "rolls back scheduled intent event when due-work insert fails"
             }
           ]
@@ -1123,14 +1123,14 @@
       "assertions": [
         {
           "failureCondition": "telemetry-neutral: post-migration verdict must reject violations owned by @agent-os/telemetry-protocol",
-          "negativeWitness": "packages/core/telemetry-protocol/test/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
+          "negativeWitness": "packages/core/telemetry-protocol/test/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
           "packageWitnesses": [
             {
               "file": "packages/core/telemetry-protocol/test/telemetry-event-tree.test.ts",
               "name": "canonicalizes timing, generated ids, and backend host ids while preserving semantics"
             },
             {
-              "file": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts",
+              "file": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts",
               "name": "maps telemetry trees without reading ledger payloads"
             }
           ]
@@ -1142,7 +1142,7 @@
         "kind": "preMigrationChecker",
         "path": "tooling/agentos-cli/src/check/check-telemetry-otlp-tree-parity.mjs"
       },
-      "owner": "@agent-os/telemetry-otlp",
+      "owner": "@agent-os/runtime/telemetry-otlp",
       "ruleId": "telemetry-otlp-tree-parity",
       "target": {
         "kind": "proofClass",
@@ -1150,15 +1150,15 @@
       },
       "assertions": [
         {
-          "failureCondition": "telemetry-otlp-tree-parity: post-migration verdict must reject violations owned by @agent-os/telemetry-otlp",
-          "negativeWitness": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"projects extension telemetry kinds from the protocol tree\"; packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts: \"fails closed before the OTLP adapter boundary on malformed source trace context\"",
+          "failureCondition": "telemetry-otlp-tree-parity: post-migration verdict must reject violations owned by @agent-os/runtime/telemetry-otlp",
+          "negativeWitness": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"projects extension telemetry kinds from the protocol tree\"; packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"fails closed before the OTLP adapter boundary on malformed source trace context\"",
           "packageWitnesses": [
             {
-              "file": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts",
+              "file": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts",
               "name": "projects extension telemetry kinds from the protocol tree"
             },
             {
-              "file": "packages/wire-adapters/telemetry-otlp/test/telemetry-otlp.test.ts",
+              "file": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts",
               "name": "fails closed before the OTLP adapter boundary on malformed source trace context"
             }
           ]

@@ -20,7 +20,7 @@ Use this package from ops tooling, not from carrier or substrate packages.
 
 ```ts
 import { mountOpsApi } from "@agent-os/ops-api";
-import { cloudflareAgentDoOpsStubFor } from "@agent-os/backend-cloudflare-do";
+import { cloudflareAgentDoOpsStubFor } from "@agent-os/runtime/cloudflare";
 ```
 
 ## Verification

@@ -151,15 +151,15 @@
       "bucket": "projection"
     },
     {
-      "id": "cloudflare-do-adapter",
+      "id": "runtime-cloudflare-adapter",
       "match": "prefix",
-      "value": "packages/backends/cloudflare-do/",
+      "value": "packages/runtime/src/cloudflare/",
       "bucket": "adapter"
     },
     {
-      "id": "in-memory-backend-adapter",
+      "id": "runtime-in-memory-adapter",
       "match": "prefix",
-      "value": "packages/backends/in-memory/",
+      "value": "packages/runtime/src/in-memory/",
       "bucket": "adapter"
     },
     {
@@ -167,6 +167,24 @@
       "match": "contains",
       "value": "/ledger.ts",
       "bucket": "ledger"
+    },
+    {
+      "id": "runtime-node-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/node/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "runtime-llm-effect-ai-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/llm-effect-ai/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "runtime-telemetry-otlp-projection",
+      "match": "prefix",
+      "value": "packages/runtime/src/telemetry-otlp/",
+      "bucket": "projection"
     },
     {
       "id": "runtime-ledger",
@@ -177,7 +195,7 @@
     {
       "id": "backend-ledger",
       "match": "regex",
-      "value": "^packages/backends/[^/]+/src/(?:ledger|storage)/",
+      "value": "^packages/runtime/src/(?:cloudflare|in-memory|node)/(?:ledger|storage)/",
       "bucket": "ledger"
     },
     {
@@ -260,9 +278,9 @@
       "ambient": "product"
     },
     {
-      "id": "node-postgres",
+      "id": "runtime-node",
       "match": "prefix",
-      "value": "packages/backends/node-postgres/",
+      "value": "packages/runtime/src/node/",
       "ambient": "node"
     },
     {
@@ -290,9 +308,9 @@
       "ambient": "node"
     },
     {
-      "id": "cloudflare-do",
+      "id": "runtime-cloudflare",
       "match": "prefix",
-      "value": "packages/backends/cloudflare-do/",
+      "value": "packages/runtime/src/cloudflare/",
       "ambient": "cloudflare-worker"
     },
     {

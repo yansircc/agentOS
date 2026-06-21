@@ -2211,14 +2211,14 @@ const DEFAULT_STATIC_TARGET_PACKAGE_SCOPE = packageScopePattern.test(INJECTED_PU
 const publicPackageSpecifier = (scope: string, name: string): string => `${scope}/${name}`;
 
 const staticTargetModules = (scope: string) => ({
-  cloudflareDoRuntime: publicPackageSpecifier(scope, "backend-cloudflare-do"),
-  openAiCompatibleTransport: publicPackageSpecifier(scope, "llm-transport-effect-ai"),
+  cloudflareDoRuntime: publicPackageSpecifier(scope, "runtime/cloudflare"),
+  openAiCompatibleTransport: publicPackageSpecifier(scope, "runtime/llm-effect-ai"),
   workspaceAgentHost: publicPackageSpecifier(scope, "workspace-agent"),
   workspaceBinding: publicPackageSpecifier(scope, "workspace-binding"),
   workspaceEnvCloudflare: publicPackageSpecifier(scope, "workspace-env-cloudflare"),
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client-svelte"),
-  runtimeProtocol: publicPackageSpecifier(scope, "runtime-protocol"),
+  runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
   sseHttp: publicPackageSpecifier(scope, "sse-http"),
   cloudflareSandbox: "@cloudflare/sandbox",
   svelteKitServer: "$app/server",

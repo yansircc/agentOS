@@ -1,0 +1,1861 @@
+/**
+ * Test worker entry.
+ *
+ * Test DOs are factory-configured for product paths.
+ */
+
+import { DurableObject } from "cloudflare:workers";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Predicate } from "effect";
+import { LlmTransport } from "@agent-os/core/llm-protocol";
+import {
+  createAgentDurableObject,
+  durableObjectDispatchTarget,
+  type AgentEventHandlerContext,
+  type AgentRuntimeClient,
+  type CloudflareAgentEnv,
+} from "../../src/cloudflare";
+import { credential, defineAgentDO, endpoint, openAIChat } from "../../src/cloudflare/facade";
+import { withAgentDOTestingDrain } from "./_testing-drain";
+import { testTruthIdentity } from "./_identity";
+import {
+  Dispatch,
+  defineProjection,
+  Ledger,
+  makeProjectionRegistryResult,
+  MaterializedProjectionRegistry,
+  MaterializedProjections,
+  Quota,
+  Resources,
+  Scheduler,
+  TriggerPump,
+  triggerParseFail,
+  attachedStreamParseOk,
+  projectionFail,
+  projectionIdentity,
+  projectionMalformed,
+  projectionPut,
+  projectionSkip,
+  triggerParseOk,
+  type AttachedStreamHandler,
+  type DurableTrigger,
+  type TriggerCancellation,
+  type TriggerTx,
+  type MaterializedProjectionRebuildResult,
+} from "@agent-os/runtime";
+import {
+  CapabilityRejected,
+  DurableTriggerAcquireCancelled,
+  ToolError,
+} from "@agent-os/core/errors";
+import { boundaryPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { eventNamespace, type ExtensionCapability } from "@agent-os/core/extensions";
+import { makePreClaim, type FactOwnerRef } from "@agent-os/core/effect-claim";
+import {
+  bindingMaterialRef,
+  materialRefKey,
+  materialRequirement,
+} from "@agent-os/core/material-ref";
+import { defineSettlementContract, settleLived } from "@agent-os/core/settlement-contract";
+import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
+import { UpstreamFailure } from "@agent-os/core/errors";
+import type {
+  DispatchToScopeSpec,
+  EventQueryOptions,
+  EventHandler,
+  LedgerEvent,
+  ResourceGrantResult,
+  ResourceGrantSpec,
+  ResourceReservationSpec,
+  ResourceReserveResult,
+  ResourceReserveSpec,
+} from "@agent-os/core/types";
+import type {
+  BackendProtocolEventIdentity,
+  BackendProtocolProjectionKey,
+  DispatchEnvelope,
+  DispatchReceiverResult,
+  DispatchTargetAdapter,
+  DispatchTargetResult,
+  GrantResult,
+  ResourceProjection,
+} from "@agent-os/core/backend-protocol";
+import {
+  backendProtocolTruthIdentityKey,
+  DISPATCH_EVENT_KINDS,
+  dispatchTargetDelivered,
+} from "@agent-os/core/backend-protocol";
+import {
+  defineAgentBindings,
+  defineAgentManifest,
+  RUNTIME_FACT_OWNER,
+  type LedgerCommitEventSpec,
+} from "@agent-os/core/runtime-protocol";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
+import { CloudflareMaterializedProjectionsLive } from "../../src/cloudflare/materialized-projections";
+import { commitLedgerTransaction } from "../../src/cloudflare/ledger/commit";
+import type { EventBusService } from "../../src/cloudflare/ledger/event-bus";
+import { cloudflareRouteKeyFromScopeRef } from "../../src/cloudflare/ledger/identity";
+import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
+import { findNextDue } from "../../src/cloudflare/due-work";
+
+const allowToolAdmitter = () =>
+  Effect.withSpan("agentos.test.cloudflare_do.allow_tool")(Effect.succeed({ ok: true as const }));
+
+export class TestAgentDO extends DurableObject {}
+
+const testAgentManifest = defineAgentManifest({
+  agentId: "test.cloudflare-do",
+  scope: { kind: "conversation", idSource: "submit_scope" },
+  effectAuthorityRef: { authorityClass: "agent", authorityId: "test.cloudflare-do" },
+  handlers: [] as const,
+});
+
+const testAgentBindings = defineAgentBindings<never>({
+  handlers: {},
+});
+
+const testAgentMountConfig = {
+  manifest: testAgentManifest,
+  agentBindings: testAgentBindings,
+};
+
+export const BACKEND_PROTOCOL_CONTRACT_BINDING_REF = bindingMaterialRef({
+  provider: "cloudflare",
+  bindingKind: "durable_object",
+  ref: "backend-protocol-contract",
+});
+
+const backendProtocolContractBindingKey = materialRefKey(BACKEND_PROTOCOL_CONTRACT_BINDING_REF);
+
+type ContractDispatchReceiver = (
+  envelope: DispatchEnvelope,
+  accept: () => Promise<DispatchReceiverResult>,
+) => Promise<DispatchReceiverResult>;
+
+type ContractDispatchTargetAdapter =
+  | DispatchTargetAdapter
+  | ((envelope: DispatchEnvelope) => Promise<DispatchTargetResult>);
+
+type ContractReceiveResult =
+  | { readonly ok: true; readonly result: DispatchReceiverResult }
+  | { readonly ok: false; readonly error: string };
+
+interface BackendProtocolContractEnv extends CloudflareAgentEnv {
+  readonly BACKEND_PROTOCOL_CONTRACT_DO: DurableObjectNamespace<BackendProtocolContractTestDO>;
+}
+
+const contractIdentityForScope = (scope: string): BackendProtocolEventIdentity => ({
+  scopeRef: { kind: "conversation", scopeId: scope },
+  effectAuthorityRef: { authorityClass: "effect", authorityId: scope },
+  factOwnerRef: RUNTIME_FACT_OWNER,
+});
+
+const makeBackendProtocolContractRuntime = (
+  ctx: DurableObjectState,
+  env: BackendProtocolContractEnv,
+  scope: string,
+  identity: BackendProtocolEventIdentity,
+  handlers: Map<string, Set<EventHandler>>,
+  dispatchTargets: Record<string, DispatchTargetAdapter>,
+) =>
+  ManagedRuntime.make(
+    makeCloudflareBackendCoreLayer(ctx, env, scope, identity, handlers, dispatchTargets),
+  );
+
+type BackendProtocolContractRuntime = ReturnType<typeof makeBackendProtocolContractRuntime>;
+
+export class BackendProtocolContractTestDO extends DurableObject<BackendProtocolContractEnv> {
+  private readonly handlers = new Map<string, Set<EventHandler>>();
+  private readonly dispatchTargets: Record<string, DispatchTargetAdapter>;
+  private readonly sinkDiagnostics: TelemetryFanoutDiagnostic[] = [];
+  private receiverIdentity: BackendProtocolEventIdentity | undefined;
+  private receiver: ContractDispatchReceiver | undefined;
+  private idPrefix = "";
+
+  constructor(ctx: DurableObjectState, env: BackendProtocolContractEnv) {
+    super(ctx, env);
+    this.dispatchTargets = {
+      [backendProtocolContractBindingKey]: this.defaultDispatchTarget(),
+    };
+  }
+
+  configure(spec: { readonly idPrefix: string }): void {
+    this.idPrefix = spec.idPrefix;
+  }
+
+  replaceHandlers(handlers: Map<string, Set<EventHandler>>): void {
+    this.handlers.clear();
+    for (const [kind, set] of handlers) {
+      this.handlers.set(kind, new Set(set));
+    }
+  }
+
+  setDispatchTargetAdapter(adapter: ContractDispatchTargetAdapter | undefined): void {
+    this.dispatchTargets[backendProtocolContractBindingKey] =
+      adapter === undefined
+        ? this.defaultDispatchTarget()
+        : typeof adapter === "function"
+          ? { deliver: adapter }
+          : adapter;
+  }
+
+  registerDispatchReceiver(
+    identity: BackendProtocolEventIdentity,
+    receiver?: ContractDispatchReceiver,
+  ): void {
+    this.receiverIdentity = identity;
+    this.receiver = receiver;
+  }
+
+  addHandler(kind: string, handler: EventHandler): { readonly unsubscribe: () => void } {
+    let set = this.handlers.get(kind);
+    if (set === undefined) {
+      set = new Set();
+      this.handlers.set(kind, set);
+    }
+    set.add(handler);
+    return {
+      unsubscribe: () => {
+        set?.delete(handler);
+      },
+    };
+  }
+
+  addSink(
+    identity: BackendProtocolEventIdentity,
+    kind: string,
+    sink: (event: LedgerEvent) => void,
+  ): { readonly unsubscribe: () => void } {
+    const identityKey = backendProtocolTruthIdentityKey(identity);
+    const handler: EventHandler = (event) => {
+      if (backendProtocolTruthIdentityKey(event) !== identityKey) return Promise.resolve();
+      return Promise.resolve()
+        .then(() => sink(event))
+        .catch((cause) => {
+          this.sinkDiagnostics.push({
+            phase: "sink",
+            eventId: event.id,
+            kind: event.kind,
+            identityKey,
+            message: cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause),
+          });
+        });
+    };
+    return this.addHandler(kind, handler);
+  }
+
+  async telemetryDiagnostics(): Promise<ReadonlyArray<TelemetryFanoutDiagnostic>> {
+    return [...this.sinkDiagnostics];
+  }
+
+  async log(
+    identity: BackendProtocolEventIdentity,
+    kind: string,
+    payload: unknown,
+  ): Promise<LedgerEvent> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      const events = await runtime.runPromise(
+        ledger.commit([
+          {
+            kind,
+            payload,
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+          },
+        ]),
+      );
+      const event = events[0];
+      if (event === undefined) throw new Error("ledger commit returned no event");
+      return event;
+    });
+  }
+
+  async commit(events: ReadonlyArray<LedgerCommitEventSpec>): Promise<ReadonlyArray<LedgerEvent>> {
+    const identity = events[0] ?? {
+      scopeRef: { kind: "conversation" as const, scopeId: "empty" },
+      effectAuthorityRef: { authorityClass: "effect" as const, authorityId: "empty" },
+      factOwnerRef: RUNTIME_FACT_OWNER,
+    };
+    return this.withRuntime({ ...identity, factOwnerRef: RUNTIME_FACT_OWNER }, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      return runtime.runPromise(ledger.commit(events));
+    });
+  }
+
+  async events(
+    identity: BackendProtocolEventIdentity,
+    opts?: EventQueryOptions,
+  ): Promise<ReadonlyArray<LedgerEvent>> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      return runtime.runPromise(ledger.events(identity, opts));
+    });
+  }
+
+  async streamSnapshot(
+    identity: BackendProtocolEventIdentity,
+    opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
+  ): Promise<ReadonlyArray<LedgerEvent>> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      return runtime.runPromise(ledger.streamSnapshot(identity, opts));
+    });
+  }
+
+  async schedule(
+    identity: BackendProtocolEventIdentity,
+    at: number,
+    eventKind: string,
+    data: unknown,
+  ): Promise<{ readonly id: number }> {
+    return this.withRuntime(identity, async (runtime) => {
+      const scheduler = await runtime.runPromise(Scheduler);
+      return runtime.runPromise(scheduler.schedule(at, eventKind, data));
+    });
+  }
+
+  async fireDue(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): Promise<{ readonly fired: number }> {
+    return this.withRuntime(identity, async (runtime) => {
+      const triggerPump = await runtime.runPromise(TriggerPump);
+      const result = await runtime.runPromise(triggerPump.drainDue(now));
+      return { fired: result.drained };
+    });
+  }
+
+  async dispatchToScope(identity: BackendProtocolEventIdentity, spec: DispatchToScopeSpec) {
+    return this.withRuntime(identity, async (runtime) => {
+      const dispatch = await runtime.runPromise(Dispatch);
+      return runtime.runPromise(dispatch.dispatchToScope(spec));
+    });
+  }
+
+  async drainDispatchDue(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): Promise<{ readonly delivered: number; readonly failed: number }> {
+    return this.withRuntime(identity, async (runtime) => {
+      const ledger = await runtime.runPromise(Ledger);
+      const before = await runtime.runPromise(ledger.events(identity));
+      const triggerPump = await runtime.runPromise(TriggerPump);
+      const result = await runtime.runPromise(triggerPump.drainDue(now));
+      if (result.drained === 0) return { delivered: 0, failed: 0 };
+      const after = await runtime.runPromise(ledger.events(identity));
+      const slice = after.slice(before.length);
+      return {
+        delivered: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)
+          .length,
+        failed: slice.filter((event) => event.kind === DISPATCH_EVENT_KINDS.OUTBOUND_FAILED).length,
+      };
+    });
+  }
+
+  nextDueAt(identity: BackendProtocolEventIdentity): Promise<number | null> {
+    return this.withRuntime(identity, (runtime) =>
+      runtime.runPromise(findNextDue(this.ctx.storage.sql)),
+    );
+  }
+
+  pendingDueCount(): number {
+    return this.ctx.storage.sql.exec("SELECT * FROM due_work WHERE completed_at IS NULL").toArray()
+      .length;
+  }
+
+  async grantResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceGrantSpec,
+  ): Promise<ResourceGrantResult> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.grant(identity, spec));
+    });
+  }
+
+  async reserveResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReserveSpec,
+  ): Promise<ResourceReserveResult> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.reserve(identity, spec));
+    });
+  }
+
+  async consumeResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReservationSpec,
+  ): Promise<void> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.consume(identity, spec));
+    });
+  }
+
+  async releaseResource(
+    identity: BackendProtocolEventIdentity,
+    spec: ResourceReservationSpec,
+  ): Promise<void> {
+    return this.withRuntime(identity, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.release(identity, spec));
+    });
+  }
+
+  async projectResource(key: BackendProtocolProjectionKey): Promise<ResourceProjection> {
+    return this.withRuntime(key, async (runtime) => {
+      const resources = await runtime.runPromise(Resources);
+      return runtime.runPromise(resources.project(key, key.projectionId));
+    });
+  }
+
+  async quotaTryGrant(
+    identity: BackendProtocolEventIdentity,
+    key: BackendProtocolProjectionKey,
+    amount: number,
+    windowMs: number,
+    limit: number,
+    toolName: string,
+    operationRef: string,
+  ): Promise<GrantResult> {
+    return this.withRuntime(identity, async (runtime) => {
+      const quota = await runtime.runPromise(Quota);
+      return runtime.runPromise(
+        quota.tryGrant(identity, key.projectionId, amount, windowMs, limit, toolName, operationRef),
+      );
+    });
+  }
+
+  async disposeDriver(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  alarm(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  __agentosReceiveDispatch(envelope: DispatchEnvelope): Promise<DispatchReceiverResult> {
+    const identity = this.receiverIdentity ?? contractIdentityForScope(envelope.targetScope);
+    const accept = async () => {
+      return this.withRuntime(identity, async (runtime) => {
+        const dispatch = await runtime.runPromise(Dispatch);
+        return runtime.runPromise(dispatch.receive(envelope));
+      });
+    };
+    return this.receiver === undefined ? accept() : this.receiver(envelope, accept);
+  }
+
+  async __agentosTryReceiveDispatch(envelope: DispatchEnvelope): Promise<ContractReceiveResult> {
+    try {
+      return { ok: true, result: await this.__agentosReceiveDispatch(envelope) };
+    } catch (cause) {
+      return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
+    }
+  }
+
+  private async withRuntime<A>(
+    identity: BackendProtocolEventIdentity,
+    fn: (runtime: BackendProtocolContractRuntime) => Promise<A>,
+  ): Promise<A> {
+    const runtime = this.runtimeFor(identity);
+    try {
+      return await fn(runtime);
+    } finally {
+      await runtime.dispose();
+    }
+  }
+
+  private runtimeFor(identity: BackendProtocolEventIdentity): BackendProtocolContractRuntime {
+    return makeBackendProtocolContractRuntime(
+      this.ctx,
+      this.env,
+      cloudflareRouteKeyFromScopeRef(identity.scopeRef),
+      identity,
+      this.handlers,
+      this.dispatchTargets,
+    );
+  }
+
+  private defaultDispatchTarget(): DispatchTargetAdapter {
+    return {
+      deliver: async (envelope) => {
+        const id = this.env.BACKEND_PROTOCOL_CONTRACT_DO.idFromName(
+          this.idPrefix + envelope.targetScope,
+        );
+        const receiver = this.env.BACKEND_PROTOCOL_CONTRACT_DO.get(id);
+        const received = await receiver.__agentosTryReceiveDispatch(envelope);
+        if (!received.ok) return Promise.reject(received.error);
+        return dispatchTargetDelivered(received.result);
+      },
+    };
+  }
+}
+
+export const EmitTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  eventHandlers: ({ runtime }) => [
+    {
+      kind: "interview.answer",
+      handler: (event) =>
+        runtime
+          .emitEvent({
+            event: "interview.followup",
+            data: { sourceId: event.id, sourcePayload: event.payload },
+          })
+          .then(() => undefined),
+    },
+  ],
+});
+export type EmitTestDO = InstanceType<typeof EmitTestDO>;
+
+interface DispatchEnv extends CloudflareAgentEnv {
+  readonly DISPATCH_DO: DurableObjectNamespace;
+}
+
+const DEAD_TARGET: DispatchTargetAdapter = {
+  deliver: () => Promise.reject("dead dispatch target"),
+};
+
+let dispatchTargetMaterializations = 0;
+
+const dispatchTarget = (env: DispatchEnv): DispatchTargetAdapter => {
+  dispatchTargetMaterializations += 1;
+  return durableObjectDispatchTarget(env.DISPATCH_DO);
+};
+
+const dispatchBindingKey = (ref: string): string =>
+  materialRefKey(
+    bindingMaterialRef({ provider: "cloudflare", bindingKind: "durable_object", ref }),
+  );
+
+export const DispatchTestDO = createAgentDurableObject<DispatchEnv>({
+  ...testAgentMountConfig,
+  dispatchTargets: (env) => ({
+    [dispatchBindingKey("peer")]: dispatchTarget(env),
+    [dispatchBindingKey("dead")]: DEAD_TARGET,
+    [dispatchBindingKey("generic")]: durableObjectDispatchTarget(env.DISPATCH_DO),
+  }),
+  eventHandlers: ({ runtime }) => [
+    {
+      kind: "dispatch.inbound.accepted",
+      handler: () =>
+        runtime
+          .emitEvent({ event: "test.inbound_accepted_handler_fired", data: {} })
+          .then(() => undefined),
+    },
+    {
+      kind: "dispatch.outbound.requested",
+      handler: () =>
+        runtime
+          .emitEvent({ event: "test.outbound_requested_handler_fired", data: {} })
+          .then(() => undefined),
+    },
+    {
+      kind: "test.delivered",
+      handler: (event) =>
+        runtime
+          .emitEvent({
+            event: "test.followup",
+            data: { sourceId: event.id, sourcePayload: event.payload },
+          })
+          .then(() => undefined),
+    },
+  ],
+});
+export type DispatchTestDO = InstanceType<typeof DispatchTestDO>;
+
+export const STREAM_OWNER_FACT_OWNER = "@agent-os/stream-owner-test";
+export const STREAM_OWNER_COMMAND_EVENT = "stream.command.owner";
+export const STREAM_OWNER_VISIBLE_EVENT = "stream.owner.visible";
+
+const streamOwnerSettlementContract = defineSettlementContract({
+  settlementId: "@agent-os/stream-owner-test",
+  anchorKinds: [],
+  rejectionKinds: [],
+  indeterminateKinds: [],
+});
+
+const streamOwnerBoundaryContract = defineBoundaryContract({
+  ownerId: STREAM_OWNER_FACT_OWNER,
+  sourcePackageName: STREAM_OWNER_FACT_OWNER,
+  kindPrefixes: ["stream.owner."],
+  roles: ["generator", "reader"],
+  effectAuthorityContracts: [],
+  materialRequirements: [],
+  events: {
+    [STREAM_OWNER_VISIBLE_EVENT]: {
+      payloadSchema: {
+        type: "object",
+        properties: {
+          label: { type: "string" },
+        },
+        required: ["label"],
+        additionalProperties: false,
+      },
+    },
+  },
+  settlement: streamOwnerSettlementContract,
+  projection: {
+    derivedFromLedger: true,
+    shadowState: false,
+  },
+});
+
+export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  extensions: () => [boundaryPackage(streamOwnerBoundaryContract, "0.1.0")],
+  eventHandlers: ({ capabilities }) => [
+    {
+      kind: "stream.slow",
+      handler: () => scheduler.wait(1_000),
+    },
+    {
+      kind: STREAM_OWNER_COMMAND_EVENT,
+      handler: (event) => {
+        const capability = capabilities.get(STREAM_OWNER_FACT_OWNER);
+        if (capability === undefined) {
+          return Promise.reject(
+            new CapabilityRejected({
+              event: STREAM_OWNER_VISIBLE_EVENT,
+              capability: `extension:${STREAM_OWNER_FACT_OWNER}`,
+            }),
+          );
+        }
+        return capability
+          .commit({
+            event: STREAM_OWNER_VISIBLE_EVENT,
+            data: {
+              label:
+                typeof event.payload === "object" &&
+                event.payload !== null &&
+                "label" in event.payload &&
+                typeof event.payload.label === "string"
+                  ? event.payload.label
+                  : "visible",
+            },
+          })
+          .then(() => undefined);
+      },
+    },
+  ],
+});
+export type StreamTestDO = InstanceType<typeof StreamTestDO>;
+
+const proofSettlementContract = defineSettlementContract({
+  settlementId: "@agent-os/proof",
+  anchorKinds: ["carrier_proof"],
+  rejectionKinds: [],
+  indeterminateKinds: [],
+});
+
+const proofBoundaryContract = defineBoundaryContract({
+  ownerId: "@agent-os/proof",
+  sourcePackageName: "@agent-os/proof",
+  kindPrefixes: ["proof."],
+  roles: ["generator", "reader"],
+  effectAuthorityContracts: [],
+  materialRequirements: [],
+  events: {
+    "proof.recorded": {
+      payloadSchema: {
+        type: "object",
+        properties: {
+          proofRef: { type: "string" },
+        },
+        required: ["proofRef"],
+        additionalProperties: false,
+      },
+      claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
+    },
+  },
+  settlement: proofSettlementContract,
+  projection: {
+    derivedFromLedger: true,
+    shadowState: false,
+  },
+});
+
+const proofPreClaimForScope = (scopeId: string) =>
+  makePreClaim({
+    operationRef: "proof:record",
+    scopeRef: { kind: "conversation", scopeId },
+    effectAuthorityRef: { authorityId: "proof.record", authorityClass: "effect" },
+    originRef: { originId: "extension-test", originKind: "test" },
+  });
+
+const proofPreClaim = proofPreClaimForScope("extension-proof");
+
+export const proofLivedClaim = settleLived(proofSettlementContract, proofPreClaim, {
+  anchorId: "proof:record",
+  anchorKind: "carrier_proof",
+  carrierRef: "proof",
+});
+
+export const proofLivedClaimForScope = (scopeId: string) =>
+  settleLived(proofSettlementContract, proofPreClaimForScope(scopeId), {
+    anchorId: "proof:record",
+    anchorKind: "carrier_proof",
+    carrierRef: "proof",
+  });
+
+export const EXTENSION_COMMAND_EVENT = "test.extension.command";
+export const EXTENSION_RESULT_EVENT = "test.extension.result";
+
+type ExtensionCommand =
+  | { readonly op: "commitImageFact"; readonly data: unknown }
+  | { readonly op: "commitWrongPrefix"; readonly data: unknown }
+  | { readonly op: "commitMissingExtension"; readonly data: unknown }
+  | { readonly op: "scheduleImageFact"; readonly at: number; readonly data: unknown }
+  | { readonly op: "commitProofFact"; readonly data: unknown }
+  | { readonly op: "commitProofOther"; readonly data: unknown }
+  | { readonly op: "scheduleProofFact"; readonly at: number; readonly data: unknown };
+
+type ExtensionCommandParseResult =
+  | { readonly ok: true; readonly command: ExtensionCommand }
+  | { readonly ok: false; readonly error: Record<string, unknown> };
+
+const malformedCommand = (message: string): ExtensionCommandParseResult => ({
+  ok: false,
+  error: { message },
+});
+
+const parseExtensionCommand = (value: unknown): ExtensionCommandParseResult => {
+  if (!Predicate.isObject(value) || typeof value.op !== "string") {
+    return malformedCommand("extension command malformed");
+  }
+  const data = value.data;
+  switch (value.op) {
+    case "commitImageFact":
+    case "commitWrongPrefix":
+    case "commitMissingExtension":
+    case "commitProofFact":
+    case "commitProofOther":
+      return { ok: true, command: { op: value.op, data } };
+    case "scheduleImageFact":
+    case "scheduleProofFact":
+      if (typeof value.at !== "number") return malformedCommand("extension command at malformed");
+      return { ok: true, command: { op: value.op, at: value.at, data } };
+    default:
+      return malformedCommand(`extension command unsupported: ${value.op}`);
+  }
+};
+
+const errorPayload = (cause: unknown): Record<string, unknown> => {
+  if (Predicate.isObject(cause)) {
+    return {
+      ...(typeof cause._tag === "string" ? { _tag: cause._tag } : {}),
+      ...(typeof cause.event === "string" ? { event: cause.event } : {}),
+      ...(typeof cause.capability === "string" ? { capability: cause.capability } : {}),
+      ...(typeof cause.issue === "string" ? { issue: cause.issue } : {}),
+      ...(typeof cause.message === "string" ? { message: cause.message } : {}),
+    };
+  }
+  if (cause instanceof Error) return { message: cause.message };
+  return { message: String(cause) };
+};
+
+type CapabilityResult =
+  | { readonly ok: true; readonly capability: ExtensionCapability }
+  | { readonly ok: false; readonly error: CapabilityRejected };
+
+const capabilityOrReject = (
+  capabilities: ReadonlyMap<string, ExtensionCapability>,
+  ownerId: string,
+): CapabilityResult => {
+  const cap = capabilities.get(ownerId);
+  if (cap !== undefined) return { ok: true, capability: cap };
+  return {
+    ok: false,
+    error: new CapabilityRejected({
+      event: "*",
+      capability:
+        ownerId === "@agent-os/image" ? `extension:${ownerId}:boundary` : `extension:${ownerId}`,
+    }),
+  };
+};
+
+const capabilityPromise = (
+  capabilities: ReadonlyMap<string, ExtensionCapability>,
+  ownerId: string,
+): Promise<ExtensionCapability> => {
+  const result = capabilityOrReject(capabilities, ownerId);
+  return result.ok ? Promise.resolve(result.capability) : Promise.reject(result.error);
+};
+
+const runExtensionCommand = (
+  capabilities: ReadonlyMap<string, ExtensionCapability>,
+  command: ExtensionCommand,
+) => {
+  const image = () => capabilityPromise(capabilities, "@agent-os/image");
+  const proof = () => capabilityPromise(capabilities, "@agent-os/proof");
+  const missing = () => capabilityPromise(capabilities, "@agent-os/missing");
+  return command.op === "commitImageFact"
+    ? image().then((cap) => cap.commit({ event: "image.job.recorded", data: command.data }))
+    : command.op === "commitWrongPrefix"
+      ? image().then((cap) => cap.commit({ event: "git.commit.recorded", data: command.data }))
+      : command.op === "commitMissingExtension"
+        ? missing().then((cap) => cap.commit({ event: "missing.fact", data: command.data }))
+        : command.op === "scheduleImageFact"
+          ? image().then((cap) =>
+              cap.time({
+                at: command.at,
+                event: "image.job.deferred",
+                data: command.data,
+              }),
+            )
+          : command.op === "commitProofFact"
+            ? proof().then((cap) => cap.commit({ event: "proof.recorded", data: command.data }))
+            : command.op === "commitProofOther"
+              ? proof().then((cap) => cap.commit({ event: "proof.other", data: command.data }))
+              : proof().then((cap) =>
+                  cap.time({
+                    at: command.at,
+                    event: "proof.recorded",
+                    data: command.data,
+                  }),
+                );
+};
+
+const extensionCommandHandlers = ({
+  runtime,
+  capabilities,
+}: AgentEventHandlerContext<AgentRuntimeClient>) => [
+  {
+    kind: EXTENSION_COMMAND_EVENT,
+    handler: async (event: Parameters<EventHandler>[0]) => {
+      const parsed = parseExtensionCommand(event.payload);
+      if (!parsed.ok) {
+        await runtime.emitEvent({
+          event: EXTENSION_RESULT_EVENT,
+          data: {
+            op: "malformed",
+            ok: false,
+            error: parsed.error,
+          },
+        });
+        return;
+      }
+      const outcome = await runExtensionCommand(capabilities, parsed.command).then(
+        (result) => ({ ok: true, result }) as const,
+        (cause) => ({ ok: false, error: errorPayload(cause) }) as const,
+      );
+      await runtime.emitEvent({
+        event: EXTENSION_RESULT_EVENT,
+        data: { op: parsed.command.op, ...outcome },
+      });
+    },
+  },
+];
+
+export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  extensions: () => [
+    eventNamespace({
+      ownerId: "@agent-os/image",
+      sourcePackageName: "@agent-os/image",
+      packageId: "@agent-os/image",
+      kindPrefixes: ["image."],
+      version: "0.3.0",
+    }),
+    boundaryPackage(proofBoundaryContract, "0.1.0"),
+  ],
+  eventHandlers: extensionCommandHandlers,
+});
+export type ExtensionTestDO = InstanceType<typeof ExtensionTestDO>;
+
+export const facadeLookup = defineTool({
+  name: "lookup",
+  description: "Lookup a symbolic key",
+  args: Schema.Struct({ key: Schema.String }),
+  authority: "read",
+  admit: allowToolAdmitter,
+  execution: deterministicToolExecution(),
+  execute: ({ key }) => Effect.succeed({ value: key }),
+});
+
+const FACADE_SECRET = "facade-secret-that-must-stay-out-of-ledger-and-llm-requests";
+
+export const facadeApply = defineTool({
+  name: "apply",
+  description: "Apply with a run-scoped material",
+  args: Schema.Struct({ key: Schema.String }),
+  authority: "write",
+  admit: allowToolAdmitter,
+  execution: deterministicToolExecution(),
+  requiredMaterials: [
+    materialRequirement({
+      slot: "facade_token",
+      kind: "credential",
+      provider: "facade",
+      purpose: "apply",
+    }),
+  ],
+  execute: (_args, ctx) =>
+    Effect.succeed({
+      materialMatched: ctx.materials.facade_token === FACADE_SECRET,
+    }),
+});
+
+export const facadeWriteFirst = defineTool({
+  name: "write_first",
+  description: "write first artifact",
+  args: Schema.Struct({ value: Schema.String }),
+  authority: "write",
+  admit: () => Effect.succeed({ ok: true as const }),
+  execution: deterministicToolExecution(),
+  execute: ({ value }) => Effect.succeed({ value }),
+});
+
+export const facadeWriteSecond = defineTool({
+  name: "write_second",
+  description: "write second artifact",
+  args: Schema.Struct({ value: Schema.String }),
+  authority: "write",
+  admit: () => Effect.succeed({ ok: true as const }),
+  execution: deterministicToolExecution(),
+  execute: ({ value }) => Effect.succeed({ value }),
+});
+
+const facadeIntentBoundaryPackage = boundaryPackage(
+  defineBoundaryContract({
+    ownerId: "@agent-os/facade-intent-test",
+    sourcePackageName: "@agent-os/facade-intent-test",
+    kindPrefixes: ["facade.intent."],
+    roles: ["generator", "reader"],
+    events: {
+      "facade.intent.requested": {
+        payloadSchema: {
+          type: "object",
+          properties: { label: { type: "string" } },
+          required: ["label"],
+          additionalProperties: false,
+        },
+      },
+    },
+    effectAuthorityContracts: [],
+    materialRequirements: [],
+    settlement: defineSettlementContract({
+      settlementId: "facade.intent.test",
+      anchorKinds: ["ledger_event"],
+      rejectionKinds: ["validation_failed"],
+      indeterminateKinds: [],
+    }),
+    projection: { derivedFromLedger: true, shadowState: false },
+  }),
+  "0.0.0",
+);
+
+const facadeIntentProjection = defineProjection({
+  kind: "facade.intent.projection",
+  version: 1,
+  eventKinds: ["facade.intent.requested"],
+  identity: Schema.Struct({ label: Schema.String }),
+  state: Schema.Struct({ label: Schema.String, eventId: Schema.Number }),
+  identityKey: (identity) => identity.label,
+  identify: (event) => {
+    const payload = Predicate.isObject(event.payload) ? event.payload : {};
+    return typeof payload.label === "string"
+      ? projectionIdentity({ label: payload.label })
+      : projectionSkip();
+  },
+  initial: (identity, event) => ({ label: identity.label, eventId: event.id }),
+  reduce: (state, event) => projectionPut({ ...state, eventId: event.id }),
+});
+
+export const FACADE_INTENT_COMMAND_EVENT = "facade.command.intent";
+
+export const facadeIntent = defineTool({
+  name: "intent",
+  description: "Emit a declared intent and wait for its projection.",
+  args: Schema.Struct({ label: Schema.String }),
+  authority: "write",
+  admit: allowToolAdmitter,
+  execution: deterministicToolExecution(),
+  execute: (args, ctx) =>
+    Effect.gen(function* () {
+      if (ctx.emitIntent === undefined) {
+        return yield* new ToolError({
+          toolName: "intent",
+          cause: { reason: "missing_emit_intent" },
+        });
+      }
+      if (ctx.awaitProjection === undefined) {
+        return yield* new ToolError({
+          toolName: "intent",
+          cause: { reason: "missing_await_projection" },
+        });
+      }
+      const emitted = yield* ctx.emitIntent("facade.intent.requested", { label: args.label });
+      const projected = yield* ctx.awaitProjection({
+        kind: "facade.intent.projection",
+        identity: { label: args.label },
+        factOwnerRef: facadeIntentBoundaryPackage.ownerId,
+        maxAttempts: 1,
+      });
+      return {
+        emittedId: emitted.id,
+        projectedState: projected.state,
+      };
+    }),
+});
+
+const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
+  resolveRoute: (route) => {
+    const routeKind = typeof route.kind === "string" ? route.kind : "unknown";
+    return Effect.succeed({
+      wireDescriptor: {
+        method: "POST",
+        url: `test-llm://${routeKind}`,
+        headers: [
+          ["x-agentos-endpoint-ref", String(route.endpointRef ?? "")],
+          ["x-agentos-credential-ref", String(route.credentialRef ?? "")],
+        ],
+        bodySchema: {
+          type: "object",
+          properties: {
+            messages: {
+              type: "array",
+              items: { type: "object", properties: {}, additionalProperties: true },
+            },
+          },
+          additionalProperties: true,
+        },
+      },
+      providerOutputAdapterId: `${routeKind}@facade-submit-test`,
+      providerOutputAdapterVersion: "1.0.0",
+      transportAdapterId: "facade-submit-test-transport",
+      transportAdapterVersion: "1.0.0",
+    });
+  },
+  call: (request) => {
+    const route = request.route;
+    const toolNames = request.tools?.map((tool) => tool.function.name) ?? [];
+    const messageText = request.messages.map((message) => message.content ?? "").join("\n");
+    const requestJson = JSON.stringify(request);
+    if (requestJson.includes(FACADE_SECRET)) {
+      return Effect.fail(
+        new UpstreamFailure({
+          cause: {
+            reason: "facade_submit_test_llm_request_leaked_provider_material",
+          },
+        }),
+      );
+    }
+    const routeOk = route.kind === "openai-chat-compatible" && route.modelId === "gpt-4.1-mini";
+    if (routeOk && messageText.includes("lookup")) {
+      return Effect.succeed({
+        items: [{ type: "message" as const, text: "facade done" }],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 4,
+          totalTokens: 7,
+        },
+      });
+    }
+    if (routeOk && messageText.includes("apply")) {
+      const hasToolResult = request.messages.some(
+        (message) =>
+          message.role === "tool" && message.content?.includes('"materialMatched":true') === true,
+      );
+      if (hasToolResult) {
+        return Effect.succeed({
+          items: [{ type: "message" as const, text: "facade done" }],
+          usage: {
+            promptTokens: 2,
+            completionTokens: 3,
+            totalTokens: 5,
+          },
+        });
+      }
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-apply",
+              type: "function" as const,
+              function: {
+                name: "apply",
+                arguments: '{"key":"abc"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
+    if (routeOk && messageText.includes("intent")) {
+      const hasToolResult = request.messages.some(
+        (message) =>
+          message.role === "tool" &&
+          message.content?.includes('"projectedState":{"label":"abc"') === true,
+      );
+      if (hasToolResult) {
+        return Effect.succeed({
+          items: [{ type: "message" as const, text: "facade intent done" }],
+          usage: {
+            promptTokens: 2,
+            completionTokens: 3,
+            totalTokens: 5,
+          },
+        });
+      }
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-intent",
+              type: "function" as const,
+              function: {
+                name: "intent",
+                arguments: '{"label":"abc"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
+    if (routeOk && messageText.includes("write artifacts")) {
+      const hasFirstWrite = request.messages.some(
+        (message) => message.role === "tool" && message.content?.includes('"value":"first"'),
+      );
+      if (hasFirstWrite) {
+        return Effect.succeed({
+          items: [
+            {
+              type: "tool_call" as const,
+              call: {
+                id: "call-write-second",
+                type: "function" as const,
+                function: {
+                  name: "write_second",
+                  arguments: '{"value":"second"}',
+                },
+              },
+            },
+          ],
+          usage: {
+            promptTokens: 3,
+            completionTokens: 2,
+            totalTokens: 5,
+          },
+        });
+      }
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-write-first",
+              type: "function" as const,
+              function: {
+                name: "write_first",
+                arguments: '{"value":"first"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
+    return Effect.fail(
+      new UpstreamFailure({
+        cause: {
+          reason: "facade_submit_test_llm_request_mismatch",
+          routeKind: route.kind,
+          modelId: route.modelId,
+          toolNames,
+        },
+      }),
+    );
+  },
+});
+
+const facadeSubmitManifest = defineAgentManifest({
+  agentId: "agent.cloudflare-do",
+  scope: { kind: "conversation", idSource: "submit_scope" },
+  effectAuthorityRef: { authorityClass: "agent", authorityId: "cloudflare-do" },
+  handlers: ["user_message"] as const,
+  llmRoutes: {
+    default: { bindingRef: "llm.default" },
+  },
+  tools: {
+    lookup: { bindingRef: "tool.lookup" },
+    apply: { bindingRef: "tool.apply" },
+    intent: { bindingRef: "tool.intent" },
+    write_first: { bindingRef: "tool.write_first" },
+    write_second: { bindingRef: "tool.write_second" },
+  },
+});
+
+const facadeSubmitAgentBindings = defineAgentBindings<"user_message">({
+  handlers: {
+    user_message: () => ({ ok: true }),
+  },
+});
+
+export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
+  manifest: facadeSubmitManifest,
+  agentBindings: facadeSubmitAgentBindings,
+  bindings: [
+    endpoint<CloudflareAgentEnv>("llm").from(() => "https://stub.openai.test/v1"),
+    credential<CloudflareAgentEnv>("llm-key").from(() => "stub-key"),
+    credential<CloudflareAgentEnv>("facade-token", {
+      provider: "facade",
+      purpose: "apply",
+    }).from(() => FACADE_SECRET),
+  ],
+  llms: {
+    default: openAIChat({
+      model: "gpt-4.1-mini",
+      endpoint: "llm",
+      credential: "llm-key",
+    }),
+  },
+  llmTransport: () => facadeSubmitLlmTransport,
+  tools: [facadeLookup, facadeApply, facadeIntent, facadeWriteFirst, facadeWriteSecond],
+  extensions: [facadeIntentBoundaryPackage],
+  on: {
+    [FACADE_INTENT_COMMAND_EVENT]: async ({ data, capabilities }) => {
+      const payload = Predicate.isObject(data) ? data : {};
+      if (typeof payload.label !== "string") return;
+      const capability = capabilities.get(facadeIntentBoundaryPackage.ownerId);
+      if (capability === undefined) {
+        throw new CapabilityRejected({
+          event: "facade.intent.requested",
+          capability: `extension:${facadeIntentBoundaryPackage.ownerId}`,
+        });
+      }
+      await capability.commit({
+        event: "facade.intent.requested",
+        data: { label: payload.label },
+      });
+    },
+  },
+  declaredIntents: [
+    {
+      kind: "facade.intent.requested",
+      boundaryOwnerId: facadeIntentBoundaryPackage.ownerId,
+    },
+  ],
+  projections: [facadeIntentProjection],
+});
+export type FacadeSubmitTestDO = InstanceType<typeof FacadeSubmitTestDO>;
+
+interface FoldIntent {
+  readonly label: string;
+}
+
+const parseFoldIntent = (raw: unknown) => {
+  if (!Predicate.isObject(raw) || typeof raw.label !== "string") {
+    return triggerParseFail<FoldIntent>("fold intent malformed");
+  }
+  return triggerParseOk({ label: raw.label });
+};
+
+const rawCanonicalPayload = () => {
+  const payload = {
+    visible: "raw",
+    toJSON: () => ({ visible: "stored" }),
+  };
+  Object.defineProperty(payload, "secret", {
+    value: "not-recorded",
+    enumerable: false,
+  });
+  return payload;
+};
+
+const payloadObservation = (payload: unknown) => ({
+  visible:
+    typeof payload === "object" && payload !== null
+      ? (payload as { readonly visible?: unknown }).visible
+      : undefined,
+  hasSecret: typeof payload === "object" && payload !== null && "secret" in payload,
+});
+
+const foldTrigger = {
+  kind: "test.fold",
+  intentEventKind: "test.fold.requested",
+  cancellation: "cooperative",
+  parseIntent: parseFoldIntent,
+  acquire: (intent: FoldIntent, ctx) =>
+    Effect.succeed({
+      intent,
+      seen: ctx.events({ kinds: ["test.fold.done"] }).length,
+    }),
+  commit: (outcome, tx) => {
+    tx.insertEvent({
+      kind: "test.fold.done",
+      payload: { label: outcome.intent.label, seen: outcome.seen },
+    });
+  },
+  commitCancelled: () => undefined,
+} satisfies DurableTrigger<FoldIntent, { readonly intent: FoldIntent; readonly seen: number }>;
+
+const canonicalTxTrigger = {
+  kind: "test.trigger_canonical_tx",
+  intentEventKind: "test.trigger_canonical_tx.requested",
+  cancellation: "cooperative",
+  parseIntent: parseFoldIntent,
+  acquire: (intent: FoldIntent) => Effect.succeed(intent),
+  commit: (_outcome, tx) => {
+    const inserted = tx.insertEvent({
+      kind: "test.trigger_canonical_tx.done",
+      payload: rawCanonicalPayload(),
+    });
+    const enqueued = tx.enqueue({
+      triggerKind: "test.fold",
+      intentEventKind: "test.fold.requested",
+      payload: rawCanonicalPayload(),
+      fireAt: tx.now + 1000,
+    });
+    tx.insertEvent({
+      kind: "test.trigger_canonical_tx.observed",
+      payload: {
+        inserted: payloadObservation(inserted.payload),
+        enqueued: payloadObservation(enqueued.payload),
+      },
+    });
+  },
+  commitCancelled: () => undefined,
+} satisfies DurableTrigger<FoldIntent, FoldIntent>;
+
+export const TriggerFacadeTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  bindings: [],
+  triggers: [foldTrigger, canonicalTxTrigger],
+});
+export type TriggerFacadeTestDO = InstanceType<typeof TriggerFacadeTestDO>;
+
+export const TriggerFactoryErrorTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  bindings: [],
+  triggers: () => {
+    JSON.parse("{");
+    return [];
+  },
+});
+export type TriggerFactoryErrorTestDO = InstanceType<typeof TriggerFactoryErrorTestDO>;
+
+interface BoundaryIntent {
+  readonly label: string;
+}
+
+const parseBoundaryIntent = (raw: unknown) => {
+  if (!Predicate.isObject(raw) || typeof raw.label !== "string") {
+    return triggerParseFail<BoundaryIntent>("boundary intent malformed");
+  }
+  return triggerParseOk({ label: raw.label });
+};
+
+export const TriggerBoundaryTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  bindings: [],
+  triggers: (ctx) => {
+    ctx.sql.exec("CREATE TABLE IF NOT EXISTS test_projection (label TEXT NOT NULL)");
+    const rollbackTrigger = {
+      kind: "test.rollback_projection",
+      intentEventKind: "test.rollback_projection.requested",
+      cancellation: "cooperative",
+      parseIntent: parseBoundaryIntent,
+      acquire: (intent: BoundaryIntent) => Effect.succeed(intent),
+      commit: (outcome, tx) => {
+        tx.insertEvent({
+          kind: "test.rollback_projection.done",
+          payload: { label: outcome.label },
+        });
+        ctx.sql.exec("INSERT INTO test_projection (label) VALUES (?)", outcome.label);
+        ctx.sql.exec("INSERT INTO missing_projection_table (label) VALUES (?)", outcome.label);
+      },
+      commitCancelled: () => undefined,
+    } satisfies DurableTrigger<BoundaryIntent, BoundaryIntent>;
+    const thenableTrigger = {
+      kind: "test.thenable_commit",
+      intentEventKind: "test.thenable_commit.requested",
+      cancellation: "cooperative",
+      parseIntent: parseBoundaryIntent,
+      acquire: (intent: BoundaryIntent) => Effect.succeed(intent),
+      commit: ((outcome: BoundaryIntent, tx: TriggerTx) => {
+        tx.insertEvent({
+          kind: "test.thenable_commit.done",
+          payload: { label: outcome.label },
+        });
+        return Promise.resolve(undefined);
+      }) as DurableTrigger<BoundaryIntent, BoundaryIntent>["commit"],
+      commitCancelled: () => undefined,
+    } satisfies DurableTrigger<BoundaryIntent, BoundaryIntent>;
+    return [rollbackTrigger, thenableTrigger];
+  },
+});
+export type TriggerBoundaryTestDO = InstanceType<typeof TriggerBoundaryTestDO>;
+
+interface ChainIntent {
+  readonly step: number;
+}
+
+const parseChainIntent = (raw: unknown) => {
+  if (!Predicate.isObject(raw) || typeof raw.step !== "number") {
+    return triggerParseFail<ChainIntent>("chain intent malformed");
+  }
+  return triggerParseOk({ step: raw.step });
+};
+
+const chainTrigger = {
+  kind: "test.chain",
+  intentEventKind: "test.chain.requested",
+  cancellation: "cooperative",
+  parseIntent: parseChainIntent,
+  acquire: (intent: ChainIntent) => Effect.succeed(intent),
+  commit: (outcome, tx) => {
+    tx.insertEvent({ kind: "test.chain.done", payload: { step: outcome.step } });
+    if (outcome.step < 3) {
+      tx.enqueue({
+        triggerKind: "test.chain",
+        intentEventKind: "test.chain.requested",
+        payload: { step: outcome.step + 1 },
+        fireAt: tx.now,
+      });
+    }
+  },
+  commitCancelled: () => undefined,
+} satisfies DurableTrigger<ChainIntent, ChainIntent>;
+
+export const TriggerTestingDrainTestDO = withAgentDOTestingDrain(
+  defineAgentDO<CloudflareAgentEnv>({
+    ...testAgentMountConfig,
+    bindings: [],
+    triggers: [chainTrigger],
+  }),
+);
+export type TriggerTestingDrainTestDO = InstanceType<typeof TriggerTestingDrainTestDO>;
+
+interface CancelIntent {
+  readonly label: string;
+}
+
+const parseCancelIntent = (raw: unknown) => {
+  if (!Predicate.isObject(raw) || typeof raw.label !== "string") {
+    return triggerParseFail<CancelIntent>("cancel intent malformed");
+  }
+  return triggerParseOk({ label: raw.label });
+};
+
+const acquireCancelled = (
+  kind: string,
+  ctx: Parameters<DurableTrigger<CancelIntent, CancelIntent>["acquire"]>[1],
+  reason?: string,
+) =>
+  new DurableTriggerAcquireCancelled({
+    scope: ctx.scope,
+    kind,
+    dueWorkId: ctx.dueWorkId,
+    intentEventId: ctx.intentEventId,
+    ...(reason === undefined ? {} : { reason }),
+  });
+
+export const TriggerCancelTestDO = withAgentDOTestingDrain(
+  defineAgentDO<CloudflareAgentEnv>({
+    ...testAgentMountConfig,
+    bindings: [],
+    triggers: (ctx) => {
+      ctx.sql.exec(`
+        CREATE TABLE IF NOT EXISTS test_acquire_observations (
+          trigger_kind TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          aborted INTEGER NOT NULL
+        )
+      `);
+      const cancellableTrigger = {
+        kind: "test.cancellable",
+        intentEventKind: "test.cancellable.requested",
+        cancellation: "cooperative",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent, acquireCtx) =>
+          Effect.tryPromise({
+            try: () =>
+              Promise.race([
+                scheduler.wait(50).then(() => intent),
+                new Promise<CancelIntent>((_resolve, reject) => {
+                  if (acquireCtx.signal.aborted) {
+                    reject(acquireCancelled("test.cancellable", acquireCtx, "already aborted"));
+                    return;
+                  }
+                  acquireCtx.signal.addEventListener(
+                    "abort",
+                    () =>
+                      reject(
+                        acquireCancelled(
+                          "test.cancellable",
+                          acquireCtx,
+                          String(acquireCtx.signal.reason ?? "aborted"),
+                        ),
+                      ),
+                    { once: true },
+                  );
+                }),
+              ]),
+            catch: (cause) =>
+              cause instanceof DurableTriggerAcquireCancelled
+                ? cause
+                : acquireCancelled("test.cancellable", acquireCtx, String(cause)),
+          }),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.cancellable.done", payload: outcome });
+        },
+        commitCancelled: (intent, cancellation, tx) => {
+          tx.insertEvent({
+            kind: "test.cancellable.cancelled",
+            payload: { label: intent.label, reason: cancellation.reason ?? null },
+          });
+        },
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const genericCancelTrigger = {
+        kind: "test.generic_cancel",
+        intentEventKind: "test.generic_cancel.requested",
+        cancellation: "ignored",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent) => Effect.succeed(intent),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.generic_cancel.done", payload: outcome });
+        },
+        commitCancelled: () => undefined,
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const thenableCancelTrigger = {
+        kind: "test.thenable_cancel",
+        intentEventKind: "test.thenable_cancel.requested",
+        cancellation: "cooperative",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent) => Effect.succeed(intent),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.thenable_cancel.done", payload: outcome });
+        },
+        commitCancelled: ((
+          intent: CancelIntent,
+          _cancellation: TriggerCancellation,
+          tx: TriggerTx,
+        ) => {
+          tx.insertEvent({ kind: "test.thenable_cancel.cancelled", payload: intent });
+          return Promise.resolve(undefined);
+        }) as DurableTrigger<CancelIntent, CancelIntent>["commitCancelled"],
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const redriveTrigger = {
+        kind: "test.redrive_once",
+        intentEventKind: "test.redrive_once.requested",
+        cancellation: "cooperative",
+        acquireDeadlineMs: 1,
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent, acquireCtx) =>
+          Effect.gen(function* () {
+            ctx.sql.exec(
+              "INSERT INTO test_acquire_observations (trigger_kind, mode, aborted) VALUES (?, ?, ?)",
+              "test.redrive_once",
+              acquireCtx.acquireMode,
+              acquireCtx.signal.aborted ? 1 : 0,
+            );
+            if (acquireCtx.acquireMode === "normal") {
+              yield* Effect.promise(() => scheduler.wait(50));
+            }
+            return intent;
+          }),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.redrive_once.done", payload: outcome });
+        },
+        commitCancelled: () => undefined,
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const redriveCancelledTrigger = {
+        kind: "test.redrive_cancelled",
+        intentEventKind: "test.redrive_cancelled.requested",
+        cancellation: "cooperative",
+        acquireDeadlineMs: 1,
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent, acquireCtx) =>
+          Effect.gen(function* () {
+            ctx.sql.exec(
+              "INSERT INTO test_acquire_observations (trigger_kind, mode, aborted) VALUES (?, ?, ?)",
+              "test.redrive_cancelled",
+              acquireCtx.acquireMode,
+              acquireCtx.signal.aborted ? 1 : 0,
+            );
+            if (acquireCtx.signal.aborted) {
+              return yield* Effect.fail(
+                acquireCancelled("test.redrive_cancelled", acquireCtx, "redrive aborted"),
+              );
+            }
+            yield* Effect.promise(() => scheduler.wait(50));
+            return intent;
+          }),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.redrive_cancelled.done", payload: outcome });
+        },
+        commitCancelled: (intent, cancellation, tx) => {
+          tx.insertEvent({
+            kind: "test.redrive_cancelled.cancelled",
+            payload: { label: intent.label, reason: cancellation.reason ?? null },
+          });
+        },
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      const defaultDeadlineTrigger = {
+        kind: "test.default_deadline",
+        intentEventKind: "test.default_deadline.requested",
+        cancellation: "cooperative",
+        parseIntent: parseCancelIntent,
+        acquire: (intent: CancelIntent) =>
+          Effect.promise(() => scheduler.wait(50)).pipe(Effect.as(intent)),
+        commit: (outcome, tx) => {
+          tx.insertEvent({ kind: "test.default_deadline.done", payload: outcome });
+        },
+        commitCancelled: () => undefined,
+      } satisfies DurableTrigger<CancelIntent, CancelIntent>;
+      return [
+        cancellableTrigger,
+        genericCancelTrigger,
+        thenableCancelTrigger,
+        redriveTrigger,
+        redriveCancelledTrigger,
+        defaultDeadlineTrigger,
+      ];
+    },
+  }),
+);
+export type TriggerCancelTestDO = InstanceType<typeof TriggerCancelTestDO>;
+
+const attachedEcho = {
+  kind: "test.attached_echo",
+  mode: "bidi",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* (_start, input) {
+    for await (const frame of input) {
+      if (frame.kind !== "input") continue;
+      yield { kind: "output", channel: "stdout", payload: frame.payload };
+      yield { kind: "completed", terminal: { echoed: frame.payload } };
+      return;
+    }
+  },
+  commitTerminal: (terminal, tx) => {
+    tx.insertEvent({ kind: "test.attached_echo.completed", payload: terminal });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
+const attachedOutput = {
+  kind: "test.attached_output",
+  mode: "output_only",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* (start) {
+    yield { kind: "progress", payload: { start } };
+    yield { kind: "completed", terminal: { ok: true, start } };
+  },
+  commitTerminal: (terminal, tx) => {
+    tx.insertEvent({ kind: "test.attached_output.completed", payload: terminal });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
+const attachedCanonicalTx = {
+  kind: "test.attached_canonical_tx",
+  mode: "output_only",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* () {
+    yield { kind: "completed", terminal: { ok: true } };
+  },
+  commitTerminal: (_terminal, tx) => {
+    const inserted = tx.insertEvent({
+      kind: "test.attached_canonical_tx.completed",
+      payload: rawCanonicalPayload(),
+    });
+    const seen = tx.events({ kinds: ["test.attached_canonical_tx.completed"] })[0];
+    tx.insertEvent({
+      kind: "test.attached_canonical_tx.observed",
+      payload: {
+        inserted: payloadObservation(inserted.payload),
+        seen: seen === undefined ? null : payloadObservation(seen.payload),
+      },
+    });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
+const waitForAbortSignal = (signal: AbortSignal): Promise<void> =>
+  signal.aborted
+    ? Promise.resolve()
+    : new Promise((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }));
+
+const attachedCancellable = {
+  kind: "test.attached_cancellable",
+  mode: "output_only",
+  cancellation: "cooperative",
+  onDetach: "abort",
+  parseStart: (raw) => attachedStreamParseOk(raw),
+  run: async function* (_start, _input, ctx) {
+    yield { kind: "progress", payload: { waiting: true } };
+    await waitForAbortSignal(ctx.signal);
+    yield { kind: "cancelled", reason: String(ctx.signal.reason ?? "cancelled") };
+  },
+  commitTerminal: (terminal, tx) => {
+    tx.insertEvent({ kind: "test.attached_cancellable.cancelled", payload: terminal });
+  },
+} satisfies AttachedStreamHandler<unknown, unknown>;
+
+export const AttachedStreamTestDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  bindings: [],
+  streams: [attachedEcho, attachedOutput, attachedCanonicalTx, attachedCancellable],
+});
+export type AttachedStreamTestDO = InstanceType<typeof AttachedStreamTestDO>;
+
+const materializedRunProjection = defineProjection({
+  kind: "run.workflow",
+  version: 1,
+  eventKinds: ["run.requested", "run.completed", "run.failed"],
+  identity: Schema.Struct({ runId: Schema.String }),
+  state: Schema.Struct({
+    runId: Schema.String,
+    status: Schema.Literals(["requested", "completed"]),
+    handoff: Schema.optional(Schema.String),
+  }),
+  identityKey: (identity) => identity.runId,
+  identify: (event) => {
+    const payload = event.payload;
+    if (payload === null || typeof payload !== "object") return projectionMalformed("payload");
+    const runId = (payload as { readonly runId?: unknown }).runId;
+    return typeof runId === "string" ? projectionIdentity({ runId }) : projectionMalformed("runId");
+  },
+  initial: (identity) => ({ runId: identity.runId, status: "requested" as const }),
+  reduce: (state, event) => {
+    if (event.kind === "run.failed") return projectionFail("projection rejected run.failed");
+    if (event.kind === "run.completed") {
+      const payload = event.payload as { readonly handoff?: unknown };
+      return projectionPut({
+        ...state,
+        status: "completed" as const,
+        ...(typeof payload.handoff === "string" ? { handoff: payload.handoff } : {}),
+      });
+    }
+    return projectionPut(state);
+  },
+});
+
+const materializedRunFailingRebuildProjection = defineProjection({
+  ...materializedRunProjection,
+  version: 2,
+  reduce: (state, event) =>
+    event.kind === "run.completed"
+      ? projectionFail("projection rebuild failed")
+      : projectionPut(state),
+});
+
+const MaterializedProjectionBaseDO = defineAgentDO<CloudflareAgentEnv>({
+  ...testAgentMountConfig,
+  bindings: [],
+  projections: [materializedRunProjection],
+});
+
+const silentEventBus = {
+  fire: () => Effect.void,
+  fireMany: () => Effect.void,
+  telemetryDiagnostics: () => [],
+  subscribe: () => ({ unsubscribe: () => undefined }),
+} satisfies EventBusService;
+
+export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
+  async emitForFactOwner(
+    scopeId: string,
+    factOwnerRef: FactOwnerRef,
+    event: string,
+    data: unknown,
+  ): Promise<void> {
+    const identity = testTruthIdentity(scopeId);
+    const exit = await Effect.runPromiseExit(
+      commitLedgerTransaction(this.ctx, silentEventBus, { factOwnerRef }, (tx) => {
+        tx.append({
+          ts: Date.now(),
+          kind: event,
+          scopeRef: identity.scopeRef,
+          effectAuthorityRef: identity.effectAuthorityRef,
+          payload: data,
+        });
+      }),
+    );
+    if (Exit.isSuccess(exit)) return;
+    const failure = Cause.findErrorOption(exit.cause);
+    if (Option.isSome(failure)) return Promise.reject(failure.value);
+    return Promise.reject(exit.cause);
+  }
+
+  async rebuildWithFailingProjection(
+    spec: BackendProtocolEventIdentity & { readonly kind: string },
+  ): Promise<MaterializedProjectionRebuildResult> {
+    const registryResult = makeProjectionRegistryResult([materializedRunFailingRebuildProjection]);
+    if (registryResult._tag === "failure") {
+      return Promise.reject(registryResult.error);
+    }
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const projections = yield* MaterializedProjections;
+        return yield* projections.rebuild(spec);
+      }).pipe(
+        Effect.provide(CloudflareMaterializedProjectionsLive(this.ctx)),
+        Effect.provideService(MaterializedProjectionRegistry, registryResult.registry),
+      ),
+    );
+    if (Exit.isSuccess(exit)) return exit.value;
+    const failure = Cause.findErrorOption(exit.cause);
+    if (Option.isSome(failure)) return Promise.reject(failure.value);
+    return Promise.reject(exit.cause);
+  }
+}
+
+interface WorkerEnv extends CloudflareAgentEnv {
+  readonly STREAM_DO: DurableObjectNamespace<StreamTestDO>;
+  readonly EXTENSION_DO: DurableObjectNamespace<ExtensionTestDO>;
+  readonly FACADE_SUBMIT_DO: DurableObjectNamespace<FacadeSubmitTestDO>;
+  readonly TRIGGER_FACADE_DO: DurableObjectNamespace<TriggerFacadeTestDO>;
+  readonly TRIGGER_FACTORY_ERROR_DO: DurableObjectNamespace<TriggerFactoryErrorTestDO>;
+  readonly TRIGGER_BOUNDARY_DO: DurableObjectNamespace<TriggerBoundaryTestDO>;
+  readonly TRIGGER_CANCEL_DO: DurableObjectNamespace<TriggerCancelTestDO>;
+  readonly ATTACHED_STREAM_DO: DurableObjectNamespace<AttachedStreamTestDO>;
+  readonly MATERIALIZED_PROJECTION_DO: DurableObjectNamespace<MaterializedProjectionTestDO>;
+}
+
+const parseLastEventId = (value: string | null): number => {
+  if (value === null) return 0;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+};
+
+export default {
+  async fetch(req: Request, env: WorkerEnv): Promise<Response> {
+    const url = new URL(req.url);
+    if (url.pathname === "/dispatch-target-materializations") {
+      return Response.json({ count: dispatchTargetMaterializations });
+    }
+    const match = url.pathname.match(/^\/stream\/([^/]+)$/);
+    if (match !== null) {
+      const scope = decodeURIComponent(match[1] ?? "");
+      const stub = env.STREAM_DO.get(env.STREAM_DO.idFromName(scope));
+      return stub.streamEvents(testTruthIdentity(scope), {
+        afterId: parseLastEventId(req.headers.get("Last-Event-ID")),
+      });
+    }
+    return new Response("@agent-os/runtime/cloudflare test worker (not for direct use)");
+  },
+};
