@@ -1098,6 +1098,23 @@ export const moduleBucketRegistryFindings = (registry) => {
       }
     }
   }
+  if (!isRecord(registry.productEjection)) {
+    findings.push(`${moduleBucketRegistryPath}: productEjection object is required`);
+  } else {
+    if (!stringArray(registry.productEjection.packagePathPrefixes)) {
+      findings.push(
+        `${moduleBucketRegistryPath}: productEjection.packagePathPrefixes must be a non-empty string array`,
+      );
+    }
+    if (
+      typeof registry.productEjection.reason !== "string" ||
+      registry.productEjection.reason.length === 0
+    ) {
+      findings.push(
+        `${moduleBucketRegistryPath}: productEjection.reason must be a non-empty string`,
+      );
+    }
+  }
 
   const bucketIds = new Set();
   if (!Array.isArray(registry.buckets) || registry.buckets.length === 0) {
@@ -1580,8 +1597,13 @@ const moduleBucketExternalFindings = (records) => {
 
 const moduleProductFindings = (graph) => {
   const ejection = ejectionBuckets();
+  const packagePathPrefixes = moduleBucketRegistry().productEjection.packagePathPrefixes;
   return graph.files
-    .filter((entry) => ejection.has(moduleBucketForPath(entry.file)))
+    .filter(
+      (entry) =>
+        packagePathPrefixes.some((prefix) => entry.package.path.startsWith(prefix)) &&
+        ejection.has(moduleBucketForPath(entry.file)),
+    )
     .map((entry) => ({
       kind: "product-ejection",
       file: entry.file,
@@ -1591,10 +1613,52 @@ const moduleProductFindings = (graph) => {
     }));
 };
 
+export const moduleBucketNegativeFixtureFailures = () => {
+  const failures = [];
+  const edgeFindings = moduleBucketFindingsForEdges([
+    {
+      fromFile: "packages/kernel/src/index.ts",
+      toFile: "packages/providers/deploy-cloudflare/src/index.ts",
+      specifier: "@agent-os/deploy-cloudflare",
+    },
+    {
+      fromFile: "packages/client/core/src/index.ts",
+      toFile: "packages/backends/node-postgres/src/index.ts",
+      specifier: "@agent-os/backend-node-postgres",
+    },
+  ]);
+  const edgeKinds = edgeFindings.map((finding) => finding.kind);
+  for (const kind of ["bucket-dag", "ambient-dag"]) {
+    if (!edgeKinds.includes(kind)) {
+      failures.push(`edge negative fixture: expected ${kind}, got ${JSON.stringify(edgeKinds)}`);
+    }
+  }
+
+  const productFindings = moduleProductFindings({
+    files: [
+      {
+        package: { name: "@agent-os/example", path: "packages/example" },
+        file: "packages/example/src/product/widget.ts",
+      },
+    ],
+  });
+  if (!productFindings.some((finding) => finding.kind === "product-ejection")) {
+    failures.push(
+      `product negative fixture: expected product-ejection, got ${JSON.stringify(productFindings)}`,
+    );
+  }
+  return failures;
+};
+
 const checkModuleBuckets = (args = []) => {
   const reportOnly = args.length === 1 && args[0] === "--report-only";
-  if (!reportOnly && args.length > 0) {
+  const negativeFixtures = args.length === 1 && args[0] === "--negative-fixtures";
+  if (!reportOnly && !negativeFixtures && args.length > 0) {
     throw new Error(`module-buckets: unexpected argument(s): ${args.join(" ")}`);
+  }
+  if (negativeFixtures) {
+    failIfAny("module buckets negative fixtures", moduleBucketNegativeFixtureFailures());
+    return;
   }
   const records = graphWorkspacePackageRecords(repoRoot).filter(
     (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),

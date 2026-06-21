@@ -5,6 +5,10 @@
     "ambientIsolation": "module labels and profile gates enforce ambient separation; packages are not security boundaries",
     "productBucket": "product is an ejection marker, not a final substrate bucket"
   },
+  "productEjection": {
+    "packagePathPrefixes": ["packages/", "tooling/agentos-cli/"],
+    "reason": "product modules are forbidden in substrate package roots; repo-local tooling may remain outside final substrate packages"
+  },
   "buckets": [
     {
       "id": "axioms",
@@ -57,9 +61,9 @@
   ],
   "bucketRules": [
     {
-      "id": "product-ops-tooling",
+      "id": "product-ops-htmx",
       "match": "prefix",
-      "value": "tooling/ops-",
+      "value": "tooling/ops-htmx/",
       "bucket": "product"
     },
     {
@@ -105,6 +109,66 @@
       "bucket": "axioms"
     },
     {
+      "id": "client-core-projection",
+      "match": "prefix",
+      "value": "packages/client/core/",
+      "bucket": "projection"
+    },
+    {
+      "id": "sse-http-projection",
+      "match": "prefix",
+      "value": "packages/transports/sse-http/",
+      "bucket": "projection"
+    },
+    {
+      "id": "attached-stream-projection",
+      "match": "prefix",
+      "value": "packages/composers/attached-stream/",
+      "bucket": "projection"
+    },
+    {
+      "id": "ops-api-adapter",
+      "match": "prefix",
+      "value": "tooling/ops-api/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "runtime-public-barrel-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/index.ts",
+      "bucket": "adapter"
+    },
+    {
+      "id": "runtime-live-loop-adapter",
+      "match": "regex",
+      "value": "^packages/runtime/src/(attached-stream|driver|submit-agent|workspace-job)\\.ts$",
+      "bucket": "adapter"
+    },
+    {
+      "id": "runtime-projection-files",
+      "match": "regex",
+      "value": "^packages/runtime/src/(continuation|input-request|projection|run-projector|workspace-job-observability)\\.ts$",
+      "bucket": "projection"
+    },
+    {
+      "id": "cloudflare-do-adapter",
+      "match": "prefix",
+      "value": "packages/backends/cloudflare-do/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "in-memory-backend-adapter",
+      "match": "prefix",
+      "value": "packages/backends/in-memory/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "backend-ledger-file",
+      "match": "contains",
+      "value": "/ledger.ts",
+      "bucket": "ledger"
+    },
+    {
       "id": "runtime-ledger",
       "match": "prefix",
       "value": "packages/runtime/",
@@ -112,8 +176,8 @@
     },
     {
       "id": "backend-ledger",
-      "match": "prefix",
-      "value": "packages/backends/",
+      "match": "regex",
+      "value": "^packages/backends/[^/]+/src/(?:ledger|storage)/",
       "bucket": "ledger"
     },
     {
@@ -178,9 +242,9 @@
   ],
   "ambientRules": [
     {
-      "id": "product-ops-tooling",
+      "id": "product-ops-htmx",
       "match": "prefix",
-      "value": "tooling/ops-",
+      "value": "tooling/ops-htmx/",
       "ambient": "product"
     },
     {
@@ -205,7 +269,7 @@
       "id": "workspace-op-local",
       "match": "prefix",
       "value": "packages/providers/workspace-op-local/",
-      "ambient": "node"
+      "ambient": "neutral"
     },
     {
       "id": "workspace-env-local",
@@ -268,6 +332,12 @@
       "ambient": "cloudflare-worker"
     },
     {
+      "id": "client-core-neutral",
+      "match": "prefix",
+      "value": "packages/client/core/",
+      "ambient": "neutral"
+    },
+    {
       "id": "client-packages",
       "match": "prefix",
       "value": "packages/client/",
@@ -277,13 +347,13 @@
       "id": "ag-ui-wire-adapter",
       "match": "prefix",
       "value": "packages/wire-adapters/ag-ui/",
-      "ambient": "browser"
+      "ambient": "neutral"
     },
     {
-      "id": "ops-htmx",
+      "id": "ops-api-neutral",
       "match": "prefix",
-      "value": "tooling/ops-htmx/",
-      "ambient": "browser"
+      "value": "tooling/ops-api/",
+      "ambient": "neutral"
     },
     {
       "id": "default-neutral",
