@@ -38,8 +38,8 @@ For product apps that consume internal agentOS packages:
 6. Keep product-owned event vocabularies product-owned. A single consumer proof
    must not promote `workspace.file.*` into substrate packages or docs.
 7. Add a golden frame mapping for any AG-UI run stream the product renders.
-   React products use `@agent-os/client-react`; Svelte products use
-   `@agent-os/client-svelte`. Both bindings consume the same canonical client
+   React products use `@agent-os/client/react`; Svelte products use
+   `@agent-os/client/svelte`. Both bindings consume the same canonical client
    store grammar.
 8. Run a UI render smoke that proves one run detail can render from typed runtime
    projection or AG-UI frames.

@@ -6,13 +6,16 @@ title: "@agent-os/client"
 
 ## Purpose
 
-Framework-neutral agent client store contract and typed command surface.
+Framework-neutral agent client store contract, typed command surface, and
+optional React/Svelte subpath bridges.
 
 ## Invariant
 
-The client core owns transport-neutral state and command orchestration. It
+The package root owns transport-neutral state and command orchestration. It
 consumes runtime-protocol Recorded projections and injected transports; it does
-not import React, Svelte, AG-UI framework adapters, or product UI code.
+not import React, Svelte, AG-UI framework adapters, or product UI code. React
+and Svelte bridges live only behind `@agent-os/client/react` and
+`@agent-os/client/svelte`.
 
 ## Minimal Usage
 
@@ -23,7 +26,14 @@ const agent = createAgentClient({ streamSource, rpcInvoker });
 const status = selectAgentClientSnapshot(agent, (snapshot) => snapshot.run.status);
 ```
 
-The store contract is the bridge point for framework packages. The client core
+Framework consumers import explicit subpaths:
+
+```ts
+import { useClientStore } from "@agent-os/client/react";
+import { selectClientReadable } from "@agent-os/client/svelte";
+```
+
+The store contract is the bridge point for framework subpaths. The client root
 owns reconnect/replay state, Recorded runtime-event snapshots, symbolic
 ContinuationRef/InputRequestRef lifecycle, and a generic command invoker; browser
 direct transports and server bridges supply only `streamSource` and `rpcInvoker`.
@@ -31,6 +41,6 @@ direct transports and server bridges supply only `streamSource` and `rpcInvoker`
 ## Verification
 
 ```sh
-cd packages/client/core
+cd packages/client
 vp test run
 ```

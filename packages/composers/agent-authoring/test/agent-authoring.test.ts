@@ -1024,7 +1024,7 @@ describe("agent authored tree compiler", () => {
       },
       {
         kind: "client-framework",
-        source: "@agent-os/client-svelte",
+        source: "@agent-os/client/svelte",
         imports: ["clientReadable", "selectClientReadable"],
       },
       {
@@ -1193,7 +1193,7 @@ describe("agent authored tree compiler", () => {
       'import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";',
     );
     expect(client).toContain(
-      'import { clientReadable, selectClientReadable } from "@agent-os/client-svelte";',
+      'import { clientReadable, selectClientReadable } from "@agent-os/client/svelte";',
     );
     expect(client).toContain('import type { AgentClientSnapshot } from "@agent-os/client";');
     expect(client).toContain('import type { Readable } from "svelte/store";');
@@ -1224,7 +1224,7 @@ describe("agent authored tree compiler", () => {
     });
     expect(publicLinked.value.moduleGraph).toContainEqual({
       kind: "client-framework",
-      source: "@yansirplus/client-svelte",
+      source: "@yansirplus/client/svelte",
       imports: ["clientReadable", "selectClientReadable"],
     });
     expect(generatedText(publicLinked, ".agentos/generated/target.ts")).toContain(
@@ -1309,12 +1309,12 @@ describe("agent authored tree compiler", () => {
     });
     expect(withExtraTool.moduleGraph).not.toContainEqual({
       kind: "client-framework",
-      source: "@agent-os/client-svelte",
+      source: "@agent-os/client/svelte",
       imports: ["clientReadable", "selectClientReadable"],
     });
     expect(
       generatedText({ ok: true, value: withExtraTool }, ".agentos/generated/client.ts"),
-    ).not.toContain("@agent-os/client-svelte");
+    ).not.toContain("@agent-os/client/svelte");
     expect(generatedText({ ok: true, value: first }, ".agentos/generated/fingerprints.json")).toBe(
       generatedText({ ok: true, value: second }, ".agentos/generated/fingerprints.json"),
     );

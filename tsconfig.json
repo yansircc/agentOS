@@ -23,13 +23,7 @@
       "path": "./packages/wire-adapters/ag-ui"
     },
     {
-      "path": "./packages/client/core"
-    },
-    {
-      "path": "./packages/client/react"
-    },
-    {
-      "path": "./packages/client/svelte"
+      "path": "./packages/client"
     },
     {
       "path": "./packages/execution-domains/workspace-env"

@@ -22,9 +22,7 @@
 | Token/progress frames                                    | `@agent-os/turn-stream`                  |
 | Workspace actuator and tools                             | `@agent-os/workspace-env`                |
 | AG-UI wire compatibility                                 | `@agent-os/ag-ui`                        |
-| Agent client core                                        | `@agent-os/client`                       |
-| React agent client bridge                                | `@agent-os/client-react`                 |
-| Svelte agent client bridge                               | `@agent-os/client-svelte`                |
+| Agent client core and framework bridges                  | `@agent-os/client`                       |
 | Workspace preset host                                    | `@agent-os/workspace-agent`              |
 | Consumer run stream                                      | `@agent-os/run-stream`                   |
 | Workspace submit binding                                 | `@agent-os/workspace-binding`            |

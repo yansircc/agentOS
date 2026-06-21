@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { createAgentClientStore } from "@agent-os/client";
-import { clientReadable, selectClientReadable } from "../src/index";
+import { clientReadable, selectClientReadable } from "../../src/svelte/index";
 
-describe("@agent-os/client-svelte", () => {
+describe("@agent-os/client/svelte", () => {
   it("adapts the core client store into Svelte readables", () => {
     const store = createAgentClientStore({ count: 0 });
     const snapshots: Array<{ readonly count: number }> = [];
@@ -28,7 +28,7 @@ describe("@agent-os/client-svelte", () => {
   });
 
   it("does not import AG-UI or declare local UI read-models", () => {
-    const source = readFileSync(resolve("src/index.ts"), "utf8");
+    const source = readFileSync(resolve("src/svelte/index.ts"), "utf8");
     expect(source).toContain("svelte/store");
     expect(source).toContain("@agent-os/client");
     expect(source).not.toContain("@agent-os/ag-ui");

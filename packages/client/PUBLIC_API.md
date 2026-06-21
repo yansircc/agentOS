@@ -2,7 +2,7 @@
 
 # @agent-os/client Public API
 
-Status: 0.5.x active development for the canonical agent client core. Public exports cover framework-neutral stores, transport injection contracts, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation.
+Status: 0.5.x active development for the canonical agent client package. Root exports cover framework-neutral stores, transport injection contracts, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation; `./react` and `./svelte` are optional-peer subpath adapters.
 
 ## Public exports
 
@@ -33,6 +33,14 @@ Status: 0.5.x active development for the canonical agent client core. Public exp
 - `.:isCurrentContinuationRef`
 - `.:isCurrentInputRequestRef`
 - `.:selectAgentClientSnapshot`
+- `./react:AgentClientSelector`
+- `./react:AgentClientStore`
+- `./react:useAgentClientSnapshot`
+- `./react:useClientStore`
+- `./svelte:AgentClientSelector`
+- `./svelte:AgentClientStore`
+- `./svelte:clientReadable`
+- `./svelte:selectClientReadable`
 
 ## Experimental exports
 

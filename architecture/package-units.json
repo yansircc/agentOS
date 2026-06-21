@@ -130,11 +130,6 @@
           "subpath": "./svelte",
           "moduleBuckets": ["adapter"],
           "optionalPeers": ["svelte"]
-        },
-        {
-          "subpath": "./ag-ui",
-          "moduleBuckets": ["projection"],
-          "optionalPeers": []
         }
       ]
     },

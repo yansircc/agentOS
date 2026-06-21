@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "../../../.cache/tsbuildinfo/packages-client-react.tsbuildinfo",
+    "tsBuildInfoFile": "../../.cache/tsbuildinfo/packages-client.tsbuildinfo",
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -18,7 +18,7 @@
     "src/**/*",
     "test/**/*",
     "vitest.config.ts",
-    "../../../tooling/types/vite-plus-test-config/index.d.ts"
+    "../../tooling/types/vite-plus-test-config/index.d.ts"
   ],
-  "extends": "../../../tsconfig.source-paths.json"
+  "extends": "../../tsconfig.source-paths.json"
 }

@@ -27,7 +27,8 @@ void test("module bucket classifier marks product paths as ejection candidates",
   assert.equal(moduleBucketForPath("packages/runtime/src/ledger.ts"), "ledger");
   assert.equal(moduleBucketForPath("packages/runtime/src/continuation.ts"), "projection");
   assert.equal(moduleBucketForPath("packages/runtime/src/submit-agent.ts"), "adapter");
-  assert.equal(moduleBucketForPath("packages/client/core/src/index.ts"), "projection");
+  assert.equal(moduleBucketForPath("packages/client/src/index.ts"), "projection");
+  assert.equal(moduleBucketForPath("packages/client/src/react/index.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/runtime/src/cloudflare/ledger/ledger.ts"), "adapter");
   assert.equal(
     moduleBucketForPath("packages/carriers/workspace-op/src/safe-events.ts"),
@@ -37,8 +38,8 @@ void test("module bucket classifier marks product paths as ejection candidates",
 
 void test("module ambient classifier keeps ambient as a module fact", () => {
   assert.equal(moduleAmbientForPath("packages/core/src/index.ts"), "neutral");
-  assert.equal(moduleAmbientForPath("packages/client/core/src/index.ts"), "neutral");
-  assert.equal(moduleAmbientForPath("packages/client/react/src/index.ts"), "browser");
+  assert.equal(moduleAmbientForPath("packages/client/src/index.ts"), "neutral");
+  assert.equal(moduleAmbientForPath("packages/client/src/react/index.ts"), "browser");
   assert.equal(moduleAmbientForPath("packages/wire-adapters/ag-ui/src/index.ts"), "neutral");
   assert.equal(
     moduleAmbientForPath("packages/providers/workspace-op-local/src/index.ts"),
@@ -59,7 +60,7 @@ void test("module bucket scanner reports downstream bucket and ambient imports",
       specifier: "@agent-os/deploy-cloudflare",
     },
     {
-      fromFile: "packages/client/core/src/index.ts",
+      fromFile: "packages/client/src/index.ts",
       toFile: "packages/runtime/src/node/index.ts",
       specifier: "@agent-os/runtime/node",
     },

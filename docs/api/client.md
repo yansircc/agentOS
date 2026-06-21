@@ -29,6 +29,14 @@
 - `.:isCurrentContinuationRef`
 - `.:isCurrentInputRequestRef`
 - `.:selectAgentClientSnapshot`
+- `./react:AgentClientSelector`
+- `./react:AgentClientStore`
+- `./react:useAgentClientSnapshot`
+- `./react:useClientStore`
+- `./svelte:AgentClientSelector`
+- `./svelte:AgentClientStore`
+- `./svelte:clientReadable`
+- `./svelte:selectClientReadable`
 
 ## Experimental exports
 

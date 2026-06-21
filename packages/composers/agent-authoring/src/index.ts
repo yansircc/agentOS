@@ -2217,7 +2217,7 @@ const staticTargetModules = (scope: string) => ({
   workspaceBinding: publicPackageSpecifier(scope, "workspace-binding"),
   workspaceEnvCloudflare: publicPackageSpecifier(scope, "workspace-env-cloudflare"),
   clientCore: publicPackageSpecifier(scope, "client"),
-  clientSvelte: publicPackageSpecifier(scope, "client-svelte"),
+  clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
   sseHttp: publicPackageSpecifier(scope, "sse-http"),
   cloudflareSandbox: "@cloudflare/sandbox",

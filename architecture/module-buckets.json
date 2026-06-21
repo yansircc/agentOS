@@ -109,9 +109,21 @@
       "bucket": "axioms"
     },
     {
-      "id": "client-core-projection",
+      "id": "client-react-adapter",
       "match": "prefix",
-      "value": "packages/client/core/",
+      "value": "packages/client/src/react/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "client-svelte-adapter",
+      "match": "prefix",
+      "value": "packages/client/src/svelte/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "client-projection",
+      "match": "prefix",
+      "value": "packages/client/",
       "bucket": "projection"
     },
     {
@@ -350,16 +362,22 @@
       "ambient": "cloudflare-worker"
     },
     {
-      "id": "client-core-neutral",
+      "id": "client-react-browser",
       "match": "prefix",
-      "value": "packages/client/core/",
-      "ambient": "neutral"
+      "value": "packages/client/src/react/",
+      "ambient": "browser"
     },
     {
-      "id": "client-packages",
+      "id": "client-svelte-browser",
+      "match": "prefix",
+      "value": "packages/client/src/svelte/",
+      "ambient": "browser"
+    },
+    {
+      "id": "client-neutral",
       "match": "prefix",
       "value": "packages/client/",
-      "ambient": "browser"
+      "ambient": "neutral"
     },
     {
       "id": "ag-ui-wire-adapter",

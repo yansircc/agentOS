@@ -40,11 +40,11 @@ type AgentClientStore<State> = {
 };
 ```
 
-It also exposes the generic typed command invoker. The core client must not
+It also exposes the generic typed command invoker. The package root must not
 import React, Svelte, AG-UI framework adapters, or product UI packages.
 
-`@agent-os/client-react` and `@agent-os/client-svelte` are the only framework
-bindings. Each package is a reactivity bridge over the core store:
+`@agent-os/client/react` and `@agent-os/client/svelte` are the only framework
+bindings. Each subpath is a reactivity bridge over the root store:
 
 - React uses `useSyncExternalStore`.
 - Svelte exposes `readable` stores.
@@ -54,8 +54,8 @@ They must not contain component source, pixel layout, timeline/file-review
 vocabulary, runtime event decoding, or transport-specific logic.
 
 `@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` are retired by this
-boundary. Useful bridge behavior moves into `@agent-os/client-react` and
-`@agent-os/client-svelte`. There is no compatibility shim package.
+boundary. Useful bridge behavior moves into `@agent-os/client/react` and
+`@agent-os/client/svelte`. There is no compatibility shim package.
 
 `@agent-os/workspace-agent` owns the hidden workspace preset host mechanism:
 
@@ -146,12 +146,12 @@ append only Recorded facts accepted by the owning runtime/carrier contract.
 
 The implementation guard must be positive and structural:
 
-- client and framework bridge packages may contain TypeScript source only;
+- client root and framework bridge subpaths may contain TypeScript source only;
 - `.tsx`, JSX-bearing files, `.svelte`, CSS, and component assets are forbidden
-  in client/framework bridge packages;
+  in client/framework bridge source;
 - hook/readable return types must be imported from runtime-protocol,
   workspace-agent projections, or AG-UI projector types;
-- framework bridge packages must not define local UI-shaped read-model types;
+- framework bridge subpaths must not define local UI-shaped read-model types;
 - retired AG-UI framework packages must not remain in the public package
   surface after the collapse phase;
 - generated Workspace DO code must match the one-driver-plus-sinks shape.
@@ -165,7 +165,7 @@ has already accepted or rejected the package.
 The migration is complete when:
 
 - no public `@agent-os/ag-ui-react` or `@agent-os/ag-ui-svelte` package remains;
-- `@agent-os/client-react` and `@agent-os/client-svelte` are the only
+- `@agent-os/client/react` and `@agent-os/client/svelte` are the only
   per-framework bindings;
 - `@agent-os/client` passes the same state-machine suite with browser-direct and
   server-bridge transports;

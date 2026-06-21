@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import { createAgentClientStore } from "@agent-os/client";
-import { useAgentClientSnapshot, useClientStore } from "../src/index";
+import { useAgentClientSnapshot, useClientStore } from "../../src/react/index";
 
-describe("@agent-os/client-react", () => {
+describe("@agent-os/client/react", () => {
   it("exports React hooks over the core client store contract", () => {
     const store = createAgentClientStore({ status: "idle" });
     expect(store.getSnapshot()).toEqual({ status: "idle" });
@@ -13,7 +13,7 @@ describe("@agent-os/client-react", () => {
   });
 
   it("does not import AG-UI or declare local UI read-models", () => {
-    const source = readFileSync(resolve("src/index.ts"), "utf8");
+    const source = readFileSync(resolve("src/react/index.ts"), "utf8");
     expect(source).toContain("useSyncExternalStore");
     expect(source).toContain("@agent-os/client");
     expect(source).not.toContain("@agent-os/ag-ui");

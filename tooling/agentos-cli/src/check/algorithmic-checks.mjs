@@ -269,12 +269,25 @@ const checkRepoToolingSurface = () => {
 
 const clientBoundaryPackages = {
   clientCore: "@agent-os/client",
-  clientReact: "@agent-os/client-react",
-  clientSvelte: "@agent-os/client-svelte",
+  clientReact: "@agent-os/client/react",
+  clientSvelte: "@agent-os/client/svelte",
   workspaceAgent: "@agent-os/workspace-agent",
   agUiReact: "@agent-os/ag-ui-react",
   agUiSvelte: "@agent-os/ag-ui-svelte",
 };
+
+const clientFrameworkSubpaths = [
+  {
+    specifier: clientBoundaryPackages.clientReact,
+    pathPrefix: "packages/client/src/react/",
+    framework: "react",
+  },
+  {
+    specifier: clientBoundaryPackages.clientSvelte,
+    pathPrefix: "packages/client/src/svelte/",
+    framework: "svelte",
+  },
+];
 
 const clientSourceFilePattern = /\.(?:ts|tsx|mts|cts|jsx|js|mjs|cjs|svelte|css|scss|less)$/u;
 const clientTypeScriptOnlyPattern = /\.ts$/u;
@@ -1595,7 +1608,7 @@ export const moduleBucketNegativeFixtureFailures = () => {
       specifier: "@agent-os/deploy-cloudflare",
     },
     {
-      fromFile: "packages/client/core/src/index.ts",
+      fromFile: "packages/client/src/index.ts",
       toFile: "packages/runtime/src/node/index.ts",
       specifier: "@agent-os/runtime/node",
     },
@@ -2639,7 +2652,14 @@ const exportEntriesBySubpath = (record) => {
 const packageUnitRecordsBySourceName = (records) =>
   new Map(records.map((record) => [record.name, record]));
 
-const checkSubpathNoLeak = () => {
+const subpathNoLeakPackageFilter = (args) => {
+  if (args.length === 0) return undefined;
+  if (args.length === 2 && args[0] === "--package" && typeof args[1] === "string") return args[1];
+  throw new Error("subpath-no-leak: expected optional --package <source-package-name>");
+};
+
+const checkSubpathNoLeak = (args = []) => {
+  const packageFilter = subpathNoLeakPackageFilter(args);
   const records = graphWorkspacePackageRecords(repoRoot).filter(
     (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
   );
@@ -2649,6 +2669,7 @@ const checkSubpathNoLeak = () => {
   const failures = [];
   for (const unit of packageUnitsRegistry().packageUnits ?? []) {
     if (!isRecord(unit) || typeof unit.targetSourcePackageName !== "string") continue;
+    if (packageFilter !== undefined && unit.targetSourcePackageName !== packageFilter) continue;
     const record = recordsByName.get(unit.targetSourcePackageName);
     if (record === undefined) continue;
     const entriesBySubpath = exportEntriesBySubpath(record);
@@ -2845,7 +2866,9 @@ const profileVerificationFindings = ({ batch }) => {
   const unitIds =
     batch === "runtime"
       ? new Set(["runtime"])
-      : new Set(packageUnits.filter(isRecord).map((unit) => unit.id));
+      : batch === "client"
+        ? new Set(["client"])
+        : new Set(packageUnits.filter(isRecord).map((unit) => unit.id));
   const units = packageUnits.filter((unit) => isRecord(unit) && unitIds.has(unit.id));
   const records = graphWorkspacePackageRecords(repoRoot).filter(
     (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
@@ -2918,7 +2941,7 @@ const checkProfileVerification = (args = []) => {
     throw new Error("profile-verification: expected --batch <batch>");
   }
   const batch = args[1];
-  if (batch !== "runtime") {
+  if (batch !== "runtime" && batch !== "client") {
     throw new Error(`profile-verification: unsupported batch ${batch}`);
   }
   failIfAny("profile verification", profileVerificationFindings({ batch }));
@@ -2948,17 +2971,19 @@ const checkClientTypeScriptOnlySource = ({ record, failures }) => {
 };
 
 const checkClientFrameworkImports = ({ record, kind, failures }) => {
-  const allowedFramework =
-    record.name === clientBoundaryPackages.clientReact ||
+  const recordAllowedFramework =
     record.name === clientBoundaryPackages.agUiReact
       ? "react"
-      : record.name === clientBoundaryPackages.clientSvelte ||
-          record.name === clientBoundaryPackages.agUiSvelte
+      : record.name === clientBoundaryPackages.agUiSvelte
         ? "svelte"
         : null;
   const frameworkPackages = ["react", "svelte", "svelte/store"];
 
   for (const file of clientPackageSourceFiles(record)) {
+    const subpathAllowedFramework =
+      clientFrameworkSubpaths.find((subpath) => file.startsWith(subpath.pathPrefix))?.framework ??
+      null;
+    const allowedFramework = subpathAllowedFramework ?? recordAllowedFramework;
     const source = read(file);
     for (const specifier of clientImportSpecifiers(source)) {
       const frameworkImport = frameworkPackages.find((framework) =>
@@ -2980,6 +3005,13 @@ const checkClientFrameworkImports = ({ record, kind, failures }) => {
 
 const checkClientFrameworkBridgeReadModels = ({ record, failures }) => {
   for (const file of clientPackageSourceFiles(record)) {
+    if (
+      record.name !== clientBoundaryPackages.agUiReact &&
+      record.name !== clientBoundaryPackages.agUiSvelte &&
+      !clientFrameworkSubpaths.some((subpath) => file.startsWith(subpath.pathPrefix))
+    ) {
+      continue;
+    }
     const source = read(file);
     const objectExportPatterns = [
       /\bexport\s+interface\s+([A-Za-z_$][\w$]*)[^{]*\{/gu,
@@ -3022,8 +3054,11 @@ const checkClientRetiredPackageWindow = ({ surfacePackages, records, failures })
   for (const item of retiredFrameworkPackages) {
     const retiredRecord = clientPackageByName(records, item.retired);
     const retiredSurface = clientPackageByName(surfacePackages, item.retired);
-    const successorRecord = clientPackageByName(records, item.successor);
-    const successorSurface = clientPackageByName(surfacePackages, item.successor);
+    const successorRecord = clientPackageByName(records, clientBoundaryPackages.clientCore);
+    const successorSurface = clientPackageByName(
+      surfacePackages,
+      clientBoundaryPackages.clientCore,
+    );
 
     if (
       (successorRecord !== undefined || successorSurface !== undefined) &&
@@ -3107,7 +3142,7 @@ const checkClientBoundaryDoc = (failures) => {
   for (const marker of [
     "client state is a projection sink plus a command surface",
     "`@agent-os/ag-ui` is a framework-neutral opt-in wire projection",
-    "`@agent-os/client-react` and `@agent-os/client-svelte` are the only framework",
+    "`@agent-os/client/react` and `@agent-os/client/svelte` are the only framework",
     "Projection reads are replayable/read-model surfaces",
     "one driver mount",
     "projection sink configuration[]",
@@ -3131,8 +3166,6 @@ const checkClientBoundaries = () => {
 
   const guardedNames = new Set([
     clientBoundaryPackages.clientCore,
-    clientBoundaryPackages.clientReact,
-    clientBoundaryPackages.clientSvelte,
     clientBoundaryPackages.workspaceAgent,
     clientBoundaryPackages.agUiReact,
     clientBoundaryPackages.agUiSvelte,
@@ -3148,8 +3181,7 @@ const checkClientBoundaries = () => {
           : "framework bridge";
     checkClientFrameworkImports({ record, kind, failures });
     if (
-      record.name === clientBoundaryPackages.clientReact ||
-      record.name === clientBoundaryPackages.clientSvelte ||
+      record.name === clientBoundaryPackages.clientCore ||
       record.name === clientBoundaryPackages.agUiReact ||
       record.name === clientBoundaryPackages.agUiSvelte
     ) {
@@ -3861,7 +3893,7 @@ const checkDogfoodSmoke = (args = []) => {
     throw new Error("dogfood-smoke: expected --batch <batch>");
   }
   const batch = args[1];
-  if (batch !== "core" && batch !== "runtime") {
+  if (batch !== "core" && batch !== "runtime" && batch !== "client") {
     throw new Error(`dogfood-smoke: unsupported batch ${batch}`);
   }
 
@@ -3877,13 +3909,15 @@ const checkDogfoodSmoke = (args = []) => {
           "@agent-os/telemetry-protocol",
           "@agent-os/backend-protocol",
         ]
-      : [
-          "@agent-os/backend-cloudflare-do",
-          "@agent-os/backend-in-memory",
-          "@agent-os/backend-node-postgres",
-          "@agent-os/llm-transport-effect-ai",
-          "@agent-os/telemetry-otlp",
-        ];
+      : batch === "runtime"
+        ? [
+            "@agent-os/backend-cloudflare-do",
+            "@agent-os/backend-in-memory",
+            "@agent-os/backend-node-postgres",
+            "@agent-os/llm-transport-effect-ai",
+            "@agent-os/telemetry-otlp",
+          ]
+        : ["@agent-os/client-react", "@agent-os/client-svelte"];
   for (const retiredName of retiredNames) {
     if (packageNames.has(retiredName)) {
       failures.push(`${retiredName}: retired ${batch} package remains in workspace`);
@@ -3894,6 +3928,9 @@ const checkDogfoodSmoke = (args = []) => {
   }
   if (batch === "runtime" && !packageNames.has("@agent-os/runtime")) {
     failures.push("@agent-os/runtime: runtime package is missing from workspace");
+  }
+  if (batch === "client" && !packageNames.has("@agent-os/client")) {
+    failures.push("@agent-os/client: client package is missing from workspace");
   }
 
   const sourceAliases = readJson("tsconfig.source-paths.json").compilerOptions?.paths ?? {};
@@ -3932,6 +3969,34 @@ const checkDogfoodSmoke = (args = []) => {
         failures.push(
           ...runProfileTypecheck({
             batch: "runtime-dogfood",
+            profile,
+            sourceSpecifiers,
+          }),
+        );
+      }
+    }
+  }
+
+  if (batch === "client" && failures.length === 0) {
+    const clientUnit = (packageUnitsRegistry().packageUnits ?? []).find(
+      (unit) => isRecord(unit) && unit.id === "client",
+    );
+    if (clientUnit === undefined) {
+      failures.push("client dogfood: package unit client is missing");
+    } else {
+      for (const profile of distributionRootsRegistry().targetProfiles ?? []) {
+        if (!isRecord(profile) || !(profile.packageUnits ?? []).includes("client")) continue;
+        const sourceSpecifiers = selectedSourceSpecifiersForProfileUnit({
+          profile,
+          unit: clientUnit,
+        });
+        if (sourceSpecifiers.length === 0) {
+          failures.push(`${profile.id}: client dogfood selects no client subpath`);
+          continue;
+        }
+        failures.push(
+          ...runProfileTypecheck({
+            batch: "client-dogfood",
             profile,
             sourceSpecifiers,
           }),
@@ -4014,6 +4079,7 @@ const checkerIdsWithArgs = new Set([
   "owner-coupling",
   "owner-identity-boundary",
   "profile-verification",
+  "subpath-no-leak",
 ]);
 
 export const listAlgorithmicCheckers = () => [...checkerById.keys()].sort(compare);

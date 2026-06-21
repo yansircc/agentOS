@@ -1,5 +1,5 @@
 {
-  "name": "@agent-os/client-react",
+  "name": "@agent-os/client",
   "version": "0.5.16",
   "private": true,
   "type": "module",
@@ -9,6 +9,14 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./react": {
+      "types": "./src/react/index.ts",
+      "default": "./src/react/index.ts"
+    },
+    "./svelte": {
+      "types": "./src/svelte/index.ts",
+      "default": "./src/svelte/index.ts"
     }
   },
   "scripts": {
@@ -16,16 +24,27 @@
     "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "dependencies": {
-    "@agent-os/client": "workspace:*"
+    "@agent-os/core": "workspace:*"
   },
   "devDependencies": {
+    "@agent-os/core": "workspace:*",
     "@types/react": "catalog:",
     "react": "catalog:",
+    "svelte": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "react": "^19.2.7"
+    "react": "^19.2.7",
+    "svelte": "^5.56.2"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    }
   }
 }

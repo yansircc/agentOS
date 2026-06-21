@@ -67,8 +67,7 @@
       "selectedSubpaths": [
         "@yansirplus/client",
         "@yansirplus/client/react",
-        "@yansirplus/client/svelte",
-        "@yansirplus/client/ag-ui"
+        "@yansirplus/client/svelte"
       ],
       "forbiddenSpecifiers": ["node:", "cloudflare:"]
     }

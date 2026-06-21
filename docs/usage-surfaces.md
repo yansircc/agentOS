@@ -12,7 +12,7 @@ views from projections.
 | App authoring      | `@agent-os/agent-authoring`                | App authors            | `agent/instructions.md`, `agent/agent.json`        |
 | Generated client   | app framework output                       | App authors            | typed submit, projection subscriptions, commands   |
 | Client core        | `@agent-os/client`                         | App UI/headless code   | transport-neutral store and typed command invoker  |
-| Framework bridge   | `@agent-os/client-react` / `client-svelte` | App UI authors         | framework reactivity over canonical client state   |
+| Framework bridge   | `@agent-os/client/react` / `client/svelte` | App UI authors         | framework reactivity over canonical client state   |
 | Workspace preset   | `@agent-os/workspace-agent`                | Generated target host  | workspace projections, commands, generated mount   |
 | Backend mount      | `@agent-os/runtime/cloudflare`             | Backend authors        | Durable Object factory, manifest mount             |
 | Runtime substrate  | `@agent-os/runtime`                        | Backend authors        | Effect Tags, submit protocol, projections          |
@@ -68,8 +68,8 @@ timeline/file-review shapes, runtime event decoders, or transport logic.
 
 `@agent-os/ag-ui` remains a framework-neutral opt-in wire projection over the
 canonical read-model. It is not the client core state model. React and Svelte
-framework bindings are `@agent-os/client-react` and
-`@agent-os/client-svelte`.
+framework bindings are `@agent-os/client/react` and
+`@agent-os/client/svelte`.
 
 Workspace preset host surfaces split by generator:
 
