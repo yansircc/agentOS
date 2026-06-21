@@ -624,6 +624,93 @@ export const ownerIdentityBoundaryFindingsForSource = (content, file, packageNam
     ownerIdentityBoundarySinkProperties,
   );
 
+const ownerIdentityBoundaryNegativeFixtures = [
+  {
+    name: "fact owner from contract package id",
+    content: ["const event = {", "  factOwnerRef: contract.packageId,", "};", ""],
+    expected: [["factOwnerRef", "packageId"]],
+  },
+  {
+    name: "fact owner from source package name",
+    content: ["const event = {", "  factOwnerRef: contract.sourcePackageName,", "};", ""],
+    expected: [["factOwnerRef", "sourcePackageName"]],
+  },
+  {
+    name: "fact owner from public package projection",
+    content: [
+      "const event = {",
+      "  factOwnerRef: publicPackageName(contract.packageId),",
+      "};",
+      "",
+    ],
+    expected: [["factOwnerRef", "publicPackageName"]],
+  },
+  {
+    name: "fact owner from public package literal",
+    content: ["const event = {", '  factOwnerRef: "@yansirplus/runtime",', "};", ""],
+    expected: [["factOwnerRef", "publicPackageNameLiteral"]],
+  },
+  {
+    name: "settlement id from package metadata",
+    content: [
+      "const settlement = defineSettlementContract({",
+      "  settlementId: spec.sourcePackageName,",
+      "});",
+      "",
+    ],
+    expected: [["settlementId", "sourcePackageName"]],
+  },
+  {
+    name: "extension conflict owner from package metadata",
+    content: ["const conflict = {", "  claimedBy: declaration.packageId,", "};", ""],
+    expected: [["claimedBy", "packageId"]],
+  },
+  {
+    name: "namespace owner from package metadata",
+    content: ["const namespace = {", "  owner: namespace.sourcePackageName,", "};", ""],
+    expected: [["owner", "sourcePackageName"]],
+  },
+  {
+    name: "boundary owner from package metadata",
+    content: ["const intent = {", "  boundaryOwnerId: boundaryPackage.packageId,", "};", ""],
+    expected: [["boundaryOwnerId", "packageId"]],
+  },
+  {
+    name: "legacy boundary package field from package metadata",
+    content: ["const intent = {", "  boundaryPackageId: boundaryPackage.packageId,", "};", ""],
+    expected: [["boundaryPackageId", "packageId"]],
+  },
+  {
+    name: "ledger identity comparison from package metadata",
+    content: ["if (committed.factOwnerRef !== contract.packageId) {}", ""],
+    expected: [["factOwnerRef", "packageId"]],
+  },
+];
+
+const findingPairs = (findings) => findings.map((finding) => [finding.sink, finding.source]);
+
+export const ownerIdentityBoundaryNegativeFixtureFailures = (packageNames) => {
+  const failures = [];
+  for (const fixture of ownerIdentityBoundaryNegativeFixtures) {
+    const findings = ownerIdentityBoundaryFindingsForSource(
+      fixture.content.join("\n"),
+      `negative-fixtures/${fixture.name}.ts`,
+      packageNames,
+    );
+    const actual = findingPairs(findings);
+    for (const expected of fixture.expected) {
+      if (!actual.some(([sink, source]) => sink === expected[0] && source === expected[1])) {
+        failures.push(
+          `${fixture.name}: expected ${expected[0]} from ${expected[1]}, got ${JSON.stringify(
+            actual,
+          )}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
+
 const ownerCouplingScanFiles = () =>
   [
     ...walk("packages").filter((file) => /\.(?:ts|tsx|mts|cts)$/u.test(file)),
@@ -653,10 +740,18 @@ const checkOwnerCoupling = (args = []) => {
 };
 
 const checkOwnerIdentityBoundary = (args = []) => {
-  if (args.length > 0) {
+  const negativeFixtures = args.length === 1 && args[0] === "--negative-fixtures";
+  if (!negativeFixtures && args.length > 0) {
     throw new Error(`owner-identity-boundary: unexpected argument(s): ${args.join(" ")}`);
   }
   const packageNames = ownerCouplingPackageNames();
+  if (negativeFixtures) {
+    failIfAny(
+      "owner identity boundary negative fixtures",
+      ownerIdentityBoundaryNegativeFixtureFailures(packageNames),
+    );
+    return;
+  }
   const findings = ownerCouplingScanFiles().flatMap((file) =>
     ownerIdentityBoundaryFindingsForSource(read(file), file, packageNames),
   );
@@ -2843,7 +2938,12 @@ const checkerById = new Map([
   ["substrate-import-dag", checkSubstrateImportDag],
   ["transaction-sync", checkTransactionSync],
 ]);
-const checkerIdsWithArgs = new Set(["distribution-units", "module-buckets", "owner-coupling"]);
+const checkerIdsWithArgs = new Set([
+  "distribution-units",
+  "module-buckets",
+  "owner-coupling",
+  "owner-identity-boundary",
+]);
 
 export const listAlgorithmicCheckers = () => [...checkerById.keys()].sort(compare);
 export const hasAlgorithmicChecker = (checkerId) => checkerById.has(checkerId);

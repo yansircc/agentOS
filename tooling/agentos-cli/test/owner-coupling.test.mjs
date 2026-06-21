@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ownerCouplingFindingsForSource,
   ownerIdentityBoundaryFindingsForSource,
+  ownerIdentityBoundaryNegativeFixtureFailures,
 } from "../src/check/algorithmic-checks.mjs";
 
 const packageNames = {
@@ -81,4 +82,8 @@ void test("owner identity boundary permits package metadata fields but rejects i
       ["settlementId", "sourcePackageName"],
     ],
   );
+});
+
+void test("owner identity boundary negative fixtures prove package metadata is rejected", () => {
+  assert.deepEqual(ownerIdentityBoundaryNegativeFixtureFailures(packageNames), []);
 });
