@@ -600,21 +600,41 @@ const matchingInterruptionEvent = (
 
 const MAX_PROVIDER_HISTORY_STRING_BYTES = 512;
 
-const compactProviderHistoryValue = (value: unknown): unknown => {
+type ProviderHistoryValueCompaction = {
+  readonly value: unknown;
+  readonly didRedact: boolean;
+};
+
+const compactProviderHistoryValue = (value: unknown): ProviderHistoryValueCompaction => {
   if (typeof value === "string") {
     const bytes = toolArgumentSummaryEncoder.encode(value).byteLength;
-    if (bytes <= MAX_PROVIDER_HISTORY_STRING_BYTES) return value;
-    return `[agentOS redacted provider history string: ${bytes} bytes]`;
+    if (bytes <= MAX_PROVIDER_HISTORY_STRING_BYTES) return { value, didRedact: false };
+    return {
+      value: `[agentOS redacted provider history string: ${bytes} bytes]`,
+      didRedact: true,
+    };
   }
   if (Array.isArray(value)) {
-    return value.map(compactProviderHistoryValue);
+    let didRedact = false;
+    const compacted = value.map((entry) => {
+      const result = compactProviderHistoryValue(entry);
+      didRedact = didRedact || result.didRedact;
+      return result.value;
+    });
+    return { value: compacted, didRedact };
   }
   if (Predicate.isObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, compactProviderHistoryValue(entry)]),
+    let didRedact = false;
+    const compacted = Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => {
+        const result = compactProviderHistoryValue(entry);
+        didRedact = didRedact || result.didRedact;
+        return [key, result.value];
+      }),
     );
+    return { value: compacted, didRedact };
   }
-  return value;
+  return { value, didRedact: false };
 };
 
 const providerHistoryArgumentsJson = (
@@ -622,12 +642,19 @@ const providerHistoryArgumentsJson = (
   toolName: string,
   args: unknown,
   originalArguments: string,
-): Effect.Effect<string, JsonStringifyError> =>
+): Effect.Effect<
+  { readonly argumentsJson: string; readonly didRedact: boolean },
+  JsonStringifyError
+> =>
   Effect.gen(function* () {
     const compacted = compactProviderHistoryValue(args);
-    const decoded = yield* Effect.result(decodeToolArgs(tool, compacted, toolName));
-    if (decoded._tag === "Failure") return originalArguments;
-    return yield* safeStringify(compacted);
+    if (!compacted.didRedact) return { argumentsJson: originalArguments, didRedact: false };
+    const decoded = yield* Effect.result(decodeToolArgs(tool, compacted.value, toolName));
+    if (decoded._tag === "Failure") {
+      return { argumentsJson: originalArguments, didRedact: false };
+    }
+    const argumentsJson = yield* safeStringify(compacted.value);
+    return { argumentsJson, didRedact: true };
   });
 
 type ProviderHistoryCompaction = {
@@ -639,19 +666,18 @@ const compactProviderHistoryToolCall = (
   messages: LlmMessage[],
   toolCallId: string,
   argumentsJson: string,
+  didRedact: boolean,
 ): ProviderHistoryCompaction | null => {
+  if (!didRedact) return null;
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
     if (message?.role !== "assistant" || message.tool_calls === undefined) continue;
     if (!message.tool_calls.some((call) => call.id === toolCallId)) continue;
     const existingCall = message.tool_calls.find((call) => call.id === toolCallId);
     const originalArguments = existingCall?.function.arguments;
-    if (originalArguments === undefined || originalArguments === argumentsJson) {
-      return null;
-    }
+    if (originalArguments === undefined) return null;
     const originalBytes = toolArgumentSummaryEncoder.encode(originalArguments).byteLength;
     const compactedBytes = toolArgumentSummaryEncoder.encode(argumentsJson).byteLength;
-    if (compactedBytes >= originalBytes) return null;
     messages[index] = {
       ...message,
       tool_calls: message.tool_calls.map((call) =>
@@ -770,7 +796,6 @@ const replayMessagesToInterruptedTool = (
           }
           const replayed = replayToolFromArtifact(artifact.artifact);
           const resultStr = yield* safeStringify(replayed.result);
-          compactProviderHistoryToolCall(messages, call.id, call.function.arguments);
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -1326,12 +1351,14 @@ export const submitAgentEffect = (
           readonly toolCallId: string;
           readonly toolName: string;
           readonly argumentsJson: string;
+          readonly didRedact: boolean;
         }): Effect.Effect<void, RuntimeStorageError | JsonStringifyError> =>
           Effect.gen(function* () {
             const compaction = compactProviderHistoryToolCall(
               messages,
               input.toolCallId,
               input.argumentsJson,
+              input.didRedact,
             );
             if (compaction === null) return;
             if (input.sourceEventId === undefined) {
@@ -1796,6 +1823,7 @@ export const submitAgentEffect = (
                 toolCallId: call.id,
                 toolName: call.function.name,
                 argumentsJson: call.function.arguments,
+                didRedact: false,
               });
               const feedback = yield* safeStringify({
                 ok: false,
@@ -1863,6 +1891,7 @@ export const submitAgentEffect = (
                 toolCallId: call.id,
                 toolName: call.function.name,
                 argumentsJson: call.function.arguments,
+                didRedact: false,
               });
               const feedback = yield* safeStringify({
                 ok: false,
@@ -1915,6 +1944,7 @@ export const submitAgentEffect = (
                 toolCallId: call.id,
                 toolName: call.function.name,
                 argumentsJson: call.function.arguments,
+                didRedact: false,
               });
               const feedback = yield* safeStringify({
                 ok: false,
@@ -2328,7 +2358,8 @@ export const submitAgentEffect = (
               sourceEventId: responseToolCallSourceEventIds.get(call.id),
               toolCallId: call.id,
               toolName: call.function.name,
-              argumentsJson: historyArguments,
+              argumentsJson: historyArguments.argumentsJson,
+              didRedact: historyArguments.didRedact,
             });
             messages.push({
               role: "tool",

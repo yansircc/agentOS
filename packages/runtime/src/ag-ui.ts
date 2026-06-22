@@ -283,6 +283,7 @@ export type AgUiLedgerEventEnvelope = {
   readonly ts: number;
   readonly kind: string;
   readonly scopeKey: string;
+  readonly safeEvent: AgUiSafeLedgerEvent | null;
   readonly agUiFrames: ReadonlyArray<AgUiFrame>;
 };
 
@@ -446,6 +447,9 @@ const threadIdForSafe = (event: SafeLedgerEvent, spec: AgUiRuntimeProjectionSpec
 const runIdString = (value: AgUiSafeValue | undefined, fallback: string | number): string =>
   String(typeof value === "string" || typeof value === "number" ? value : fallback);
 
+const customRunId = (event: SafeLedgerEvent, payload: SafeLedgerPayloadShape): number =>
+  numberOf(payload.runId) ?? event.id;
+
 const messageIdFor = (runId: string | number, turnIndex: number, ordinal: number): string =>
   `agent-os:run:${runId}:turn:${turnIndex}:message:${ordinal}`;
 
@@ -580,6 +584,7 @@ export const projectToolsToAgUiTools = (
 const projectSafeLlmResponse = (event: SafeLedgerEvent): ReadonlyArray<AgUiFrame> => {
   const payload = payloadOf(event);
   const runId = runIdString(payload.runId, event.id);
+  const numericRunId = customRunId(event, payload);
   const turnIndex = numberOf(payload.turnIndex) ?? 0;
   const frames: AgUiFrame[] = [];
   let messageOrdinal = 0;
@@ -626,7 +631,7 @@ const projectSafeLlmResponse = (event: SafeLedgerEvent): ReadonlyArray<AgUiFrame
           timestamp: event.ts,
           name: "agent-os.tool.started",
           value: {
-            runId,
+            runId: numericRunId,
             turnIndex,
             toolCallId,
             toolName,
@@ -692,7 +697,7 @@ const projectSafeLlmResponse = (event: SafeLedgerEvent): ReadonlyArray<AgUiFrame
         timestamp: event.ts,
         name: `agent-os.llm.${type}`,
         value: {
-          runId,
+          runId: numericRunId,
           turnIndex,
           ...(type === "refusal"
             ? { refusal: item.refusal ?? null }
@@ -707,7 +712,7 @@ const projectSafeLlmResponse = (event: SafeLedgerEvent): ReadonlyArray<AgUiFrame
     timestamp: event.ts,
     name: "agent-os.llm.completed",
     value: {
-      runId: typeof payload.runId === "number" ? payload.runId : runId,
+      runId: numericRunId,
       turnIndex,
       usage: payload.usage ?? null,
     },
@@ -718,7 +723,7 @@ const projectSafeLlmResponse = (event: SafeLedgerEvent): ReadonlyArray<AgUiFrame
     timestamp: event.ts,
     name: "agent-os.llm.usage",
     value: {
-      runId: typeof payload.runId === "number" ? payload.runId : runId,
+      runId: numericRunId,
       turnIndex,
       usage: payload.usage ?? null,
     },
@@ -740,6 +745,16 @@ const defaultCustomFrame = (event: SafeLedgerEvent): AgUiCustomFrame => ({
 const projectCustomSafeLedgerEventToAgUiFrames = (
   event: AgUiSafeLedgerEvent,
 ): ReadonlyArray<AgUiFrame> => [defaultCustomFrame(event)];
+
+const projectOwnerAgUiFrames = (
+  projected: OwnerProjectedSafeEvent,
+  spec: AgUiRuntimeProjectionSpec,
+): ReadonlyArray<AgUiFrame> => {
+  const eventFrames =
+    projected.projectFrames?.(projected.safeEvent, spec) ??
+    projectCustomSafeLedgerEventToAgUiFrames(projected.safeEvent);
+  return ownerAgUiFrames(projected.factOwnerRef, eventFrames);
+};
 
 const ownerAgUiFrames = (
   factOwnerRef: string,
@@ -777,7 +792,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
           timestamp: event.ts,
           name: "agent-os.chat.ingested",
           value: {
-            runId: payload.runId ?? event.id,
+            runId: customRunId(event, payload),
             intent: payload.intent ?? null,
           },
         },
@@ -791,6 +806,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
           name: "agent-os.run.interrupted",
           value: {
             ...payload,
+            runId: customRunId(event, payload),
             ...(inputRequest === undefined ? {} : { inputRequest }),
           },
         },
@@ -802,7 +818,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
           type: "CUSTOM",
           timestamp: event.ts,
           name: "agent-os.run.resumed",
-          value: payload,
+          value: { ...payload, runId: customRunId(event, payload) },
         },
       ];
     case "llm.requested":
@@ -811,7 +827,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
           type: "CUSTOM",
           timestamp: event.ts,
           name: "agent-os.llm.requested",
-          value: payload,
+          value: { ...payload, runId: customRunId(event, payload) },
         },
       ];
     case "llm.response":
@@ -822,7 +838,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
           type: "CUSTOM",
           timestamp: event.ts,
           name: "agent-os.runtime.completed_after_tools",
-          value: payload,
+          value: { ...payload, runId: customRunId(event, payload) },
         },
       ];
     case "tool.executed": {
@@ -830,6 +846,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
       if (toolCallId === undefined) return [];
       const toolName = stringOf(payload.toolName);
       const runId = runIdString(payload.runId, event.id);
+      const numericRunId = customRunId(event, payload);
       return [
         {
           type: "TOOL_CALL_RESULT",
@@ -844,7 +861,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
           timestamp: event.ts,
           name: "agent-os.tool.completed",
           value: {
-            runId,
+            runId: numericRunId,
             toolCallId,
             ...(toolName === undefined ? {} : { toolName }),
             ...(payload.io === undefined ? {} : { io: payload.io }),
@@ -863,7 +880,7 @@ export const projectSafeLedgerEventToAgUiFrames = (
             timestamp: event.ts,
             name: "agent-os.tool.policy_rejected",
             value: {
-              runId: payload.runId ?? event.id,
+              runId: customRunId(event, payload),
               toolCallId: payload.toolCallId ?? null,
               toolName,
               diagnostics: diagnostics ?? null,
@@ -924,10 +941,7 @@ export const projectLedgerEventsToAgUiFrames = (
   for (const event of [...events].sort((left, right) => left.id - right.id)) {
     const projected = projectOwnerSafeLedgerEvent(event, projectors);
     if (projected === undefined) continue;
-    const eventFrames =
-      projected.projectFrames?.(projected.safeEvent, spec) ??
-      projectCustomSafeLedgerEventToAgUiFrames(projected.safeEvent);
-    frames.push(...ownerAgUiFrames(projected.factOwnerRef, eventFrames));
+    frames.push(...projectOwnerAgUiFrames(projected, spec));
   }
   return frames;
 };
@@ -944,13 +958,14 @@ export const projectLedgerEventToAgUiEnvelope = (
   event: AgUiRecordedLedgerEvent,
   spec: AgUiLedgerEnvelopeProjectionSpec = {},
 ): AgUiLedgerEventEnvelope => {
-  const agUiFrames = projectLedgerEventsToAgUiFrames([event], spec);
+  const projected = projectOwnerSafeLedgerEvent(event, ownerSafeEventProjectors(spec));
   return {
     id: event.id,
     ts: event.ts,
     kind: event.kind,
     scopeKey: scopeRefKey(event.scopeRef),
-    agUiFrames,
+    safeEvent: projected?.safeEvent ?? null,
+    agUiFrames: projected === undefined ? [] : projectOwnerAgUiFrames(projected, spec),
   };
 };
 

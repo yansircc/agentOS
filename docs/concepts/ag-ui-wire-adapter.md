@@ -20,6 +20,12 @@ AG-UI frames are derived projections and are never written back to the ledger.
 Product-owned events can appear only when their owner supplies a safe event
 projector; AG-UI does not choose raw payload fields.
 
+The AG-UI ledger envelope is one line per source ledger event. Audit and log
+consumers read `safeEvent`; UI wire consumers read `agUiFrames`. A single safe
+event can derive multiple AG-UI frames, so flattening `TOOL_CALL_*`,
+`REASONING_*`, or other frames does not produce a runtime event stream and must
+not be treated as the ledger chronology.
+
 AG-UI tool declarations are generated from `AgentSchema.projections.canonical`.
 AG-UI tool JSON Schema never creates `Tool.execution`, admission policy, quota,
 material refs, or settlement authority.

@@ -1979,6 +1979,174 @@ describe("submit-agent runtime event writes", () => {
     }),
   );
 
+  it.effect("does not record provider history compaction for JSON minify without redaction", () =>
+    Effect.gen(function* () {
+      const originalArguments = JSON.stringify({ content: "short value" }, null, 2);
+      const tool = defineTool({
+        name: "write_file",
+        description: "write a file",
+        args: Schema.Struct({ content: Schema.String }),
+        execute: (args) => Effect.succeed({ bytesWritten: args.content.length }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const { result, events, llmRequests } = yield* runSubmit(
+        baseSpec({ tools: { write_file: tool } }),
+        [
+          response({
+            items: [
+              { type: "message", text: "write small file" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: {
+                    name: "write_file",
+                    arguments: originalArguments,
+                  },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, status: "delivered" });
+      expect(
+        decodedRuntimeEvents(events).find(
+          (event) => event.kind === RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED,
+        ),
+      ).toBeUndefined();
+      const assistantMessage = llmRequests[1]?.messages.find(
+        (message) =>
+          message.role === "assistant" && message.tool_calls?.some((call) => call.id === "call-1"),
+      );
+      expect(
+        assistantMessage?.tool_calls?.find((call) => call.id === "call-1")?.function.arguments,
+      ).toBe(originalArguments);
+    }),
+  );
+
+  it.effect("compacts nested provider history strings when any nested value is redacted", () =>
+    Effect.gen(function* () {
+      const largeContent = `<section>${"nested provider history ".repeat(1_000)}</section>`;
+      const tool = defineTool({
+        name: "write_sections",
+        description: "write sections",
+        args: Schema.Struct({
+          sections: Schema.Array(Schema.Struct({ html: Schema.String })),
+          meta: Schema.Struct({ notes: Schema.Array(Schema.String) }),
+        }),
+        execute: (args) => Effect.succeed({ sections: args.sections.length }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const { result, events, llmRequests } = yield* runSubmit(
+        baseSpec({ tools: { write_sections: tool } }),
+        [
+          response({
+            items: [
+              { type: "message", text: "write sections" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: {
+                    name: "write_sections",
+                    arguments: JSON.stringify({
+                      sections: [{ html: largeContent }],
+                      meta: { notes: ["small", largeContent] },
+                    }),
+                  },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, status: "delivered" });
+      const compaction = decodedRuntimeEvents(events).find(
+        (event) => event.kind === RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED,
+      );
+      expect(compaction).toBeDefined();
+      const assistantMessage = llmRequests[1]?.messages.find(
+        (message) =>
+          message.role === "assistant" && message.tool_calls?.some((call) => call.id === "call-1"),
+      );
+      const compactedArgumentsJson = assistantMessage?.tool_calls?.find(
+        (call) => call.id === "call-1",
+      )?.function.arguments;
+      expect(compactedArgumentsJson).toBeDefined();
+      const compactedArguments = JSON.parse(compactedArgumentsJson!);
+      expect(compactedArguments.sections[0].html).toContain(
+        "agentOS redacted provider history string",
+      );
+      expect(compactedArguments.meta.notes[1]).toContain(
+        "agentOS redacted provider history string",
+      );
+      expect(JSON.stringify(llmRequests[1]?.messages ?? [])).not.toContain(
+        largeContent.slice(0, 120),
+      );
+    }),
+  );
+
+  it.effect("keeps provider history unchanged when redacted arguments fail tool decoding", () =>
+    Effect.gen(function* () {
+      const largeContent = `<main>${"literal-only ".repeat(1_000)}</main>`;
+      const tool = defineTool({
+        name: "write_literal",
+        description: "write a literal",
+        args: Schema.Struct({ content: Schema.Literal(largeContent) }),
+        execute: (args) => Effect.succeed({ bytesWritten: args.content.length }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const { result, events, llmRequests } = yield* runSubmit(
+        baseSpec({ tools: { write_literal: tool } }),
+        [
+          response({
+            items: [
+              { type: "message", text: "write literal" },
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-1",
+                  type: "function",
+                  function: {
+                    name: "write_literal",
+                    arguments: JSON.stringify({ content: largeContent }),
+                  },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "done" }] }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: true, status: "delivered" });
+      expect(
+        decodedRuntimeEvents(events).find(
+          (event) => event.kind === RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED,
+        ),
+      ).toBeUndefined();
+      const secondRequestMessages = JSON.stringify(llmRequests[1]?.messages ?? []);
+      expect(secondRequestMessages).toContain(largeContent.slice(0, 120));
+      expect(secondRequestMessages).not.toContain("agentOS redacted provider history string");
+    }),
+  );
+
   it.effect("known tool JSON parse failure aborts when validation retry budget is exhausted", () =>
     Effect.gen(function* () {
       const tool = defineTool({
