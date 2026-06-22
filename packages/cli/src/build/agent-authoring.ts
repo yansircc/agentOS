@@ -2612,10 +2612,13 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
   }
 
   resetWorkspace(): Promise<WorkspaceAgentMutationCommandOutput> {
-    const sandbox = workspaceSandboxFor(this.targetEnv);
-    return sandbox
+    return workspaceSandboxFor(this.targetEnv)
       .destroy()
-      .then(() => sandbox.mkdir(${jsString(normalized.workspace.root)}, { recursive: true }))
+      .then(() =>
+        workspaceSandboxFor(this.targetEnv).mkdir(${jsString(normalized.workspace.root)}, {
+          recursive: true,
+        }),
+      )
       .then(() => ({ ok: true as const }));
   }
 
