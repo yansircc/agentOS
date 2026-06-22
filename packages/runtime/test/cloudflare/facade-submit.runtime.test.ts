@@ -148,6 +148,77 @@ describe("defineAgentDO facade submit", () => {
     expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
   });
 
+  it("resumes a pending input request through the generated runtime surface", async () => {
+    const scope = "facade-submit-resume-input-request";
+    const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
+
+    const first = await runInDurableObject(stub, (instance) =>
+      instance.submit({
+        intent: "write first only",
+        input: { key: "abc" },
+        decisionInterrupts: [{ toolName: "write_first", reason: "approval_required" }],
+        budget: { maxTurns: 1 },
+      }),
+    );
+
+    expect(first).toMatchObject({
+      ok: false,
+      status: "interrupted",
+      inputRequest: { kind: "approval" },
+    });
+    if (first.status !== "interrupted" || first.inputRequest === undefined) {
+      expect.fail("expected interrupted result with input request");
+    }
+    const inputRequest = first.inputRequest;
+    const eventReader = stub as unknown as {
+      readonly events: (
+        identity: ReturnType<typeof testTruthIdentity>,
+      ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
+    };
+    const toolAuthorityEvents = await eventReader.events(
+      testTruthIdentity(scope, { authorityClass: "write", authorityId: "tool:write_first" }),
+    );
+    expect(toolAuthorityEvents.some((event) => event.kind === "decision_gate.requested")).toBe(
+      false,
+    );
+
+    const resumed = await runInDurableObject(stub, (instance) =>
+      instance.resumeInputRequest({
+        ref: inputRequest.ref,
+        decidedBy: "operator/alice",
+        answer: {
+          decisionRef: "decision/facade-resume",
+          resume: { kind: "approval", approved: true },
+        },
+      }),
+    );
+
+    const events = await eventReader.events(testTruthIdentity(scope));
+
+    expect(resumed).toMatchObject({ ok: true, final: "facade done" });
+    expect(events.map((event) => event.kind)).toEqual([
+      "agent.run.started",
+      "chat.ingested",
+      "llm.requested",
+      "llm.response",
+      "decision_gate.requested",
+      "agent.run.interrupted",
+      "decision_gate.decided",
+      "decision_gate.consumed",
+      "agent.run.resumed",
+      "tool.executed",
+      "llm.requested",
+      "llm.response",
+      "agent.run.completed",
+    ]);
+    expect(events.find((event) => event.kind === "decision_gate.decided")?.payload).toMatchObject({
+      gateRef: first.gateRef,
+      decisionRef: "decision/facade-resume",
+      decision: "approved",
+      decidedBy: "operator/alice",
+    });
+  });
+
   it("passes submit tool policy through facade lowering", async () => {
     const scope = "facade-submit-tool-policy";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));

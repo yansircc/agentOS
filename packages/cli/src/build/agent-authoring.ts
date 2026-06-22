@@ -2302,6 +2302,7 @@ const renderStaticTarget = (
         "WorkspaceAgentReadStateCommandOutput",
         "WorkspaceAgentReadFileCommandInput",
         "WorkspaceAgentReadFileCommandOutput",
+        "WorkspaceAgentResumeInputRequestCommandInput",
       ],
       modules.workspaceAgentHost,
     ),
@@ -2588,6 +2589,13 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
       : rejectTargetFailure(bindings);
   }
 
+  resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.resumeInputRequestWithBindings(input, bindings.value)
+      : rejectTargetFailure(bindings);
+  }
+
   readWorkspaceState(
     input: WorkspaceAgentReadStateCommandInput = {},
   ): Promise<WorkspaceAgentReadStateCommandOutput> {
@@ -2701,7 +2709,15 @@ ${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
 ${renderNamedImport(["Result", "Schema"], modules.effect)}
 ${renderNamedImport(["WORKSPACE_AGENT_COMMAND"], modules.workspaceAgentHost)}
-${renderNamedImport(["decodeRuntimeLedgerEvent", "manifestTruthIdentity"], modules.runtimeProtocol)}
+${renderNamedImport(
+  [
+    "decodeRuntimeLedgerEvent",
+    "isInputRequestRef",
+    "manifestTruthIdentity",
+    "parseInputRequestResumePayload",
+  ],
+  modules.runtimeProtocol,
+)}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
 ${renderTypeImport(["SseHttpEvent"], modules.sseHttp)}
 ${renderTypeImport(
@@ -2713,6 +2729,7 @@ ${renderTypeImport(
     "WorkspaceAgentDestroyCommandInput",
     "WorkspaceAgentCommandOutputByName",
     "WorkspaceAgentReadFileCommandInput",
+    "WorkspaceAgentResumeInputRequestCommandInput",
     "WorkspaceAgentReadStateCommandInput",
     "WorkspaceAgentResetCommandInput",
   ],
@@ -2726,6 +2743,9 @@ type AgentOSTargetEnv = {
 
 type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
+  readonly resumeInputRequest: (
+    input: WorkspaceAgentResumeInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
   readonly readWorkspaceFile: (
     input: WorkspaceAgentReadFileCommandInput,
   ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.READ_FILE]>;
@@ -2801,6 +2821,33 @@ const submitInputFromUnknown = (
     return fail(400, "invalid submit run input");
   }
   return { ok: true, value: { input: value.input as unknown as AgentOSSubmitRunInput } };
+};
+
+const resumeInputRequestFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentResumeInputRequestCommandInput> => {
+  if (!isRecord(value)) return fail(400, "invalid resumeInputRequest command input");
+  if (!isInputRequestRef(value.ref)) return fail(400, "invalid resumeInputRequest ref");
+  const ref = value.ref;
+  if (typeof value.decidedBy !== "string" || value.decidedBy.length === 0) {
+    return fail(400, "invalid resumeInputRequest decidedBy");
+  }
+  if (!isRecord(value.answer) || typeof value.answer.decisionRef !== "string") {
+    return fail(400, "invalid resumeInputRequest answer");
+  }
+  const parsed = parseInputRequestResumePayload(ref.requestKind, value.answer.resume);
+  if (!parsed.ok) return fail(400, parsed.reason);
+  return {
+    ok: true,
+    value: {
+      ref,
+      decidedBy: value.decidedBy,
+      answer: {
+        decisionRef: value.answer.decisionRef,
+        resume: parsed.resume,
+      },
+    },
+  };
 };
 
 const readStateInputFromUnknown = (
@@ -2927,6 +2974,12 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
     return submitInput.ok
       ? runtime.submitRunInput(submitInput.value.input)
       : rejectFailure(submitInput);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST) {
+    const resumeInput = resumeInputRequestFromUnknown(input);
+    return resumeInput.ok
+      ? runtime.resumeInputRequest(resumeInput.value)
+      : rejectFailure(resumeInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.READ_STATE) {
     const readStateInput = readStateInputFromUnknown(input);

@@ -2801,6 +2801,33 @@ describe("submit-agent runtime event writes", () => {
         status: "requested",
       });
       const requested = events.find((event) => event.kind === DECISION_GATE_KIND.REQUESTED);
+      expect(requested).toMatchObject({
+        factOwnerRef: "@agent-os/decision-gate",
+        scopeRef: { kind: "conversation", scopeId: "submit-runtime-events" },
+        effectAuthorityRef: {
+          authorityClass: "llm_route",
+          authorityId: "test-route",
+        },
+        payload: {
+          gateRef: result.gateRef,
+          subjectRef: "tool:submit-runtime-events:1:0:call-1",
+          claim: {
+            phase: "pre",
+            scopeRef: { kind: "conversation", scopeId: "submit-runtime-events" },
+            effectAuthorityRef: {
+              authorityClass: "llm_route",
+              authorityId: "test-route",
+            },
+            originRef: { originKind: "submit", originId: "run:1" },
+          },
+        },
+      });
+      const requestedPayload = requested?.payload as
+        | { readonly claim?: { readonly operationRef?: string } }
+        | undefined;
+      expect(requestedPayload?.claim?.operationRef).not.toBe(
+        "tool:submit-runtime-events:1:0:call-1",
+      );
       const interrupted = decodedRuntimeEvents(events).find(
         (event) => event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
       );

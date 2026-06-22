@@ -1130,6 +1130,41 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
         },
       });
     }
+    if (routeOk && messageText.includes("write first only")) {
+      const hasFirstWrite = request.messages.some(
+        (message) => message.role === "tool" && message.content?.includes('"value":"first"'),
+      );
+      if (hasFirstWrite) {
+        return Effect.succeed({
+          items: [{ type: "message" as const, text: "facade done" }],
+          usage: {
+            promptTokens: 2,
+            completionTokens: 3,
+            totalTokens: 5,
+          },
+        });
+      }
+      return Effect.succeed({
+        items: [
+          {
+            type: "tool_call" as const,
+            call: {
+              id: "call-write-first",
+              type: "function" as const,
+              function: {
+                name: "write_first",
+                arguments: '{"value":"first"}',
+              },
+            },
+          },
+        ],
+        usage: {
+          promptTokens: 3,
+          completionTokens: 2,
+          totalTokens: 5,
+        },
+      });
+    }
     if (routeOk && messageText.includes("write artifacts")) {
       const hasFirstWrite = request.messages.some(
         (message) => message.role === "tool" && message.content?.includes('"value":"first"'),

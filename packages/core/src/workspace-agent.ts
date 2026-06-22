@@ -2,6 +2,7 @@ import type { Derived } from "./value-brands";
 import type {
   AgentManifestProjection,
   InputRequestAnswer,
+  InputRequestRef,
   RecordedInputRequestRef,
   RuntimeLedgerEvent,
   SubmitResult,
@@ -95,7 +96,8 @@ export interface WorkspaceAgentSubmitCommandInput {
 }
 
 export interface WorkspaceAgentResumeInputRequestCommandInput {
-  readonly ref: RecordedInputRequestRef;
+  readonly ref: InputRequestRef;
+  readonly decidedBy: string;
   readonly answer: InputRequestAnswer;
 }
 

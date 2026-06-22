@@ -3,6 +3,7 @@ import type {
   DispatchToScopeSpec,
   EventHandler,
   EventQueryOptions,
+  LedgerEvent,
   LedgerEventRpc,
   QuotaState,
   QuotaStateSpec,
@@ -75,6 +76,7 @@ import type {
   AgentSubmitBindings,
   AttemptKey,
   CapabilityLease,
+  InputRequestRef,
   SubmitResult,
   SubmitRunInput,
   SubmitSpec,
@@ -85,6 +87,7 @@ import {
   AttachedStreams,
   Dispatch,
   DurableTriggerRegistry,
+  BoundaryEvents,
   commitBoundaryEvent,
   Ledger,
   MaterializedProjections,
@@ -105,9 +108,12 @@ import {
 } from "@agent-os/runtime";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
+  decodeRuntimeLedgerEvent,
   lowerSubmitRunInput,
   manifestTruthIdentity,
   RUNTIME_FACT_OWNER,
+  RUNTIME_EVENT_KIND,
+  submitResumeDecisionFromInputRequestRef,
 } from "@agent-os/core/runtime-protocol";
 import {
   backendProtocolEventIdentityKey,
@@ -137,7 +143,8 @@ import {
   rejectClaimedAppEvent,
   validateExtensionDeclarations,
 } from "@agent-os/core/extensions";
-import { isScopeRef } from "@agent-os/core/effect-claim";
+import { isScopeRef, scopeRefKey } from "@agent-os/core/effect-claim";
+import type { WorkspaceAgentResumeInputRequestCommandInput } from "@agent-os/core/workspace-agent";
 import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
 import {
   projectRunsPage,
@@ -167,6 +174,12 @@ import {
   CloudflareLedgerSchemaError,
   eventIdentity,
 } from "./ledger/identity";
+import {
+  DECISION_GATE_KIND,
+  decisionGateBoundaryContract,
+  projectDecisionGate,
+} from "../decision-gate";
+import { projectInputRequest } from "../input-request";
 
 export interface AgentRuntimeReaderClient {
   readonly info: () => Promise<AgentManifestProjection>;
@@ -234,6 +247,9 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
   readonly submit: (spec: AgentSubmitSpec) => Promise<SubmitResult>;
+  readonly resumeInputRequest: (
+    spec: WorkspaceAgentResumeInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
   readonly runWorkspaceJob: (spec: AgentWorkspaceJobSpec) => Promise<WorkspaceJobProjection>;
 }
 
@@ -323,6 +339,31 @@ const declaredToolIntents = (
       boundaryPackage,
     };
   });
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const chatInputForResume = (
+  events: ReadonlyArray<LedgerEvent>,
+  ref: InputRequestRef,
+): { readonly intent: string; readonly context: Record<string, unknown> } | null => {
+  for (const event of events) {
+    const decoded = decodeRuntimeLedgerEvent(event);
+    if (
+      decoded._tag !== "runtime" ||
+      decoded.event.kind !== RUNTIME_EVENT_KIND.CHAT_INGESTED ||
+      decoded.event.payload.runId !== ref.runId
+    ) {
+      continue;
+    }
+    if (!isRecord(decoded.event.payload.context)) return null;
+    return {
+      intent: decoded.event.payload.intent,
+      context: decoded.event.payload.context,
+    };
+  }
+  return null;
 };
 
 export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentRuntimeReaderClient>
@@ -677,6 +718,73 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       } catch (cause) {
         return Promise.reject(cause);
       }
+    });
+  }
+
+  protected resumeInputRequestWithBindings(
+    spec: WorkspaceAgentResumeInputRequestCommandInput,
+    baseBindings: AgentSubmitBindings,
+  ): Promise<SubmitResult> {
+    return this.scopedPromise((scope) => {
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
+      }
+      if (scopeRefKey(spec.ref.scopeRef) !== scopeRefKey(truthIdentity.scopeRef)) {
+        return Promise.reject(
+          new UnsupportedScopeRef({ scopeId: scopeRefKey(spec.ref.scopeRef), position: "source" }),
+        );
+      }
+      const runtimeIdentity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+      return this.runScopedEffect(
+        scope,
+        Effect.gen(function* () {
+          const ledger = yield* Ledger;
+          const boundaryEvents = yield* BoundaryEvents;
+          const events = yield* ledger.events(runtimeIdentity);
+          const chatInput = chatInputForResume(events, spec.ref);
+          if (chatInput === null) {
+            return yield* Effect.fail(
+              new TypeError("input request resume missing original chat input"),
+            );
+          }
+          const gate = projectDecisionGate(events, spec.ref.gateRef);
+          const inputRequest = projectInputRequest(events, spec.ref);
+          if (gate.status === "requested" && inputRequest.status === "pending") {
+            yield* boundaryEvents.commit(decisionGateBoundaryContract, DECISION_GATE_KIND.DECIDED, {
+              gateRef: spec.ref.gateRef,
+              decisionRef: spec.answer.decisionRef,
+              decision: "approved",
+              decidedBy: spec.decidedBy,
+            });
+          } else if (
+            (gate.status === "approved" || gate.status === "consumed") &&
+            gate.decision?.decisionRef === spec.answer.decisionRef
+          ) {
+            // Idempotent retry after DECIDED was persisted but before/while submit resumed.
+          } else {
+            return yield* Effect.fail(
+              new TypeError(`input request is not resumable: ${gate.status}`),
+            );
+          }
+          return chatInput;
+        }),
+        runtimeIdentity,
+      ).then((chatInput) =>
+        this.submitFullScoped(
+          scope,
+          truthIdentity,
+          lowerSubmitRunInput({
+            input: {
+              intent: chatInput.intent,
+              context: chatInput.context,
+              resume: submitResumeDecisionFromInputRequestRef(spec.ref, spec.answer),
+            },
+            bindings: baseBindings,
+            effectAuthorityRef: truthIdentity.effectAuthorityRef,
+          }),
+        ),
+      );
     });
   }
 
@@ -1226,6 +1334,10 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
       return this.submitWithBindings(spec, this._mount.driverConfig.bindings);
+    }
+
+    resumeInputRequest(spec: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
+      return this.resumeInputRequestWithBindings(spec, this._mount.driverConfig.bindings);
     }
 
     runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {

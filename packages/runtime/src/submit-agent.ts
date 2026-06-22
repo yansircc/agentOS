@@ -409,6 +409,21 @@ const decisionInterruptIdFor = (interrupt: SubmitDecisionInterrupt, operationRef
 const decisionSubjectRefFor = (claim: { readonly operationRef: string }): string =>
   claim.operationRef;
 
+const decisionGateClaimFor = (
+  spec: Pick<InternalSubmitSpec, "effectAuthorityRef" | "scopeRef">,
+  runId: number,
+  gateRef: string,
+): PreClaim =>
+  makePreClaim({
+    operationRef: makeOperationRef("decision_gate", [gateRef]),
+    scopeRef: spec.scopeRef,
+    effectAuthorityRef: spec.effectAuthorityRef,
+    originRef: {
+      originId: `run:${runId}`,
+      originKind: "submit",
+    },
+  });
+
 const materialRejection = (
   claim: { readonly operationRef: string },
   reason: string,
@@ -1971,6 +1986,7 @@ export const submitAgentEffect = (
               const gateRef = decisionGateRefFor(interrupt, claim.operationRef);
               const interruptId = decisionInterruptIdFor(interrupt, claim.operationRef);
               const subjectRef = decisionSubjectRefFor(claim);
+              const gateClaim = decisionGateClaimFor(spec, started.id, gateRef);
               yield* appendNextDriverAction(
                 { ledger, boundaryEvents },
                 {
@@ -1982,7 +1998,7 @@ export const submitAgentEffect = (
                       ? {}
                       : { policyRef: interrupt.policyRef }),
                     ...(interrupt.summary === undefined ? {} : { summary: interrupt.summary }),
-                    claim,
+                    claim: gateClaim,
                   },
                   interruption: agentRunInterruptedEvent({
                     ...identity,

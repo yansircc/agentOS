@@ -4,6 +4,7 @@ import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/
 import { type AgentManifest, type SubmitResult } from "@agent-os/core/runtime-protocol";
 import type { LlmTransport } from "@agent-os/core/llm-protocol";
 import type { RefResolverService } from "@agent-os/core/ref-resolver";
+import type { WorkspaceAgentResumeInputRequestCommandInput } from "@agent-os/core/workspace-agent";
 import type { Layer } from "effect";
 import {
   AgentDurableObject,
@@ -55,6 +56,9 @@ export interface AgentFacadeRuntimeClient {
 
 export interface AgentFacadeRuntimeClientWithSubmit extends AgentFacadeRuntimeClient {
   readonly submit: (spec: AgentSubmitSpec) => Promise<SubmitResult>;
+  readonly resumeInputRequest: (
+    spec: WorkspaceAgentResumeInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
 }
 
 export type AgentDOClass<
@@ -225,6 +229,12 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
 
       submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
         return this.submitWithBindings(spec, this._submitBindings);
+      }
+
+      resumeInputRequest(
+        spec: WorkspaceAgentResumeInputRequestCommandInput,
+      ): Promise<SubmitResult> {
+        return this.resumeInputRequestWithBindings(spec, this._submitBindings);
       }
 
       runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {
