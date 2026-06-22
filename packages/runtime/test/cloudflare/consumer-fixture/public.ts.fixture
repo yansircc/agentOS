@@ -8,6 +8,7 @@ import {
   createAgentDurableObject,
   installCloudflareWorkspaceJobProfile,
   installCloudflareWorkspaceOperationProvider,
+  makeCloudflareWorkspaceEnv,
   type CloudflareAgentEnv,
 } from "@agent-os/runtime/cloudflare";
 import {
@@ -104,6 +105,29 @@ export const fixtureSandboxWorkspaceResolver = createCloudflareSandboxWorkspaceE
 });
 
 export const fixtureWorkspaceOpInstall = installCloudflareWorkspaceOperationProvider({
+  env: makeCloudflareWorkspaceEnv({
+    client: {
+      exec: () =>
+        Promise.resolve({
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+        }),
+      readFile: () => Promise.resolve(""),
+      readFileBuffer: () => Promise.resolve(new Uint8Array()),
+      writeFile: () => Promise.resolve(),
+      stat: () => Promise.resolve({ type: "file" }),
+      readdir: () => Promise.resolve([]),
+      exists: () => Promise.resolve(true),
+      mkdir: () => Promise.resolve(),
+      rm: () => Promise.resolve(),
+    },
+    cwd: "/workspace",
+    workspaceRef: "fixture",
+  }),
+});
+
+export const fixtureWorkspaceOpInstallFromStructuralEnv = installCloudflareWorkspaceOperationProvider({
   env: {
     domain: { kind: "sandbox", ref: "fixture" },
     cwd: "/workspace",

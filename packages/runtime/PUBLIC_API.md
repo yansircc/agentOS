@@ -417,6 +417,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./cloudflare:InstallCloudflareWorkspaceJobProfileOptions`
 - `./cloudflare:installCloudflareWorkspaceOperationProvider`
 - `./cloudflare:InstallCloudflareWorkspaceOperationProviderOptions`
+- `./cloudflare:makeCloudflareWorkspaceEnv`
 - `./cloudflare:materializeCloudflareAgentDeployment`
 - `./cloudflare:MaterializedAgentConfig`
 - `./cloudflare:mountCloudflareAgent`

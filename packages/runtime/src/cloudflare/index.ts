@@ -14,6 +14,7 @@ export * from "./workspace-job-facade";
 export * from "./workspace-job-profile";
 export * from "./workspace-env";
 export * from "./workspace-op";
+export { makeCloudflareWorkspaceEnv } from "./workspace-env-adapter";
 export type {
   AgentAttachedStreamCancelSpec,
   AgentAttachedStreamSpec,

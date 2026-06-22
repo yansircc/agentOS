@@ -417,6 +417,7 @@ title: "@agent-os/runtime Public API Intent"
 - `./cloudflare:InstallCloudflareWorkspaceJobProfileOptions`
 - `./cloudflare:installCloudflareWorkspaceOperationProvider`
 - `./cloudflare:InstallCloudflareWorkspaceOperationProviderOptions`
+- `./cloudflare:makeCloudflareWorkspaceEnv`
 - `./cloudflare:materializeCloudflareAgentDeployment`
 - `./cloudflare:MaterializedAgentConfig`
 - `./cloudflare:mountCloudflareAgent`
