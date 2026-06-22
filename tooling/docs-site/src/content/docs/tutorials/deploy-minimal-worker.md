@@ -15,8 +15,8 @@ refs, and keeps provider handles outside the ledger.
 
 ## Prerequisites
 
-- [Deploy package](/packages/deploy/)
-- [Deploy Cloudflare package](/packages/deploy-cloudflare/)
+- [Runtime package](/packages/runtime/)
+- [Runtime API](/api/runtime/)
 - [Provider material binding](/tutorials/provider-material-binding/)
 
 ## Steps

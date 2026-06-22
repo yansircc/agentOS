@@ -2,7 +2,11 @@ import type { QuotaState, QuotaStateSpec, ResourceState } from "@agent-os/core/t
 import { Effect } from "effect";
 import { ABORT, SqlError } from "@agent-os/core/errors";
 import type { LedgerEvent } from "@agent-os/core/types";
-import { type AttemptKey, type CapabilityLease, projectLease } from "./admission";
+import {
+  type AttemptKey,
+  type CapabilityLease,
+  projectLease,
+} from "@agent-os/core/runtime-protocol";
 import { loadAdmissionRows } from "./admission/payload";
 import {
   scopeRefKey,

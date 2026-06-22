@@ -24,4 +24,4 @@ hour-long workspace process lifecycle.
 ## Related
 
 - [Add an attached stream](/guides/add-attached-stream/)
-- [Attached stream package](/packages/attached-stream/)
+- [Runtime package](/packages/runtime/)

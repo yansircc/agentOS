@@ -23,7 +23,6 @@ const isCarrier = (value) =>
   isRecord(value) &&
   typeof value.ownerId === "string" &&
   typeof value.sourcePackageName === "string" &&
-  typeof value.packageId === "string" &&
   typeof value.prefix === "string" &&
   isRecord(value.boundaryContract) &&
   isRecord(value.settlementContract) &&
@@ -34,10 +33,46 @@ const isEventNamespace = (value) =>
   isRecord(value) &&
   typeof value.ownerId === "string" &&
   typeof value.sourcePackageName === "string" &&
-  typeof value.packageId === "string" &&
   Array.isArray(value.kindPrefixes) &&
   value.kindPrefixes.every((prefix) => typeof prefix === "string" && prefix.length > 0) &&
   typeof value.version === "string";
+
+const walk = (relativePath, options = {}) => {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) return [];
+  const stat = fs.statSync(absolutePath);
+  if (stat.isFile()) return [relativePath];
+  const ignored = options.ignored ?? new Set(["node_modules", "dist", ".wrangler", ".turbo"]);
+  const files = [];
+  for (const entry of fs.readdirSync(absolutePath, { withFileTypes: true })) {
+    if (entry.isDirectory() && ignored.has(entry.name)) continue;
+    const child = path.join(relativePath, entry.name).split(path.sep).join("/");
+    if (entry.isDirectory()) files.push(...walk(child, options));
+    if (entry.isFile()) files.push(child);
+  }
+  return files.sort((left, right) => left.localeCompare(right));
+};
+
+const sourcePackages = surface.packages
+  .filter(
+    (pkg) =>
+      isRecord(pkg) &&
+      typeof pkg.name === "string" &&
+      typeof pkg.path === "string" &&
+      pkg.path.startsWith("packages/") &&
+      fs.existsSync(path.join(root, pkg.path, "package.json")),
+  )
+  .sort(
+    (left, right) => right.path.length - left.path.length || left.path.localeCompare(right.path),
+  );
+
+const sourcePackageForFile = (file) =>
+  sourcePackages.find((pkg) => file === pkg.path || file.startsWith(`${pkg.path}/`));
+
+const defineCarrierFiles = () =>
+  walk("packages")
+    .filter((file) => /\/src\/.*\.ts$/u.test(file))
+    .filter((file) => fs.readFileSync(path.join(root, file), "utf8").includes("defineCarrier("));
 
 const escapeCell = (value) => String(value).replaceAll("|", "\\|").replaceAll("\n", "<br>");
 
@@ -129,7 +164,7 @@ const authorityRows = (authorities) =>
   ]);
 
 const validateCarrier = (carrier, pkg) => {
-  if (carrier.sourcePackageName !== pkg.name || carrier.packageId !== carrier.sourcePackageName) {
+  if (carrier.sourcePackageName !== pkg.name) {
     failures.push(
       `${pkg.name}: carrier sourcePackageName ${carrier.sourcePackageName} does not match surface name`,
     );
@@ -160,26 +195,18 @@ const validateCarrier = (carrier, pkg) => {
 };
 
 const validateNamespace = (namespace, pkg) => {
-  if (
-    namespace.sourcePackageName !== pkg.name ||
-    namespace.packageId !== namespace.sourcePackageName
-  ) {
+  if (namespace.sourcePackageName !== pkg.name) {
     failures.push(
       `${pkg.name}: namespace sourcePackageName ${namespace.sourcePackageName} does not match surface name`,
     );
   }
 };
 
-const carrierModuleEntries = async (pkg) => {
-  const files = ["src/definition.ts", "src/extension.ts"]
-    .map((relative) => path.join(root, pkg.path, relative))
-    .filter((file) => fs.existsSync(file));
+const carrierModuleEntries = async (file) => {
   const entries = [];
-  for (const file of files) {
-    const mod = await import(pathToFileURL(file).href);
-    for (const [exportName, value] of Object.entries(mod)) {
-      entries.push({ exportName, value, file });
-    }
+  const mod = await import(pathToFileURL(path.join(root, file)).href);
+  for (const [exportName, value] of Object.entries(mod)) {
+    entries.push({ exportName, value, file });
   }
   return entries;
 };
@@ -213,12 +240,15 @@ const discoverCarriers = async () => {
   const carriers = [];
   const seenOwnerIds = new Set();
   const seenEventKinds = new Set();
-  const carrierPackages = surface.packages.filter((pkg) =>
-    pkg.path.startsWith("packages/carriers/"),
-  );
+  const files = defineCarrierFiles();
 
-  for (const pkg of carrierPackages) {
-    const entries = await carrierModuleEntries(pkg);
+  for (const file of files) {
+    const pkg = sourcePackageForFile(file);
+    if (pkg === undefined) {
+      failures.push(`${file}: defineCarrier declaration is outside a live workspace package`);
+      continue;
+    }
+    const entries = await carrierModuleEntries(file);
     const exportedCarriers = [];
     const seenCarrierOwnerIds = new Set();
     for (const entry of entries) {
@@ -240,15 +270,15 @@ const discoverCarriers = async () => {
     }
 
     if (exportedCarriers.length > 1) {
-      failures.push(`${pkg.name}: exports multiple carrier-shaped values`);
+      failures.push(`${file}: exports multiple carrier-shaped values`);
       continue;
     }
     if (exportedCarriers.length === 0 && exportedNamespaces.length > 1) {
-      failures.push(`${pkg.name}: exports multiple namespace-shaped values`);
+      failures.push(`${file}: exports multiple namespace-shaped values`);
       continue;
     }
     if (exportedCarriers.length === 0 && exportedNamespaces.length === 0) {
-      failures.push(`${pkg.name}: carrier package exports no carrier or namespace declaration`);
+      failures.push(`${file}: defineCarrier declaration exports no carrier or namespace value`);
       continue;
     }
 
@@ -268,7 +298,13 @@ const discoverCarriers = async () => {
         seenEventKinds.add(eventKind);
       }
 
-      carriers.push({ kind: "carrier", pkg, exportName: entry.exportName, carrier: entry.carrier });
+      carriers.push({
+        kind: "carrier",
+        pkg,
+        file,
+        exportName: entry.exportName,
+        carrier: entry.carrier,
+      });
       continue;
     }
 
@@ -287,16 +323,27 @@ const discoverCarriers = async () => {
     carriers.push({
       kind: "namespace",
       pkg,
+      file,
       exportName: entry.exportName,
       namespace: entry.namespace,
       events: entry.events,
     });
   }
 
-  return carriers.sort((left, right) => left.pkg.name.localeCompare(right.pkg.name));
+  if (files.length > 0 && carriers.length === 0) {
+    failures.push(
+      `carrier reference projected zero carriers from ${files.length} defineCarrier declaration file(s)`,
+    );
+  }
+
+  return carriers.sort((left, right) =>
+    (left.kind === "carrier" ? left.carrier.ownerId : left.namespace.ownerId).localeCompare(
+      right.kind === "carrier" ? right.carrier.ownerId : right.namespace.ownerId,
+    ),
+  );
 };
 
-const renderCarrier = ({ pkg, exportName, carrier }) => {
+const renderCarrier = ({ pkg, file, exportName, carrier }) => {
   const boundary = carrier.boundaryContract;
   const settlement = carrier.settlementContract;
   const eventRows = Object.entries(boundary.events)
@@ -308,7 +355,11 @@ const renderCarrier = ({ pkg, exportName, carrier }) => {
     ]);
 
   const sections = [
-    `## ${pkg.name}`,
+    `## ${carrier.ownerId}`,
+    "",
+    `Source package: \`${pkg.name}\``,
+    "",
+    `Source file: \`${file}\``,
     "",
     `Export: \`${exportName}\``,
     "",
@@ -348,10 +399,14 @@ const renderCarrier = ({ pkg, exportName, carrier }) => {
   return sections.join("\n");
 };
 
-const renderNamespace = ({ pkg, exportName, namespace, events }) => {
+const renderNamespace = ({ pkg, file, exportName, namespace, events }) => {
   const eventRows = events.map((eventKind) => [`\`${eventKind}\``, "namespace-only", "None."]);
   return [
-    `## ${pkg.name}`,
+    `## ${namespace.ownerId}`,
+    "",
+    `Source package: \`${pkg.name}\``,
+    "",
+    `Source file: \`${file}\``,
     "",
     `Export: \`${exportName}\``,
     "",
@@ -380,6 +435,7 @@ const renderNamespace = ({ pkg, exportName, namespace, events }) => {
 
 const renderReference = (carriers) => {
   const summaryRows = carriers.map((entry) => [
+    `\`${entry.kind === "carrier" ? entry.carrier.ownerId : entry.namespace.ownerId}\``,
     `\`${entry.pkg.name}\``,
     entry.kind === "carrier" ? `\`${entry.carrier.prefix}\`` : list(entry.namespace.kindPrefixes),
     String(
@@ -399,11 +455,11 @@ const renderReference = (carriers) => {
     "",
     generatedNotice,
     "",
-    "Generated from carrier package declarations. Package docs explain intent; this page owns event, schema, settlement, authority, and material reference facts.",
+    "Generated from live `defineCarrier` declarations. Package docs explain intent; this page owns event, schema, settlement, authority, and material reference facts.",
     "",
     "## Carriers",
     "",
-    table(["Package", "Prefix", "Events", "Roles"], summaryRows),
+    table(["Owner", "Source package", "Prefix", "Events", "Roles"], summaryRows),
     "",
     ...sections,
   ].join("\n");

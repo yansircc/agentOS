@@ -18,7 +18,7 @@ runtime. The same handler shape maps to SSE in the Cloudflare backend.
 
 - [Attached streams](/concepts/attached-streams/)
 - [Add an attached stream](/guides/add-attached-stream/)
-- [Attached stream package](/packages/attached-stream/)
+- [Runtime package](/packages/runtime/)
 
 ## Steps
 

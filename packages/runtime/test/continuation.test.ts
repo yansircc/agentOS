@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import type { LedgerEvent } from "@agent-os/core/types";
-import { DECISION_GATE_KIND, settleDecisionGateConsumed } from "@agent-os/decision-gate";
+import { DECISION_GATE_KIND, settleDecisionGateConsumed } from "../src/decision-gate";
 import {
   agentRunInterruptedEvent,
   agentRunStartedEvent,

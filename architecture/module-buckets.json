@@ -121,18 +121,6 @@
       "bucket": "projection"
     },
     {
-      "id": "sse-http-projection",
-      "match": "prefix",
-      "value": "packages/transports/sse-http/",
-      "bucket": "projection"
-    },
-    {
-      "id": "attached-stream-projection",
-      "match": "prefix",
-      "value": "packages/composers/attached-stream/",
-      "bucket": "projection"
-    },
-    {
       "id": "ops-api-adapter",
       "match": "prefix",
       "value": "packages/runtime/src/cloudflare/ops-api/",
@@ -142,6 +130,24 @@
       "id": "runtime-public-barrel-adapter",
       "match": "prefix",
       "value": "packages/runtime/src/index.ts",
+      "bucket": "adapter"
+    },
+    {
+      "id": "runtime-folded-projection-files",
+      "match": "regex",
+      "value": "^packages/runtime/src/(ag-ui|attached-stream-protocol|sse-http)\\.ts$",
+      "bucket": "projection"
+    },
+    {
+      "id": "runtime-folded-carrier-projections",
+      "match": "regex",
+      "value": "^packages/runtime/src/(decision-gate|workspace-job-carrier|workspace-op-carrier)/",
+      "bucket": "projection"
+    },
+    {
+      "id": "runtime-local-provider-adapters",
+      "match": "regex",
+      "value": "^packages/runtime/src/(workspace-binding|workspace-op-local)\\.ts$",
       "bucket": "adapter"
     },
     {
@@ -169,33 +175,15 @@
       "bucket": "adapter"
     },
     {
-      "id": "backend-ledger-file",
-      "match": "contains",
-      "value": "/ledger.ts",
-      "bucket": "ledger"
-    },
-    {
       "id": "runtime-node-adapter",
       "match": "prefix",
       "value": "packages/runtime/src/node/",
       "bucket": "adapter"
     },
     {
-      "id": "runtime-llm-effect-ai-adapter",
-      "match": "prefix",
-      "value": "packages/runtime/src/llm-effect-ai/",
-      "bucket": "adapter"
-    },
-    {
-      "id": "runtime-telemetry-otlp-projection",
-      "match": "prefix",
-      "value": "packages/runtime/src/telemetry-otlp/",
-      "bucket": "projection"
-    },
-    {
-      "id": "runtime-ledger",
-      "match": "prefix",
-      "value": "packages/runtime/",
+      "id": "backend-ledger-file",
+      "match": "contains",
+      "value": "/ledger.ts",
       "bucket": "ledger"
     },
     {
@@ -217,15 +205,27 @@
       "bucket": "ledger"
     },
     {
-      "id": "state-file",
-      "match": "contains",
-      "value": "/state.ts",
-      "bucket": "ledger"
-    },
-    {
       "id": "commit-file",
       "match": "contains",
       "value": "/commit.ts",
+      "bucket": "ledger"
+    },
+    {
+      "id": "runtime-llm-effect-ai-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/llm-effect-ai/",
+      "bucket": "adapter"
+    },
+    {
+      "id": "runtime-telemetry-otlp-projection",
+      "match": "prefix",
+      "value": "packages/runtime/src/telemetry-otlp/",
+      "bucket": "projection"
+    },
+    {
+      "id": "runtime-ledger",
+      "match": "prefix",
+      "value": "packages/runtime/",
       "bucket": "ledger"
     },
     {
@@ -244,18 +244,6 @@
       "id": "safe-events-name",
       "match": "contains",
       "value": "safe-events",
-      "bucket": "projection"
-    },
-    {
-      "id": "carrier-packages",
-      "match": "prefix",
-      "value": "packages/carriers/",
-      "bucket": "projection"
-    },
-    {
-      "id": "wire-adapter-packages",
-      "match": "prefix",
-      "value": "packages/wire-adapters/",
       "bucket": "projection"
     },
     {
@@ -284,18 +272,6 @@
       "ambient": "node"
     },
     {
-      "id": "workspace-op-local",
-      "match": "prefix",
-      "value": "packages/providers/workspace-op-local/",
-      "ambient": "neutral"
-    },
-    {
-      "id": "workspace-env-local",
-      "match": "prefix",
-      "value": "packages/execution-domains/workspace-env-local/",
-      "ambient": "node"
-    },
-    {
       "id": "cli",
       "match": "prefix",
       "value": "packages/cli/",
@@ -314,42 +290,6 @@
       "ambient": "cloudflare-worker"
     },
     {
-      "id": "deploy-cloudflare",
-      "match": "prefix",
-      "value": "packages/providers/deploy-cloudflare/",
-      "ambient": "cloudflare-worker"
-    },
-    {
-      "id": "dynamic-worker",
-      "match": "prefix",
-      "value": "packages/providers/dynamic-worker/",
-      "ambient": "cloudflare-worker"
-    },
-    {
-      "id": "resource-cloudflare",
-      "match": "prefix",
-      "value": "packages/providers/resource-cloudflare/",
-      "ambient": "cloudflare-worker"
-    },
-    {
-      "id": "workspace-session-cloudflare",
-      "match": "prefix",
-      "value": "packages/providers/workspace-session-cloudflare/",
-      "ambient": "cloudflare-worker"
-    },
-    {
-      "id": "sandbox-cloudflare",
-      "match": "prefix",
-      "value": "packages/execution-domains/sandbox-cloudflare/",
-      "ambient": "cloudflare-worker"
-    },
-    {
-      "id": "workspace-env-cloudflare",
-      "match": "prefix",
-      "value": "packages/execution-domains/workspace-env-cloudflare/",
-      "ambient": "cloudflare-worker"
-    },
-    {
       "id": "client-react-browser",
       "match": "prefix",
       "value": "packages/client/src/react/",
@@ -365,12 +305,6 @@
       "id": "client-neutral",
       "match": "prefix",
       "value": "packages/client/",
-      "ambient": "neutral"
-    },
-    {
-      "id": "ag-ui-wire-adapter",
-      "match": "prefix",
-      "value": "packages/wire-adapters/ag-ui/",
       "ambient": "neutral"
     },
     {

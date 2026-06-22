@@ -13,7 +13,7 @@ the same event through `Ledger.events`.
 
 - [Durable truth](../concepts/durable-truth.md)
 - [Runtime package](../packages/runtime.md)
-- [In-memory backend](../packages/backend-in-memory.md)
+- [Runtime API](../api/runtime.md)
 
 ## Steps
 

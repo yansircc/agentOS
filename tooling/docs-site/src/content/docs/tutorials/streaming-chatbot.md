@@ -18,7 +18,7 @@ generator with a live provider is a later change axis.
 
 - [Attached streams](/concepts/attached-streams/)
 - [Output-only attached stream](/tutorials/output-only-attached-stream/)
-- [Attached stream API](/api/attached-stream/)
+- [Runtime API](/api/runtime/)
 
 ## Steps
 

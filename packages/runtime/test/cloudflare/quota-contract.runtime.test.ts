@@ -16,10 +16,10 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
-import { AdmissionLive } from "../../src/cloudflare/admission";
+import { AdmissionLive } from "../../src/cloudflare/admission/admission";
 import { BoundaryEventsLive } from "../../src/cloudflare/boundary-events";
-import { EventBusLive } from "../../src/cloudflare/ledger";
-import { Ledger, LedgerLive } from "../../src/cloudflare/ledger";
+import { EventBusLive } from "../../src/cloudflare/ledger/event-bus";
+import { LedgerLive } from "../../src/cloudflare/ledger/ledger";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
 import { QuotaLive } from "../../src/cloudflare/quota";
 import { withQuota } from "../../src/cloudflare/quota";
@@ -27,6 +27,7 @@ import { ToolError } from "@agent-os/core/errors";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   MaterializedProjectionRegistry,
+  Ledger,
   internalSubmitSpec,
   submitAgentEffect,
   type InternalSubmitSpec,

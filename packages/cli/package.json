@@ -6,7 +6,23 @@
     "agentos": "./src/main.mjs"
   },
   "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@agent-os/core": "workspace:*",
+    "@agent-os/runtime": "workspace:*",
+    "effect": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0-beta.84"
   }
 }

@@ -17,12 +17,12 @@ import {
   workspaceOpBoundaryPackage,
   type WorkspaceOperationRequestedPayload,
   type WorkspaceOperationProjection,
-} from "@agent-os/workspace-op";
+} from "../workspace-op-carrier";
 import {
   createWorkspaceOperationLocalProvider,
   type CreateWorkspaceOperationLocalProviderOptions,
   type WorkspaceOperationLocalProvider,
-} from "@agent-os/workspace-op-local";
+} from "../workspace-op-local";
 
 export interface CloudflareWorkspaceOperationInstallContext {
   readonly capabilities: ReadonlyMap<string, ExtensionCapability>;

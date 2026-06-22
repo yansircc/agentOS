@@ -83,10 +83,12 @@ import type {
 import {
   Admission,
   AttachedStreams,
+  Dispatch,
   DurableTriggerRegistry,
   commitBoundaryEvent,
   Ledger,
   MaterializedProjections,
+  Resources,
   TriggerPump,
   internalSubmitSpec,
   recordLedgerPortEvent,
@@ -113,14 +115,16 @@ import {
   RESOURCE_EVENT_KIND,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
+  type DispatchEnvelope,
   type DispatchReceiverResult,
 } from "@agent-os/core/backend-protocol";
-import { Dispatch, type DispatchEnvelope, type DispatchTargetRegistry } from "./dispatch";
-import { EventBus, createEventStreamResponse, eventToRpc } from "./ledger";
+import { type DispatchTargetRegistry } from "./dispatch/dispatch";
+import { EventBus } from "./ledger/event-bus";
+import { eventToRpc } from "./ledger/ledger";
+import { createEventStreamResponse } from "./ledger/stream";
 import { Scheduler } from "./scheduler";
-import { Resources } from "./resources";
 import { isMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
-import { AdmissionLive } from "./admission";
+import { AdmissionLive } from "./admission/admission";
 import { RefResolverLive, RefResolverService, type RefResolver } from "@agent-os/core/ref-resolver";
 import {
   type BoundaryPackage,
@@ -142,7 +146,7 @@ import {
   RUN_BEARING_KINDS,
 } from "@agent-os/runtime/run-projector";
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
-import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
+import type { WorkspaceJobProjection } from "../workspace-job-carrier";
 import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
@@ -531,7 +535,6 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     return {
       ownerId: pkg.ownerId,
       sourcePackageName: pkg.sourcePackageName,
-      packageId: pkg.packageId,
       kindPrefixes: pkg.kindPrefixes,
       version: pkg.version,
       commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data),

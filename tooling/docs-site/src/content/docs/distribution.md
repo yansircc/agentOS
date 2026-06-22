@@ -14,12 +14,14 @@ generates publish-only package projections under `dist/internal-npm`.
 Install agentOS packages plus required peers:
 
 ```sh
-bun add @yansirplus/runtime @yansirplus/backend-cloudflare-do effect
+bun add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect
 ```
 
-Cloudflare-targeted packages also peer depend on
-`@cloudflare/workers-types`. Worker apps should install a compatible version
-from the release manifest before typechecking Cloudflare-facing code.
+Cloudflare-targeted runtime subpaths also peer depend on
+`@cloudflare/workers-types`. Optional integration subpaths such as
+`@yansirplus/runtime/llm-effect-ai`, `@yansirplus/client/react`, and
+`@yansirplus/client/svelte` require their matching optional peers only when
+the consumer imports that subpath.
 
 ## Publish
 
@@ -70,8 +72,10 @@ path:
 ```json
 {
   "dependencies": {
+    "@yansirplus/core": "agentos-dev",
     "@yansirplus/runtime": "agentos-dev",
-    "@yansirplus/backend-cloudflare-do": "agentos-dev"
+    "@yansirplus/client": "agentos-dev",
+    "@yansirplus/cli": "agentos-dev"
   }
 }
 ```

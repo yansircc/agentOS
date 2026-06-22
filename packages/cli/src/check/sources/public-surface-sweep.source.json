@@ -24,7 +24,7 @@
       "reason": "shape helper for SafeLedgerPayload projection sinks"
     },
     {
-      "export": "@agent-os/ag-ui:AG_UI_WIRE_COMPATIBILITY",
+      "export": "@agent-os/runtime:AG_UI_WIRE_COMPATIBILITY",
       "moduleBucket": "projection",
       "reason": "versioned wire projection contract, not a legacy compatibility shim"
     }

@@ -34,7 +34,7 @@ import {
   type LoweredAgentConfigWithoutSubmit,
   type LlmRouteMap,
 } from "./facade-lowering";
-import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
+import type { WorkspaceJobProjection } from "../workspace-job-carrier";
 
 export interface AgentFacadeRuntimeClient {
   readonly emit: (event: string, data: unknown) => Promise<{ id: number }>;

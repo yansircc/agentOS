@@ -95,7 +95,6 @@ describe("BoundaryContract", () => {
     expect(boundaryPackage(contract, "0.1.0")).toEqual({
       ownerId: "@agent-os/example-carrier",
       sourcePackageName: "@agent-os/example-carrier",
-      packageId: "@agent-os/example-carrier",
       kindPrefixes: ["example."],
       version: "0.1.0",
       boundaryContract: contract,
@@ -107,12 +106,11 @@ describe("BoundaryContract", () => {
     const literal: BoundaryPackage = {
       ownerId: "@agent-os/example-carrier",
       sourcePackageName: "@agent-os/example-carrier",
-      packageId: "@agent-os/example-carrier",
       kindPrefixes: ["example."],
       version: "0.1.0",
       boundaryContract: contract as BoundaryContract,
     };
-    expect(literal.packageId).toBe("@agent-os/example-carrier");
+    expect(literal.sourcePackageName).toBe("@agent-os/example-carrier");
   });
 
   it("accepts a complete event-level boundary declaration", () => {

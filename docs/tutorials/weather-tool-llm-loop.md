@@ -14,7 +14,7 @@ and a default LLM route ref.
 
 - [Authoring minimal agent](cloudflare-do-minimal-app.md)
 - [Usage surfaces](../usage-surfaces.md)
-- [Agent authoring package](../packages/agent-authoring.md)
+- [CLI package](../packages/cli.md)
 
 ## Steps
 

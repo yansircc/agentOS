@@ -12,6 +12,7 @@ export * from "./quota-service";
 export * from "./resources";
 export * from "./run-projector";
 export * from "./scheduler";
+export * from "./sse-http";
 export * from "./structured-output";
 export * from "./submit-agent";
 export * from "./telemetry-tree";
@@ -27,5 +28,8 @@ export {
 export type { Tool, ToolDefinition } from "@agent-os/core/tools";
 export * from "./trigger";
 export * from "./witness-port";
+export * from "./workspace-agent";
+export * from "./workspace-binding";
+export * from "./workspace-env-core";
 export * from "./workspace-job";
 export * from "./workspace-job-observability";

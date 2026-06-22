@@ -2,6 +2,12 @@
   "shape": ["library"],
   "allowedAdapters": [
     {
+      "path": "src/attached-stream-protocol.ts",
+      "owner": "@agent-os/runtime/attached-stream-protocol",
+      "reason": "attached-stream JSON and SSE codecs own malformed frame decode classification without depending on Effect",
+      "rules": ["EFF001"]
+    },
+    {
       "path": "src/cloudflare/agent-do.ts",
       "owner": "@agent-os/runtime/cloudflare/cf-do",
       "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
@@ -44,6 +50,12 @@
       "rules": ["EFF025"]
     },
     {
+      "path": "src/cloudflare/workspace-env-adapter.ts",
+      "owner": "@agent-os/runtime/cloudflare/workspace-env-adapter",
+      "reason": "terminal Cloudflare Sandbox WorkspaceEnv adapter owns Promise provider calls, pre/post AbortSignal checks, provider duration normalization, and symbolic material rejection at the adapter boundary",
+      "rules": ["EFF003", "EFF004", "EFF024", "EFF025", "EFF026"]
+    },
+    {
       "path": "src/cloudflare/workspace-job-facade.ts",
       "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
       "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
@@ -54,6 +66,18 @@
       "owner": "@agent-os/runtime/node/psql-host-adapter",
       "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
       "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
+    },
+    {
+      "path": "src/sse-http.ts",
+      "owner": "@agent-os/runtime/sse-http",
+      "reason": "terminal SSE-over-HTTP transport adapter owns Web Fetch Response construction and async iterator pumping from attached-stream codecs",
+      "rules": ["EFF001", "EFF002", "EFF003", "EFF004", "EFF402"]
+    },
+    {
+      "path": "src/workspace-env-core.ts",
+      "owner": "@agent-os/runtime/workspace-env-core",
+      "reason": "WorkspaceEnv core owns fail-fast AbortSignal and workspace path validation before provider side effects",
+      "rules": ["EFF024", "EFF025"]
     },
     {
       "path": "test/cloudflare/_in-memory-do.ts",

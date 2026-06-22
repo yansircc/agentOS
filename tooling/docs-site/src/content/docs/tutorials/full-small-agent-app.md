@@ -74,7 +74,7 @@ Cloudflare Worker.
 The app has no source workspace dependency and no hidden state table:
 
 ```text
-@agent-os/* imports are package entrypoints
+@yansirplus/core, @yansirplus/runtime, @yansirplus/client, and @yansirplus/cli imports are package entrypoints
 provider material appears only as refs in ledger-visible payloads
 stream frames are not ledger facts
 ops views are read-only

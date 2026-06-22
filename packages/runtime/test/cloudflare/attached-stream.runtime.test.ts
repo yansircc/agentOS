@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import {
   decodeAttachedStreamMessage,
   type AttachedStreamOutboundFrame,
-} from "@agent-os/attached-stream";
+} from "../../src/attached-stream-protocol";
 import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import type { AgentAttachedStreamCancelSpec, AgentAttachedStreamSpec } from "../../src/cloudflare";
 import type { AttachedStreamTestDO } from "./test-worker";

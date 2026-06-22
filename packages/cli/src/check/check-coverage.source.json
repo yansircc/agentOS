@@ -8,7 +8,7 @@
         "kind": "preMigrationChecker",
         "path": "packages/cli/src/check/check-ag-ui-egress-allowlist.mjs"
       },
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "ag-ui-egress-allowlist",
       "target": {
         "kind": "proofClass",
@@ -17,15 +17,15 @@
       "assertions": [
         {
           "failureCondition": "AG-UI egress exposes only owner-safe envelope and frame facts",
-          "negativeWitness": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"does not let product projectors override default owner safe projections\"; packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"drops product frames that emit reserved agent-os custom names\"",
+          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"keeps sse-http generic while host helper materializes AG-UI SSE responses\"; packages/client/test/react/client-react.test.ts: \"does not import AG-UI or declare local UI read-models\"",
           "packageWitnesses": [
             {
-              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-              "name": "does not let product projectors override default owner safe projections"
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+              "name": "keeps sse-http generic while host helper materializes AG-UI SSE responses"
             },
             {
-              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-              "name": "drops product frames that emit reserved agent-os custom names"
+              "file": "packages/client/test/react/client-react.test.ts",
+              "name": "does not import AG-UI or declare local UI read-models"
             }
           ]
         }
@@ -36,7 +36,7 @@
         "kind": "preMigrationChecker",
         "path": "packages/cli/src/check/check-ag-ui-resume-boundary.mjs"
       },
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "ag-ui-resume-boundary",
       "target": {
         "kind": "proofClass",
@@ -44,12 +44,12 @@
       },
       "assertions": [
         {
-          "failureCondition": "ag-ui-resume-boundary: post-migration verdict must reject violations owned by @agent-os/ag-ui",
-          "negativeWitness": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"rejects AG-UI resume input without a runtime InputRequest binding\"",
+          "failureCondition": "ag-ui-resume-boundary: post-migration verdict must reject violations owned by @agent-os/runtime/ag-ui",
+          "negativeWitness": "packages/core/test/runtime-protocol/input-request.test.ts: \"does not derive a request ref without decision binding or supported reason\"",
           "packageWitnesses": [
             {
-              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-              "name": "rejects AG-UI resume input without a runtime InputRequest binding"
+              "file": "packages/core/test/runtime-protocol/input-request.test.ts",
+              "name": "does not derive a request ref without decision binding or supported reason"
             }
           ]
         }
@@ -60,7 +60,7 @@
         "kind": "preMigrationChecker",
         "path": "packages/cli/src/check/check-ag-ui-sse-axis.mjs"
       },
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "ag-ui-sse-axis",
       "target": {
         "kind": "proofClass",
@@ -68,12 +68,12 @@
       },
       "assertions": [
         {
-          "failureCondition": "ag-ui-sse-axis: post-migration verdict must reject violations owned by @agent-os/ag-ui",
-          "negativeWitness": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts: \"projects ledger SSE into AG-UI envelopes and AG-UI SSE chunks\"",
+          "failureCondition": "ag-ui-sse-axis: post-migration verdict must reject violations owned by @agent-os/runtime/ag-ui",
+          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"keeps sse-http generic while host helper materializes AG-UI SSE responses\"",
           "packageWitnesses": [
             {
-              "file": "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-              "name": "projects ledger SSE into AG-UI envelopes and AG-UI SSE chunks"
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+              "name": "keeps sse-http generic while host helper materializes AG-UI SSE responses"
             }
           ]
         }
@@ -112,14 +112,14 @@
       "assertions": [
         {
           "failureCondition": "agent-manifest-intent-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/runtime-protocol/test/manifest.test.ts: \"rejects function-valued fields in AgentManifest at mount time\"; packages/core/runtime-protocol/test/manifest.test.ts: \"keeps extension handler kinds closed by manifest extension declarations\"",
+          "negativeWitness": "packages/core/test/runtime-protocol/manifest.test.ts: \"rejects function-valued fields in AgentManifest at mount time\"; packages/core/test/runtime-protocol/manifest.test.ts: \"keeps extension handler kinds closed by manifest extension declarations\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/runtime-protocol/test/manifest.test.ts",
+              "file": "packages/core/test/runtime-protocol/manifest.test.ts",
               "name": "rejects function-valued fields in AgentManifest at mount time"
             },
             {
-              "file": "packages/core/runtime-protocol/test/manifest.test.ts",
+              "file": "packages/core/test/runtime-protocol/manifest.test.ts",
               "name": "keeps extension handler kinds closed by manifest extension declarations"
             }
           ]
@@ -188,7 +188,7 @@
         "kind": "preMigrationCheckerHelper",
         "path": "packages/cli/src/check/backend-neutral-production-backends.mjs"
       },
-      "owner": "packages/cli algorithmic checker bundle",
+      "owner": "package.json agentos.backendNeutrality",
       "ruleId": "backend-neutrality",
       "target": {
         "kind": "algorithmic-helper",
@@ -257,7 +257,7 @@
         "kind": "preMigrationChecker",
         "path": "packages/cli/src/check/check-carrier-projection-source-truth.mjs"
       },
-      "owner": "defineCarrier declarations",
+      "owner": "runtime carrier declarations",
       "ruleId": "carrier-projection-source-truth",
       "target": {
         "kind": "manifestRule",
@@ -323,7 +323,7 @@
         "kind": "mainlineChecker",
         "path": "packages/cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
+      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/cli/src/build/agent-authoring.ts",
       "ruleId": "convergence-boundary",
       "target": {
         "kind": "algorithmic",
@@ -408,15 +408,15 @@
       "assertions": [
         {
           "failureCondition": "decision-gate-lifecycle-boundary: post-migration verdict must reject violations owned by @agent-os/decision-gate",
-          "negativeWitness": "packages/carriers/decision-gate/test/decision-gate.test.ts: \"does not approve a gate from a decision without a request\"; packages/carriers/decision-gate/test/decision-gate.test.ts: \"keeps a consumed gate terminal across later requested and decided facts\"",
+          "negativeWitness": "packages/runtime/test/submit-agent-runtime-events.test.ts: \"does not execute a tool when the matching decision is rejected\"; packages/runtime/test/submit-agent-runtime-events.test.ts: \"consumes an approved decision exactly once before resuming tool execution\"",
           "packageWitnesses": [
             {
-              "file": "packages/carriers/decision-gate/test/decision-gate.test.ts",
-              "name": "does not approve a gate from a decision without a request"
+              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "name": "does not execute a tool when the matching decision is rejected"
             },
             {
-              "file": "packages/carriers/decision-gate/test/decision-gate.test.ts",
-              "name": "keeps a consumed gate terminal across later requested and decided facts"
+              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "name": "consumes an approved decision exactly once before resuming tool execution"
             }
           ]
         }
@@ -436,10 +436,10 @@
       "assertions": [
         {
           "failureCondition": "dispatch-delivery-receipt-authority: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"settles outbound delivery against target-owned receipts\"",
+          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"settles outbound delivery against target-owned receipts\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
               "name": "settles outbound delivery against target-owned receipts"
             }
           ]
@@ -460,10 +460,10 @@
       "assertions": [
         {
           "failureCondition": "dispatch-idempotency-receipt: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"receipt-before-terminal proof ties terminal delivery to idempotency receipt\"",
+          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"receipt-before-terminal proof ties terminal delivery to idempotency receipt\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
               "name": "receipt-before-terminal proof ties terminal delivery to idempotency receipt"
             }
           ]
@@ -497,13 +497,14 @@
       "owner": "docs source facts and generated docs projections",
       "ruleId": "docs-structure",
       "target": {
-        "kind": "proofClass",
-        "ruleId": "docs-structure"
+        "kind": "algorithmic",
+        "ruleId": "docs-structure",
+        "checker": "docs-link-integrity"
       },
       "assertions": [
         {
-          "failureCondition": "generated docs structure must match declared source facts and generator ownership",
-          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
+          "failureCondition": "relative Markdown docs links must resolve to live docs pages after generated package/API pages are deleted",
+          "negativeWitness": "algorithmic projection rejects a relative link to a deleted package/API docs page"
         }
       ]
     },
@@ -521,14 +522,14 @@
       "assertions": [
         {
           "failureCondition": "effectful-tool-replay-receipt: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/runtime-protocol/test/runtime-events.test.ts: \"replays receipt-backed external tool execution from the receipt artifact\"; packages/core/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
+          "negativeWitness": "packages/core/test/runtime-protocol/runtime-events.test.ts: \"replays receipt-backed external tool execution from the receipt artifact\"; packages/core/test/runtime-protocol/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
               "name": "replays receipt-backed external tool execution from the receipt artifact"
             },
             {
-              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
               "name": "validates receipt-backed bridge results before runtime logs tool.executed"
             }
           ]
@@ -624,14 +625,14 @@
       "assertions": [
         {
           "failureCondition": "failure diagnostics are projected from protocol categories, not SubmitResult",
-          "negativeWitness": "packages/core/runtime-protocol/test/failure-diagnostics.test.ts: \"folds structured tool rejection diagnostics without exposing raw args\"; packages/core/runtime-protocol/test/failure-diagnostics.test.ts: \"classifies missing receipt-backed execution path without hard-coded consumer owner\"",
+          "negativeWitness": "packages/core/test/runtime-protocol/failure-diagnostics.test.ts: \"folds structured tool rejection diagnostics without exposing raw args\"; packages/core/test/runtime-protocol/failure-diagnostics.test.ts: \"classifies missing receipt-backed execution path without hard-coded consumer owner\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/runtime-protocol/test/failure-diagnostics.test.ts",
+              "file": "packages/core/test/runtime-protocol/failure-diagnostics.test.ts",
               "name": "folds structured tool rejection diagnostics without exposing raw args"
             },
             {
-              "file": "packages/core/runtime-protocol/test/failure-diagnostics.test.ts",
+              "file": "packages/core/test/runtime-protocol/failure-diagnostics.test.ts",
               "name": "classifies missing receipt-backed execution path without hard-coded consumer owner"
             }
           ]
@@ -671,14 +672,14 @@
       "assertions": [
         {
           "failureCondition": "intent-settlement-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/runtime-protocol/test/intent.test.ts: \"detects overlap between intent and settlement vocabularies\"; packages/core/runtime-protocol/test/intent.test.ts: \"rejects fake-generic mutation and state lifecycle names\"",
+          "negativeWitness": "packages/core/test/runtime-protocol/intent.test.ts: \"detects overlap between intent and settlement vocabularies\"; packages/core/test/runtime-protocol/intent.test.ts: \"rejects fake-generic mutation and state lifecycle names\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/runtime-protocol/test/intent.test.ts",
+              "file": "packages/core/test/runtime-protocol/intent.test.ts",
               "name": "detects overlap between intent and settlement vocabularies"
             },
             {
-              "file": "packages/core/runtime-protocol/test/intent.test.ts",
+              "file": "packages/core/test/runtime-protocol/intent.test.ts",
               "name": "rejects fake-generic mutation and state lifecycle names"
             }
           ]
@@ -793,7 +794,7 @@
         "kind": "preMigrationChecker",
         "path": "packages/cli/src/check/check-product-resource-boundary.mjs"
       },
-      "owner": "@agent-os/resource-carrier",
+      "owner": "@agent-os/runtime",
       "ruleId": "product-resource-boundary",
       "target": {
         "kind": "proofClass",
@@ -801,16 +802,16 @@
       },
       "assertions": [
         {
-          "failureCondition": "product-resource-boundary: post-migration verdict must reject violations owned by @agent-os/resource-carrier",
-          "negativeWitness": "packages/carriers/resource/test/projection.test.ts: \"does not project lifecycle state from bound, mutation, or destroyed events without provision\"; packages/providers/resource-cloudflare/test/resource-carriers.test.ts: \"fast-fails unsupported mutation before material resolution or fetch\"",
+          "failureCondition": "product-resource-boundary: post-migration verdict must reject violations owned by @agent-os/runtime",
+          "negativeWitness": "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts: \"reserve rejects without writing resource_pool.reserved when insufficient\"; packages/runtime/test/cloudflare/resource-contract.runtime.test.ts: \"consume and release are mutually exclusive\"",
           "packageWitnesses": [
             {
-              "file": "packages/carriers/resource/test/projection.test.ts",
-              "name": "does not project lifecycle state from bound, mutation, or destroyed events without provision"
+              "file": "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts",
+              "name": "reserve rejects without writing resource_pool.reserved when insufficient"
             },
             {
-              "file": "packages/providers/resource-cloudflare/test/resource-carriers.test.ts",
-              "name": "fast-fails unsupported mutation before material resolution or fetch"
+              "file": "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts",
+              "name": "consume and release are mutually exclusive"
             }
           ]
         }
@@ -864,7 +865,7 @@
         "kind": "currentCheckerHelper",
         "path": "packages/cli/src/lib/public-api-model.mjs"
       },
-      "owner": "packages/cli algorithmic checker bundle",
+      "owner": "docs/surface.json",
       "ruleId": "public-api",
       "target": {
         "kind": "algorithmic-helper",
@@ -891,10 +892,10 @@
       "assertions": [
         {
           "failureCondition": "replay-dispatch-snapshot: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot\"",
+          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
               "name": "replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot"
             }
           ]
@@ -915,14 +916,14 @@
       "assertions": [
         {
           "failureCondition": "replay-llm-snapshot: post-migration verdict must reject violations owned by @agent-os/llm-protocol",
-          "negativeWitness": "packages/core/llm-protocol/test/llm-protocol.test.ts: \"replay mode live LLM provider adapter not called when call snapshot is present\"; packages/core/llm-protocol/test/llm-protocol.test.ts: \"snapshots an LLM call without route fields and replays the response\"",
+          "negativeWitness": "packages/core/test/llm-protocol/llm-protocol.test.ts: \"replay mode live LLM provider adapter not called when call snapshot is present\"; packages/core/test/llm-protocol/llm-protocol.test.ts: \"snapshots an LLM call without route fields and replays the response\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/llm-protocol/test/llm-protocol.test.ts",
+              "file": "packages/core/test/llm-protocol/llm-protocol.test.ts",
               "name": "replay mode live LLM provider adapter not called when call snapshot is present"
             },
             {
-              "file": "packages/core/llm-protocol/test/llm-protocol.test.ts",
+              "file": "packages/core/test/llm-protocol/llm-protocol.test.ts",
               "name": "snapshots an LLM call without route fields and replays the response"
             }
           ]
@@ -943,14 +944,14 @@
       "assertions": [
         {
           "failureCondition": "replay-tool-snapshot: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/runtime-protocol/test/runtime-events.test.ts: \"replay mode tool execute not called: deterministic tool result replays from snapshot\"; packages/core/runtime-protocol/test/runtime-events.test.ts: \"does not build a raw result snapshot for an external tool without a receipt\"",
+          "negativeWitness": "packages/core/test/runtime-protocol/runtime-events.test.ts: \"replay mode tool execute not called: deterministic tool result replays from snapshot\"; packages/core/test/runtime-protocol/runtime-events.test.ts: \"does not build a raw result snapshot for an external tool without a receipt\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
               "name": "replay mode tool execute not called: deterministic tool result replays from snapshot"
             },
             {
-              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
               "name": "does not build a raw result snapshot for an external tool without a receipt"
             }
           ]
@@ -971,7 +972,7 @@
       },
       "assertions": [
         {
-          "failureCondition": "root command surface must stay collapsed to the private CLI and approved distribution/runtime commands; scripts/ must remain reserved for parallel-dev shell helpers; tooling CLI must not import packages/* source",
+          "failureCondition": "root command surface must stay collapsed to the CLI package and approved distribution/runtime commands; scripts/ must remain reserved for parallel-dev shell helpers; CLI package specifiers must be declared dependencies; CLI must not import packages/* source outside packages/cli",
           "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
         }
       ]
@@ -990,10 +991,10 @@
       "assertions": [
         {
           "failureCondition": "resource-quota-protocol-ownership: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"owns quota payload codecs, idempotent grant usage, and malformed fact failure\"",
+          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"owns quota payload codecs, idempotent grant usage, and malformed fact failure\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
               "name": "owns quota payload codecs, idempotent grant usage, and malformed fact failure"
             }
           ]
@@ -1014,10 +1015,10 @@
       "assertions": [
         {
           "failureCondition": "resource-reservation-concurrency: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/backend-protocol/test/dispatch-payload.test.ts: \"owns resource payload codecs and projection fold\"",
+          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"owns resource payload codecs and projection fold\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/backend-protocol/test/dispatch-payload.test.ts",
+              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
               "name": "owns resource payload codecs and projection fold"
             }
           ]
@@ -1123,10 +1124,10 @@
       "assertions": [
         {
           "failureCondition": "telemetry-neutral: post-migration verdict must reject violations owned by @agent-os/telemetry-protocol",
-          "negativeWitness": "packages/core/telemetry-protocol/test/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
+          "negativeWitness": "packages/core/test/telemetry-protocol/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/telemetry-protocol/test/telemetry-event-tree.test.ts",
+              "file": "packages/core/test/telemetry-protocol/telemetry-event-tree.test.ts",
               "name": "canonicalizes timing, generated ids, and backend host ids while preserving semantics"
             },
             {
@@ -1179,14 +1180,14 @@
       "assertions": [
         {
           "failureCondition": "tool-execution-access-requirements: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "packages/core/test/tools.test.ts: \"rejects access-mismatched and write snapshot replay laws\"; packages/core/test/tools.test.ts: \"rejects host declarations without an env allowlist\"",
+          "negativeWitness": "packages/core/test/kernel/tools.test.ts: \"rejects access-mismatched and write snapshot replay laws\"; packages/core/test/kernel/tools.test.ts: \"rejects host declarations without an env allowlist\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/test/tools.test.ts",
+              "file": "packages/core/test/kernel/tools.test.ts",
               "name": "rejects access-mismatched and write snapshot replay laws"
             },
             {
-              "file": "packages/core/test/tools.test.ts",
+              "file": "packages/core/test/kernel/tools.test.ts",
               "name": "rejects host declarations without an env allowlist"
             }
           ]
@@ -1207,14 +1208,14 @@
       "assertions": [
         {
           "failureCondition": "tool-mutation-boundary: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "packages/core/test/tools.test.ts: \"keeps execution out of the claim contract\"; packages/core/test/tools.test.ts: \"rejects LLM tool-call envelopes at type level\"",
+          "negativeWitness": "packages/core/test/kernel/tools.test.ts: \"keeps execution out of the claim contract\"; packages/core/test/kernel/tools.test.ts: \"rejects LLM tool-call envelopes at type level\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/test/tools.test.ts",
+              "file": "packages/core/test/kernel/tools.test.ts",
               "name": "keeps execution out of the claim contract"
             },
             {
-              "file": "packages/core/test/tools.test.ts",
+              "file": "packages/core/test/kernel/tools.test.ts",
               "name": "rejects LLM tool-call envelopes at type level"
             }
           ]
@@ -1235,14 +1236,14 @@
       "assertions": [
         {
           "failureCondition": "tool replay witness is derived from execution domain law",
-          "negativeWitness": "packages/core/test/tools.test.ts: \"resolves replay witness only from the domain law\"; packages/core/runtime-protocol/test/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
+          "negativeWitness": "packages/core/test/kernel/tools.test.ts: \"resolves replay witness only from the domain law\"; packages/core/test/runtime-protocol/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
           "packageWitnesses": [
             {
-              "file": "packages/core/test/tools.test.ts",
+              "file": "packages/core/test/kernel/tools.test.ts",
               "name": "resolves replay witness only from the domain law"
             },
             {
-              "file": "packages/core/runtime-protocol/test/runtime-events.test.ts",
+              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
               "name": "validates receipt-backed bridge results before runtime logs tool.executed"
             }
           ]
@@ -1273,7 +1274,7 @@
         "kind": "preMigrationChecker",
         "path": "packages/cli/src/check/check-turn-stream-provider-wire-boundary.mjs"
       },
-      "owner": "@agent-os/turn-stream",
+      "owner": "@agent-os/runtime",
       "ruleId": "turn-stream-provider-wire-boundary",
       "target": {
         "kind": "proofClass",
@@ -1281,16 +1282,16 @@
       },
       "assertions": [
         {
-          "failureCondition": "turn-stream-provider-wire-boundary: post-migration verdict must reject violations owned by @agent-os/turn-stream",
-          "negativeWitness": "packages/composers/turn-stream/test/turn-stream.test.ts: \"preserves provider error terminal frames without ledger writes\"; packages/composers/turn-stream/test/turn-stream.test.ts: \"encodes and decodes data-only SSE frames\"",
+          "failureCondition": "turn-stream-provider-wire-boundary: post-migration verdict must reject violations owned by @agent-os/runtime",
+          "negativeWitness": "packages/runtime/test/cloudflare/attached-stream.runtime.test.ts: \"runs an output-only SSE attached stream\"; packages/runtime/test/attached-stream.test.ts: \"closes with a failed terminal frame when terminal commit is not acknowledged\"",
           "packageWitnesses": [
             {
-              "file": "packages/composers/turn-stream/test/turn-stream.test.ts",
-              "name": "preserves provider error terminal frames without ledger writes"
+              "file": "packages/runtime/test/cloudflare/attached-stream.runtime.test.ts",
+              "name": "runs an output-only SSE attached stream"
             },
             {
-              "file": "packages/composers/turn-stream/test/turn-stream.test.ts",
-              "name": "encodes and decodes data-only SSE frames"
+              "file": "packages/runtime/test/attached-stream.test.ts",
+              "name": "closes with a failed terminal frame when terminal commit is not acknowledged"
             }
           ]
         }
@@ -1301,7 +1302,7 @@
         "kind": "package-test",
         "id": "workspace-agui-integration-fixture"
       },
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "workspace-agui-integration-fixture",
       "target": {
         "kind": "proofClass",
@@ -1310,11 +1311,11 @@
       "assertions": [
         {
           "failureCondition": "workspace AG-UI integration consumes owner-safe projections",
-          "negativeWitness": "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts: \"uses standard workspace binding, receipt-backed writes, diagnostics, and safe AG-UI egress\"",
+          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"installs a workspace-job profile over sanitized projection and existing host helpers\"",
           "packageWitnesses": [
             {
-              "file": "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts",
-              "name": "uses standard workspace binding, receipt-backed writes, diagnostics, and safe AG-UI egress"
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+              "name": "installs a workspace-job profile over sanitized projection and existing host helpers"
             }
           ]
         }
@@ -1325,7 +1326,7 @@
         "kind": "preMigrationChecker",
         "path": "packages/cli/src/check/check-workspace-exec-material-ref-boundary.mjs"
       },
-      "owner": "@agent-os/workspace-env",
+      "owner": "@agent-os/runtime",
       "ruleId": "workspace-exec-material-ref-boundary",
       "target": {
         "kind": "proofClass",
@@ -1333,16 +1334,16 @@
       },
       "assertions": [
         {
-          "failureCondition": "workspace-exec-material-ref-boundary: post-migration verdict must reject violations owned by @agent-os/workspace-env",
-          "negativeWitness": "packages/execution-domains/workspace-env/test/workspace-env.test.ts: \"generates workspace tools from one actuator\"; packages/execution-domains/workspace-env/test/workspace-env.test.ts: \"rejects host absolute workspace tool paths before actuator resolution\"",
+          "failureCondition": "workspace-exec-material-ref-boundary: post-migration verdict must reject violations owned by @agent-os/runtime",
+          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"resolves one Cloudflare WorkspaceEnv lease per scope/run and validates bindings\"; packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"allows hosts to declare the WorkspaceEnv ref carried by workspace operations\"",
           "packageWitnesses": [
             {
-              "file": "packages/execution-domains/workspace-env/test/workspace-env.test.ts",
-              "name": "generates workspace tools from one actuator"
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+              "name": "resolves one Cloudflare WorkspaceEnv lease per scope/run and validates bindings"
             },
             {
-              "file": "packages/execution-domains/workspace-env/test/workspace-env.test.ts",
-              "name": "rejects host absolute workspace tool paths before actuator resolution"
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+              "name": "allows hosts to declare the WorkspaceEnv ref carried by workspace operations"
             }
           ]
         }
@@ -1362,15 +1363,15 @@
       "assertions": [
         {
           "failureCondition": "workspace-job terminal vocabulary remains carrier-owned",
-          "negativeWitness": "packages/carriers/workspace-job/test/workspace-job.test.ts: \"keeps verified, verifier_rejected, and failed terminal states distinct\"; packages/carriers/workspace-job/test/workspace-job.test.ts: \"does not project a verdict unless it references the finalized terminal artifact fact\"",
+          "negativeWitness": "packages/runtime/test/workspace-job.test.ts: \"commits verifier_rejected as a product verdict distinct from failed\"; packages/runtime/test/workspace-job.test.ts: \"verifies finalized bytes and commits a verified projection digest for delivery bytes\"",
           "packageWitnesses": [
             {
-              "file": "packages/carriers/workspace-job/test/workspace-job.test.ts",
-              "name": "keeps verified, verifier_rejected, and failed terminal states distinct"
+              "file": "packages/runtime/test/workspace-job.test.ts",
+              "name": "commits verifier_rejected as a product verdict distinct from failed"
             },
             {
-              "file": "packages/carriers/workspace-job/test/workspace-job.test.ts",
-              "name": "does not project a verdict unless it references the finalized terminal artifact fact"
+              "file": "packages/runtime/test/workspace-job.test.ts",
+              "name": "verifies finalized bytes and commits a verified projection digest for delivery bytes"
             }
           ]
         }
@@ -1390,11 +1391,11 @@
       "assertions": [
         {
           "failureCondition": "workspace-op terminals are carrier receipts, not inline runtime tool facts",
-          "negativeWitness": "packages/carriers/workspace-op/test/workspace-op.test.ts: \"projects requested and external-receipt completed workspace operation state\"",
+          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"installs workspace-op provider handlers that commit only through boundary capability\"",
           "packageWitnesses": [
             {
-              "file": "packages/carriers/workspace-op/test/workspace-op.test.ts",
-              "name": "projects requested and external-receipt completed workspace operation state"
+              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+              "name": "installs workspace-op provider handlers that commit only through boundary capability"
             }
           ]
         }
@@ -1405,7 +1406,7 @@
         "kind": "package-test",
         "id": "workspace-tool-exposure-policy"
       },
-      "owner": "@agent-os/workspace-binding",
+      "owner": "@agent-os/runtime",
       "ruleId": "workspace-tool-exposure-policy",
       "target": {
         "kind": "proofClass",
@@ -1414,15 +1415,15 @@
       "assertions": [
         {
           "failureCondition": "workspace tool exposure defaults to read-only and opts in to receipt-backed mutations",
-          "negativeWitness": "packages/composers/workspace-binding/test/workspace-binding.test.ts: \"keeps mutation and shell tools disabled unless receipt-backed policy is explicit\"; packages/composers/workspace-binding/test/workspace-binding.test.ts: \"turns mutation tools into workspace-op intent/projection bridges\"",
+          "negativeWitness": "packages/runtime/test/submit-agent-runtime-events.test.ts: \"does not execute an external tool without a receipt-backed terminal contract\"; packages/runtime/test/submit-agent-runtime-events.test.ts: \"records receipt-backed external tool execution from a declared bridge result\"",
           "packageWitnesses": [
             {
-              "file": "packages/composers/workspace-binding/test/workspace-binding.test.ts",
-              "name": "keeps mutation and shell tools disabled unless receipt-backed policy is explicit"
+              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "name": "does not execute an external tool without a receipt-backed terminal contract"
             },
             {
-              "file": "packages/composers/workspace-binding/test/workspace-binding.test.ts",
-              "name": "turns mutation tools into workspace-op intent/projection bridges"
+              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "name": "records receipt-backed external tool execution from a declared bridge result"
             }
           ]
         }

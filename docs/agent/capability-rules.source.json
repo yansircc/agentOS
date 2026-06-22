@@ -11,20 +11,25 @@
       "allowedPrimitives": [
         "primitive.agent-authoring.compileAgentTree",
         "primitive.agent-authoring.linkWorkspaceStaticTarget",
-        "primitive.workspace-agent.createWorkspaceAgentClient",
         "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
       ],
       "forbiddenWrites": [
         {
           "actor": "generated_target",
           "action": "choose_implementation_from_manifest_json",
-          "target": { "kind": "surface", "value": "manifest.json" },
+          "target": {
+            "kind": "surface",
+            "value": "manifest.json"
+          },
           "invariant": "invariant.algebra.single-code-source"
         },
         {
           "actor": "product",
           "action": "hand_write_generated_target_wiring",
-          "target": { "kind": "surface", "value": ".agentos/generated" },
+          "target": {
+            "kind": "surface",
+            "value": ".agentos/generated"
+          },
           "invariant": "invariant.docs.agent-projection"
         }
       ],
@@ -51,13 +56,19 @@
         {
           "actor": "product",
           "action": "read_raw_ledger_payload",
-          "target": { "kind": "eventPrefix", "value": "agent." },
+          "target": {
+            "kind": "eventPrefix",
+            "value": "agent."
+          },
           "invariant": "invariant.boundary.owner-owned-safe-projection"
         },
         {
           "actor": "ui",
           "action": "treat_stream_as_durable_truth",
-          "target": { "kind": "surface", "value": "ag-ui-sse" },
+          "target": {
+            "kind": "surface",
+            "value": "ag-ui-sse"
+          },
           "invariant": "invariant.d10.truth-identity"
         }
       ],
@@ -83,19 +94,28 @@
         {
           "actor": "product",
           "action": "write_terminal_fact",
-          "target": { "kind": "eventPrefix", "value": "workspace_job." },
+          "target": {
+            "kind": "eventPrefix",
+            "value": "workspace_job."
+          },
           "invariant": "invariant.d10.namespace-integrity"
         },
         {
           "actor": "product",
           "action": "read_raw_ledger_payload",
-          "target": { "kind": "eventPrefix", "value": "workspace_op." },
+          "target": {
+            "kind": "eventPrefix",
+            "value": "workspace_op."
+          },
           "invariant": "invariant.boundary.owner-owned-safe-projection"
         },
         {
           "actor": "public_submit",
           "action": "carry_resolved_provider_material",
-          "target": { "kind": "material", "value": "resolved provider material" },
+          "target": {
+            "kind": "material",
+            "value": "resolved provider material"
+          },
           "invariant": "invariant.d10.truth-identity"
         }
       ],
@@ -124,13 +144,19 @@
         {
           "actor": "product",
           "action": "execute_without_declared_tool_contract",
-          "target": { "kind": "eventPrefix", "value": "tool." },
+          "target": {
+            "kind": "eventPrefix",
+            "value": "tool."
+          },
           "invariant": "invariant.algebra.type-or-boot-proof"
         },
         {
           "actor": "tool_handler",
           "action": "store_provider_material_in_tool_payload",
-          "target": { "kind": "material", "value": "provider credentials" },
+          "target": {
+            "kind": "material",
+            "value": "provider credentials"
+          },
           "invariant": "invariant.boundary.runtime-validation-external-only"
         }
       ],
@@ -153,13 +179,19 @@
         {
           "actor": "projection",
           "action": "become_source_of_truth",
-          "target": { "kind": "surface", "value": "materialized projection state" },
+          "target": {
+            "kind": "surface",
+            "value": "materialized projection state"
+          },
           "invariant": "invariant.d10.truth-identity"
         },
         {
           "actor": "consumer",
           "action": "write_derived_state_back_to_ledger_fact",
-          "target": { "kind": "eventPrefix", "value": "agent." },
+          "target": {
+            "kind": "eventPrefix",
+            "value": "agent."
+          },
           "invariant": "invariant.ledger.single-commit-source"
         }
       ],

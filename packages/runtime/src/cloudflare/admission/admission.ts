@@ -42,7 +42,7 @@ import {
   type Outcome,
 } from "@agent-os/core/runtime-protocol";
 import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/core/llm-protocol";
-import { EventBus } from "../ledger";
+import { EventBus } from "../ledger/event-bus";
 import { JsonStringifyError, UpstreamFailure } from "@agent-os/core/errors";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { loadAdmissionRows } from "./payload";

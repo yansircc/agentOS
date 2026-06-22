@@ -17,12 +17,13 @@ instead of sharing the agentOS source workspace lockfile.
 ## Steps
 
 1. Install required packages with semver versions.
-2. Use the published `@yansirplus/*` package names.
+2. Use the published `@yansirplus/core`, `@yansirplus/runtime`,
+   `@yansirplus/client`, and `@yansirplus/cli` package names.
 3. Install required peers such as `effect`.
 4. For prepublish first-party work, run `bun run install:consumer --
-/path/to/consumer` in agentOS. This overlays the generated `@yansirplus/*`
-   package projection into the consumer `node_modules` without changing the
-   consumer manifest or lockfile.
+/path/to/consumer` in agentOS. This overlays the generated final public package
+   projection into the consumer `node_modules` without changing the consumer
+   manifest or lockfile.
 5. Restore the consumer to registry truth with `bun run restore:consumer --
 /path/to/consumer`.
 6. If the consumer must exercise registry or dist-tag behavior instead, run a
@@ -68,8 +69,10 @@ Consumer `package.json`:
 ```json
 {
   "dependencies": {
-    "@yansirplus/ag-ui": "agentos-dev",
-    "@yansirplus/runtime": "agentos-dev"
+    "@yansirplus/core": "agentos-dev",
+    "@yansirplus/runtime": "agentos-dev",
+    "@yansirplus/client": "agentos-dev",
+    "@yansirplus/cli": "agentos-dev"
   }
 }
 ```

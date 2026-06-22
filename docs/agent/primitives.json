@@ -8,70 +8,70 @@
   "primitives": [
     {
       "id": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
-      "package": "@agent-os/ag-ui",
-      "packagePath": "packages/wire-adapters/ag-ui",
-      "entrypoints": ["."],
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": ["./ag-ui"],
       "symbol": "projectLedgerEventToAgUiEnvelope",
-      "exportKey": ".:projectLedgerEventToAgUiEnvelope",
-      "sourceFile": "packages/wire-adapters/ag-ui/src/index.ts",
+      "exportKey": "./ag-ui:projectLedgerEventToAgUiEnvelope",
+      "sourceFile": "packages/runtime/src/ag-ui.ts",
       "summary": "Projects one typed ledger event into a browser-safe AG-UI envelope.",
       "aliases": [],
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "capabilityKind": "projection",
       "testEvidence": {
-        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
       }
     },
     {
       "id": "primitive.ag-ui.projectLedgerSseToAgUiSse",
-      "package": "@agent-os/ag-ui",
-      "packagePath": "packages/wire-adapters/ag-ui",
-      "entrypoints": ["."],
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": ["./ag-ui"],
       "symbol": "projectLedgerSseToAgUiSse",
-      "exportKey": ".:projectLedgerSseToAgUiSse",
-      "sourceFile": "packages/wire-adapters/ag-ui/src/index.ts",
+      "exportKey": "./ag-ui:projectLedgerSseToAgUiSse",
+      "sourceFile": "packages/runtime/src/ag-ui.ts",
       "summary": "Transports ledger SSE events as AG-UI SSE envelopes.",
       "aliases": [],
       "invariants": ["invariant.boundary.owner-owned-safe-projection"],
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "capabilityKind": "projection",
       "testEvidence": {
-        "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
       }
     },
     {
       "id": "primitive.agent-authoring.compileAgentTree",
-      "package": "@agent-os/agent-authoring",
-      "packagePath": "packages/composers/agent-authoring",
+      "package": "@agent-os/cli",
+      "packagePath": "packages/cli",
       "entrypoints": ["."],
       "symbol": "compileAgentTree",
       "exportKey": ".:compileAgentTree",
-      "sourceFile": "packages/composers/agent-authoring/src/index.ts",
-      "summary": "Compile an authored `agent/` tree into one normalized manifest plus provenance. This is the app-author entrypoint; runtime facts and provider material are rejected before they can become manifest truth.",
+      "sourceFile": "packages/cli/src/index.ts",
+      "summary": "Compile an authored `agent/` tree into one normalized manifest plus provenance. Runtime facts and provider material are rejected before they can become manifest truth.",
       "aliases": [],
       "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
       "docs": "docs/guides/build-natural-language-workspace-agent.md",
       "capabilityKind": "composer",
       "testEvidence": {
-        "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+        "tests": ["packages/cli/test/build-command.test.mjs"]
       }
     },
     {
       "id": "primitive.agent-authoring.linkWorkspaceStaticTarget",
-      "package": "@agent-os/agent-authoring",
-      "packagePath": "packages/composers/agent-authoring",
+      "package": "@agent-os/cli",
+      "packagePath": "packages/cli",
       "entrypoints": ["."],
       "symbol": "linkWorkspaceStaticTarget",
       "exportKey": ".:linkWorkspaceStaticTarget",
-      "sourceFile": "packages/composers/agent-authoring/src/index.ts",
+      "sourceFile": "packages/cli/src/index.ts",
       "summary": "Link normalized workspace authoring intent to a closed-target residual program. Implementation wiring is static imports and factory composition; manifest and deployment JSON remain semantic/provenance data only.",
       "aliases": [],
       "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
       "docs": "docs/guides/build-natural-language-workspace-agent.md",
       "capabilityKind": "composer",
       "testEvidence": {
-        "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+        "tests": ["packages/cli/test/build-command.test.mjs"]
       }
     },
     {
@@ -554,8 +554,8 @@
       "capabilityKind": "kernel",
       "testEvidence": {
         "tests": [
-          "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-          "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+          "packages/core/test/runtime-protocol/runtime-events.test.ts",
+          "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
         ]
       }
     },
@@ -922,7 +922,7 @@
       "summary": "Projects a consumer-safe workspace job view by joining workspace-job terminal facts with runtime diagnostic projections. The raw carrier projection may expose substrate/debug join keys; this projection never exposes them.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.failure-observability-join"],
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/workspace-job.test.ts"]
@@ -939,7 +939,7 @@
       "summary": "Runs a protected workspace job from product declarations to a carrier-owned terminal projection. The verifier receives finalized artifact bytes; candidate bytes are never the verification subject. When recovery is declared, verifier_rejected is an attempt terminal state until the repair budget is exhausted; the job projection is derived from the latest attempt.",
       "aliases": [],
       "invariants": ["invariant.workspace-job.verified-terminal"],
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "capabilityKind": "runtime",
       "testEvidence": {
         "tests": ["packages/runtime/test/workspace-job.test.ts"]
@@ -1000,26 +1000,6 @@
       "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/runtime/test/projection.test.ts"]
-      }
-    },
-    {
-      "id": "primitive.workspace-agent.createWorkspaceAgentClient",
-      "package": "@agent-os/workspace-agent",
-      "packagePath": "packages/composers/workspace-agent",
-      "entrypoints": ["."],
-      "symbol": "createWorkspaceAgentClient",
-      "exportKey": ".:createWorkspaceAgentClient",
-      "sourceFile": "packages/composers/workspace-agent/src/index.ts",
-      "summary": "Create the workspace-agent typed command client over the shared transport-neutral client state machine. Generated framework bridges inject stream and RPC transports; this package does not own UI components.",
-      "aliases": [],
-      "invariants": [
-        "invariant.docs.agent-projection",
-        "invariant.boundary.owner-owned-safe-projection"
-      ],
-      "docs": "docs/guides/build-natural-language-workspace-agent.md",
-      "capabilityKind": "composer",
-      "testEvidence": {
-        "tests": ["packages/composers/workspace-agent/test/workspace-agent.test.ts"]
       }
     }
   ]

@@ -18,7 +18,7 @@ import {
   ResourceReservationClosed,
   ResourceReservationNotFound,
 } from "@agent-os/core/errors";
-import { EventBus } from "../ledger";
+import { EventBus } from "../ledger/event-bus";
 import { Resources, runtimeStorageError, runtimeStorageOrJsonError } from "@agent-os/runtime";
 import { commitLedgerTransaction } from "../ledger/commit";
 import {
@@ -27,10 +27,6 @@ import {
 } from "@agent-os/core/backend-protocol";
 
 import { emptyProjection, loadState } from "./projection";
-
-// Re-export the projection shape so callers that historically imported
-// it from "./resources" keep working.
-export type { ResourceProjection } from "@agent-os/core/backend-protocol";
 
 const assertPositiveAmount = (amount: number): Effect.Effect<void, InvalidResourceAmount> =>
   Number.isFinite(amount) && amount > 0

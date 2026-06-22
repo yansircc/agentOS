@@ -12,7 +12,7 @@ import {
   commitDurableTriggerIntent,
   selectDurableProcessLifecycle,
 } from "../../src/cloudflare/due-work";
-import { EventBus } from "../../src/cloudflare/ledger";
+import { EventBus } from "../../src/cloudflare/ledger/event-bus";
 import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {

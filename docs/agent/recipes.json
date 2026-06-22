@@ -12,17 +12,11 @@
       "tutorial": "docs/guides/build-natural-language-workspace-agent.md",
       "primitives": [
         "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget",
-        "primitive.workspace-agent.createWorkspaceAgentClient"
+        "primitive.agent-authoring.linkWorkspaceStaticTarget"
       ],
-      "commands": [
-        "bun run --cwd packages/composers/agent-authoring test",
-        "bun run --cwd packages/composers/workspace-agent test",
-        "bun run check:distribution"
-      ],
+      "commands": ["bun run --cwd packages/cli test", "bun run check:distribution"],
       "evidence": [
-        "packages/composers/agent-authoring/test/agent-authoring.test.ts",
-        "packages/composers/workspace-agent/test/workspace-agent.test.ts",
+        "packages/cli/test/build-command.test.mjs",
         "packages/cli/src/check/algorithmic-checks.mjs"
       ],
       "next": ["recipe.tool-schema-authority", "recipe.projection-reader"]
@@ -62,10 +56,7 @@
         "primitive.runtime.defineProjection",
         "primitive.runtime.ProjectionReduceResult"
       ],
-      "commands": [
-        "bun run --cwd packages/runtime test",
-        "bun run --cwd packages/runtime/src/in-memory test"
-      ],
+      "commands": ["bun run --cwd packages/runtime test"],
       "evidence": [
         "packages/runtime/test/projection.test.ts",
         "packages/runtime/test/in-memory/materialized-projections.test.ts"
@@ -85,13 +76,10 @@
         "primitive.runtime.SubmitResult",
         "primitive.ag-ui.projectLedgerEventToAgUiEnvelope"
       ],
-      "commands": [
-        "bun run --cwd packages/runtime test",
-        "bun run --cwd packages/wire-adapters/ag-ui test"
-      ],
+      "commands": ["bun run --cwd packages/runtime test"],
       "evidence": [
         "packages/runtime/test/submit-agent-runtime-events.test.ts",
-        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ],
       "next": ["recipe.tool-schema-authority", "recipe.full-small-agent-app"]
     },
@@ -109,14 +97,11 @@
         "primitive.kernel.ExecutionDomain",
         "primitive.kernel.BoundaryContract"
       ],
-      "commands": [
-        "bun run --cwd packages/core test",
-        "bun run --cwd packages/execution-domains/workspace-env test"
-      ],
+      "commands": ["bun run --cwd packages/core test", "bun run --cwd packages/runtime test"],
       "evidence": [
         "packages/core/test/kernel/agent-schema.test.ts",
         "packages/core/test/kernel/tools.test.ts",
-        "packages/execution-domains/workspace-env/test/workspace-env.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ],
       "next": ["recipe.provider-material-binding", "recipe.full-small-agent-app"]
     }

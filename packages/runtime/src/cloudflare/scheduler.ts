@@ -8,7 +8,7 @@ import {
   runtimeStorageOrJsonError,
   type RuntimeStorageError,
 } from "@agent-os/runtime";
-import { EventBus } from "./ledger";
+import { EventBus } from "./ledger/event-bus";
 import { enqueueScheduledEvent, ensureDueWorkSchema } from "./due-work";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 

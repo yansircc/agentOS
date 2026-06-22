@@ -3,19 +3,19 @@
   "evidence": [
     {
       "primitive": "primitive.agent-authoring.compileAgentTree",
-      "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+      "tests": ["packages/cli/test/build-command.test.mjs"]
     },
     {
       "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
-      "tests": ["packages/composers/agent-authoring/test/agent-authoring.test.ts"]
+      "tests": ["packages/cli/test/build-command.test.mjs"]
     },
     {
       "primitive": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
-      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.ag-ui.projectLedgerSseToAgUiSse",
-      "tests": ["packages/wire-adapters/ag-ui/test/ag-ui.test.ts"]
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
       "primitive": "primitive.kernel.AgentSchema",
@@ -110,8 +110,8 @@
     {
       "primitive": "primitive.kernel.SafeLedgerEvent",
       "tests": [
-        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-        "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+        "packages/core/test/runtime-protocol/runtime-events.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },
     {
@@ -145,10 +145,6 @@
     {
       "primitive": "primitive.runtime.Ledger",
       "tests": ["packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"]
-    },
-    {
-      "primitive": "primitive.workspace-agent.createWorkspaceAgentClient",
-      "tests": ["packages/composers/workspace-agent/test/workspace-agent.test.ts"]
     },
     {
       "primitive": "primitive.runtime.LedgerCommitEventSpec",

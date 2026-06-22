@@ -65,9 +65,7 @@ const expectNoExtraArgs = (args, command) => {
 };
 
 const runBuild = async (args) => {
-  const runner = fileURLToPath(
-    new URL("../../../packages/composers/agent-authoring/bin/build-cli.ts", import.meta.url),
-  );
+  const runner = fileURLToPath(new URL("./build/build-cli.ts", import.meta.url));
   await new Promise((resolve, reject) => {
     const child = spawn("bun", [runner, "build", ...args], { stdio: "inherit" });
     child.on("error", (error) => {

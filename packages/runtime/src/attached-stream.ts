@@ -4,8 +4,8 @@ import type {
   AttachedStreamMode,
   AttachedStreamOutboundBody,
   AttachedStreamOutboundFrame,
-} from "@agent-os/attached-stream";
-import { attachedStreamOutboundFrame } from "@agent-os/attached-stream";
+} from "./attached-stream-protocol";
+import { attachedStreamOutboundFrame } from "./attached-stream-protocol";
 import type { JsonStringifyError } from "@agent-os/core";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import type { TriggerEventSpec } from "./trigger";

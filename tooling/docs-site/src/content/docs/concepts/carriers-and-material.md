@@ -31,4 +31,4 @@ This concept does not choose tenant auth policy or provider API topology.
 
 - [Boundary contract](/boundary-contract/)
 - [Runtime packages](/runtime-packages/)
-- [Resource carrier](/packages/resource-carrier/)
+- [Carrier reference](/reference/carriers/)

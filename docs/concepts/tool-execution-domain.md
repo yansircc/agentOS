@@ -27,12 +27,12 @@ WorkspaceEnv tool. The declaration exists so admission, boot validation, and
 ledger audit all see the same symbolic locus without putting execution inside
 the claim contract.
 
-`@agent-os/sandbox` is bounded stateless execution-domain algebra.
-`@agent-os/workspace-env` is a stable fs+exec actuator. Provider adapters choose
-the real execution domain: Cloudflare Sandbox declares `sandbox`; local Node
-fs/shell declares `host` with an explicit environment allowlist. These are
-adjacent execution surfaces, not one merged abstraction and not carrier
-packages.
+Sandbox is bounded stateless execution-domain algebra in `@agent-os/core`.
+`@agent-os/runtime` owns the stable WorkspaceEnv fs+exec actuator. Provider
+adapters choose the real execution domain: Cloudflare Sandbox declares
+`sandbox`; local Node fs/shell declares `host` with an explicit environment
+allowlist. These are adjacent execution surfaces, not one merged abstraction and
+not carrier packages.
 
 ## Non-Goals
 
@@ -41,7 +41,5 @@ workspace-session lifecycle, or product-specific workspace projections.
 
 ## Related
 
-- [Sandbox package](../packages/sandbox.md)
-- [WorkspaceEnv package](../packages/workspace-env.md)
-- [Workspace session package](../packages/workspace-session.md)
-- [Local WorkspaceEnv package](../packages/workspace-env-local.md)
+- [Core package](../packages/core.md)
+- [Runtime package](../packages/runtime.md)

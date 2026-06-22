@@ -25,12 +25,11 @@
         "primitive.kernel.ToolExecution",
         "primitive.kernel.ToolExecutionContext"
       ],
-      "errors": ["agent_os.invalid_resource_amount", "agent_os.sandbox_policy_denied"],
+      "errors": ["agent_os.invalid_resource_amount"],
       "docs": [
         "docs/boundary-contract.md",
         "docs/concepts/tool-execution-domain.md",
-        "docs/packages/resource-carrier.md",
-        "docs/packages/sandbox.md",
+        "docs/packages/runtime.md",
         "docs/README.md"
       ],
       "tests": [
@@ -61,7 +60,7 @@
       "docs": [
         "docs/concepts/durable-process-algebra.md",
         "docs/concepts/durable-truth.md",
-        "docs/packages/resource-carrier.md"
+        "docs/packages/runtime.md"
       ],
       "tests": [
         "packages/runtime/test/cloudflare/ledger-commit-contract.test.ts",
@@ -107,25 +106,16 @@
       "errors": [
         "agent_os.aead_sealed_codec_failure",
         "agent_os.backend_protocol_parse_failure",
-        "agent_os.cloudflare_worker_bundle_resolution_failure",
-        "agent_os.cloudflare_worker_deploy_resolution_failure",
         "agent_os.dispatch_payload_parse_failure",
-        "agent_os.dynamic_worker_failure",
-        "agent_os.dynamic_worker_policy_denied",
-        "agent_os.dynamic_worker_policy_violation",
-        "agent_os.dynamic_worker_provider_failure",
         "agent_os.effect_ai_aborted",
         "agent_os.effect_ai_prompt_error",
         "agent_os.effect_ai_unsupported_route",
-        "agent_os.image_resource_settlement_reconcile_required",
         "agent_os.invalid_trace_context",
         "agent_os.llm_call_timed_out",
         "agent_os.llm_call_timeout",
         "agent_os.postgres_harness_error",
         "agent_os.provider_http_failure",
         "agent_os.ref_resolution_failed",
-        "agent_os.sandbox_failure",
-        "agent_os.tenant_credential_resolver_configuration_error",
         "agent_os.witness_port_rejected"
       ],
       "docs": [
@@ -133,12 +123,7 @@
         "docs/concepts/agent-schema.md",
         "docs/concepts/carriers-and-material.md",
         "docs/packages/core.md",
-        "docs/packages/deploy-cloudflare.md",
-        "docs/packages/dynamic-worker.md",
-        "docs/packages/image-resource-settlement.md",
         "docs/packages/runtime.md",
-        "docs/packages/sandbox.md",
-        "docs/packages/tenant-material.md",
         "docs/README.md"
       ],
       "tests": [
@@ -152,18 +137,13 @@
       "primitives": [
         "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
         "primitive.ag-ui.projectLedgerSseToAgUiSse",
-        "primitive.kernel.SafeLedgerEvent",
-        "primitive.workspace-agent.createWorkspaceAgentClient"
+        "primitive.kernel.SafeLedgerEvent"
       ],
       "errors": [],
-      "docs": [
-        "docs/concepts/ag-ui-wire-adapter.md",
-        "docs/concepts/durable-truth.md",
-        "docs/guides/build-natural-language-workspace-agent.md"
-      ],
+      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/concepts/durable-truth.md"],
       "tests": [
-        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-        "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+        "packages/core/test/runtime-protocol/runtime-events.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },
     {
@@ -250,8 +230,7 @@
       "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
       "primitives": [
         "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget",
-        "primitive.workspace-agent.createWorkspaceAgentClient"
+        "primitive.agent-authoring.linkWorkspaceStaticTarget"
       ],
       "errors": ["agent_os.projection_sink_failure"],
       "docs": [
@@ -284,10 +263,10 @@
       "statement": "Only the workspace-op carrier constructs workspace_op.* terminal payloads; host providers execute requested facts and commit through the carrier boundary capability.",
       "primitives": ["primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider"],
       "errors": [],
-      "docs": ["docs/packages/runtime.md", "docs/packages/workspace-op.md"],
+      "docs": ["docs/packages/runtime.md"],
       "tests": [
-        "packages/carriers/workspace-op/test/workspace-op.test.ts",
-        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+        "packages/runtime/test/submit-agent-runtime-events.test.ts"
       ]
     },
     {
@@ -314,9 +293,8 @@
         "agent_os.workspace_job_run_id_mismatch",
         "agent_os.workspace_job_verifier_failed"
       ],
-      "docs": ["docs/packages/runtime.md", "docs/packages/workspace-job.md"],
+      "docs": ["docs/packages/runtime.md"],
       "tests": [
-        "packages/carriers/workspace-job/test/workspace-job.test.ts",
         "packages/runtime/test/workspace-job.test.ts",
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
@@ -329,9 +307,8 @@
         "primitive.runtime.projectWorkspaceJobObservability"
       ],
       "errors": [],
-      "docs": ["docs/packages/runtime.md", "docs/packages/workspace-job.md"],
+      "docs": ["docs/packages/runtime.md"],
       "tests": [
-        "packages/carriers/workspace-job/test/workspace-job.test.ts",
         "packages/runtime/test/workspace-job.test.ts",
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]

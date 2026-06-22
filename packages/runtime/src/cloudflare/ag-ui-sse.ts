@@ -4,7 +4,7 @@ import {
   projectLedgerEventsToAgUiEnvelopes,
   projectLedgerSseToAgUiSse,
   type AgUiLedgerEnvelopeProjectionSpec,
-} from "@agent-os/ag-ui";
+} from "../ag-ui";
 import type { LedgerEvent } from "@agent-os/core/types";
 import {
   createSseHttpResponse,
@@ -12,7 +12,7 @@ import {
   responseToSseHttpChunks,
   type SseHttpResponseOptions,
   type SseHttpChunk,
-} from "@agent-os/sse-http";
+} from "../sse-http";
 
 export type CloudflareLedgerSseSource = Response | AsyncIterable<SseHttpChunk>;
 

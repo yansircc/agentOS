@@ -9,16 +9,16 @@ views from projections.
 
 | Surface            | Package                                    | Audience               | First facts                                        |
 | ------------------ | ------------------------------------------ | ---------------------- | -------------------------------------------------- |
-| App authoring      | `@agent-os/agent-authoring`                | App authors            | `agent/instructions.md`, `agent/agent.json`        |
+| App authoring      | `@agent-os/cli`                            | App authors            | `agent/instructions.md`, `agent/agent.json`        |
 | Generated client   | app framework output                       | App authors            | typed submit, projection subscriptions, commands   |
 | Client core        | `@agent-os/client`                         | App UI/headless code   | transport-neutral store and typed command invoker  |
 | Framework bridge   | `@agent-os/client/react` / `client/svelte` | App UI authors         | framework reactivity over canonical client state   |
-| Workspace preset   | `@agent-os/workspace-agent`                | Generated target host  | workspace projections, commands, generated mount   |
+| Workspace preset   | `@agent-os/cli`                            | Generated target host  | workspace projections, commands, generated mount   |
 | Backend mount      | `@agent-os/runtime/cloudflare`             | Backend authors        | Durable Object factory, manifest mount             |
 | Runtime substrate  | `@agent-os/runtime`                        | Backend authors        | Effect Tags, submit protocol, projections          |
 | Backend protocol   | `@agent-os/core/backend-protocol`          | Backend authors        | shared dispatch/scheduler/resource/quota semantics |
-| Carriers/providers | `@agent-os/*` carrier/provider packages    | Domain package authors | boundary packages, provider materializers          |
-| Composers/tooling  | `@agent-os/run-stream`, tooling packages   | Ops and UI authors     | projections, manifests, install-time registries    |
+| Carriers/providers | `@agent-os/runtime` modules/subpaths       | Domain package authors | boundary packages, provider materializers          |
+| Composers/tooling  | `@agent-os/runtime`, `@agent-os/cli`       | Ops and UI authors     | projections, manifests, install-time registries    |
 
 ## Minimal App Concepts
 
@@ -66,9 +66,9 @@ Framework packages stop at reactivity bridges. They expose hooks or stores over
 the client state and typed command invoker; they do not own UI components,
 timeline/file-review shapes, runtime event decoders, or transport logic.
 
-`@agent-os/ag-ui` remains a framework-neutral opt-in wire projection over the
-canonical read-model. It is not the client core state model. React and Svelte
-framework bindings are `@agent-os/client/react` and
+`@agent-os/runtime/ag-ui` remains a framework-neutral opt-in wire projection
+over the canonical read-model. It is not the client core state model. React and
+Svelte framework bindings are `@agent-os/client/react` and
 `@agent-os/client/svelte`.
 
 Workspace preset host surfaces split by generator:

@@ -20,7 +20,7 @@ import {
   DECISION_GATE_KIND,
   projectDecisionGate,
   settleDecisionGateConsumed,
-} from "@agent-os/decision-gate";
+} from "./decision-gate";
 import {
   JsonStringifyError,
   safeStringify,

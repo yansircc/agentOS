@@ -6,7 +6,7 @@ import {
   type WorkspaceJobRequestedPayload,
   type WorkspaceJobTerminalArtifact,
   type WorkspaceJobVerificationCheck,
-} from "@agent-os/workspace-job";
+} from "./workspace-job-carrier";
 import {
   failureDiagnosticEnvelopeForReason,
   projectFailureDiagnostics,
@@ -142,7 +142,7 @@ const failureExplanation = (
  *
  * @agentosPrimitive primitive.runtime.projectWorkspaceJobObservability
  * @agentosInvariant invariant.workspace-job.failure-observability-join
- * @agentosDocs docs/packages/workspace-job.md
+ * @agentosDocs docs/packages/runtime.md
  * @public
  */
 export const projectWorkspaceJobObservability = (

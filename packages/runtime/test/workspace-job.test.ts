@@ -46,7 +46,7 @@ import {
   workspaceJobRequestedPayload,
   workspaceJobSeedWrittenPayload,
   workspaceJobTerminalFinalizedPayload,
-} from "@agent-os/workspace-job";
+} from "../src/workspace-job-carrier";
 import {
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
   RUNTIME_FACT_OWNER,

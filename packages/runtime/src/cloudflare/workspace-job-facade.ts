@@ -1,4 +1,4 @@
-import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
+import type { WorkspaceJobProjection } from "../workspace-job-carrier";
 
 export type CloudflareWorkspaceJobResponseProjection = Pick<
   WorkspaceJobProjection,

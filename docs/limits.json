@@ -20,8 +20,8 @@
     {
       "id": "workspace-env.tool-path-codec",
       "class": "contract",
-      "owner": "@agent-os/workspace-env tool argument codec",
-      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "owner": "@agent-os/runtime workspace-env tool argument codec",
+      "sourcePaths": ["packages/runtime/src/workspace-env-core.ts"],
       "value": "workspace paths reject empty, NUL, parent escape, and host path semantics",
       "reason": "Path acceptance is part of the workspace tool argument contract, not a consumer adapter policy."
     },
@@ -104,8 +104,8 @@
     {
       "id": "workspace-env.max-file-bytes",
       "class": "policy",
-      "owner": "@agent-os/workspace-env standard tools",
-      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "owner": "@agent-os/runtime workspace-env standard tools",
+      "sourcePaths": ["packages/runtime/src/workspace-env-core.ts"],
       "value": "default 256KiB file content bound",
       "overrideSurface": "CreateWorkspaceToolsOptions.maxFileBytes",
       "reason": "Workspace file preview/write size is an integration policy for one tool bundle."
@@ -113,8 +113,8 @@
     {
       "id": "workspace-env.max-command-chars",
       "class": "policy",
-      "owner": "@agent-os/workspace-env standard tools",
-      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "owner": "@agent-os/runtime workspace-env standard tools",
+      "sourcePaths": ["packages/runtime/src/workspace-env-core.ts"],
       "value": "default 2000 command characters",
       "overrideSurface": "CreateWorkspaceToolsOptions.maxCommandChars",
       "reason": "Command length is a workspace tool policy, not a substrate-wide safety proof."
@@ -122,8 +122,8 @@
     {
       "id": "workspace-env.exec-timeout",
       "class": "policy",
-      "owner": "@agent-os/workspace-env standard tools",
-      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "owner": "@agent-os/runtime workspace-env standard tools",
+      "sourcePaths": ["packages/runtime/src/workspace-env-core.ts"],
       "value": "default 30000ms exec timeout",
       "overrideSurface": "CreateWorkspaceToolsOptions.execTimeoutMs",
       "reason": "Workspace command timeout is selected by the workspace host/tool bundle."
@@ -131,8 +131,8 @@
     {
       "id": "workspace-env.max-output-bytes",
       "class": "policy",
-      "owner": "@agent-os/workspace-env standard tools",
-      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "owner": "@agent-os/runtime workspace-env standard tools",
+      "sourcePaths": ["packages/runtime/src/workspace-env-core.ts"],
       "value": "default 16384 output bytes",
       "overrideSurface": "CreateWorkspaceToolsOptions.maxOutputBytes",
       "reason": "Output projection size is a tool bundle policy and remains separate from actuator correctness."
@@ -140,8 +140,8 @@
     {
       "id": "workspace-env.search-window",
       "class": "policy",
-      "owner": "@agent-os/workspace-env search tools",
-      "sourcePaths": ["packages/execution-domains/workspace-env/src/index.ts"],
+      "owner": "@agent-os/runtime workspace-env search tools",
+      "sourcePaths": ["packages/runtime/src/workspace-env-core.ts"],
       "value": "default 100 matches and 4096 bytes per match",
       "overrideSurface": "glob/grep tool args maxMatches and maxBytesPerMatch",
       "reason": "Search result volume is caller-selected output shaping."
@@ -194,63 +194,6 @@
       ],
       "value": "projection list reads are capped at 1000 rows per page",
       "reason": "Projection page caps must remain backend-consistent until a protocol-level page policy exists."
-    },
-    {
-      "id": "sandbox.timeout-cap",
-      "class": "closed",
-      "owner": "@agent-os/sandbox policy",
-      "sourcePaths": [
-        "packages/execution-domains/sandbox/src/types.ts",
-        "packages/execution-domains/sandbox/src/policy.ts"
-      ],
-      "value": "global sandbox timeout cap 60000ms",
-      "capabilityGate": "StaticPolicyOptions.maxTimeoutMs may lower the cap for a sandbox host",
-      "reason": "The global cap protects sandbox runtime resources; ordinary callers can choose a request timeout only inside this cap."
-    },
-    {
-      "id": "sandbox.network-default-closed",
-      "class": "closed",
-      "owner": "@agent-os/sandbox policy",
-      "sourcePaths": [
-        "packages/execution-domains/sandbox/src/types.ts",
-        "packages/execution-domains/sandbox/src/policy.ts"
-      ],
-      "value": "network defaults to none",
-      "capabilityGate": "StaticPolicyOptions.allowNetwork explicit allowlist",
-      "reason": "Network access is a capability boundary, not a submit-time convenience flag."
-    },
-    {
-      "id": "dynamic-worker.timeout-cap",
-      "class": "closed",
-      "owner": "@agent-os/dynamic-worker policy",
-      "sourcePaths": [
-        "packages/providers/dynamic-worker/src/types.ts",
-        "packages/providers/dynamic-worker/src/policy.ts"
-      ],
-      "value": "global dynamic worker timeout cap 10000ms",
-      "capabilityGate": "DynamicWorkerStaticPolicyOptions.maxTimeoutMs may lower the cap for a host",
-      "reason": "Dynamic worker runtime duration is a provider safety invariant."
-    },
-    {
-      "id": "dynamic-worker.egress-default-closed",
-      "class": "closed",
-      "owner": "@agent-os/dynamic-worker policy",
-      "sourcePaths": [
-        "packages/providers/dynamic-worker/src/types.ts",
-        "packages/providers/dynamic-worker/src/policy.ts"
-      ],
-      "value": "egress defaults to none",
-      "capabilityGate": "DynamicWorkerStaticPolicyOptions.allowEgress explicit allowlist",
-      "reason": "External egress is a host capability boundary, not a run budget."
-    },
-    {
-      "id": "dynamic-worker.code-size-policy-cap",
-      "class": "closed",
-      "owner": "@agent-os/dynamic-worker static policy",
-      "sourcePaths": ["packages/providers/dynamic-worker/src/policy.ts"],
-      "value": "default static policy cap 64000 code bytes",
-      "capabilityGate": "DynamicWorkerStaticPolicyOptions.maxCodeBytes",
-      "reason": "Executable code size changes provider risk and must be set by the host policy, not by an agent submit."
     },
     {
       "id": "telemetry.trace-context-spec",

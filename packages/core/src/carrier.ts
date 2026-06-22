@@ -203,7 +203,6 @@ export interface Carrier<
 > {
   readonly ownerId: string;
   readonly sourcePackageName: string;
-  readonly packageId: string;
   readonly prefix: Prefix;
   readonly kind: CarrierKindView<Prefix, Events>;
   readonly events: CarrierEventPayloads<Prefix, Events>;
@@ -529,7 +528,6 @@ export const defineCarrier = <
   return {
     ownerId: spec.ownerId,
     sourcePackageName: spec.sourcePackageName,
-    packageId: spec.sourcePackageName,
     prefix: spec.prefix,
     kind: kind as CarrierKindView<Prefix, Events>,
     events: payloadEvents as CarrierEventPayloads<Prefix, Events>,

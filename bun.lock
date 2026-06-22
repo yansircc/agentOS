@@ -21,231 +21,16 @@
         "vitest": "catalog:",
       },
     },
-    "packages/backends/cloudflare-do": {
-      "name": "@agent-os/backend-cloudflare-do",
+    "packages/cli": {
+      "name": "@agent-os/cli",
       "version": "0.5.16",
+      "bin": {
+        "agentos": "./src/main.mjs",
+      },
       "dependencies": {
-        "@agent-os/ag-ui": "workspace:*",
-        "@agent-os/attached-stream": "workspace:*",
-        "@agent-os/core": "workspace:*",
-        "@agent-os/runtime": "workspace:*",
-        "@agent-os/sse-http": "workspace:*",
-        "@agent-os/workspace-env": "workspace:*",
-        "@agent-os/workspace-env-cloudflare": "workspace:*",
-        "@agent-os/workspace-op": "workspace:*",
-        "@agent-os/workspace-op-local": "workspace:*",
-        "@effect/sql-sqlite-do": "catalog:",
-      },
-      "devDependencies": {
-        "@cloudflare/vitest-pool-workers": "catalog:",
-        "@cloudflare/workers-types": "catalog:",
-        "@effect/language-service": "catalog:",
-        "@effect/vitest": "catalog:",
-        "effect": "catalog:",
-        "fast-check": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "@cloudflare/workers-types": "^4.20251201.0",
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/backends/in-memory": {
-      "name": "@agent-os/backend-in-memory",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/attached-stream": "workspace:*",
         "@agent-os/core": "workspace:*",
         "@agent-os/runtime": "workspace:*",
         "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/backends/node-postgres": {
-      "name": "@agent-os/backend-node-postgres",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/vitest": "catalog:",
-        "@types/node": "^24.12.4",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/decision-gate": {
-      "name": "@agent-os/decision-gate",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/deploy": {
-      "name": "@agent-os/deploy",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/git": {
-      "name": "@agent-os/git-carrier",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/image": {
-      "name": "@agent-os/image",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/resource": {
-      "name": "@agent-os/resource-carrier",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/staging-artifact": {
-      "name": "@agent-os/staging-artifact",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/verification": {
-      "name": "@agent-os/verification",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/workspace-job": {
-      "name": "@agent-os/workspace-job",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/workspace-op": {
-      "name": "@agent-os/workspace-op",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/carriers/workspace-session": {
-      "name": "@agent-os/workspace-session",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
       },
       "peerDependencies": {
         "effect": "^4.0.0-beta.84",
@@ -270,121 +55,10 @@
         "react": "^19.2.7",
         "svelte": "^5.56.2",
       },
-    },
-    "packages/cli": {
-      "name": "@agent-os/cli",
-      "version": "0.5.16",
-      "bin": {
-        "agentos": "./src/main.mjs",
-      },
-    },
-    "packages/composers/agent-authoring": {
-      "name": "@agent-os/agent-authoring",
-      "version": "0.5.16",
-      "bin": {
-        "agentos": "./bin/build-cli.ts",
-      },
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/workspace-env": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/composers/attached-stream": {
-      "name": "@agent-os/attached-stream",
-      "version": "0.5.16",
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "packages/composers/config": {
-      "name": "@agent-os/config",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/agent-authoring": "workspace:*",
-      },
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "packages/composers/run-stream": {
-      "name": "@agent-os/run-stream",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/turn-stream": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@cloudflare/workers-types": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/composers/turn-stream": {
-      "name": "@agent-os/turn-stream",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/composers/workspace-agent": {
-      "name": "@agent-os/workspace-agent",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/client": "workspace:*",
-        "@agent-os/core": "workspace:*",
-        "@agent-os/workspace-env": "workspace:*",
-      },
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "packages/composers/workspace-binding": {
-      "name": "@agent-os/workspace-binding",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/workspace-env": "workspace:*",
-        "@agent-os/workspace-op": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
+      "optionalPeers": [
+        "react",
+        "svelte",
+      ],
     },
     "packages/core": {
       "name": "@agent-os/core",
@@ -402,327 +76,37 @@
         "effect": "^4.0.0-beta.84",
       },
     },
-    "packages/execution-domains/sandbox": {
-      "name": "@agent-os/sandbox",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/execution-domains/sandbox-cloudflare": {
-      "name": "@agent-os/sandbox-cloudflare",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/sandbox": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "@cloudflare/workers-types": "^4.20251201.0",
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/execution-domains/workspace-env": {
-      "name": "@agent-os/workspace-env",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/execution-domains/workspace-env-cloudflare": {
-      "name": "@agent-os/workspace-env-cloudflare",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/workspace-env": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "@cloudflare/workers-types": "^4.20251201.0",
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/execution-domains/workspace-env-local": {
-      "name": "@agent-os/workspace-env-local",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/workspace-env": "workspace:*",
-      },
-      "devDependencies": {
-        "@agent-os/core": "workspace:*",
-        "@effect/language-service": "catalog:",
-        "@types/node": "^24.12.4",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "packages/providers/deploy-cloudflare": {
-      "name": "@agent-os/deploy-cloudflare",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/deploy": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@agent-os/staging-artifact": "workspace:*",
-        "@agent-os/workspace-session": "workspace:*",
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/dynamic-worker": {
-      "name": "@agent-os/dynamic-worker",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/language-service": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/image-resource-settlement": {
-      "name": "@agent-os/image-resource-settlement",
-      "version": "0.5.16",
-      "dependencies": {
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/llm-transport-effect-ai": {
-      "name": "@agent-os/llm-transport-effect-ai",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@effect/ai-anthropic": "catalog:",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/llm-transport-http": {
-      "name": "@agent-os/llm-transport-http",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/turn-stream": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@cloudflare/workers-types": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/resource-cloudflare": {
-      "name": "@agent-os/resource-cloudflare",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/resource-carrier": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "@cloudflare/workers-types": "^4.20251201.0",
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/tenant-material": {
-      "name": "@agent-os/tenant-material",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/workspace-op-local": {
-      "name": "@agent-os/workspace-op-local",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/workspace-env": "workspace:*",
-        "@agent-os/workspace-op": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/node": "^24.12.4",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/providers/workspace-session-cloudflare": {
-      "name": "@agent-os/workspace-session-cloudflare",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/workspace-session": "workspace:*",
-      },
-      "devDependencies": {
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "@cloudflare/workers-types": "^4.20251201.0",
-        "effect": "^4.0.0-beta.84",
-      },
-    },
     "packages/runtime": {
       "name": "@agent-os/runtime",
       "version": "0.5.16",
       "dependencies": {
-        "@agent-os/attached-stream": "workspace:*",
         "@agent-os/core": "workspace:*",
-        "@agent-os/decision-gate": "workspace:*",
-        "@agent-os/workspace-job": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@cloudflare/vitest-pool-workers": "catalog:",
+        "@cloudflare/workers-types": "catalog:",
+        "@effect/ai-anthropic": "catalog:",
         "@effect/language-service": "catalog:",
+        "@effect/sql-sqlite-do": "catalog:",
         "@effect/vitest": "catalog:",
+        "@types/node": "^24.12.4",
+        "fast-check": "catalog:",
         "typescript": "catalog:",
         "vite-plus": "catalog:",
         "vitest": "catalog:",
       },
       "peerDependencies": {
+        "@cloudflare/workers-types": "^4.20251201.0",
+        "@effect/ai-anthropic": "^4.0.0-beta.84",
+        "@effect/sql-sqlite-do": "^4.0.0-beta.84",
         "effect": "^4.0.0-beta.84",
       },
-    },
-    "packages/transports/sse-http": {
-      "name": "@agent-os/sse-http",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/attached-stream": "workspace:*",
-        "@agent-os/run-stream": "workspace:*",
-      },
-      "devDependencies": {
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "packages/wire-adapters/ag-ui": {
-      "name": "@agent-os/ag-ui",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/sse-http": "workspace:*",
-        "@agent-os/workspace-job": "workspace:*",
-        "@agent-os/workspace-op": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@agent-os/runtime": "workspace:*",
-        "@agent-os/workspace-binding": "workspace:*",
-        "@agent-os/workspace-env-cloudflare": "workspace:*",
-        "@agent-os/workspace-op-local": "workspace:*",
-        "@effect/vitest": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
-    },
-    "packages/wire-adapters/telemetry-otlp": {
-      "name": "@agent-os/telemetry-otlp",
-      "version": "0.5.16",
-      "dependencies": {
-        "@agent-os/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@agent-os/core": "workspace:*",
-        "@agent-os/runtime": "workspace:*",
-        "@effect/vitest": "catalog:",
-        "effect": "catalog:",
-        "typescript": "catalog:",
-        "vite-plus": "catalog:",
-        "vitest": "catalog:",
-      },
-      "peerDependencies": {
-        "effect": "^4.0.0-beta.84",
-      },
+      "optionalPeers": [
+        "@cloudflare/workers-types",
+        "@effect/ai-anthropic",
+        "@effect/sql-sqlite-do",
+      ],
     },
     "tooling/docs-site": {
       "name": "@agent-os/docs-site",
@@ -756,89 +140,15 @@
     "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.22",
   },
   "packages": {
-    "@agent-os/ag-ui": ["@agent-os/ag-ui@workspace:packages/wire-adapters/ag-ui"],
-
-    "@agent-os/agent-authoring": ["@agent-os/agent-authoring@workspace:packages/composers/agent-authoring"],
-
-    "@agent-os/attached-stream": ["@agent-os/attached-stream@workspace:packages/composers/attached-stream"],
-
-    "@agent-os/backend-cloudflare-do": ["@agent-os/backend-cloudflare-do@workspace:packages/backends/cloudflare-do"],
-
-    "@agent-os/backend-in-memory": ["@agent-os/backend-in-memory@workspace:packages/backends/in-memory"],
-
-    "@agent-os/backend-node-postgres": ["@agent-os/backend-node-postgres@workspace:packages/backends/node-postgres"],
+    "@agent-os/cli": ["@agent-os/cli@workspace:packages/cli"],
 
     "@agent-os/client": ["@agent-os/client@workspace:packages/client"],
 
-    "@agent-os/cli": ["@agent-os/cli@workspace:packages/cli"],
-
-    "@agent-os/config": ["@agent-os/config@workspace:packages/composers/config"],
-
     "@agent-os/core": ["@agent-os/core@workspace:packages/core"],
-
-    "@agent-os/decision-gate": ["@agent-os/decision-gate@workspace:packages/carriers/decision-gate"],
-
-    "@agent-os/deploy": ["@agent-os/deploy@workspace:packages/carriers/deploy"],
-
-    "@agent-os/deploy-cloudflare": ["@agent-os/deploy-cloudflare@workspace:packages/providers/deploy-cloudflare"],
 
     "@agent-os/docs-site": ["@agent-os/docs-site@workspace:tooling/docs-site"],
 
-    "@agent-os/dynamic-worker": ["@agent-os/dynamic-worker@workspace:packages/providers/dynamic-worker"],
-
-    "@agent-os/git-carrier": ["@agent-os/git-carrier@workspace:packages/carriers/git"],
-
-    "@agent-os/image": ["@agent-os/image@workspace:packages/carriers/image"],
-
-    "@agent-os/image-resource-settlement": ["@agent-os/image-resource-settlement@workspace:packages/providers/image-resource-settlement"],
-
-    "@agent-os/llm-transport-effect-ai": ["@agent-os/llm-transport-effect-ai@workspace:packages/providers/llm-transport-effect-ai"],
-
-    "@agent-os/llm-transport-http": ["@agent-os/llm-transport-http@workspace:packages/providers/llm-transport-http"],
-
-    "@agent-os/resource-carrier": ["@agent-os/resource-carrier@workspace:packages/carriers/resource"],
-
-    "@agent-os/resource-cloudflare": ["@agent-os/resource-cloudflare@workspace:packages/providers/resource-cloudflare"],
-
-    "@agent-os/run-stream": ["@agent-os/run-stream@workspace:packages/composers/run-stream"],
-
     "@agent-os/runtime": ["@agent-os/runtime@workspace:packages/runtime"],
-
-    "@agent-os/sandbox": ["@agent-os/sandbox@workspace:packages/execution-domains/sandbox"],
-
-    "@agent-os/sandbox-cloudflare": ["@agent-os/sandbox-cloudflare@workspace:packages/execution-domains/sandbox-cloudflare"],
-
-    "@agent-os/sse-http": ["@agent-os/sse-http@workspace:packages/transports/sse-http"],
-
-    "@agent-os/staging-artifact": ["@agent-os/staging-artifact@workspace:packages/carriers/staging-artifact"],
-
-    "@agent-os/telemetry-otlp": ["@agent-os/telemetry-otlp@workspace:packages/wire-adapters/telemetry-otlp"],
-
-    "@agent-os/tenant-material": ["@agent-os/tenant-material@workspace:packages/providers/tenant-material"],
-
-    "@agent-os/turn-stream": ["@agent-os/turn-stream@workspace:packages/composers/turn-stream"],
-
-    "@agent-os/verification": ["@agent-os/verification@workspace:packages/carriers/verification"],
-
-    "@agent-os/workspace-agent": ["@agent-os/workspace-agent@workspace:packages/composers/workspace-agent"],
-
-    "@agent-os/workspace-binding": ["@agent-os/workspace-binding@workspace:packages/composers/workspace-binding"],
-
-    "@agent-os/workspace-env": ["@agent-os/workspace-env@workspace:packages/execution-domains/workspace-env"],
-
-    "@agent-os/workspace-env-cloudflare": ["@agent-os/workspace-env-cloudflare@workspace:packages/execution-domains/workspace-env-cloudflare"],
-
-    "@agent-os/workspace-env-local": ["@agent-os/workspace-env-local@workspace:packages/execution-domains/workspace-env-local"],
-
-    "@agent-os/workspace-job": ["@agent-os/workspace-job@workspace:packages/carriers/workspace-job"],
-
-    "@agent-os/workspace-op": ["@agent-os/workspace-op@workspace:packages/carriers/workspace-op"],
-
-    "@agent-os/workspace-op-local": ["@agent-os/workspace-op-local@workspace:packages/providers/workspace-op-local"],
-
-    "@agent-os/workspace-session": ["@agent-os/workspace-session@workspace:packages/carriers/workspace-session"],
-
-    "@agent-os/workspace-session-cloudflare": ["@agent-os/workspace-session-cloudflare@workspace:packages/providers/workspace-session-cloudflare"],
 
     "@astrojs/compiler": ["@astrojs/compiler@4.0.0", "", {}, "sha512-eouss7G8ygdZqHuke033VMcVw5HTZUu+PXd/h06DGDUg/jt5btPYPqh66ENWw/mU78rBrf/oeC4oqoBwMtDMNA=="],
 

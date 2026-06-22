@@ -10,7 +10,9 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import type {} from "@effect/vitest";
 
-import { Ledger, LedgerLive, EventBusLive } from "../../src/cloudflare/ledger";
+import { Ledger } from "@agent-os/runtime";
+import { EventBusLive } from "../../src/cloudflare/ledger/event-bus";
+import { LedgerLive } from "../../src/cloudflare/ledger/ledger";
 import {
   EffectSqliteDoReadLive,
   selectLedgerEventsWithEffectSql,

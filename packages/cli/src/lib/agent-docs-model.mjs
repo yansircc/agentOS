@@ -578,6 +578,13 @@ const classifyCapabilityKind = (primitive) => {
   const pkg = primitive.packagePath.toLowerCase();
   const identity = `${id} ${symbol}`;
 
+  if (
+    identity.includes("agent-authoring") ||
+    identity.includes("compileagenttree") ||
+    identity.includes("linkworkspacestatictarget")
+  ) {
+    return "composer";
+  }
   if (identity.includes("workspacejobprofile") || identity.includes("profile")) return "profile";
   if (pkg.includes("/composers/")) return "composer";
   if (identity.includes("facade") || identity.includes("response")) return "facade";

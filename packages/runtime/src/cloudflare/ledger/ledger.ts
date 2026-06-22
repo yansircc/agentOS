@@ -15,7 +15,7 @@ import {
   runtimeStorageError,
   runtimeStorageOrJsonError,
   type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../../ledger";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { EventBus } from "./event-bus";
 import { commitLedgerTransaction, ensureLedgerSchema } from "./commit";

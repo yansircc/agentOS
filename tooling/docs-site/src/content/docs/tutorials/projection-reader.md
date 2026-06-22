@@ -10,8 +10,8 @@ Turn ledger events into a deterministic read model without writing shadow state.
 
 ## What You Build
 
-A tiny decision-gate projection over recorded events. The same pattern applies
-to app projections: durable facts are the source, projections are derived.
+A tiny materialized projection over recorded events. The same pattern applies to
+app projections: durable facts are the source, projections are derived.
 
 ## Prerequisites
 
@@ -21,51 +21,40 @@ to app projections: durable facts are the source, projections are derived.
 
 ## Steps
 
-1. Import the carrier projection:
+1. Import the projection algebra:
 
    ```ts
-   import { DECISION_GATE_KIND, projectDecisionGate } from "@agent-os/decision-gate";
+   import { Schema } from "effect";
+   import { defineProjection, projectionIdentity, projectionPut } from "@agent-os/runtime";
    ```
 
-2. Build the smallest event history for one gate:
+2. Define the smallest projection over two event kinds:
 
    ```ts
-   const events = [
-     {
-       id: 1,
-       kind: DECISION_GATE_KIND.REQUESTED,
-       payload: {
-         gateRef: "gate/1",
-         subjectRef: "subject-1",
-         claim: {
-           phase: "pre",
-           operationRef: "publish:subject-1",
-           scopeRef: { kind: "artifact", scopeId: "artifact/subject-1" },
-           effectAuthorityRef: {
-             authorityId: "publish.subject",
-             authorityClass: "effect",
-           },
-           originRef: { originId: "agent/run-1", originKind: "agent_run" },
-         },
-       },
-     },
-     {
-       id: 2,
-       kind: DECISION_GATE_KIND.DECIDED,
-       payload: {
-         gateRef: "gate/1",
-         decisionRef: "decision/1",
-         decision: "approved",
-         decidedBy: "operator/alice",
-       },
-     },
-   ];
+   const runProjection = defineProjection({
+     kind: "tutorial.run",
+     version: 1,
+     eventKinds: ["tutorial.run.requested", "tutorial.run.completed"],
+     identity: Schema.Struct({ runId: Schema.String }),
+     state: Schema.Struct({
+       runId: Schema.String,
+       status: Schema.Literals(["requested", "completed"]),
+     }),
+     identityKey: (identity) => identity.runId,
+     identify: (event) => projectionIdentity({ runId: event.payload.runId }),
+     initial: (identity) => ({ runId: identity.runId, status: "requested" }),
+     reduce: (state, event) =>
+       event.kind === "tutorial.run.completed"
+         ? projectionPut({ ...state, status: "completed" })
+         : projectionPut(state),
+   });
    ```
 
-3. Project the state:
+3. Register the projection with a runtime backend. Each matching ledger commit
+   applies the reducer in the same transaction as the fact write.
 
    ```ts
-   const projection = projectDecisionGate(events, "gate/1");
+   const projections = [runProjection];
    ```
 
 4. Treat the projection as read-only output. If the next state changes, append
@@ -76,7 +65,7 @@ to app projections: durable facts are the source, projections are derived.
 The projection status is derived only from the event list:
 
 ```ts
-projection.status === "approved";
+row.state.status === "completed";
 ```
 
 There is no second database table to keep in sync and no hidden repair branch.

@@ -7,13 +7,13 @@ import type { LedgerEvent, LedgerEventRpc } from "@agent-os/core/types";
 import type { ExtensionCapability } from "@agent-os/core/extensions";
 import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
 import { agentRunStartedEvent, RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
-import { createSseHttpTextResponse, decodeSseHttpEvents } from "@agent-os/sse-http";
+import { createSseHttpTextResponse, decodeSseHttpEvents } from "../../src/sse-http";
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
   WORKSPACE_OP_PROJECTION_KIND,
-} from "@agent-os/workspace-op";
-import type { WorkspaceJobProjection } from "@agent-os/workspace-job";
+} from "../../src/workspace-op-carrier";
+import type { WorkspaceJobProjection } from "../../src/workspace-job-carrier";
 import {
   createCloudflareLedgerAgUiHistorySseResponse,
   createCloudflareLedgerAgUiSseResponse,
@@ -27,6 +27,7 @@ import {
 import { installCloudflareWorkspaceOperationProvider } from "../../src/cloudflare/workspace-op";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+const RUNTIME_SOURCE_PACKAGE_NAME = "@agent-os/runtime";
 
 const collectAsync = async <A>(source: AsyncIterable<A>): Promise<ReadonlyArray<A>> => {
   const values: A[] = [];
@@ -155,14 +156,14 @@ const workspaceEnv = (ref: string) => ({
 describe("Cloudflare DO workspace host helpers", () => {
   it("keeps sse-http generic while host helper materializes AG-UI SSE responses", async () => {
     const sseHttpSource = fs.readFileSync(
-      path.join(repoRoot, "packages/transports/sse-http/src/index.ts"),
+      path.join(repoRoot, "packages/runtime/src/sse-http.ts"),
       "utf8",
     );
     const agUiSource = fs.readFileSync(
-      path.join(repoRoot, "packages/wire-adapters/ag-ui/src/index.ts"),
+      path.join(repoRoot, "packages/runtime/src/ag-ui.ts"),
       "utf8",
     );
-    expect(sseHttpSource).not.toContain("@agent-os/ag-ui");
+    expect(sseHttpSource).not.toContain("./ag-ui");
     expect(agUiSource).toContain("encodeAgUiLedgerEventEnvelopeSse");
     expect(agUiSource).toContain("projectLedgerSseToAgUiSse");
 
@@ -334,8 +335,7 @@ describe("Cloudflare DO workspace host helpers", () => {
 
     const capability: ExtensionCapability = {
       ownerId: WORKSPACE_OP_FACT_OWNER,
-      sourcePackageName: WORKSPACE_OP_FACT_OWNER,
-      packageId: WORKSPACE_OP_FACT_OWNER,
+      sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
       kindPrefixes: ["workspace_op."],
       version: "0.2.9",
       commit: async () => ({ id: 1 }),
@@ -651,7 +651,7 @@ describe("Cloudflare DO workspace host helpers", () => {
       },
     });
     expect(install.extensions[0]).toMatchObject({
-      packageId: WORKSPACE_OP_FACT_OWNER,
+      sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
       kindPrefixes: ["workspace_op."],
     });
     expect(install.declaredIntents).toEqual([
@@ -664,8 +664,7 @@ describe("Cloudflare DO workspace host helpers", () => {
     const committed: Array<{ event: string; data: unknown }> = [];
     const capability: ExtensionCapability = {
       ownerId: WORKSPACE_OP_FACT_OWNER,
-      sourcePackageName: WORKSPACE_OP_FACT_OWNER,
-      packageId: WORKSPACE_OP_FACT_OWNER,
+      sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
       kindPrefixes: ["workspace_op."],
       version: "0.2.9",
       commit: async (spec) => {
@@ -828,8 +827,7 @@ describe("Cloudflare DO workspace host helpers", () => {
     });
     const capability: ExtensionCapability = {
       ownerId: WORKSPACE_OP_FACT_OWNER,
-      sourcePackageName: WORKSPACE_OP_FACT_OWNER,
-      packageId: WORKSPACE_OP_FACT_OWNER,
+      sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
       kindPrefixes: ["workspace_op."],
       version: "0.2.9",
       commit: async () => ({ id: 1 }),

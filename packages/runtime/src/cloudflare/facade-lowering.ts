@@ -26,8 +26,8 @@ import {
   type Tool,
 } from "@agent-os/core/tools";
 import type { DispatchTargetAdapter } from "@agent-os/core/backend-protocol";
-import { durableObjectDispatchTarget } from "./dispatch";
-import type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch";
+import { durableObjectDispatchTarget } from "./dispatch/dispatch";
+import type { DispatchTargetNamespace, DispatchTargetRegistry } from "./dispatch/dispatch";
 
 export interface AgentMaterialBinding<Env, Value = unknown> {
   readonly ref: MaterialRef;

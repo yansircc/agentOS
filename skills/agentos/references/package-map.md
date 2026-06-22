@@ -2,34 +2,12 @@
 
 <!-- agentos:generated package-map:start -->
 
-| Need                                                     | Package                                  |
-| -------------------------------------------------------- | ---------------------------------------- |
-| Neutral agentOS substrate algebra                        | `@agent-os/core`                         |
-| Runtime substrate and statically linked adapter subpaths | `@agent-os/runtime`                      |
-| Resource lifecycle carrier                               | `@agent-os/resource-carrier`             |
-| Cloudflare resource provider                             | `@agent-os/resource-cloudflare`          |
-| Workspace/session facts                                  | `@agent-os/workspace-session`            |
-| Workspace operation carrier                              | `@agent-os/workspace-op`                 |
-| Local workspace operation provider                       | `@agent-os/workspace-op-local`           |
-| Cloudflare Sandbox workspace backend                     | `@agent-os/workspace-session-cloudflare` |
-| Cloudflare WorkspaceEnv adapter                          | `@agent-os/workspace-env-cloudflare`     |
-| Local WorkspaceEnv adapter                               | `@agent-os/workspace-env-local`          |
-| Tenant credential material resolver                      | `@agent-os/tenant-material`              |
-| HTTP LLM token streaming                                 | `@agent-os/llm-transport-http`           |
-| Low-friction agent authoring projection                  | `@agent-os/agent-authoring`              |
-| agentOS config schema                                    | `@agent-os/config`                       |
-| Attached live stream frames                              | `@agent-os/attached-stream`              |
-| Token/progress frames                                    | `@agent-os/turn-stream`                  |
-| Workspace actuator and tools                             | `@agent-os/workspace-env`                |
-| AG-UI wire compatibility                                 | `@agent-os/ag-ui`                        |
-| Agent client core and framework bridges                  | `@agent-os/client`                       |
-| Workspace preset host                                    | `@agent-os/workspace-agent`              |
-| Consumer run stream                                      | `@agent-os/run-stream`                   |
-| Workspace submit binding                                 | `@agent-os/workspace-binding`            |
-| SSE-over-HTTP transport                                  | `@agent-os/sse-http`                     |
-| Approval/decision gate                                   | `@agent-os/decision-gate`                |
-| Cloudflare Worker deploy provider                        | `@agent-os/deploy-cloudflare`            |
-| Single developer command package                         | `@agent-os/cli`                          |
+| Need                                                     | Package             |
+| -------------------------------------------------------- | ------------------- |
+| Neutral agentOS substrate algebra                        | `@agent-os/core`    |
+| Runtime substrate and statically linked adapter subpaths | `@agent-os/runtime` |
+| Agent client core and framework bridges                  | `@agent-os/client`  |
+| Single developer command package                         | `@agent-os/cli`     |
 
 <!-- agentos:generated package-map:end -->
 

@@ -10,7 +10,7 @@ settlement.
 - [Durable truth](../concepts/durable-truth.md)
 - [Durable process algebra](../concepts/durable-process-algebra.md)
 - [Runtime package](../packages/runtime.md)
-- [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
+- [Runtime API](../api/runtime.md)
 
 ## Steps
 
@@ -49,4 +49,3 @@ in ledger facts plus a materialized projection, not in the buffer row.
 ## References
 
 - [Runtime API](../api/runtime.md)
-- [Cloudflare DO API](../api/backend-cloudflare-do.md)

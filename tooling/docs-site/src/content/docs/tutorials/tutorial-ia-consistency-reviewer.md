@@ -56,7 +56,7 @@ and honest about which checkpoints are local proofs versus live smokes.
 5. Reject source-shape drift:
 
    ```text
-   no @agent-os/*/src imports
+   no deep /src imports from private source packages
    no workspace: or file: consumer install path
    no raw provider URL or token in docs examples
    no duplicate kill criterion in package docs

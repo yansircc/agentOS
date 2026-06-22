@@ -29,10 +29,7 @@ import {
   applyProjectionEvent,
   getProjection,
   makeProjectionRegistryResult,
-  getDurableTrigger,
   type AnyMaterializedProjectionDefinition,
-  type AttachedStreamTx,
-  type AttachedStreamTerminal,
   type MaterializedProjectionRebuildResult,
   type MaterializedProjectionRow,
   type MaterializedProjectionStatus,
@@ -41,10 +38,10 @@ import {
   type ProjectionRegistryBuildResult,
   type ProjectionRegistryError,
   type ProjectionReducerReturnedThenable,
-  type TriggerRegistry,
-  type TriggerTx,
   UnregisteredProjectionKind,
-} from "@agent-os/runtime";
+} from "../projection";
+import { type AttachedStreamTerminal, type AttachedStreamTx } from "../attached-stream";
+import { getDurableTrigger, type TriggerRegistry, type TriggerTx } from "../trigger";
 import {
   assertRuntimeLedgerTransitions,
   RUNTIME_FACT_OWNER,

@@ -760,6 +760,8 @@ type CapabilityResult =
   | { readonly ok: true; readonly capability: ExtensionCapability }
   | { readonly ok: false; readonly error: CapabilityRejected };
 
+export const PREFIX_ONLY_EXTENSION_OWNER = "@agent-os/runtime";
+
 const capabilityOrReject = (
   capabilities: ReadonlyMap<string, ExtensionCapability>,
   ownerId: string,
@@ -771,7 +773,9 @@ const capabilityOrReject = (
     error: new CapabilityRejected({
       event: "*",
       capability:
-        ownerId === "@agent-os/image" ? `extension:${ownerId}:boundary` : `extension:${ownerId}`,
+        ownerId === PREFIX_ONLY_EXTENSION_OWNER
+          ? `extension:${ownerId}:boundary`
+          : `extension:${ownerId}`,
     }),
   };
 };
@@ -788,7 +792,7 @@ const runExtensionCommand = (
   capabilities: ReadonlyMap<string, ExtensionCapability>,
   command: ExtensionCommand,
 ) => {
-  const image = () => capabilityPromise(capabilities, "@agent-os/image");
+  const image = () => capabilityPromise(capabilities, PREFIX_ONLY_EXTENSION_OWNER);
   const proof = () => capabilityPromise(capabilities, "@agent-os/proof");
   const missing = () => capabilityPromise(capabilities, "@agent-os/missing");
   return command.op === "commitImageFact"
@@ -853,9 +857,8 @@ export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
   ...testAgentMountConfig,
   extensions: () => [
     eventNamespace({
-      ownerId: "@agent-os/image",
-      sourcePackageName: "@agent-os/image",
-      packageId: "@agent-os/image",
+      ownerId: PREFIX_ONLY_EXTENSION_OWNER,
+      sourcePackageName: "@agent-os/runtime",
       kindPrefixes: ["image."],
       version: "0.3.0",
     }),

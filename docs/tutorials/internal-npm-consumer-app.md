@@ -26,7 +26,7 @@ typechecks a smoke import from the authoring surface.
 2. In a separate consumer app, install one packed package and its peers:
 
    ```sh
-   npm install /path/to/dist/internal-npm/tarballs/agent-os-agent-authoring-0.5.16.tgz effect@^4
+   npm install /path/to/dist/internal-npm/tarballs/yansirplus-cli-0.5.16.tgz effect@^4
    npm install -D typescript
    ```
 
@@ -48,7 +48,7 @@ typechecks a smoke import from the authoring surface.
 4. Import only package entrypoints:
 
    ```ts
-   import { compileAgentTree } from "@agent-os/agent-authoring";
+   import { compileAgentTree } from "@yansirplus/cli";
 
    const result = compileAgentTree({
      files: [{ path: "agent/instructions.md", kind: "markdown", text: "Say hello." }],
@@ -67,7 +67,7 @@ typechecks a smoke import from the authoring surface.
    A minimal `smoke.mjs` can import the packed package at runtime:
 
    ```js
-   const authoring = await import("@agent-os/agent-authoring");
+   const authoring = await import("@yansirplus/cli");
 
    if (typeof authoring.compileAgentTree !== "function") {
      throw new Error("agentOS packed consumer proof failed");

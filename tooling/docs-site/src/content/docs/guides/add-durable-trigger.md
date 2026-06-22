@@ -14,7 +14,7 @@ settlement.
 - [Durable truth](/concepts/durable-truth/)
 - [Durable process algebra](/concepts/durable-process-algebra/)
 - [Runtime package](/packages/runtime/)
-- [Cloudflare DO backend](/packages/backend-cloudflare-do/)
+- [Runtime API](/api/runtime/)
 
 ## Steps
 
@@ -53,4 +53,3 @@ in ledger facts plus a materialized projection, not in the buffer row.
 ## References
 
 - [Runtime API](/api/runtime/)
-- [Cloudflare DO API](/api/backend-cloudflare-do/)

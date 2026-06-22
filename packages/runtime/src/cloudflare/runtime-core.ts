@@ -4,11 +4,13 @@ import {
   AttachedStreamRegistry,
   AttachedStreams,
   BoundaryEvents,
+  Dispatch,
   DurableTriggerRegistry,
   Ledger,
   MaterializedProjectionRegistry,
   MaterializedProjections,
   Quota,
+  Resources,
   TriggerPump,
   makeProjectionRegistry,
   makeDurableTriggerRegistry,
@@ -19,14 +21,14 @@ import {
 } from "@agent-os/runtime";
 import { SqlError, TriggerFactoryError } from "@agent-os/core/errors";
 import {
-  Dispatch,
   DispatchLive,
   deliveryRetryTrigger,
   type DispatchTargetRegistry,
-} from "./dispatch";
-import { EventBus, EventBusLive, LedgerLive } from "./ledger";
+} from "./dispatch/dispatch";
+import { EventBus, EventBusLive } from "./ledger/event-bus";
+import { LedgerLive } from "./ledger/ledger";
 import { Scheduler, SchedulerLive } from "./scheduler";
-import { Resources, ResourcesLive } from "./resources";
+import { ResourcesLive } from "./resources/resources";
 import { QuotaLive } from "./quota";
 import { TriggerPumpLive } from "./trigger-pump";
 import { resolveCloudflareTriggerSource, type CloudflareTriggerSource } from "./trigger-factory";

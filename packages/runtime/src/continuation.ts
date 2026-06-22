@@ -5,7 +5,7 @@ import {
   projectDecisionGate,
   type DecisionGateConsumedPayload,
   type DecisionGateDecidedPayload,
-} from "@agent-os/decision-gate";
+} from "./decision-gate";
 import {
   continuationRefFromInterruptedEvent,
   decodeRuntimeLedgerEvent,

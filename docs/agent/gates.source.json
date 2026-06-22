@@ -44,34 +44,6 @@
       "proofClasses": ["test", "runtime"],
       "affectedProofClasses": ["runtime"],
       "reason": "Runtime contains Cloudflare, in-memory, and Node profile subpaths; profile conformance includes Workers runtime and Postgres harness proof."
-    },
-    {
-      "path": "packages/execution-domains/sandbox-cloudflare",
-      "fastProof": "test",
-      "proofClasses": ["test", "runtime"],
-      "affectedProofClasses": ["runtime"],
-      "reason": "Cloudflare sandbox behavior is a runtime surface."
-    },
-    {
-      "path": "packages/execution-domains/workspace-env-cloudflare",
-      "fastProof": "test",
-      "proofClasses": ["test", "runtime"],
-      "affectedProofClasses": ["runtime"],
-      "reason": "Cloudflare workspace environment behavior is a runtime surface."
-    },
-    {
-      "path": "packages/providers/resource-cloudflare",
-      "fastProof": "test",
-      "proofClasses": ["test", "runtime"],
-      "affectedProofClasses": ["runtime"],
-      "reason": "Cloudflare resource provider changes can require provider runtime proof."
-    },
-    {
-      "path": "packages/providers/workspace-session-cloudflare",
-      "fastProof": "test",
-      "proofClasses": ["test", "runtime"],
-      "affectedProofClasses": ["runtime"],
-      "reason": "Cloudflare workspace session behavior is a runtime surface."
     }
   ],
   "changedPathProofRules": [

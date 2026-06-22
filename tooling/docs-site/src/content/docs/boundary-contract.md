@@ -19,8 +19,8 @@ Projection   derived-from-ledger reader contract
 
 These axes must be independently checkable. Effect authority requirements must
 be subsets of the top-level material axis. `factOwnerRef` is not part of the
-authority axis; it comes from `packageId` at the commit boundary and cannot be
-set by claim authors.
+authority axis; it comes from the boundary `ownerId`/explicit fact owner at the
+commit boundary and cannot be set by claim authors.
 
 ## Invariants
 
@@ -48,7 +48,8 @@ const settlement = defineSettlementContract({
 });
 
 export const boundary = defineBoundaryContract({
-  packageId: "@agent-os/example",
+  ownerId: "@agent-os/example",
+  sourcePackageName: "@agent-os/runtime",
   kindPrefixes: ["example."],
   roles: ["resolver", "reader"],
   effectAuthorityContracts: [],

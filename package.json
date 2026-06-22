@@ -6,13 +6,7 @@
     "packages/runtime",
     "packages/client",
     "packages/cli",
-    "packages/carriers/*",
-    "packages/execution-domains/*",
-    "packages/providers/*",
-    "packages/composers/*",
-    "packages/transports/*",
-    "packages/wire-adapters/*",
-    "tooling/*"
+    "tooling/docs-site"
   ],
   "type": "module",
   "scripts": {

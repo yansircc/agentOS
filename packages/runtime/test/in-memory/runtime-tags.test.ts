@@ -56,7 +56,7 @@ const structuredResponse = (args: Record<string, unknown>) => ({
   usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
 });
 
-const DECISION_GATE_FACT_OWNER = "@agent-os/decision-gate";
+const DECISION_GATE_FACT_OWNER = "../../src/decision-gate";
 
 const makeRuntime = (
   scope: string,

@@ -21,7 +21,7 @@ import {
   type TriggerTx,
 } from "@agent-os/runtime";
 import { selectLedgerEvents } from "./ledger/ledger";
-import { EventBus } from "./ledger";
+import { EventBus } from "./ledger/event-bus";
 import {
   armNextDue,
   claimDueWork,

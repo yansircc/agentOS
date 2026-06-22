@@ -105,6 +105,10 @@
     "./types": {
       "types": "./src/types.ts",
       "default": "./src/types.ts"
+    },
+    "./workspace-agent": {
+      "types": "./src/workspace-agent.ts",
+      "default": "./src/workspace-agent.ts"
     }
   },
   "scripts": {

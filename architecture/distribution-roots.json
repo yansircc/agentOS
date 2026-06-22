@@ -40,7 +40,18 @@
       "id": "neutral",
       "ambient": "neutral",
       "packageUnits": ["core", "runtime"],
-      "selectedSubpaths": ["@yansirplus/core", "@yansirplus/runtime"],
+      "selectedSubpaths": [
+        "@yansirplus/core",
+        "@yansirplus/core/workspace-agent",
+        "@yansirplus/runtime",
+        "@yansirplus/runtime/admission",
+        "@yansirplus/runtime/ag-ui",
+        "@yansirplus/runtime/in-memory",
+        "@yansirplus/runtime/llm-effect-ai",
+        "@yansirplus/runtime/run-projector",
+        "@yansirplus/runtime/sse-http",
+        "@yansirplus/runtime/telemetry-otlp"
+      ],
       "forbiddenSpecifiers": ["node:", "cloudflare:", "react", "svelte"]
     },
     {
@@ -50,7 +61,10 @@
       "selectedSubpaths": [
         "@yansirplus/runtime/cloudflare",
         "@yansirplus/runtime/cloudflare/do-rpc",
-        "@yansirplus/runtime/cloudflare/ops-api"
+        "@yansirplus/runtime/cloudflare/ops-api",
+        "@yansirplus/runtime/sse-http",
+        "@yansirplus/runtime/workspace-agent",
+        "@yansirplus/runtime/workspace-binding"
       ],
       "forbiddenSpecifiers": ["node:fs", "node:child_process", "pg"]
     },
@@ -68,7 +82,8 @@
       "selectedSubpaths": [
         "@yansirplus/client",
         "@yansirplus/client/react",
-        "@yansirplus/client/svelte"
+        "@yansirplus/client/svelte",
+        "@yansirplus/client/workspace-agent"
       ],
       "forbiddenSpecifiers": ["node:", "cloudflare:"]
     }

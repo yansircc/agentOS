@@ -29,28 +29,16 @@
     ],
     "allowedAdapters": [
       {
-        "path": "packages/composers/attached-stream/src/index.ts",
-        "owner": "@agent-os/attached-stream/json-text-codec",
-        "reason": "attached-stream JSON text codec owns malformed frame decode classification without depending on Effect",
-        "rules": ["EFF001"]
-      },
-      {
-        "path": "packages/composers/agent-authoring/bin/build-cli.ts",
-        "owner": "@agent-os/agent-authoring/build-host",
+        "path": "packages/cli/src/build/build-cli.ts",
+        "owner": "@agent-os/cli/build-host",
         "reason": "terminal authoring build host owns filesystem projection IO, JSONC config reads, TypeScript authored tool module loading, build-time cache-busting import URLs, and process-facing argument failure mapping before runtime starts",
         "rules": ["EFF020", "EFF021", "EFF024", "EFF025", "EFF026", "EFF404"]
       },
       {
-        "path": "packages/execution-domains/workspace-env/src/index.ts",
-        "owner": "@agent-os/workspace-env/js-actuator-facade",
-        "reason": "WorkspaceEnv is the public Promise/synchronous path facade for workspace actuators; it owns fail-fast AbortSignal and path validation errors before provider side effects",
-        "rules": ["EFF024", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/attached-stream-wire.ts",
-        "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
-        "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
+        "path": "packages/runtime/src/attached-stream-protocol.ts",
+        "owner": "@agent-os/runtime/attached-stream-protocol",
+        "reason": "attached-stream JSON and SSE codecs own malformed frame decode classification without depending on Effect",
+        "rules": ["EFF001"]
       },
       {
         "path": "packages/runtime/src/cloudflare/agent-do.ts",
@@ -59,10 +47,10 @@
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/runtime/src/cloudflare/workspace-job-facade.ts",
-        "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
-        "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
-        "rules": ["EFF402"]
+        "path": "packages/runtime/src/cloudflare/attached-stream-wire.ts",
+        "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
+        "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
+        "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
       },
       {
         "path": "packages/runtime/src/cloudflare/ledger/stream.ts",
@@ -71,16 +59,28 @@
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/transports/sse-http/src/index.ts",
-        "owner": "@agent-os/sse-http/web-fetch-transport",
-        "reason": "terminal SSE-over-HTTP transport adapter owns Web Fetch Response construction and async iterator pumping from composer-owned frame codecs",
-        "rules": ["EFF001", "EFF002", "EFF003", "EFF004", "EFF402"]
+        "path": "packages/runtime/src/cloudflare/materialized-projections.ts",
+        "owner": "@agent-os/runtime/cloudflare/materialized-projections",
+        "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
+        "rules": ["EFF025"]
       },
       {
-        "path": "packages/transports/sse-http/test/sse-http.test.ts",
-        "owner": "@agent-os/sse-http/test-transport",
-        "reason": "generic SSE-over-HTTP transport tests construct Fetch Response objects to prove response body chunk adaptation at the transport boundary",
+        "path": "packages/runtime/src/cloudflare/ops-api/encoding.ts",
+        "owner": "@agent-os/runtime/cloudflare/ops-api",
+        "reason": "terminal Cloudflare runtime ops query parser owns malformed URL/base64/JSON decode classification",
+        "rules": ["EFF001"]
+      },
+      {
+        "path": "packages/runtime/src/cloudflare/ops-api/errors.ts",
+        "owner": "@agent-os/runtime/cloudflare/ops-api",
+        "reason": "terminal Cloudflare runtime ops API error adapter owns Response construction",
         "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/runtime/src/cloudflare/ops-api/mount.ts",
+        "owner": "@agent-os/runtime/cloudflare/ops-api",
+        "reason": "terminal Cloudflare runtime ops API HTTP mount owns startup option assertions and request handler async boundary",
+        "rules": ["EFF003", "EFF024", "EFF025"]
       },
       {
         "path": "packages/runtime/src/cloudflare/storage/sql-row.ts",
@@ -95,16 +95,34 @@
         "rules": ["EFF025"]
       },
       {
-        "path": "packages/runtime/src/cloudflare/materialized-projections.ts",
-        "owner": "@agent-os/runtime/cloudflare/materialized-projections",
-        "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
-        "rules": ["EFF025"]
+        "path": "packages/runtime/src/cloudflare/workspace-env-adapter.ts",
+        "owner": "@agent-os/runtime/cloudflare/workspace-env-adapter",
+        "reason": "terminal Cloudflare Sandbox WorkspaceEnv adapter owns Promise provider calls, pre/post AbortSignal checks, provider duration normalization, and symbolic material rejection at the adapter boundary",
+        "rules": ["EFF003", "EFF004", "EFF024", "EFF025", "EFF026"]
+      },
+      {
+        "path": "packages/runtime/src/cloudflare/workspace-job-facade.ts",
+        "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
+        "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
+        "rules": ["EFF402"]
       },
       {
         "path": "packages/runtime/src/node/host.ts",
         "owner": "@agent-os/runtime/node/psql-host-adapter",
         "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
         "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
+      },
+      {
+        "path": "packages/runtime/src/sse-http.ts",
+        "owner": "@agent-os/runtime/sse-http",
+        "reason": "terminal SSE-over-HTTP transport adapter owns Web Fetch Response construction and async iterator pumping from attached-stream codecs",
+        "rules": ["EFF001", "EFF002", "EFF003", "EFF004", "EFF402"]
+      },
+      {
+        "path": "packages/runtime/src/workspace-env-core.ts",
+        "owner": "@agent-os/runtime/workspace-env-core",
+        "reason": "WorkspaceEnv core owns fail-fast AbortSignal and workspace path validation before provider side effects",
+        "rules": ["EFF024", "EFF025"]
       },
       {
         "path": "packages/runtime/test/cloudflare/_in-memory-do.ts",
@@ -125,9 +143,9 @@
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
+        "path": "packages/runtime/test/cloudflare/ops-api-contract.test.ts",
+        "owner": "@agent-os/runtime/cloudflare/ops-api-tests",
+        "reason": "Cloudflare runtime ops API HTTP contract tests own Request/Response construction",
         "rules": ["EFF402"]
       },
       {
@@ -137,65 +155,23 @@
         "rules": ["EFF402"]
       },
       {
-        "path": "packages/providers/dynamic-worker/test/dynamic-worker-contract.test.ts",
-        "owner": "@agent-os/dynamic-worker-tests",
-        "reason": "test worker source strings exercise Response construction in sandboxed dynamic workers",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/execution-domains/workspace-env-cloudflare/src/index.ts",
-        "owner": "@agent-os/workspace-env-cloudflare/provider-adapter",
-        "reason": "terminal Cloudflare Sandbox WorkspaceEnv adapter owns Promise provider calls, pre/post AbortSignal checks, and provider duration normalization",
-        "rules": ["EFF003", "EFF004", "EFF024", "EFF025", "EFF026"]
-      },
-      {
-        "path": "packages/execution-domains/workspace-env-local/src/index.ts",
-        "owner": "@agent-os/workspace-env-local/provider-adapter",
-        "reason": "terminal local host WorkspaceEnv adapter owns Node fs/child_process Promise calls, timeout, AbortSignal, and host environment allowlist enforcement",
-        "rules": ["EFF003", "EFF004", "EFF020", "EFF021", "EFF024", "EFF025", "EFF026"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ops-api/errors.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api",
-        "reason": "terminal Cloudflare runtime ops API error adapter owns Response construction",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ops-api/encoding.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api",
-        "reason": "terminal Cloudflare runtime ops query parser owns malformed URL/base64/JSON decode classification",
-        "rules": ["EFF001"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ops-api/mount.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api",
-        "reason": "terminal Cloudflare runtime ops API HTTP mount owns startup option assertions and request handler async boundary",
-        "rules": ["EFF003", "EFF024", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/ops-api-contract.test.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api-tests",
-        "reason": "Cloudflare runtime ops API HTTP contract tests own Request/Response construction",
+        "path": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
+        "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
         "rules": ["EFF402"]
       }
     ]
   },
   "packageManifests": {
-    "packages/carriers/image": {
-      "shape": ["library"]
-    },
-    "packages/execution-domains/sandbox-cloudflare": {
-      "shape": ["library"]
-    },
-    "packages/execution-domains/sandbox": {
-      "shape": ["library"]
-    },
-    "packages/carriers/workspace-session": {
-      "shape": ["library"]
-    },
     "packages/runtime": {
       "shape": ["library"],
       "allowedAdapters": [
+        {
+          "path": "src/attached-stream-protocol.ts",
+          "owner": "@agent-os/runtime/attached-stream-protocol",
+          "reason": "attached-stream JSON and SSE codecs own malformed frame decode classification without depending on Effect",
+          "rules": ["EFF001"]
+        },
         {
           "path": "src/cloudflare/agent-do.ts",
           "owner": "@agent-os/runtime/cloudflare/cf-do",
@@ -239,6 +215,12 @@
           "rules": ["EFF025"]
         },
         {
+          "path": "src/cloudflare/workspace-env-adapter.ts",
+          "owner": "@agent-os/runtime/cloudflare/workspace-env-adapter",
+          "reason": "terminal Cloudflare Sandbox WorkspaceEnv adapter owns Promise provider calls, pre/post AbortSignal checks, provider duration normalization, and symbolic material rejection at the adapter boundary",
+          "rules": ["EFF003", "EFF004", "EFF024", "EFF025", "EFF026"]
+        },
+        {
           "path": "src/cloudflare/workspace-job-facade.ts",
           "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
           "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
@@ -249,6 +231,18 @@
           "owner": "@agent-os/runtime/node/psql-host-adapter",
           "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
           "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
+        },
+        {
+          "path": "src/sse-http.ts",
+          "owner": "@agent-os/runtime/sse-http",
+          "reason": "terminal SSE-over-HTTP transport adapter owns Web Fetch Response construction and async iterator pumping from attached-stream codecs",
+          "rules": ["EFF001", "EFF002", "EFF003", "EFF004", "EFF402"]
+        },
+        {
+          "path": "src/workspace-env-core.ts",
+          "owner": "@agent-os/runtime/workspace-env-core",
+          "reason": "WorkspaceEnv core owns fail-fast AbortSignal and workspace path validation before provider side effects",
+          "rules": ["EFF024", "EFF025"]
         },
         {
           "path": "test/cloudflare/_in-memory-do.ts",

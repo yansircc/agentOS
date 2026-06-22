@@ -6,6 +6,7 @@ import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protoc
 import {
   EXTENSION_COMMAND_EVENT,
   EXTENSION_RESULT_EVENT,
+  PREFIX_ONLY_EXTENSION_OWNER,
   proofLivedClaimForScope,
   type ExtensionTestDO,
 } from "./test-worker";
@@ -83,7 +84,7 @@ describe("extension capability P1", () => {
     expect(result.ok).toBe(false);
     expect(result.error?._tag).toBe("agent_os.capability_rejected");
     expect(result.error?.event).toBe("*");
-    expect(result.error?.capability).toBe("extension:@agent-os/image:boundary");
+    expect(result.error?.capability).toBe(`extension:${PREFIX_ONLY_EXTENSION_OWNER}:boundary`);
     expect(extensionFacts(events)).toHaveLength(0);
   });
 
@@ -97,7 +98,7 @@ describe("extension capability P1", () => {
     expect(result.ok).toBe(false);
     expect(result.error?._tag).toBe("agent_os.capability_rejected");
     expect(result.error?.event).toBe("*");
-    expect(result.error?.capability).toBe("extension:@agent-os/image:boundary");
+    expect(result.error?.capability).toBe(`extension:${PREFIX_ONLY_EXTENSION_OWNER}:boundary`);
     expect(extensionFacts(events)).toHaveLength(0);
   });
 
@@ -110,7 +111,7 @@ describe("extension capability P1", () => {
     expect(result.ok).toBe(false);
     expect(result.error?._tag).toBe("agent_os.capability_rejected");
     expect(result.error?.event).toBe("*");
-    expect(result.error?.capability).toBe("extension:@agent-os/image:boundary");
+    expect(result.error?.capability).toBe(`extension:${PREFIX_ONLY_EXTENSION_OWNER}:boundary`);
     expect(extensionFacts(events)).toHaveLength(0);
   });
 

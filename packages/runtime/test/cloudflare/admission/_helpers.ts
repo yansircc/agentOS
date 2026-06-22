@@ -12,14 +12,15 @@
 
 import { Context, Layer, ManagedRuntime, Schema } from "effect";
 
-import { EventBusLive, LedgerLive } from "../../../src/cloudflare/ledger";
+import { EventBusLive } from "../../../src/cloudflare/ledger/event-bus";
+import { LedgerLive } from "../../../src/cloudflare/ledger/ledger";
 import { CloudflareMaterializedProjectionsLive } from "../../../src/cloudflare/materialized-projections";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import { MaterializedProjectionRegistry } from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
 import { QuotaLive } from "../../../src/cloudflare/quota";
-import { AdmissionLive } from "../../../src/cloudflare/admission";
+import { AdmissionLive } from "../../../src/cloudflare/admission/admission";
 import { BoundaryEventsLive } from "../../../src/cloudflare/boundary-events";
 import type { EventHandler } from "@agent-os/core/types";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";

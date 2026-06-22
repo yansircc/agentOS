@@ -12,7 +12,7 @@
 import { Effect, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { makeAdmissionSchemaSpec } from "../../../src/cloudflare/admission";
+import { makeAdmissionSchemaSpec } from "@agent-os/core/runtime-protocol";
 
 describe("admission — canonical fingerprint (contract §4.1)", () => {
   const S1 = Schema.Struct({

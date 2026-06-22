@@ -18,15 +18,15 @@ step that produces a manifest and provenance map.
 
 - [Distribution boundary](/concepts/distribution-boundary/)
 - [Durable truth](/concepts/durable-truth/)
-- [Agent authoring package](/packages/agent-authoring/)
+- [CLI package](/packages/cli/)
 - [Usage surfaces](/usage-surfaces/)
 
 ## Steps
 
-1. Install the authoring package and TypeScript peer tooling:
+1. Install the CLI package and TypeScript peer tooling:
 
    ```sh
-   bun add @agent-os/agent-authoring effect
+   bun add @yansirplus/cli effect
    bun add -d typescript
    ```
 
@@ -56,7 +56,7 @@ step that produces a manifest and provenance map.
 5. Compile the authored tree in your build step:
 
    ```ts
-   import { compileAgentTree } from "@agent-os/agent-authoring";
+   import { compileAgentTree } from "@yansirplus/cli";
 
    const compiled = compileAgentTree({
      files: [

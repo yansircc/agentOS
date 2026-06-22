@@ -20,8 +20,8 @@ Recorded run events, projection DTOs, `ContinuationRef`, and `InputRequestRef`.
 Client packages may store and expose those values, but they must not mint a
 second run-event vocabulary.
 
-`@agent-os/ag-ui` is a framework-neutral opt-in wire projection over the
-canonical runtime-protocol vocabulary. It may project canonical values into
+`@agent-os/runtime/ag-ui` is a framework-neutral opt-in wire projection over
+the canonical runtime-protocol vocabulary. It may project canonical values into
 AG-UI frames and accept AG-UI-shaped external input at the boundary. It is not
 the client state model.
 
@@ -53,11 +53,13 @@ bindings. Each subpath is a reactivity bridge over the root store:
 They must not contain component source, pixel layout, timeline/file-review
 vocabulary, runtime event decoding, or transport-specific logic.
 
-`@agent-os/ag-ui-react` and `@agent-os/ag-ui-svelte` are retired by this
-boundary. Useful bridge behavior moves into `@agent-os/client/react` and
-`@agent-os/client/svelte`. There is no compatibility shim package.
+`@agent-os/ag-ui-react`, `@agent-os/ag-ui-svelte`, and
+`@agent-os/workspace-agent` are retired by this boundary. Useful framework
+bridge behavior moves into `@agent-os/client/react` and
+`@agent-os/client/svelte`; workspace preset host generation moves into
+`@agent-os/cli`. There is no compatibility shim package.
 
-`@agent-os/workspace-agent` owns the hidden workspace preset host mechanism:
+`@agent-os/cli` owns the hidden workspace preset host mechanism:
 
 - workspace file/state projections;
 - scan/diff/emit helpers;
@@ -150,7 +152,7 @@ The implementation guard must be positive and structural:
 - `.tsx`, JSX-bearing files, `.svelte`, CSS, and component assets are forbidden
   in client/framework bridge source;
 - hook/readable return types must be imported from runtime-protocol,
-  workspace-agent projections, or AG-UI projector types;
+  runtime AG-UI projection types, or client core;
 - framework bridge subpaths must not define local UI-shaped read-model types;
 - retired AG-UI framework packages must not remain in the public package
   surface after the collapse phase;
@@ -165,13 +167,14 @@ has already accepted or rejected the package.
 The migration is complete when:
 
 - no public `@agent-os/ag-ui-react` or `@agent-os/ag-ui-svelte` package remains;
+- no public `@agent-os/workspace-agent` package remains;
 - `@agent-os/client/react` and `@agent-os/client/svelte` are the only
   per-framework bindings;
 - `@agent-os/client` passes the same state-machine suite with browser-direct and
   server-bridge transports;
 - client-exposed events roundtrip exactly against runtime-protocol projection
   fields, with no UI reshaping;
-- workspace-agent projection reads are reactive/replayable and commands are
+- workspace preset projection reads are reactive/replayable and commands are
   routed through generic typed invocation;
 - the web-cursor spike deletes local EventSource/NDJSON glue, local workspace
   projection/observer/tool-binding boilerplate, and local framework component

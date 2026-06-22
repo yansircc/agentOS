@@ -12,7 +12,6 @@ const namespace = ({
 }): EventNamespace => ({
   ownerId,
   sourcePackageName,
-  packageId: sourcePackageName,
   kindPrefixes,
   version: "0.1.0",
 });

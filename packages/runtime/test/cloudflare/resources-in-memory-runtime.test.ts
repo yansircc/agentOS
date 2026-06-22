@@ -10,8 +10,10 @@ import * as fc from "fast-check";
 import { Cause, Exit, Layer, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
-import { EventBusLive, Ledger, LedgerLive } from "../../src/cloudflare/ledger";
-import { Resources, ResourcesLive } from "../../src/cloudflare/resources";
+import { EventBusLive } from "../../src/cloudflare/ledger/event-bus";
+import { LedgerLive } from "../../src/cloudflare/ledger/ledger";
+import { ResourcesLive } from "../../src/cloudflare/resources/resources";
+import { Ledger, Resources } from "@agent-os/runtime";
 import type { EventHandler } from "@agent-os/core/types";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";

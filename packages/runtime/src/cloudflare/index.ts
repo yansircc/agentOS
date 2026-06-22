@@ -55,11 +55,11 @@ export {
   httpDispatchTarget,
   providerDispatchTarget,
   queueDispatchTarget,
-} from "./dispatch";
+} from "./dispatch/dispatch";
 export type {
   DispatchTargetNamespace,
   DispatchTargetRegistry,
   HttpDispatchTargetSpec,
   ProviderDispatchTargetSpec,
   QueueDispatchTargetBinding,
-} from "./dispatch";
+} from "./dispatch/dispatch";

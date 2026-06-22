@@ -26,8 +26,8 @@ material refs, or settlement authority.
 
 ### Bindings
 
-`@agent-os/ag-ui` owns all AG-UI frame mapping, field retention, redaction, and
-submit input lowering.
+`@agent-os/runtime/ag-ui` owns all AG-UI frame mapping, field retention,
+redaction, and submit input lowering.
 
 React and Svelte consumption belongs in `@agent-os/client/react` and
 `@agent-os/client/svelte`, which bridge the transport-neutral client store. The

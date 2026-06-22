@@ -21,13 +21,6 @@ const sourcePackageScope = "@agent-os";
 const publicPackageScopePlaceholder = "__AGENTOS_PUBLIC_PACKAGE_SCOPE__";
 
 const runtimePackageRoots = ["packages", "tooling"];
-const cloudflarePackageNames = new Set([
-  "@agent-os/runtime",
-  "@agent-os/resource-cloudflare",
-  "@agent-os/sandbox-cloudflare",
-  "@agent-os/workspace-env-cloudflare",
-  "@agent-os/workspace-session-cloudflare",
-]);
 const tarballBlocklist = [
   /(^|\/)vitest(?:\.cloudflare)?\.config\.ts$/,
   /(^|\/)tsconfig\.json$/,
@@ -378,6 +371,25 @@ const sourceFiles = (record) => {
   return files.sort((left, right) => left.localeCompare(right));
 };
 
+const sourceMjsFiles = (record) => {
+  const srcDir = path.join(record.packageDir, "src");
+  const files = [];
+  const visit = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const target = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visit(target);
+        continue;
+      }
+      if (entry.isFile() && entry.name.endsWith(".mjs")) {
+        files.push(target);
+      }
+    }
+  };
+  visit(srcDir);
+  return files.sort((left, right) => left.localeCompare(right));
+};
+
 const isBinTsTarget = (target) => target.startsWith("./bin/") && target.endsWith(".ts");
 const isBinMjsTarget = (target) => target.startsWith("./bin/") && target.endsWith(".mjs");
 const isSourceMjsTarget = (target) => target.startsWith("./src/") && target.endsWith(".mjs");
@@ -461,17 +473,26 @@ const assertSourceManifests = () => {
         `${record.packagePath}: package imports effect and must peer depend on ${rootCatalog.effect}`,
       );
     }
-    const workersPeer = pkg.peerDependencies?.["@cloudflare/workers-types"];
-    if (cloudflarePackageNames.has(pkg.name) && pkg.name !== "@agent-os/runtime") {
-      if (workersPeer !== rootCatalog["@cloudflare/workers-types"]) {
+    for (const peerName of unitOptionalPeers) {
+      const expected = rootCatalog[peerName];
+      if (pkg.peerDependencies?.[peerName] !== expected) {
         issues.push(
-          `${record.packagePath}: Cloudflare package must peer depend on @cloudflare/workers-types ${rootCatalog["@cloudflare/workers-types"]}`,
+          `${record.packagePath}: optional peer ${String(peerName)} must use catalog ${String(expected)}`,
         );
       }
-    } else if (workersPeer !== undefined && !unitOptionalPeers.has("@cloudflare/workers-types")) {
-      issues.push(
-        `${record.packagePath}: non-Cloudflare package must not peer depend on @cloudflare/workers-types`,
-      );
+      if (pkg.peerDependenciesMeta?.[peerName]?.optional !== true) {
+        issues.push(
+          `${record.packagePath}: optional peer ${String(peerName)} must be marked optional`,
+        );
+      }
+    }
+    for (const peerName of Object.keys(pkg.peerDependencies ?? {})) {
+      if (peerName === "effect") continue;
+      if (!unitOptionalPeers.has(peerName)) {
+        issues.push(
+          `${record.packagePath}: peer ${peerName} must be declared by architecture/package-units.json optionalPeers`,
+        );
+      }
     }
   }
   if (issues.length > 0) fail(issues.join("\n"));
@@ -606,8 +627,20 @@ const resolveRelativeTargetFile = (sourceFile, specifier, declarationOutput) => 
     return undefined;
   }
   const base = path.resolve(path.dirname(sourceFile), specifier);
+  if (fs.existsSync(base) && fs.statSync(base).isFile()) {
+    if (
+      base.endsWith(".ts") ||
+      base.endsWith(".mjs") ||
+      (declarationOutput && base.endsWith(".d.ts"))
+    ) {
+      return base;
+    }
+  }
   if (fs.existsSync(`${base}.ts`)) {
     return `${base}.ts`;
+  }
+  if (fs.existsSync(`${base}.mjs`)) {
+    return `${base}.mjs`;
   }
   if (fs.existsSync(path.join(base, "index.ts"))) {
     return path.join(base, "index.ts");
@@ -669,29 +702,56 @@ const rewriteModuleSpecifiers = (record, text, sourceFile, outFile, declarationO
         specifier,
         declarationOutput,
       )}${suffix}`;
-    });
+    })
+    .replace(
+      /(\bnew\s+URL\s*\(\s*["'])([^"']+)(["']\s*,\s*import\.meta\.url\s*\))/g,
+      (_match, prefix, specifier, suffix) =>
+        `${prefix}${resolveModuleSpecifier(
+          record,
+          sourceFile,
+          outFile,
+          specifier,
+          declarationOutput,
+        )}${suffix}`,
+    );
 
-const emitJs = (record) => {
-  for (const file of [...sourceFiles(record), ...binSourceFiles(record)]) {
-    const out = distJsForSourceFile(record, file);
-    if (out === undefined) fail(`${record.packagePath}: cannot emit ${repoPath(file)}`);
-    const source = fs.readFileSync(file, "utf8");
-    const transpiled = ts.transpileModule(source, {
-      fileName: file,
-      compilerOptions: {
-        target: ts.ScriptTarget.ES2022,
-        module: ts.ModuleKind.ES2022,
-        importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
-        sourceMap: false,
-      },
-    });
-    fs.mkdirSync(path.dirname(out), { recursive: true });
+const runtimeSourceFiles = (record) =>
+  [...new Set([...sourceFiles(record), ...sourceMjsFiles(record), ...binSourceFiles(record)])].sort(
+    (left, right) => left.localeCompare(right),
+  );
+
+const emitJsFile = (record, file, out) => {
+  const source = fs.readFileSync(file, "utf8");
+  if (file.endsWith(".mjs")) {
     fs.writeFileSync(
       out,
-      rewritePublicScopePlaceholders(
-        rewriteModuleSpecifiers(record, transpiled.outputText, file, out, false),
-      ),
+      rewritePublicScopePlaceholders(rewriteModuleSpecifiers(record, source, file, out, false)),
     );
+    return;
+  }
+  const transpiled = ts.transpileModule(source, {
+    fileName: file,
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ES2022,
+      importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+      sourceMap: false,
+    },
+  });
+  fs.writeFileSync(
+    out,
+    rewritePublicScopePlaceholders(
+      rewriteModuleSpecifiers(record, transpiled.outputText, file, out, false),
+    ),
+  );
+};
+
+const emitJs = (record) => {
+  for (const file of runtimeSourceFiles(record)) {
+    const out = distJsForSourceFile(record, file);
+    if (out === undefined) fail(`${record.packagePath}: cannot emit ${repoPath(file)}`);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    emitJsFile(record, file, out);
   }
 };
 
@@ -789,9 +849,6 @@ const projectedPeerDependencies = (record) => {
   }
   if (packageImportsEffect(record)) {
     peers.effect = rootCatalog.effect;
-  }
-  if (cloudflarePackageNames.has(record.packageJson.name)) {
-    peers["@cloudflare/workers-types"] = rootCatalog["@cloudflare/workers-types"];
   }
   return Object.keys(peers).length === 0 ? undefined : peers;
 };
@@ -1114,6 +1171,86 @@ const npmPackDryRunFiles = (cwd) => {
   return parsed[0]?.files?.map((entry) => entry.path) ?? [];
 };
 
+const collectPackageTargetStrings = (value, output = []) => {
+  if (typeof value === "string") {
+    output.push(value);
+    return output;
+  }
+  if (value === null || typeof value !== "object") return output;
+  for (const child of Object.values(value)) collectPackageTargetStrings(child, output);
+  return output;
+};
+
+const manifestFileTargets = (manifest) =>
+  [
+    manifest.main,
+    manifest.types,
+    ...collectPackageTargetStrings(manifest.bin),
+    ...collectPackageTargetStrings(manifest.exports),
+  ].filter((target) => typeof target === "string" && target.startsWith("./"));
+
+const runtimeReferenceSpecifiers = (text) => {
+  const specifiers = [];
+  const sourceFile = ts.createSourceFile(
+    "agentos-staged-package.js",
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specifiers.push(node.arguments[0].text);
+    }
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "URL" &&
+      node.arguments?.length === 2 &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
+      node.arguments[1].getText(sourceFile) === "import.meta.url"
+    ) {
+      specifiers.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return specifiers;
+};
+
+const assertStagedRuntimeClosure = (record, issues) => {
+  for (const target of manifestFileTargets(readJson(path.join(record.stageDir, "package.json")))) {
+    const absoluteTarget = path.join(record.stageDir, target.slice("./".length));
+    if (!fs.existsSync(absoluteTarget) || !fs.statSync(absoluteTarget).isFile()) {
+      issues.push(`${repoPath(absoluteTarget)} is declared by package.json but does not exist`);
+    }
+  }
+  for (const file of allFiles(path.join(record.stageDir, "dist")).filter(
+    (candidate) => candidate.endsWith(".js") || candidate.endsWith(".mjs"),
+  )) {
+    const text = fs.readFileSync(file, "utf8");
+    for (const specifier of runtimeReferenceSpecifiers(text)) {
+      if (!specifier.startsWith(".")) continue;
+      const resolved = path.resolve(path.dirname(file), specifier);
+      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+        issues.push(`${repoPath(file)} references missing runtime file ${specifier}`);
+      }
+    }
+  }
+};
+
 const assertStagingPackage = (record) => {
   const manifest = readJson(path.join(record.stageDir, "package.json"));
   const manifestText = JSON.stringify(manifest);
@@ -1146,7 +1283,8 @@ const assertStagingPackage = (record) => {
   );
   const publishedSourcePathPattern = new RegExp(`${escapeRegExp(publishScope())}/[^"']+/src/`, "u");
   for (const file of allFiles(path.join(record.stageDir, "dist")).filter(
-    (candidate) => candidate.endsWith(".d.ts") || candidate.endsWith(".js"),
+    (candidate) =>
+      candidate.endsWith(".d.ts") || candidate.endsWith(".js") || candidate.endsWith(".mjs"),
   )) {
     const text = fs.readFileSync(file, "utf8");
     if (sourceModuleSpecifierPattern.test(text)) {
@@ -1166,6 +1304,7 @@ const assertStagingPackage = (record) => {
       issues.push(`${record.packageJson.name}: tarball dry-run includes blocked file ${file}`);
     }
   }
+  assertStagedRuntimeClosure(record, issues);
   if (issues.length > 0) fail(`${record.packageJson.name}\n${issues.join("\n")}`);
 };
 
@@ -1180,7 +1319,6 @@ const checkDistribution = () => {
 
 const packInternal = () => {
   checkDistribution();
-  fs.rmSync(tarballRoot, { recursive: true, force: true });
   fs.mkdirSync(tarballRoot, { recursive: true });
   const tarballs = [];
   for (const record of publishedRecords()) {
@@ -1204,20 +1342,10 @@ const packInternal = () => {
 
 const tarballsByPackage = () => {
   if (!fs.existsSync(tarballRoot)) packInternal();
-  const byPackage = new Map();
-  const version = packageVersion();
-  for (const record of publishedRecords()) {
-    const packageName = publicPackageName(record.packageJson.name);
-    const packageNamePart = packageName.replace(/^@/u, "").replace(/\//gu, "-");
-    const prefix = `${packageNamePart}-${version}`;
-    const tarball = allFiles(tarballRoot)
-      .filter((entry) => path.basename(entry).startsWith(prefix) && entry.endsWith(".tgz"))
-      .sort((left, right) => left.localeCompare(right))
-      .at(-1);
-    if (tarball === undefined) fail(`${packageName}: missing tarball`);
-    byPackage.set(packageName, tarball);
-  }
-  return byPackage;
+  const manifest = readInstallManifest();
+  return new Map(
+    tarballPackageEntries(manifest).map((entry) => [entry.packageName, entry.tarball]),
+  );
 };
 
 const packageDepsFromTarballs = () =>
@@ -1242,7 +1370,7 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "index.ts"),
     [
-      `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
+      `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
@@ -1257,21 +1385,21 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
     [
-      `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
+      `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { ABORT } from "${publicSpecifier("@agent-os/core")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
-      `import { projectTurnStream } from "${publicSpecifier("@agent-os/turn-stream")}";`,
+      `import { AG_UI_WIRE_COMPATIBILITY } from "${publicSpecifier("@agent-os/runtime/ag-ui")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
-      "if (!compileAgentTree || !ABORT || !triggerParseOk || !projectTurnStream || !mountOpsApi) throw new Error('missing import');",
+      "if (!compileAgentTree || !ABORT || !triggerParseOk || !AG_UI_WIRE_COMPATIBILITY || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
     path.join(dir, "cf-entry.ts"),
     [
-      `import { compileAgentTree } from "${publicSpecifier("@agent-os/agent-authoring")}";`,
+      `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai")}";`,
-      `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
+      `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core")}";`,
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
       "});",
@@ -1311,33 +1439,42 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
 const npmInstall = (dir, omitPeer = false) => {
   run(
     "npm",
-    ["install", "--package-lock=false", "--ignore-scripts", ...(omitPeer ? ["--omit=peer"] : [])],
+    [
+      "install",
+      "--package-lock=false",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--prefer-offline",
+      ...(omitPeer ? ["--omit=peer", "--legacy-peer-deps"] : []),
+    ],
     { cwd: dir, capture: true },
   );
 };
 
 const assertPeerFailure = () => {
   const dir = mkdtempFixture("agentos-peer-failure-");
+  const corePublicName = publicSpecifier("@agent-os/core");
+  const coreTarball = tarballsByPackage().get(corePublicName);
+  if (coreTarball === undefined) fail(`${corePublicName}: missing tarball for peer failure test`);
   writeJson(path.join(dir, "package.json"), {
     name: "agentos-peer-failure",
     private: true,
     type: "module",
-    dependencies: packageDepsFromTarballs(),
+    dependencies: {
+      [corePublicName]: `file:${coreTarball}`,
+    },
     devDependencies: {
       typescript: catalog().typescript,
     },
   });
   fs.writeFileSync(
     path.join(dir, "index.ts"),
-    `import { makePreClaim } from "${publicSpecifier(
-      "@agent-os/core/effect-claim",
-    )}";\nvoid makePreClaim;\n`,
+    `import { makePreClaim } from "${publicSpecifier("@agent-os/core")}";\nvoid makePreClaim;\n`,
   );
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
-    `import { makePreClaim } from "${publicSpecifier(
-      "@agent-os/core/effect-claim",
-    )}";\nvoid makePreClaim;\n`,
+    `import { makePreClaim } from "${publicSpecifier("@agent-os/core")}";\nvoid makePreClaim;\n`,
   );
   writeJson(path.join(dir, "tsconfig.json"), {
     compilerOptions: {
@@ -1371,9 +1508,8 @@ const assertPeerFailure = () => {
 const negativeContractTests = () => {
   const records = publishedRecords();
   const core = records.find((record) => record.packageJson.name === "@agent-os/core");
-  const turnStream = records.find((record) => record.packageJson.name === "@agent-os/turn-stream");
   const cloudflare = records.find((record) => record.packageJson.name === "@agent-os/runtime");
-  if (core === undefined || turnStream === undefined || cloudflare === undefined) {
+  if (core === undefined || cloudflare === undefined) {
     fail("negative test fixtures missing expected packages");
   }
   const assertFails = (label, fn) => {
@@ -1401,9 +1537,7 @@ const negativeContractTests = () => {
     if (!paths.has(kernel.packagePath)) fail(`${kernel.packagePath}: missing published package`);
   });
   assertFails("deep source path in d.ts", () => {
-    const text = `import type { X } from "${publicSpecifier(
-      "@agent-os/runtime/src/internal-helper",
-    )}";\n`;
+    const text = `import type { X } from "${publishScope()}/runtime/src/internal-helper";\n`;
     if (
       /\/src\/|src\/index|workspace:\*|["']workspace:/.test(text) ||
       new RegExp(`${escapeRegExp(publishScope())}/[^"']+/src/`, "u").test(text)
@@ -1412,9 +1546,9 @@ const negativeContractTests = () => {
     }
   });
   assertFails("effect import without peer", () => {
-    const pkg = structuredClone(turnStream.packageJson);
+    const pkg = structuredClone(core.packageJson);
     delete pkg.peerDependencies?.effect;
-    if (packageImportsEffect(turnStream) && pkg.peerDependencies?.effect !== catalog().effect) {
+    if (packageImportsEffect(core) && pkg.peerDependencies?.effect !== catalog().effect) {
       fail("missing effect peer");
     }
   });

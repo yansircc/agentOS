@@ -18,7 +18,7 @@ import { projectionScopeKey, runtimeEventIdentity, truthIdentity } from "./ident
 const payload = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
-const WORKSPACE_OP_FACT_OWNER = "@agent-os/workspace-op";
+const WORKSPACE_OP_FACT_OWNER = "../../src/workspace-op-carrier";
 
 const runWorkflowProjection = (version = 1): AnyMaterializedProjectionDefinition =>
   defineProjection({

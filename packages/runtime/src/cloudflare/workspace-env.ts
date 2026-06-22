@@ -4,8 +4,8 @@ import {
   type CloudflareWorkspaceEnvExecOptions,
   type CloudflareWorkspaceEnvExecRawResult,
   type CloudflareWorkspaceEnvOptions,
-} from "@agent-os/workspace-env-cloudflare";
-import type { WorkspaceEnv } from "@agent-os/workspace-env";
+} from "./workspace-env-adapter";
+import type { WorkspaceEnv } from "../workspace-env-core";
 
 export interface CloudflareWorkspaceEnvResolverInput {
   readonly scope: string;

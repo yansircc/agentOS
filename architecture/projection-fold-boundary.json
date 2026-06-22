@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "decision": "keep-consumer-boundary",
+  "sharedFold": false,
+  "blockingContractReason": "Browser client state and server/runtime read models currently consume the same runtime ledger vocabulary but do not expose one shared fold with two interpreters. The client fold owns connection status, replay cursor, pending continuation refs, and input-request UI state. The runtime/server fold owns run status, run trace, submit-result, and materialized projection reads. Until those outputs are specified as one projection algebra with distinct interpreters, the disputed event-projection fold must not be promoted into core.",
+  "corePromotionCondition": "Promote this fold into @agent-os/core only after a single source file defines the shared runtime-event fold algebra, both browser and server tests import that source directly, and consumer-specific interpreters contain no independent event lifecycle rules.",
+  "ownedFolds": [
+    {
+      "id": "browser-client-runtime-snapshot",
+      "packageName": "@agent-os/client",
+      "file": "packages/client/src/index.ts",
+      "consumerRoots": ["browser-client"],
+      "exports": [
+        "AgentClientSnapshot",
+        "AgentClientRunSnapshot",
+        "createInitialAgentClientSnapshot",
+        "appendRuntimeEventsToSnapshot",
+        "isCurrentContinuationRef",
+        "isCurrentInputRequestRef"
+      ],
+      "allowedConsumers": [
+        "packages/client/src/react/index.ts",
+        "packages/client/src/svelte/index.ts"
+      ]
+    },
+    {
+      "id": "runtime-server-run-projectors",
+      "packageName": "@agent-os/runtime",
+      "file": "packages/runtime/src/run-projector.ts",
+      "consumerRoots": ["runtime-server"],
+      "exports": ["projectRunStatus", "projectRunTrace", "projectRunsPage", "projectSubmitResult"],
+      "allowedConsumers": [
+        "packages/runtime/src/cloudflare/agent-do.ts",
+        "packages/runtime/src/index.ts",
+        "packages/runtime/src/submit-agent.ts",
+        "packages/runtime/src/workspace-job.ts"
+      ]
+    }
+  ],
+  "coreForbiddenExports": [
+    "AgentClientSnapshot",
+    "AgentClientRunSnapshot",
+    "createInitialAgentClientSnapshot",
+    "appendRuntimeEventsToSnapshot",
+    "isCurrentContinuationRef",
+    "isCurrentInputRequestRef",
+    "projectRunStatus",
+    "projectRunTrace",
+    "projectRunsPage",
+    "projectSubmitResult"
+  ]
+}

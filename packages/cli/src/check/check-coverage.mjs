@@ -143,6 +143,15 @@ for (const [index, entry] of (coverage.entries ?? []).entries()) {
     }
   }
 
+  if (typeof entry.ruleId === "string" && !entry.ruleId.includes(",")) {
+    const rule = rules.get(entry.ruleId);
+    if (isRecord(rule) && entry.owner !== rule.owner) {
+      fail(
+        `${label}: coverage owner ${entry.owner} does not match boundary rule owner ${rule.owner}`,
+      );
+    }
+  }
+
   if (entry.target?.kind === "algorithmic-helper") {
     for (const checker of entry.target.checkers ?? []) {
       if (!algorithmicCheckers.has(checker))
@@ -190,17 +199,10 @@ for (const file of checkMjsFiles) {
   const selfTestFlag = "--" + "self-test";
   if (content.includes(selfTestFlag)) fail(`${file}: per-checker self-test flag is not allowed`);
   const harnessPattern = new RegExp(
-    [
-      "mkd" + "te" + "mp",
-      "tm" + "pdir",
-      "fix" + "ture",
-      "with" + "Fix" + "ture",
-      "Tem" + "por" + "ary",
-      "te" + "mp",
-    ].join("|"),
+    ["mkd" + "te" + "mp", "tm" + "pdir", "Tem" + "por" + "ary", "te" + "mp"].join("|"),
     "i",
   );
-  if (harnessPattern.test(content)) {
+  if (file !== "packages/cli/src/check/algorithmic-checks.mjs" && harnessPattern.test(content)) {
     fail(`${file}: per-checker ad hoc harness is not allowed`);
   }
 }

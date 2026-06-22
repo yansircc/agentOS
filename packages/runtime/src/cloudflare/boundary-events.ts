@@ -14,7 +14,7 @@ import {
 import type { BoundaryContract } from "@agent-os/core/boundary-contract";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import { RUNTIME_FACT_OWNER, type RuntimeEventCommitSpec } from "@agent-os/core/runtime-protocol";
-import { EventBus } from "./ledger";
+import { EventBus } from "./ledger/event-bus";
 import { commitLedgerTransaction } from "./ledger/commit";
 
 export const BoundaryEventsLive = (

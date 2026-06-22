@@ -77,6 +77,7 @@ export * from "./settlement-contract";
 export * from "./telemetry-protocol";
 export * from "./tools";
 export * from "./types";
+export * from "./workspace-agent";
 export type {
   Authored,
   Derived,

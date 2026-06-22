@@ -42,8 +42,8 @@
       "statement": "Browser-safe ledger event views are projected by the fact owner before any wire adapter or product renderer consumes them.",
       "docs": "docs/concepts/ag-ui-wire-adapter.md",
       "tests": [
-        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts",
-        "packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"
+        "packages/core/test/runtime-protocol/runtime-events.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
     },
     {
@@ -87,10 +87,10 @@
     {
       "id": "invariant.workspace-op.carrier-single-writer",
       "statement": "Only the workspace-op carrier constructs workspace_op.* terminal payloads; host providers execute requested facts and commit through the carrier boundary capability.",
-      "docs": "docs/packages/workspace-op.md",
+      "docs": "docs/packages/runtime.md",
       "tests": [
-        "packages/carriers/workspace-op/test/workspace-op.test.ts",
-        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+        "packages/runtime/test/submit-agent-runtime-events.test.ts"
       ]
     },
     {
@@ -102,9 +102,8 @@
     {
       "id": "invariant.workspace-job.verified-terminal",
       "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; written, readback, hashed, verified, and delivered terminal bytes flow through one closed pipeline, and verifier repair attempts are aggregated by agentOS before a job terminal projection is delivered.",
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "tests": [
-        "packages/carriers/workspace-job/test/workspace-job.test.ts",
         "packages/runtime/test/workspace-job.test.ts",
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]
@@ -112,9 +111,8 @@
     {
       "id": "invariant.workspace-job.failure-observability-join",
       "statement": "Workspace job failure explanation is derived by runtime composition from workspace-job terminal facts joined with runtime diagnostic projections; carrier facts remain terminal vocabulary and consumer projections do not expose runtime numeric run ids.",
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "tests": [
-        "packages/carriers/workspace-job/test/workspace-job.test.ts",
         "packages/runtime/test/workspace-job.test.ts",
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ]

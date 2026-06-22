@@ -4,7 +4,7 @@ import {
   decisionGateBoundaryContract,
   type DecisionGateConsumedPayload,
   type DecisionGateRequestedPayload,
-} from "@agent-os/decision-gate";
+} from "./decision-gate";
 import type { JsonStringifyError } from "@agent-os/core/errors";
 import type { RecordedLedgerEvent } from "@agent-os/core/types";
 import {

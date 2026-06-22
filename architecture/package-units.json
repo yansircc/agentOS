@@ -30,6 +30,132 @@
           "subpath": ".",
           "moduleBuckets": ["axioms"],
           "optionalPeers": []
+        },
+        {
+          "subpath": "./abort",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./agent-schema",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./authored-value",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./backend-protocol",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./backend-protocol/reference",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./boundary-contract",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./carrier",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./context",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./effect-claim",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./errors",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./extensions",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./live-edge",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./llm-protocol",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./material-ref",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./projection",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./quota",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./recorded-value",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./ref-resolver",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./runtime-protocol",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./runtime-scope",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./settlement-contract",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./telemetry-protocol",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./tools",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./types",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-agent",
+          "moduleBuckets": ["axioms"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
         }
       ]
     },
@@ -56,18 +182,50 @@
         {
           "subpath": ".",
           "moduleBuckets": ["ledger", "projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./admission",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./run-projector",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./ag-ui",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./sse-http",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral", "cloudflare-worker"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-agent",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["cloudflare-worker"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-binding",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["cloudflare-worker"],
           "optionalPeers": []
         },
         {
           "subpath": "./cloudflare",
           "moduleBuckets": ["ledger", "adapter"],
+          "targetProfiles": ["cloudflare-worker"],
           "optionalPeers": [
-            "@agent-os/ag-ui",
-            "@agent-os/sse-http",
-            "@agent-os/workspace-env",
-            "@agent-os/workspace-env-cloudflare",
-            "@agent-os/workspace-op",
-            "@agent-os/workspace-op-local",
             "@cloudflare/workers-types",
             "@effect/ai-anthropic",
             "@effect/sql-sqlite-do"
@@ -76,31 +234,37 @@
         {
           "subpath": "./cloudflare/do-rpc",
           "moduleBuckets": ["adapter"],
+          "targetProfiles": ["cloudflare-worker"],
           "optionalPeers": ["@cloudflare/workers-types"]
         },
         {
           "subpath": "./cloudflare/ops-api",
           "moduleBuckets": ["adapter"],
+          "targetProfiles": ["cloudflare-worker"],
           "optionalPeers": ["@cloudflare/workers-types"]
         },
         {
           "subpath": "./in-memory",
           "moduleBuckets": ["ledger", "adapter"],
+          "targetProfiles": ["neutral"],
           "optionalPeers": []
         },
         {
           "subpath": "./node",
           "moduleBuckets": ["ledger", "adapter"],
+          "targetProfiles": ["node"],
           "optionalPeers": []
         },
         {
           "subpath": "./llm-effect-ai",
           "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
           "optionalPeers": ["@effect/ai-anthropic"]
         },
         {
           "subpath": "./telemetry-otlp",
           "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
           "optionalPeers": []
         }
       ]
@@ -134,6 +298,12 @@
           "subpath": "./svelte",
           "moduleBuckets": ["adapter"],
           "optionalPeers": ["svelte"]
+        },
+        {
+          "subpath": "./workspace-agent",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["browser"],
+          "optionalPeers": []
         }
       ]
     },

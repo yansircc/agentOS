@@ -25,11 +25,11 @@ title: "@agent-os/client Public API Intent"
 - `.:AgentClientStreamOptions`
 - `.:AgentClientStreamSource`
 - `.:AgentClientUnsubscribe`
-- `.:CreateAgentClientOptions`
 - `.:appendRuntimeEventsToSnapshot`
 - `.:createAgentClient`
-- `.:createInitialAgentClientSnapshot`
+- `.:CreateAgentClientOptions`
 - `.:createAgentClientStore`
+- `.:createInitialAgentClientSnapshot`
 - `.:isCurrentContinuationRef`
 - `.:isCurrentInputRequestRef`
 - `.:selectAgentClientSnapshot`
@@ -41,6 +41,28 @@ title: "@agent-os/client Public API Intent"
 - `./svelte:AgentClientStore`
 - `./svelte:clientReadable`
 - `./svelte:selectClientReadable`
+- `./workspace-agent:createWorkspaceAgentClient`
+- `./workspace-agent:createWorkspaceAgentClientBridge`
+- `./workspace-agent:CreateWorkspaceAgentClientOptions`
+- `./workspace-agent:WORKSPACE_AGENT_COMMAND`
+- `./workspace-agent:WorkspaceAgentClient`
+- `./workspace-agent:WorkspaceAgentClientBridge`
+- `./workspace-agent:WorkspaceAgentCommandInputByName`
+- `./workspace-agent:WorkspaceAgentCommandMap`
+- `./workspace-agent:WorkspaceAgentCommandName`
+- `./workspace-agent:WorkspaceAgentCommandOutputByName`
+- `./workspace-agent:WorkspaceAgentCustomCommandInput`
+- `./workspace-agent:WorkspaceAgentDestroyCommandInput`
+- `./workspace-agent:WorkspaceAgentFileEntry`
+- `./workspace-agent:WorkspaceAgentMutationCommandOutput`
+- `./workspace-agent:WorkspaceAgentProjectionName`
+- `./workspace-agent:WorkspaceAgentReadFileCommandInput`
+- `./workspace-agent:WorkspaceAgentReadFileCommandOutput`
+- `./workspace-agent:WorkspaceAgentReadStateCommandInput`
+- `./workspace-agent:WorkspaceAgentReadStateCommandOutput`
+- `./workspace-agent:WorkspaceAgentResetCommandInput`
+- `./workspace-agent:WorkspaceAgentResumeInputRequestCommandInput`
+- `./workspace-agent:WorkspaceAgentSubmitCommandInput`
 
 ## Experimental exports
 

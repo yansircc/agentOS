@@ -13,7 +13,7 @@ through backend configuration generated or owned by the framework.
 ## Prerequisites
 
 - [Durable triggers guide](../guides/add-durable-trigger.md)
-- [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
+- [Runtime API](../api/runtime.md)
 - [Durable truth](../concepts/durable-truth.md)
 
 ## Steps

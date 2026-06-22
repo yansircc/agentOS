@@ -16,7 +16,7 @@ material, execution domain, interaction, and receipt policy declarations.
 ## Prerequisites
 
 - [Usage surfaces](/usage-surfaces/)
-- [Agent authoring package](/packages/agent-authoring/)
+- [CLI package](/packages/cli/)
 - [Weather tool LLM loop](/tutorials/weather-tool-llm-loop/)
 
 ## Steps

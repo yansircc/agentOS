@@ -19,32 +19,32 @@
     {
       "ownerId": "@agent-os/decision-gate",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/decision-gate"]
+      "sourcePackageNames": ["@agent-os/runtime"]
     },
     {
       "ownerId": "@agent-os/deploy",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/deploy"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/deploy"]
     },
     {
       "ownerId": "@agent-os/dynamic-worker",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/dynamic-worker"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/dynamic-worker"]
     },
     {
       "ownerId": "@agent-os/git-carrier",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/git-carrier"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/git-carrier"]
     },
     {
       "ownerId": "@agent-os/image",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/image"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/image"]
     },
     {
       "ownerId": "@agent-os/resource-carrier",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/resource-carrier"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/resource-carrier"]
     },
     {
       "ownerId": "@agent-os/runtime",
@@ -58,28 +58,28 @@
     },
     {
       "ownerId": "@agent-os/staging-artifact",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/staging-artifact"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/staging-artifact"]
     },
     {
       "ownerId": "@agent-os/verification",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/verification"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/verification"]
     },
     {
       "ownerId": "@agent-os/workspace-job",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/workspace-job"]
+      "sourcePackageNames": ["@agent-os/runtime"]
     },
     {
       "ownerId": "@agent-os/workspace-op",
       "status": "active",
-      "sourcePackageNames": ["@agent-os/workspace-op"]
+      "sourcePackageNames": ["@agent-os/runtime"]
     },
     {
       "ownerId": "@agent-os/workspace-session",
-      "status": "active",
-      "sourcePackageNames": ["@agent-os/workspace-session"]
+      "status": "retired",
+      "retiredSourcePackageNames": ["@agent-os/workspace-session"]
     }
   ]
 }

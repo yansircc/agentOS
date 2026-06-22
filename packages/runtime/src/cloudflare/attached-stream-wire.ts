@@ -2,9 +2,9 @@ import {
   decodeAttachedStreamMessage,
   encodeAttachedStreamMessage,
   isAttachedStreamInboundFrame,
-} from "@agent-os/attached-stream";
+} from "../attached-stream-protocol";
 import type { AttachedStreamSession } from "@agent-os/runtime";
-import { createAttachedStreamSseResponse } from "@agent-os/sse-http";
+import { createAttachedStreamSseResponse } from "../sse-http";
 import type { Effect as EffectType } from "effect";
 
 type AttachedStreamEffectRunner = <A, E>(effect: EffectType.Effect<A, E>) => Promise<A>;

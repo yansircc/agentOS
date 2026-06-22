@@ -48,7 +48,7 @@ whose source is exported TSDoc and `docs/agent/*.source.json`.
 This page does not teach a compatibility path for old ledger rows. D10 has no
 legacy migration and no scope-wide public scan.
 
-This page does not introduce `@agent-os/create`, multi-agent relationship
+This page does not introduce a create-app package, multi-agent relationship
 calculus, `WorkspaceFs`, `OverlayFs`, `defineBoundary()`, or durable
 reconnect/resume. Those remain outside the current generated navigation layer.
 

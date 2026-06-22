@@ -47,20 +47,6 @@
       "sourceFiles": ["packages/runtime/src/cloudflare/ledger/identity.ts"]
     },
     {
-      "tag": "agent_os.cloudflare_worker_bundle_resolution_failure",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/deploy-cloudflare.md",
-      "fix": "Resolve Cloudflare worker bundle references before deploy composition and fail the provider boundary when the bundle cannot be located.",
-      "sourceFiles": ["packages/providers/deploy-cloudflare/src/index.ts"]
-    },
-    {
-      "tag": "agent_os.cloudflare_worker_deploy_resolution_failure",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/deploy-cloudflare.md",
-      "fix": "Resolve deploy target bindings and provider configuration before emitting deploy facts.",
-      "sourceFiles": ["packages/providers/deploy-cloudflare/src/index.ts"]
-    },
-    {
       "tag": "agent_os.dispatch_binding_ref_malformed",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/packages/runtime.md",
@@ -129,40 +115,6 @@
       "docs": "docs/concepts/durable-process-algebra.md",
       "fix": "Drain due work through the durable trigger scheduler with an explicit limit and retry the remaining due work later.",
       "sourceFiles": ["packages/core/src/errors.ts"]
-    },
-    {
-      "tag": "agent_os.dynamic_worker_failure",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/dynamic-worker.md",
-      "fix": "Surface dynamic worker provider failures through the provider boundary instead of converting them into successful runtime output.",
-      "sourceFiles": [
-        "packages/providers/dynamic-worker/src/types.ts",
-        "packages/providers/dynamic-worker/test/dynamic-worker-contract.test.ts"
-      ]
-    },
-    {
-      "tag": "agent_os.dynamic_worker_policy_denied",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/dynamic-worker.md",
-      "fix": "Reject disallowed dynamic worker requests at policy evaluation before provider execution.",
-      "sourceFiles": [
-        "packages/providers/dynamic-worker/src/types.ts",
-        "packages/providers/dynamic-worker/test/dynamic-worker-contract.test.ts"
-      ]
-    },
-    {
-      "tag": "agent_os.dynamic_worker_policy_violation",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/dynamic-worker.md",
-      "fix": "Move policy-violating dynamic worker input back to the caller boundary and require a valid provider policy.",
-      "sourceFiles": ["packages/providers/dynamic-worker/src/types.ts"]
-    },
-    {
-      "tag": "agent_os.dynamic_worker_provider_failure",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/dynamic-worker.md",
-      "fix": "Classify provider failures at the dynamic worker adapter and keep product logic out of provider error parsing.",
-      "sourceFiles": ["packages/providers/dynamic-worker/src/types.ts"]
     },
     {
       "tag": "agent_os.effect_ai_aborted",
@@ -234,19 +186,9 @@
       ]
     },
     {
-      "tag": "agent_os.image_resource_settlement_reconcile_required",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/image-resource-settlement.md",
-      "fix": "Treat consume/release settlement failures as provider-local reconcile signals; callers that own a carrier boundary must translate them into indeterminate settlement facts.",
-      "sourceFiles": [
-        "packages/providers/image-resource-settlement/src/index.ts",
-        "packages/providers/image-resource-settlement/test/image-resource-settlement.test.ts"
-      ]
-    },
-    {
       "tag": "agent_os.invalid_resource_amount",
       "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "docs": "docs/packages/resource-carrier.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Reject non-positive or non-finite resource amounts before committing resource or quota facts.",
       "sourceFiles": ["packages/core/src/errors.ts"]
     },
@@ -384,7 +326,7 @@
     {
       "tag": "agent_os.resource_insufficient",
       "invariants": ["invariant.ledger.single-commit-source"],
-      "docs": "docs/packages/resource-carrier.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Grant or release resources through the resource ledger before attempting a reservation that would exceed available capacity.",
       "sourceFiles": [
         "packages/core/src/errors.ts",
@@ -396,7 +338,7 @@
     {
       "tag": "agent_os.resource_reservation_closed",
       "invariants": ["invariant.ledger.single-commit-source"],
-      "docs": "docs/packages/resource-carrier.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Do not consume or release a reservation after its terminal resource fact has already been committed.",
       "sourceFiles": [
         "packages/core/src/errors.ts",
@@ -407,7 +349,7 @@
     {
       "tag": "agent_os.resource_reservation_not_found",
       "invariants": ["invariant.ledger.single-commit-source"],
-      "docs": "docs/packages/resource-carrier.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Commit or look up the resource reservation under the exact ledger identity before consuming or releasing it.",
       "sourceFiles": ["packages/core/src/errors.ts"]
     },
@@ -430,28 +372,6 @@
         "packages/runtime/test/cloudflare/materialized-projections.runtime.test.ts",
         "packages/runtime/test/cloudflare/quota-contract.runtime.test.ts",
         "packages/runtime/test/in-memory/runtime-tags.test.ts"
-      ]
-    },
-    {
-      "tag": "agent_os.sandbox_failure",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/sandbox.md",
-      "fix": "Classify sandbox provider failures at the sandbox execution-domain adapter and return a closed tool result.",
-      "sourceFiles": [
-        "packages/execution-domains/sandbox-cloudflare/test/cloudflare-contract.test.ts",
-        "packages/execution-domains/sandbox/src/types.ts",
-        "packages/execution-domains/sandbox/test/sandbox-contract.test.ts"
-      ]
-    },
-    {
-      "tag": "agent_os.sandbox_policy_denied",
-      "invariants": ["invariant.algebra.type-or-boot-proof"],
-      "docs": "docs/packages/sandbox.md",
-      "fix": "Reject sandbox requests that violate the declared sandbox policy before provider execution.",
-      "sourceFiles": [
-        "packages/execution-domains/sandbox/src/output.ts",
-        "packages/execution-domains/sandbox/src/types.ts",
-        "packages/execution-domains/sandbox/test/sandbox-contract.test.ts"
       ]
     },
     {
@@ -481,13 +401,6 @@
       "docs": "docs/packages/runtime.md",
       "fix": "Stream only with an exact scopeRef and effectAuthorityRef identity and reject malformed stream identity input.",
       "sourceFiles": ["packages/runtime/src/cloudflare/agent-do.ts"]
-    },
-    {
-      "tag": "agent_os.tenant_credential_resolver_configuration_error",
-      "invariants": ["invariant.boundary.runtime-validation-external-only"],
-      "docs": "docs/packages/tenant-material.md",
-      "fix": "Configure tenant credential resolution before binding provider credentials to material refs.",
-      "sourceFiles": ["packages/providers/tenant-material/src/index.ts"]
     },
     {
       "tag": "agent_os.trigger_factory_error",
@@ -537,28 +450,28 @@
     {
       "tag": "agent_os.workspace_job_candidate_missing",
       "invariants": ["invariant.workspace-job.verified-terminal"],
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Treat a missing candidate as a workspace_job.failed terminal fact before finalization or verification can produce a deliverable.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     },
     {
       "tag": "agent_os.workspace_job_data_plane_failed",
       "invariants": ["invariant.workspace-job.verified-terminal"],
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Keep seed and terminal build/write/read failures inside the workspace job data-plane boundary; retryable witness gaps settle through workspace_job.reconcile_required while non-retryable finalization defects settle through workspace_job.failed.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     },
     {
       "tag": "agent_os.workspace_job_run_id_mismatch",
       "invariants": ["invariant.workspace-job.verified-terminal"],
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Reject terminal builder output whose run id does not match the requested workspace job before verifier checks can mark it deliverable.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     },
     {
       "tag": "agent_os.workspace_job_verifier_failed",
       "invariants": ["invariant.workspace-job.verified-terminal"],
-      "docs": "docs/packages/workspace-job.md",
+      "docs": "docs/packages/runtime.md",
       "fix": "Map verifier exceptions to workspace_job.reconcile_required; reserve verifier_rejected for successful product-domain verifier verdicts.",
       "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
     }

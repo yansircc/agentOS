@@ -10,7 +10,7 @@ backend stream configuration.
 - [Attached streams](../concepts/attached-streams.md)
 - [Durable truth](../concepts/durable-truth.md)
 - [Runtime package](../packages/runtime.md)
-- [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
+- [Runtime API](../api/runtime.md)
 
 ## Steps
 
@@ -23,5 +23,4 @@ backend stream configuration.
 
 ## References
 
-- [Attached stream API](../api/attached-stream.md)
 - [Runtime API](../api/runtime.md)

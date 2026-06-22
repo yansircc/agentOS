@@ -16,14 +16,14 @@ import {
   SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolEventIdentity,
 } from "@agent-os/core/backend-protocol";
-import { type DispatchTargetRegistry } from "../../src/cloudflare/dispatch";
+import { type DispatchTargetRegistry } from "../../src/cloudflare/dispatch/dispatch";
 import {
   commitDurableTriggerIntent,
   enqueueScheduledEvent,
   ensureDueWorkSchema,
   findNextDue,
 } from "../../src/cloudflare/due-work";
-import { EventBusLive } from "../../src/cloudflare/ledger";
+import { EventBusLive } from "../../src/cloudflare/ledger/event-bus";
 import type { EventBusService } from "../../src/cloudflare/ledger/event-bus";
 import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
 import { TriggerPumpLive } from "../../src/cloudflare/trigger-pump";

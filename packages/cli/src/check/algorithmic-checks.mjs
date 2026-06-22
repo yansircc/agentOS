@@ -239,13 +239,32 @@ const checkRepoToolingSurface = () => {
 
   const packagesRoot = path.join(repoRoot, "packages");
   const cliRoot = path.join(packagesRoot, "cli");
+  const cliManifest = readJson("packages/cli/package.json");
+  const declaredCliPackageDependencies = new Set(
+    ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"].flatMap(
+      (section) => Object.keys(cliManifest[section] ?? {}),
+    ),
+  );
+  const packageSpecPrefixesRequiringDeclaredDependency =
+    constraints.packageSpecPrefixesRequireDeclaredDependency ??
+    constraints.forbiddenPackageSpecPrefixes ??
+    [];
+  const declaredPackageForSpecifier = (specifier) =>
+    [...declaredCliPackageDependencies].find(
+      (name) => specifier === name || specifier.startsWith(`${name}/`),
+    );
   for (const file of walk("packages/cli/src").filter((entry) =>
     /\.(?:mjs|js|ts|tsx)$/u.test(entry),
   )) {
     const content = read(file);
     for (const specifier of importSpecifiers(content)) {
-      if (constraints.forbiddenPackageSpecPrefixes.some((prefix) => specifier.startsWith(prefix))) {
-        failures.push(`${file}: CLI must not import package specifier ${specifier}`);
+      if (
+        packageSpecPrefixesRequiringDeclaredDependency.some((prefix) =>
+          specifier.startsWith(prefix),
+        ) &&
+        declaredPackageForSpecifier(specifier) === undefined
+      ) {
+        failures.push(`${file}: CLI package specifier ${specifier} is not a declared dependency`);
       }
       if (specifier.startsWith(".")) {
         const resolved = path.resolve(path.dirname(path.join(repoRoot, file)), specifier);
@@ -275,6 +294,7 @@ const clientBoundaryPackages = {
   clientCore: "@agent-os/client",
   clientReact: "@agent-os/client/react",
   clientSvelte: "@agent-os/client/svelte",
+  runtime: "@agent-os/runtime",
   workspaceAgent: "@agent-os/workspace-agent",
   agUiReact: "@agent-os/ag-ui-react",
   agUiSvelte: "@agent-os/ag-ui-svelte",
@@ -352,6 +372,29 @@ const packagePathMatches = (packagePath, prefix) =>
 const packageMatchesConstraint = (record, names = [], pathPrefixes = []) =>
   names.includes(record.name) ||
   pathPrefixes.some((prefix) => packagePathMatches(record.path, prefix));
+
+export const packageConstraintNameFailures = ({ ruleId, constraints, records }) => {
+  const liveNames = new Set(records.map((record) => record.name));
+  const failures = [];
+  for (const [index, constraint] of (constraints.forbiddenEdges ?? []).entries()) {
+    if (!isRecord(constraint)) continue;
+    for (const key of [
+      "fromPackageNames",
+      "allowedTargetPackageNames",
+      "forbiddenTargetPackageNames",
+    ]) {
+      const names = constraint[key];
+      if (!Array.isArray(names)) continue;
+      for (const name of names) {
+        if (typeof name !== "string" || liveNames.has(name)) continue;
+        failures.push(
+          `${ruleId}: constraints.forbiddenEdges[${index}].${key} references non-workspace package ${name}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
 
 const sourceFileMatchesPublicSubpath = (packagePath, subpath, sourceFile) => {
   if (typeof packagePath !== "string" || typeof subpath !== "string") return false;
@@ -439,6 +482,8 @@ const checkPackageImportDag = ({ ruleId, label }) => {
   );
   const edges = graphPackageSourceImportEdges(repoRoot, records);
   const failures = [];
+
+  failures.push(...packageConstraintNameFailures({ ruleId, constraints, records }));
 
   for (const cycle of graphPackageImportCycles(records, edges)) {
     failures.push(`${ruleId}: package cycle ${cycle.join(" -> ")}`);
@@ -837,6 +882,8 @@ export const ownerIdDeclarationFindingsForSource = ({
             ownerNode ?? node,
             `ownerId ${ownerId} is not registered in ${ownerIdRegistryPath}`,
           );
+        } else if (registeredOwners.get(ownerId)?.status === "retired") {
+          record(ownerNode ?? node, `ownerId ${ownerId} is retired and cannot be declared`);
         }
         if (sourcePackageName === undefined) {
           record(
@@ -848,9 +895,13 @@ export const ownerIdDeclarationFindingsForSource = ({
             sourceNode ?? node,
             `sourcePackageName ${sourcePackageName} is not a workspace package`,
           );
-        } else if (ownerId !== undefined && registeredOwners.has(ownerId)) {
+        } else if (
+          ownerId !== undefined &&
+          registeredOwners.has(ownerId) &&
+          registeredOwners.get(ownerId)?.status === "active"
+        ) {
           const owner = registeredOwners.get(ownerId);
-          const sources = new Set(owner.sourcePackageNames);
+          const sources = new Set(owner.sourcePackageNames ?? []);
           if (!sources.has(sourcePackageName)) {
             record(
               sourceNode ?? node,
@@ -859,6 +910,100 @@ export const ownerIdDeclarationFindingsForSource = ({
           }
         }
       }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return findings;
+};
+
+export const coreClaimedNamespaceFindingsForSource = ({
+  content,
+  file,
+  registeredOwners,
+  workspacePackageNames,
+}) => {
+  const sourceFile = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const constStrings = ownerIdConstStrings(sourceFile);
+  const findings = [];
+  const record = (node, message) => {
+    const position = ownerCouplingPosition(sourceFile, node);
+    findings.push(`${file}:${position.line}:${position.column}: owner-ids: ${message}`);
+  };
+
+  const validateNamespaceObject = (objectLiteral) => {
+    const ownerNode = ownerIdObjectProperty(objectLiteral, "ownerId");
+    const sourceNode = ownerIdObjectProperty(objectLiteral, "sourcePackageName");
+    const packageNode = ownerIdObjectProperty(objectLiteral, "packageId");
+    if (packageNode !== undefined) {
+      record(packageNode, "CORE_CLAIMED_EVENT_NAMESPACES must not declare packageId");
+    }
+    const ownerId = ownerNode === undefined ? undefined : ownerIdValue(ownerNode, constStrings);
+    const sourcePackageName =
+      sourceNode === undefined ? undefined : ownerIdValue(sourceNode, constStrings);
+    if (ownerId === undefined) {
+      record(objectLiteral, "CORE_CLAIMED_EVENT_NAMESPACES entry requires literal ownerId");
+    } else if (!registeredOwners.has(ownerId)) {
+      record(
+        ownerNode ?? objectLiteral,
+        `ownerId ${ownerId} is not registered in ${ownerIdRegistryPath}`,
+      );
+    } else if (registeredOwners.get(ownerId)?.status === "retired") {
+      record(ownerNode ?? objectLiteral, `ownerId ${ownerId} is retired and cannot be declared`);
+    }
+    if (sourcePackageName === undefined) {
+      record(
+        objectLiteral,
+        "CORE_CLAIMED_EVENT_NAMESPACES entry requires literal sourcePackageName",
+      );
+    } else if (!workspacePackageNames.has(sourcePackageName)) {
+      record(
+        sourceNode ?? objectLiteral,
+        `sourcePackageName ${sourcePackageName} is not a workspace package`,
+      );
+    } else if (
+      ownerId !== undefined &&
+      registeredOwners.has(ownerId) &&
+      registeredOwners.get(ownerId)?.status === "active"
+    ) {
+      const owner = registeredOwners.get(ownerId);
+      const sources = new Set(owner.sourcePackageNames ?? []);
+      if (!sources.has(sourcePackageName)) {
+        record(
+          sourceNode ?? objectLiteral,
+          `sourcePackageName ${sourcePackageName} is not registered for ownerId ${ownerId}`,
+        );
+      }
+    }
+  };
+
+  const visit = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "CORE_CLAIMED_EVENT_NAMESPACES" &&
+      node.initializer !== undefined
+    ) {
+      const initializer = unwrap(node.initializer);
+      if (!ts.isArrayLiteralExpression(initializer)) {
+        record(node, "CORE_CLAIMED_EVENT_NAMESPACES must be an array literal");
+        return;
+      }
+      for (const element of initializer.elements) {
+        const entry = unwrap(element);
+        if (ts.isObjectLiteralExpression(entry)) {
+          validateNamespaceObject(entry);
+        } else {
+          record(element, "CORE_CLAIMED_EVENT_NAMESPACES entries must be object literals");
+        }
+      }
+      return;
     }
     ts.forEachChild(node, visit);
   };
@@ -907,18 +1052,39 @@ export const ownerIdRegistryFindings = ({ registry, workspacePackageNames }) => 
     if (owner.status !== "active" && owner.status !== "retired") {
       findings.push(`${label}: status must be active or retired`);
     }
-    if (
-      !Array.isArray(owner.sourcePackageNames) ||
-      owner.sourcePackageNames.length === 0 ||
-      !owner.sourcePackageNames.every((name) => typeof name === "string" && name.length > 0)
-    ) {
-      findings.push(`${label}: sourcePackageNames must be a non-empty string array`);
-      continue;
+    if (owner.status === "active") {
+      if (
+        !Array.isArray(owner.sourcePackageNames) ||
+        owner.sourcePackageNames.length === 0 ||
+        !owner.sourcePackageNames.every((name) => typeof name === "string" && name.length > 0)
+      ) {
+        findings.push(`${label}: active owner sourcePackageNames must be a non-empty string array`);
+        continue;
+      }
+      if ("retiredSourcePackageNames" in owner) {
+        findings.push(`${label}: active owner must not declare retiredSourcePackageNames`);
+      }
+      for (const sourcePackageName of owner.sourcePackageNames) {
+        if (!workspacePackageNames.has(sourcePackageName)) {
+          findings.push(
+            `${label}: sourcePackageName ${sourcePackageName} is not a workspace package`,
+          );
+        }
+      }
     }
-    for (const sourcePackageName of owner.sourcePackageNames) {
-      if (!workspacePackageNames.has(sourcePackageName)) {
+    if (owner.status === "retired") {
+      if ("sourcePackageNames" in owner) {
+        findings.push(`${label}: retired owner must not declare live sourcePackageNames`);
+      }
+      if (
+        !Array.isArray(owner.retiredSourcePackageNames) ||
+        owner.retiredSourcePackageNames.length === 0 ||
+        !owner.retiredSourcePackageNames.every(
+          (name) => typeof name === "string" && name.length > 0,
+        )
+      ) {
         findings.push(
-          `${label}: sourcePackageName ${sourcePackageName} is not a workspace package`,
+          `${label}: retiredSourcePackageNames must be a non-empty string array for retired owners`,
         );
       }
     }
@@ -947,7 +1113,26 @@ const checkOwnerIds = () => {
       workspacePackageNames,
     }),
   );
-  failIfAny("owner ids", [...registryFindings, ...declarationFindings]);
+  const retiredTestDeclarationFindings = packageTestFiles().flatMap((file) =>
+    ownerIdDeclarationFindingsForSource({
+      content: read(file),
+      file,
+      registeredOwners,
+      workspacePackageNames,
+    }).filter((finding) => finding.includes(" is retired and cannot be declared")),
+  );
+  const coreNamespaceFindings = coreClaimedNamespaceFindingsForSource({
+    content: read("packages/core/src/errors.ts"),
+    file: "packages/core/src/errors.ts",
+    registeredOwners,
+    workspacePackageNames,
+  });
+  failIfAny("owner ids", [
+    ...registryFindings,
+    ...declarationFindings,
+    ...retiredTestDeclarationFindings,
+    ...coreNamespaceFindings,
+  ]);
 };
 
 const moduleBucketRegistryPath = "architecture/module-buckets.json";
@@ -1283,11 +1468,17 @@ const validatePeerEntries = ({ label, peers, findings }) => {
   }
 };
 
+const expectedPublicPackageNameForSource = (sourcePackageName) =>
+  typeof sourcePackageName === "string" && sourcePackageName.startsWith("@agent-os/")
+    ? `@yansirplus/${sourcePackageName.slice("@agent-os/".length)}`
+    : undefined;
+
 export const packageUnitsRegistryFindings = ({
   registry,
   bucketIds,
   ambientIds,
   targetProfileIds = new Set(),
+  workspacePackageRecordsByName = new Map(),
 }) => {
   const findings = [];
   if (!isRecord(registry)) return [`${packageUnitsRegistryPath}: registry must be a JSON object`];
@@ -1333,6 +1524,17 @@ export const packageUnitsRegistryFindings = ({
       findings.push(`${label}: duplicate publicPackageName ${unit.publicPackageName}`);
     } else {
       publicNames.add(unit.publicPackageName);
+    }
+    const expectedPublicPackageName = expectedPublicPackageNameForSource(
+      unit.targetSourcePackageName,
+    );
+    if (
+      expectedPublicPackageName !== undefined &&
+      unit.publicPackageName !== expectedPublicPackageName
+    ) {
+      findings.push(
+        `${label}: publicPackageName must be ${expectedPublicPackageName}, the @yansirplus projection of ${unit.targetSourcePackageName}`,
+      );
     }
     if (typeof unit.status !== "string" || unit.status.length === 0) {
       findings.push(`${label}: status must be a non-empty string`);
@@ -1401,6 +1603,19 @@ export const packageUnitsRegistryFindings = ({
         noun: "bucket",
         findings,
       });
+      if ("targetProfiles" in subpath) {
+        validateStringRefs({
+          label: `${subpathLabel}: targetProfiles`,
+          values: subpath.targetProfiles,
+          allowed: targetProfileIds,
+          noun: "targetProfile",
+          findings,
+        });
+      } else if (Array.isArray(unit.targetProfiles) && unit.targetProfiles.length > 1) {
+        findings.push(
+          `${subpathLabel}: targetProfiles must be declared when package unit has multiple targetProfiles`,
+        );
+      }
       if (!Array.isArray(subpath.optionalPeers)) {
         findings.push(`${subpathLabel}: optionalPeers must be an array`);
       } else if (
@@ -1409,11 +1624,45 @@ export const packageUnitsRegistryFindings = ({
         findings.push(`${subpathLabel}: optionalPeers entries must be non-empty strings`);
       }
     }
+    const record = workspacePackageRecordsByName.get(unit.targetSourcePackageName);
+    if (record !== undefined) {
+      const manifestPath = `${record.path}/package.json`;
+      if (!fs.existsSync(path.join(repoRoot, manifestPath))) {
+        findings.push(`${label}: source package manifest is missing at ${manifestPath}`);
+      } else {
+        const actualSubpaths = new Set(packageExportSubpaths(readJson(manifestPath)));
+        const declaredSubpaths = new Set(
+          unit.publicSubpaths
+            .filter(isRecord)
+            .map((subpath) => subpath.subpath)
+            .filter((subpath) => typeof subpath === "string"),
+        );
+        for (const subpath of [...actualSubpaths].sort(compare)) {
+          if (!declaredSubpaths.has(subpath)) {
+            findings.push(
+              `${label}: publicSubpaths missing package.json export ${unit.targetSourcePackageName}${subpath === "." ? "" : `/${subpath.slice(2)}`}`,
+            );
+          }
+        }
+        for (const subpath of [...declaredSubpaths].sort(compare)) {
+          if (!actualSubpaths.has(subpath)) {
+            findings.push(
+              `${label}: publicSubpaths declares non-exported subpath ${String(subpath)}`,
+            );
+          }
+        }
+      }
+    }
   }
   return findings;
 };
 
-export const distributionRootsRegistryFindings = ({ registry, packageUnitIds, ambientIds }) => {
+export const distributionRootsRegistryFindings = ({
+  registry,
+  packageUnitIds,
+  ambientIds,
+  packageUnitsById = new Map(),
+}) => {
   const findings = [];
   if (!isRecord(registry)) {
     return [`${distributionRootsRegistryPath}: registry must be a JSON object`];
@@ -1456,6 +1705,16 @@ export const distributionRootsRegistryFindings = ({ registry, packageUnitIds, am
       ) {
         findings.push(`${label}: publicPackageName must be an @yansirplus/* string`);
       }
+      const unit = packageUnitsById.get(root.packageUnit);
+      if (
+        unit !== undefined &&
+        typeof unit.publicPackageName === "string" &&
+        root.publicPackageName !== unit.publicPackageName
+      ) {
+        findings.push(
+          `${label}: publicPackageName must equal package unit ${root.packageUnit} publicPackageName ${unit.publicPackageName}`,
+        );
+      }
       if (typeof root.consumerRoot !== "string" || root.consumerRoot.length === 0) {
         findings.push(`${label}: consumerRoot must be a non-empty string`);
       }
@@ -1492,6 +1751,52 @@ export const distributionRootsRegistryFindings = ({ registry, packageUnitIds, am
       });
       if (!stringArray(profile.selectedSubpaths)) {
         findings.push(`${label}: selectedSubpaths must be a non-empty string array`);
+      } else {
+        const allowedPublicSpecifiers = new Set();
+        const explicitProfileSpecifiers = new Set();
+        const explicitUnitPublicSpecifiers = new Set();
+        for (const unitId of Array.isArray(profile.packageUnits) ? profile.packageUnits : []) {
+          const unit = packageUnitsById.get(unitId);
+          if (!isRecord(unit) || typeof unit.publicPackageName !== "string") continue;
+          for (const subpath of Array.isArray(unit.publicSubpaths) ? unit.publicSubpaths : []) {
+            if (!isRecord(subpath) || typeof subpath.subpath !== "string") continue;
+            const specifier =
+              subpath.subpath === "."
+                ? unit.publicPackageName
+                : `${unit.publicPackageName}/${subpath.subpath.slice(2)}`;
+            allowedPublicSpecifiers.add(specifier);
+            if (Array.isArray(subpath.targetProfiles)) {
+              explicitUnitPublicSpecifiers.add(specifier);
+              if (subpath.targetProfiles.includes(profile.id)) {
+                explicitProfileSpecifiers.add(specifier);
+              }
+            }
+          }
+        }
+        const selected = new Set(profile.selectedSubpaths);
+        for (const expected of explicitProfileSpecifiers) {
+          if (!selected.has(expected)) {
+            findings.push(
+              `${label}: selectedSubpaths is missing ${String(expected)}, which package-units assigns to targetProfile ${profile.id}`,
+            );
+          }
+        }
+        for (const specifier of profile.selectedSubpaths) {
+          if (allowedPublicSpecifiers.has(specifier)) continue;
+          findings.push(
+            `${label}: selectedSubpaths includes ${specifier}, which is not exported by the selected packageUnits`,
+          );
+        }
+        for (const specifier of profile.selectedSubpaths) {
+          if (
+            explicitUnitPublicSpecifiers.has(specifier) &&
+            !explicitProfileSpecifiers.has(specifier)
+          ) {
+            findings.push(
+              `${label}: selectedSubpaths includes ${specifier}, which package-units does not assign to targetProfile ${profile.id}`,
+            );
+          }
+        }
       }
       if (!Array.isArray(profile.forbiddenSpecifiers)) {
         findings.push(`${label}: forbiddenSpecifiers must be an array`);
@@ -1697,14 +2002,24 @@ const checkModuleBuckets = (args = []) => {
 };
 
 const architectureSourceFindings = () => {
-  const workspacePackageNames = new Set(
-    graphWorkspacePackageRecords(repoRoot)
-      .map((record) => record.name)
-      .filter((name) => typeof name === "string" && name.startsWith("@agent-os/")),
+  const workspacePackageRecords = graphWorkspacePackageRecords(repoRoot).filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const workspacePackageNames = new Set(workspacePackageRecords.map((record) => record.name));
+  const workspacePackageRecordsByName = new Map(
+    workspacePackageRecords.map((record) => [record.name, record]),
   );
   const moduleBuckets = moduleBucketRegistry();
   const packageUnits = readJson(packageUnitsRegistryPath);
   const distributionRoots = readJson(distributionRootsRegistryPath);
+  const packageUnitsById = new Map(
+    Array.isArray(packageUnits.packageUnits)
+      ? packageUnits.packageUnits
+          .filter(isRecord)
+          .map((unit) => [unit.id, unit])
+          .filter(([id]) => typeof id === "string")
+      : [],
+  );
   const bucketIds = new Set(
     Array.isArray(moduleBuckets.buckets) ? moduleBuckets.buckets.map((bucket) => bucket.id) : [],
   );
@@ -1731,11 +2046,13 @@ const architectureSourceFindings = () => {
       bucketIds,
       ambientIds,
       targetProfileIds,
+      workspacePackageRecordsByName,
     }),
     ...distributionRootsRegistryFindings({
       registry: distributionRoots,
       packageUnitIds,
       ambientIds,
+      packageUnitsById,
     }),
   ];
 };
@@ -2351,9 +2668,23 @@ export const distributionUnitRegistryFindings = ({ registry, expectedEffectRange
 };
 
 const distributionArchitectureFailures = () => {
+  const workspacePackageRecords = graphWorkspacePackageRecords(repoRoot).filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const workspacePackageRecordsByName = new Map(
+    workspacePackageRecords.map((record) => [record.name, record]),
+  );
   const moduleBuckets = moduleBucketRegistry();
   const packageUnits = readJson(packageUnitsRegistryPath);
   const distributionRoots = readJson(distributionRootsRegistryPath);
+  const packageUnitsById = new Map(
+    Array.isArray(packageUnits.packageUnits)
+      ? packageUnits.packageUnits
+          .filter(isRecord)
+          .map((unit) => [unit.id, unit])
+          .filter(([id]) => typeof id === "string")
+      : [],
+  );
   const bucketIds = new Set(
     Array.isArray(moduleBuckets.buckets) ? moduleBuckets.buckets.map((bucket) => bucket.id) : [],
   );
@@ -2379,11 +2710,13 @@ const distributionArchitectureFailures = () => {
       bucketIds,
       ambientIds,
       targetProfileIds,
+      workspacePackageRecordsByName,
     }),
     ...distributionRootsRegistryFindings({
       registry: distributionRoots,
       packageUnitIds,
       ambientIds,
+      packageUnitsById,
     }),
     ...distributionUnitRegistryFindings({
       registry: packageUnits,
@@ -2524,7 +2857,8 @@ const formatDistributionFinding = (finding) => {
 const checkDistributionUnits = (args = []) => {
   const reportOnly = args.length === 1 && args[0] === "--report-only";
   const negativeFixtures = args.length === 1 && args[0] === "--negative-fixtures";
-  if (!reportOnly && !negativeFixtures && args.length > 0) {
+  const enforceMinimality = args.length === 1 && args[0] === "--enforce-minimality";
+  if (!reportOnly && !negativeFixtures && !enforceMinimality && args.length > 0) {
     throw new Error(`distribution-units: unexpected argument(s): ${args.join(" ")}`);
   }
   if (negativeFixtures) {
@@ -2594,15 +2928,401 @@ const checkDistributionUnits = (args = []) => {
     recordsWithManifests,
     readJson("package.json").catalog?.effect,
   );
-  failIfAny("distribution units", [
+  const failures = [
     ...distributionArchitectureFailures(),
     ...rootLeakFindings.map(formatDistributionFinding),
     ...effectPeerFindings.map(formatDistributionFinding),
-  ]);
+  ];
+  if (enforceMinimality) failures.push(...distributionMinimalityFailures());
+  failIfAny(enforceMinimality ? "distribution units minimality" : "distribution units", failures);
 };
 
 const packageUnitsRegistry = () => readJson(packageUnitsRegistryPath);
 const distributionRootsRegistry = () => readJson(distributionRootsRegistryPath);
+
+const packageUnitRecords = () =>
+  (packageUnitsRegistry().packageUnits ?? []).filter(
+    (unit) =>
+      isRecord(unit) &&
+      typeof unit.id === "string" &&
+      typeof unit.targetSourcePackageName === "string" &&
+      typeof unit.publicPackageName === "string",
+  );
+
+const packageUnitSourceNames = () =>
+  new Set(packageUnitRecords().map((unit) => unit.targetSourcePackageName));
+
+const packageUnitPublicNames = () =>
+  new Set(packageUnitRecords().map((unit) => unit.publicPackageName));
+
+const packageUnitSourcePathByName = () => {
+  const unitNames = packageUnitSourceNames();
+  return new Map(
+    graphWorkspacePackageRecords(repoRoot)
+      .filter((record) => unitNames.has(record.name))
+      .map((record) => [record.name, record.path]),
+  );
+};
+
+const allowedToolingSurface = (pkg) =>
+  isRecord(pkg) &&
+  typeof pkg.path === "string" &&
+  pkg.path.startsWith("tooling/") &&
+  pkg.published === false;
+
+const packageExportSubpaths = (packageJson) => {
+  const exported = packageJson.exports;
+  if (typeof exported === "string") return ["."];
+  if (!isRecord(exported)) return ["."];
+  return Object.keys(exported)
+    .filter((key) => key === "." || key.startsWith("./"))
+    .sort(compare);
+};
+
+const packageUnitExportSpecifiers = () => {
+  const sourceSpecifiers = new Set();
+  const publicSpecifiers = new Set();
+  for (const unit of packageUnitRecords()) {
+    const unitPath = packageUnitSourcePathByName().get(unit.targetSourcePackageName);
+    if (unitPath === undefined) continue;
+    const manifest = readJson(`${unitPath}/package.json`);
+    for (const exportSubpath of packageExportSubpaths(manifest)) {
+      const suffix = exportSubpath === "." ? "" : `/${exportSubpath.slice(2)}`;
+      sourceSpecifiers.add(`${unit.targetSourcePackageName}${suffix}`);
+      publicSpecifiers.add(`${unit.publicPackageName}${suffix}`);
+    }
+  }
+  return { sourceSpecifiers, publicSpecifiers };
+};
+
+const consumerFacingSpecifierFiles = () => [
+  "README.md",
+  "docs/usage-surfaces.md",
+  "docs/runtime-packages.md",
+  ...walk("docs/tutorials").filter((file) => file.endsWith(".md")),
+  ...walk("docs/guides").filter((file) => file.endsWith(".md")),
+  ...walk("docs/concepts").filter((file) => file.endsWith(".md")),
+  "skills/agentos/SKILL.md",
+  "skills/agentos-release/SKILL.md",
+  "skills/agentos/references/package-map.md",
+];
+
+const packageSpecifierPattern =
+  /@(?:agent-os|yansirplus)\/(?:\*|[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*(?:\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)*)/gu;
+
+const textPosition = (content, index) => {
+  const prefix = content.slice(0, index);
+  const lines = prefix.split("\n");
+  return { line: lines.length, column: lines.at(-1).length + 1 };
+};
+
+export const consumerFacingSpecifierFailuresForContent = ({
+  file,
+  content,
+  sourceSpecifiers,
+  publicSpecifiers,
+  toolingSourceSpecifiers,
+}) => {
+  const failures = [];
+  for (const match of content.matchAll(packageSpecifierPattern)) {
+    const specifier = match[0];
+    const allowed = specifier.startsWith("@yansirplus/")
+      ? publicSpecifiers.has(specifier)
+      : sourceSpecifiers.has(specifier) || toolingSourceSpecifiers.has(specifier);
+    if (allowed) continue;
+    const position = textPosition(content, match.index ?? 0);
+    failures.push(
+      `${file}:${position.line}:${position.column}: obsolete consumer-facing package specifier ${specifier}`,
+    );
+  }
+  return failures;
+};
+
+const consumerFacingSpecifierFailures = () => {
+  const { sourceSpecifiers, publicSpecifiers } = packageUnitExportSpecifiers();
+  const toolingSourceSpecifiers = new Set(
+    (readJson("docs/surface.json").packages ?? [])
+      .filter((pkg) => allowedToolingSurface(pkg) && typeof pkg.name === "string")
+      .map((pkg) => pkg.name),
+  );
+  const failures = [];
+  for (const file of consumerFacingSpecifierFiles()) {
+    if (!fs.existsSync(path.join(repoRoot, file))) continue;
+    const content = read(file);
+    failures.push(
+      ...consumerFacingSpecifierFailuresForContent({
+        file,
+        content,
+        sourceSpecifiers,
+        publicSpecifiers,
+        toolingSourceSpecifiers,
+      }),
+    );
+  }
+  return failures.sort(compare);
+};
+
+const markdownLinkPattern = /!?\[[^\]\n]*\]\(([^)\n]+)\)/gu;
+const externalMarkdownTargetPattern = /^(?:[a-z][a-z0-9+.-]*:|#|\/)/iu;
+
+const normalizeMarkdownTarget = (rawTarget) => {
+  const target = rawTarget.trim().split(/\s+/u)[0]?.replace(/^<|>$/gu, "") ?? "";
+  if (target.length === 0 || externalMarkdownTargetPattern.test(target)) return undefined;
+  return target.split("#")[0];
+};
+
+const markdownTargetCandidates = (file, target) => {
+  const decoded = decodeURI(target);
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(file), decoded));
+  if (base.endsWith("/")) return [`${base}index.md`];
+  if (path.posix.extname(base).length > 0) return [base];
+  return [base, `${base}.md`, `${base}/index.md`];
+};
+
+export const markdownLinkFailuresForContent = ({ file, content }) => {
+  const failures = [];
+  for (const match of content.matchAll(markdownLinkPattern)) {
+    const target = normalizeMarkdownTarget(match[1]);
+    if (target === undefined) continue;
+    let candidates;
+    try {
+      candidates = markdownTargetCandidates(file, target);
+    } catch {
+      const position = textPosition(content, match.index ?? 0);
+      failures.push(
+        `${file}:${position.line}:${position.column}: markdown link target ${target} is not a valid URI path`,
+      );
+      continue;
+    }
+    const targetExtension = path.posix.extname(candidates[0] ?? "");
+    if (targetExtension.length > 0 && targetExtension !== ".md") continue;
+    if (candidates.some((candidate) => fs.existsSync(path.join(repoRoot, candidate)))) continue;
+    const position = textPosition(content, match.index ?? 0);
+    failures.push(
+      `${file}:${position.line}:${position.column}: markdown link target ${target} does not resolve to ${candidates.join(" or ")}`,
+    );
+  }
+  return failures;
+};
+
+const docsLinkIntegrityFailures = () =>
+  [
+    ...walk("docs").filter((file) => file.endsWith(".md")),
+    ...walk("tooling/docs-site/src/content/docs").filter((file) => file.endsWith(".md")),
+  ]
+    .flatMap((file) => markdownLinkFailuresForContent({ file, content: read(file) }))
+    .sort(compare);
+
+const checkDocsLinkIntegrity = () => {
+  failIfAny("docs link integrity", docsLinkIntegrityFailures());
+};
+
+const specifierAllowedByPackageUnits = (specifier, unitNames = packageUnitSourceNames()) =>
+  [...unitNames].some((name) => specifierMatchesPackage(specifier, name));
+
+const packageUnitDocSources = () => {
+  const unitNames = packageUnitSourceNames();
+  const allowedApiSources = new Set();
+  const allowedPackageDocs = new Set();
+  for (const pkg of readJson("docs/surface.json").packages ?? []) {
+    if (!isRecord(pkg)) continue;
+    if (!unitNames.has(pkg.name) && !allowedToolingSurface(pkg)) continue;
+    if (typeof pkg.apiSource === "string") allowedApiSources.add(pkg.apiSource);
+    if (typeof pkg.slug === "string") allowedPackageDocs.add(`docs/packages/${pkg.slug}.md`);
+  }
+  return { allowedApiSources, allowedPackageDocs };
+};
+
+const packageUnitOptionalPeerFindings = () => {
+  const findings = [];
+  for (const unit of packageUnitRecords()) {
+    for (const { peer, subpath } of packageUnitOptionalPeerEntries(unit)) {
+      if (!peer.startsWith("@agent-os/")) continue;
+      findings.push(
+        formatDistributionFinding(
+          distributionUnitFinding({
+            kind: "package-unit-internal-optional-peer",
+            unit,
+            message:
+              "internal @agent-os modules must be package-local subpaths, not package-unit optional peers",
+            specifier: peer,
+            target: subpath,
+          }),
+        ),
+      );
+    }
+  }
+  return findings;
+};
+
+export const obsoletePublicPackageFailures = () => {
+  const failures = [];
+  const unitNames = packageUnitSourceNames();
+  const unitPaths = new Set(packageUnitSourcePathByName().values());
+  const unitPublicNames = packageUnitPublicNames();
+  const surfacePackages = readJson("docs/surface.json").packages ?? [];
+  const surfaceByPath = new Map(
+    surfacePackages
+      .filter((pkg) => isRecord(pkg) && typeof pkg.path === "string")
+      .map((pkg) => [pkg.path, pkg]),
+  );
+
+  for (const packageJson of walk("packages").filter((file) => file.endsWith("/package.json"))) {
+    const packagePath = packageJson.slice(0, -"/package.json".length);
+    const manifest = readJson(packageJson);
+    if (!manifest.name?.startsWith("@agent-os/")) continue;
+    if (!unitNames.has(manifest.name)) {
+      failures.push(
+        `${packageJson}: obsolete source package ${manifest.name} is not declared by architecture/package-units.json`,
+      );
+    }
+    if (!unitPaths.has(packagePath)) {
+      failures.push(`${packageJson}: package path is outside final package-unit roots`);
+    }
+  }
+
+  for (const packageJson of walk("tooling").filter((file) => file.endsWith("/package.json"))) {
+    const packagePath = packageJson.slice(0, -"/package.json".length);
+    const manifest = readJson(packageJson);
+    if (!manifest.name?.startsWith("@agent-os/")) continue;
+    const surface = surfaceByPath.get(packagePath);
+    if (!allowedToolingSurface(surface)) {
+      failures.push(`${packageJson}: tooling package must be private docs/tooling surface only`);
+    }
+  }
+
+  for (const pkg of surfacePackages) {
+    if (!isRecord(pkg)) {
+      failures.push("docs/surface.json: package entries must be objects");
+      continue;
+    }
+    const label = `docs/surface.json:${pkg.name ?? pkg.path ?? "package"}`;
+    if (allowedToolingSurface(pkg)) continue;
+    if (!unitNames.has(pkg.name)) {
+      failures.push(`${label}: obsolete package remains in docs/surface.json`);
+    }
+    if (pkg.published === true && !unitNames.has(pkg.name)) {
+      failures.push(`${label}: obsolete published package remains public`);
+    }
+    if (
+      typeof pkg.path === "string" &&
+      pkg.path.startsWith("packages/") &&
+      !unitPaths.has(pkg.path)
+    ) {
+      failures.push(`${label}: package path is outside final package-unit roots`);
+    }
+  }
+
+  const { allowedApiSources, allowedPackageDocs } = packageUnitDocSources();
+  for (const file of walk("docs/api").filter((entry) => entry.endsWith(".md"))) {
+    if (!allowedApiSources.has(file)) failures.push(`${file}: obsolete API intent page remains`);
+  }
+  for (const file of walk("docs/packages").filter((entry) => entry.endsWith(".md"))) {
+    if (!allowedPackageDocs.has(file)) failures.push(`${file}: obsolete package doc remains`);
+  }
+  for (const file of walk("tooling/docs-site/src/content/docs/api").filter((entry) =>
+    entry.endsWith(".md"),
+  )) {
+    const source = `docs/api/${path.basename(file)}`;
+    if (!allowedApiSources.has(source)) {
+      failures.push(`${file}: obsolete docs-site API projection remains`);
+    }
+  }
+  for (const file of walk("tooling/docs-site/src/content/docs/packages").filter((entry) =>
+    entry.endsWith(".md"),
+  )) {
+    const source = `docs/packages/${path.basename(file)}`;
+    if (!allowedPackageDocs.has(source)) {
+      failures.push(`${file}: obsolete docs-site package projection remains`);
+    }
+  }
+
+  for (const file of walk("packages").filter((entry) =>
+    /\/(?:README|PUBLIC_API)\.md$/u.test(entry),
+  )) {
+    if (![...unitPaths].some((unitPath) => file.startsWith(`${unitPath}/`))) {
+      failures.push(`${file}: obsolete generated package doc remains`);
+    }
+  }
+
+  const sourceAliases = readJson("tsconfig.source-paths.json").compilerOptions?.paths ?? {};
+  for (const specifier of Object.keys(sourceAliases)) {
+    if (!specifier.startsWith("@agent-os/")) continue;
+    if (!specifierAllowedByPackageUnits(specifier, unitNames)) {
+      failures.push(`${specifier}: obsolete source alias remains`);
+    }
+  }
+
+  for (const unitName of unitNames) {
+    const unitPath = packageUnitSourcePathByName().get(unitName);
+    if (unitPath === undefined) {
+      failures.push(`${String(unitName)}: package unit source package is missing from workspace`);
+      continue;
+    }
+    const manifest = readJson(`${unitPath}/package.json`);
+    for (const section of ["dependencies", "devDependencies", "peerDependencies"]) {
+      for (const dependencyName of Object.keys(manifest[section] ?? {})) {
+        if (!dependencyName.startsWith("@agent-os/")) continue;
+        if (!unitNames.has(dependencyName)) {
+          failures.push(
+            `${unitPath}/package.json:${section}: obsolete internal dependency ${dependencyName}`,
+          );
+        }
+      }
+    }
+  }
+
+  for (const [unitName, unitPath] of packageUnitSourcePathByName()) {
+    for (const file of walk(unitPath).filter((entry) =>
+      /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/u.test(entry),
+    )) {
+      const source = read(file);
+      for (const importRecord of importSpecifierRecords(source, file)) {
+        if (!importRecord.specifier.startsWith("@agent-os/")) continue;
+        if (specifierAllowedByPackageUnits(importRecord.specifier, unitNames)) continue;
+        failures.push(
+          `${file}:${importRecord.line}:${importRecord.column}: obsolete import specifier ${importRecord.specifier} in final package ${unitName}`,
+        );
+      }
+    }
+  }
+
+  const ownerRegistry = ownerIdRegistry();
+  for (const [index, owner] of (ownerRegistry.owners ?? []).entries()) {
+    if (!isRecord(owner) || !Array.isArray(owner.sourcePackageNames)) continue;
+    for (const sourcePackageName of owner.sourcePackageNames) {
+      if (typeof sourcePackageName !== "string" || !sourcePackageName.startsWith("@agent-os/")) {
+        continue;
+      }
+      if (!unitNames.has(sourcePackageName)) {
+        failures.push(
+          `architecture/owner-ids.json:owners[${index}]: obsolete sourcePackageName ${sourcePackageName}`,
+        );
+      }
+    }
+  }
+
+  for (const unit of packageUnitRecords()) {
+    for (const publicName of [unit.publicPackageName]) {
+      if (!unitPublicNames.has(publicName)) {
+        failures.push(`${unit.id}: public package ${publicName} is not a package-unit public name`);
+      }
+    }
+  }
+
+  failures.push(...consumerFacingSpecifierFailures());
+
+  return failures.sort(compare);
+};
+
+const distributionMinimalityFailures = () => [
+  ...packageUnitOptionalPeerFindings(),
+  ...obsoletePublicPackageFailures(),
+];
+
+const checkNoObsoletePublicPackages = () => {
+  failIfAny("no obsolete public packages", obsoletePublicPackageFailures());
+};
 
 const sourceSpecifierForPublicSubpath = (unit, publicSpecifier) => {
   if (
@@ -2628,6 +3348,37 @@ const subpathForSourceSpecifier = (unit, sourceSpecifier) => {
   }
   const suffix = sourceSpecifier.slice(unit.targetSourcePackageName.length);
   return suffix.length === 0 ? "." : `.${suffix}`;
+};
+
+const publicSpecifierForSourceSpecifier = (unit, sourceSpecifier) => {
+  const subpath = subpathForSourceSpecifier(unit, sourceSpecifier);
+  if (subpath === undefined) return undefined;
+  if (subpath === ".") return unit.publicPackageName;
+  if (!subpath.startsWith("./")) return undefined;
+  return `${unit.publicPackageName}/${subpath.slice(2)}`;
+};
+
+const packageUnitPublicSpecifiers = () => {
+  const specifiers = new Set();
+  for (const unit of packageUnitRecords()) {
+    for (const entry of unit.publicSubpaths ?? []) {
+      if (!isRecord(entry) || typeof entry.subpath !== "string") continue;
+      if (entry.subpath === ".") {
+        specifiers.add(unit.publicPackageName);
+      } else if (entry.subpath.startsWith("./")) {
+        specifiers.add(`${unit.publicPackageName}/${entry.subpath.slice(2)}`);
+      }
+    }
+  }
+  return specifiers;
+};
+
+const packageUnitPublicSpecifierForSource = (sourceSpecifier) => {
+  for (const unit of packageUnitRecords()) {
+    const publicSpecifier = publicSpecifierForSourceSpecifier(unit, sourceSpecifier);
+    if (publicSpecifier !== undefined) return publicSpecifier;
+  }
+  return undefined;
 };
 
 const specifierMatchesPackage = (specifier, packageName) =>
@@ -3024,7 +3775,7 @@ const checkClientFrameworkBridgeReadModels = ({ record, failures }) => {
     for (const pattern of objectExportPatterns) {
       for (const match of source.matchAll(pattern)) {
         failures.push(
-          `${file}: client-boundary-read-model: framework bridges must not declare exported object read-model type ${match[1]}; define canonical DTOs in runtime-protocol, workspace-agent, ag-ui, or client core`,
+          `${file}: client-boundary-read-model: framework bridges must not declare exported object read-model type ${match[1]}; define canonical DTOs in runtime-protocol, runtime AG-UI projection types, or client core`,
         );
       }
     }
@@ -3117,19 +3868,21 @@ const checkClientRetiredPackageWindow = ({ surfacePackages, records, failures })
 };
 
 const checkClientCanonicalSurface = ({ surfacePackages, failures }) => {
-  const agUi = clientPackageByName(surfacePackages, "@agent-os/ag-ui");
-  if (agUi === undefined) {
-    failures.push("docs/surface.json: client-boundary-canonical-surface: @agent-os/ag-ui missing");
+  const runtime = clientPackageByName(surfacePackages, clientBoundaryPackages.runtime);
+  if (runtime === undefined) {
+    failures.push(
+      "docs/surface.json: client-boundary-canonical-surface: @agent-os/runtime missing",
+    );
     return;
   }
-  if (!String(agUi.boundary ?? "").includes("opt-in AG-UI edge protocol projection")) {
+  if (!String(runtime.boundary ?? "").includes("./ag-ui")) {
     failures.push(
-      "docs/surface.json: client-boundary-canonical-surface: @agent-os/ag-ui must be declared as opt-in wire projection",
+      "docs/surface.json: client-boundary-canonical-surface: @agent-os/runtime must declare ./ag-ui as the AG-UI wire projection subpath",
     );
   }
-  if (!String(agUi.boundary ?? "").includes("runtime-protocol Recorded vocabulary")) {
+  if (!String(runtime.boundary ?? "").includes("runtime-protocol Recorded vocabulary")) {
     failures.push(
-      "docs/surface.json: client-boundary-canonical-surface: @agent-os/ag-ui boundary must state client state remains runtime-protocol Recorded vocabulary",
+      "docs/surface.json: client-boundary-canonical-surface: @agent-os/runtime ./ag-ui boundary must state client state remains runtime-protocol Recorded vocabulary",
     );
   }
 };
@@ -3145,7 +3898,7 @@ const checkClientBoundaryDoc = (failures) => {
   const source = read(boundaryPath);
   for (const marker of [
     "client state is a projection sink plus a command surface",
-    "`@agent-os/ag-ui` is a framework-neutral opt-in wire projection",
+    "`@agent-os/runtime/ag-ui` is a framework-neutral opt-in wire projection",
     "`@agent-os/client/react` and `@agent-os/client/svelte` are the only framework",
     "Projection reads are replayable/read-model surfaces",
     "one driver mount",
@@ -3170,7 +3923,6 @@ const checkClientBoundaries = () => {
 
   const guardedNames = new Set([
     clientBoundaryPackages.clientCore,
-    clientBoundaryPackages.workspaceAgent,
     clientBoundaryPackages.agUiReact,
     clientBoundaryPackages.agUiSvelte,
   ]);
@@ -3178,11 +3930,7 @@ const checkClientBoundaries = () => {
     if (!guardedNames.has(record.name)) continue;
     checkClientTypeScriptOnlySource({ record, failures });
     const kind =
-      record.name === clientBoundaryPackages.clientCore
-        ? "client core"
-        : record.name === clientBoundaryPackages.workspaceAgent
-          ? "workspace host"
-          : "framework bridge";
+      record.name === clientBoundaryPackages.clientCore ? "client core" : "framework bridge";
     checkClientFrameworkImports({ record, kind, failures });
     if (
       record.name === clientBoundaryPackages.clientCore ||
@@ -3194,6 +3942,215 @@ const checkClientBoundaries = () => {
   }
 
   failIfAny("client boundaries", failures);
+};
+
+const projectionFoldBoundaryPath = "architecture/projection-fold-boundary.json";
+
+const hasExportModifier = (node) =>
+  ts.canHaveModifiers(node) &&
+  (ts.getModifiers(node) ?? []).some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
+
+const addBindingNames = (name, names) => {
+  if (ts.isIdentifier(name)) {
+    names.add(name.text);
+    return;
+  }
+  if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+    for (const element of name.elements) {
+      if (ts.isBindingElement(element)) addBindingNames(element.name, names);
+    }
+  }
+};
+
+const exportedSymbolNamesForFile = (file) => {
+  const names = new Set();
+  const sourceFile = ts.createSourceFile(
+    file,
+    read(file),
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const visit = (node) => {
+    if (hasExportModifier(node)) {
+      if (
+        (ts.isFunctionDeclaration(node) ||
+          ts.isClassDeclaration(node) ||
+          ts.isInterfaceDeclaration(node) ||
+          ts.isTypeAliasDeclaration(node) ||
+          ts.isEnumDeclaration(node)) &&
+        node.name !== undefined
+      ) {
+        names.add(node.name.text);
+      }
+      if (ts.isVariableStatement(node)) {
+        for (const declaration of node.declarationList.declarations) {
+          addBindingNames(declaration.name, names);
+        }
+      }
+    }
+    if (
+      ts.isExportDeclaration(node) &&
+      node.exportClause !== undefined &&
+      ts.isNamedExports(node.exportClause)
+    ) {
+      for (const element of node.exportClause.elements) names.add(element.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+};
+
+const exportedSymbolNamesUnder = (relativePath) => {
+  const names = new Set();
+  for (const file of walk(relativePath).filter((entry) => /\.(?:ts|tsx|mts|cts)$/u.test(entry))) {
+    for (const name of exportedSymbolNamesForFile(file)) names.add(name);
+  }
+  return names;
+};
+
+const projectionFoldBoundaryFailures = () => {
+  const failures = [];
+  if (!fs.existsSync(path.join(repoRoot, projectionFoldBoundaryPath))) {
+    failures.push(`${projectionFoldBoundaryPath}: missing projection fold audit decision`);
+    return failures;
+  }
+
+  const registry = readJson(projectionFoldBoundaryPath);
+  if (registry.schemaVersion !== 1) {
+    failures.push(`${projectionFoldBoundaryPath}: schemaVersion must be 1`);
+  }
+  if (registry.decision !== "keep-consumer-boundary") {
+    failures.push(
+      `${projectionFoldBoundaryPath}: decision must stay keep-consumer-boundary until a shared core fold source exists`,
+    );
+  }
+  if (registry.sharedFold !== false) {
+    failures.push(`${projectionFoldBoundaryPath}: sharedFold must be false for this decision`);
+  }
+  for (const key of ["blockingContractReason", "corePromotionCondition"]) {
+    if (typeof registry[key] !== "string" || registry[key].trim().length === 0) {
+      failures.push(`${projectionFoldBoundaryPath}: ${key} must record the audit contract`);
+    }
+  }
+
+  const packagePathByName = new Map(
+    workspacePackageRecords().map((record) => [record.name, record.path]),
+  );
+  const records = graphWorkspacePackageRecords(repoRoot).filter(
+    (record) => typeof record.name === "string" && record.name.startsWith("@agent-os/"),
+  );
+  const graph = sourceModuleGraph(repoRoot, records);
+  const ownedFolds = Array.isArray(registry.ownedFolds) ? registry.ownedFolds : [];
+  if (ownedFolds.length === 0) {
+    failures.push(`${projectionFoldBoundaryPath}: ownedFolds must be non-empty`);
+  }
+  for (const [index, fold] of ownedFolds.entries()) {
+    const label = isRecord(fold) && typeof fold.id === "string" ? fold.id : `ownedFolds[${index}]`;
+    if (!isRecord(fold)) {
+      failures.push(`${projectionFoldBoundaryPath}:${label}: fold entry must be an object`);
+      continue;
+    }
+    const packageName = fold.packageName;
+    const file = fold.file;
+    const exports = Array.isArray(fold.exports) ? fold.exports : [];
+    if (typeof packageName !== "string" || !packageName.startsWith("@agent-os/")) {
+      failures.push(`${projectionFoldBoundaryPath}:${label}: packageName must be @agent-os/*`);
+      continue;
+    }
+    const packagePath = packagePathByName.get(packageName);
+    if (packagePath === undefined) {
+      failures.push(`${projectionFoldBoundaryPath}:${label}: package ${packageName} is missing`);
+      continue;
+    }
+    if (typeof file !== "string" || !file.startsWith(`${packagePath}/`)) {
+      failures.push(
+        `${projectionFoldBoundaryPath}:${label}: file must live under package ${packageName}`,
+      );
+      continue;
+    }
+    if (!fs.existsSync(path.join(repoRoot, file))) {
+      failures.push(`${projectionFoldBoundaryPath}:${label}: file is missing: ${file}`);
+      continue;
+    }
+    if (exports.length === 0 || exports.some((name) => typeof name !== "string")) {
+      failures.push(`${projectionFoldBoundaryPath}:${label}: exports must be non-empty strings`);
+      continue;
+    }
+    const actualExports = exportedSymbolNamesForFile(file);
+    for (const name of exports) {
+      if (!actualExports.has(name)) {
+        failures.push(`${file}: projection-fold-boundary:${label}: missing export ${name}`);
+      }
+    }
+    if (
+      !Array.isArray(fold.consumerRoots) ||
+      fold.consumerRoots.length === 0 ||
+      fold.consumerRoots.some((root) => typeof root !== "string")
+    ) {
+      failures.push(
+        `${projectionFoldBoundaryPath}:${label}: consumerRoots must name the true consumer set`,
+      );
+    }
+    if (
+      !Array.isArray(fold.allowedConsumers) ||
+      fold.allowedConsumers.some((consumer) => typeof consumer !== "string")
+    ) {
+      failures.push(`${projectionFoldBoundaryPath}:${label}: allowedConsumers must be strings`);
+      continue;
+    }
+    const allowedConsumers = new Set(fold.allowedConsumers);
+    for (const consumer of allowedConsumers) {
+      if (!fs.existsSync(path.join(repoRoot, consumer))) {
+        failures.push(
+          `${projectionFoldBoundaryPath}:${label}: consumer file is missing ${String(consumer)}`,
+        );
+      }
+    }
+    const incoming = graph.edges.filter((edge) => edge.toFile === file && edge.fromFile !== file);
+    const actualConsumers = new Set(incoming.map((edge) => edge.fromFile));
+    for (const edge of incoming) {
+      if (!allowedConsumers.has(edge.fromFile)) {
+        failures.push(
+          `${edge.fromFile}:${edge.line}:${edge.column}: projection-fold-boundary:${label}: unexpected consumer of ${file} via ${edge.specifier}`,
+        );
+      }
+    }
+    for (const consumer of allowedConsumers) {
+      if (!actualConsumers.has(consumer)) {
+        failures.push(
+          `${projectionFoldBoundaryPath}:${label}: declared consumer ${String(consumer)} does not import ${file}`,
+        );
+      }
+    }
+  }
+
+  const forbiddenCoreExports = Array.isArray(registry.coreForbiddenExports)
+    ? registry.coreForbiddenExports
+    : [];
+  if (
+    forbiddenCoreExports.length === 0 ||
+    forbiddenCoreExports.some((name) => typeof name !== "string")
+  ) {
+    failures.push(`${projectionFoldBoundaryPath}: coreForbiddenExports must be non-empty strings`);
+  } else {
+    const coreExports = exportedSymbolNamesUnder("packages/core/src");
+    for (const name of forbiddenCoreExports) {
+      if (coreExports.has(name)) {
+        failures.push(
+          `packages/core/src: projection-fold-boundary: core must not export disputed event fold symbol ${name}`,
+        );
+      }
+    }
+  }
+
+  return failures;
+};
+
+const checkProjectionFoldBoundary = () => {
+  const failures = projectionFoldBoundaryFailures();
+  failIfAny("projection fold boundary", failures);
 };
 
 const checkLimitRegistry = () => {
@@ -3361,6 +4318,14 @@ const packageSourceFiles = () =>
       /\.(?:ts|tsx|mts|cts)$/u.test(file) &&
       !file.endsWith(".d.ts") &&
       file.split("/").includes("src"),
+  );
+
+const packageTestFiles = () =>
+  walk("packages").filter(
+    (file) =>
+      /\.(?:ts|tsx|mts|cts)$/u.test(file) &&
+      !file.endsWith(".d.ts") &&
+      file.split("/").includes("test"),
   );
 
 const nodeLabel = (sourceFile, node) => {
@@ -3621,7 +4586,7 @@ const sliceBetweenMarkers = (source, startMarker, endMarker) => {
 
 const checkGeneratedStaticTargetLinking = () => {
   const failures = [];
-  const sourcePath = "packages/composers/agent-authoring/src/index.ts";
+  const sourcePath = "packages/cli/src/build/agent-authoring.ts";
   const source = read(sourcePath);
   const renderStaticTargetSource = sliceBetweenMarkers(
     source,
@@ -3863,6 +4828,7 @@ const checkConvergencePublicSurface = () => {
       failures.push(`${retained.export}: retained projection vocabulary is not publicly exported`);
     }
   }
+  failures.push(...consumerFacingSpecifierFailures());
 
   failIfAny("convergence public surface", failures);
   console.log(
@@ -4002,38 +4968,130 @@ const checkCliSurface = () => {
   failIfAny("cli surface", failures);
 };
 
+const stringLiteralCallRecords = ({ file, callee }) => {
+  const source = read(file);
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  const records = [];
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      callName(node.expression) === callee &&
+      node.arguments.length > 0 &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      const position = sourceFile.getLineAndCharacterOfPosition(
+        node.arguments[0].getStart(sourceFile),
+      );
+      records.push({
+        value: node.arguments[0].text,
+        line: position.line + 1,
+        column: position.character + 1,
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return records;
+};
+
+const consumerImportFailures = () => {
+  const failures = [];
+  const allowedPublicSpecifiers = packageUnitPublicSpecifiers();
+  const distributionTool = "tooling/distribution/distribution.mjs";
+
+  for (const record of stringLiteralCallRecords({
+    file: distributionTool,
+    callee: "publicSpecifier",
+  })) {
+    const sourceSpecifier = record.value;
+    const publicSpecifier = sourceSpecifier.startsWith("@agent-os/")
+      ? packageUnitPublicSpecifierForSource(sourceSpecifier)
+      : sourceSpecifier;
+    if (publicSpecifier === undefined) {
+      failures.push(
+        `${distributionTool}:${record.line}:${record.column}: ${sourceSpecifier} does not map to a final public package/subpath`,
+      );
+      continue;
+    }
+    if (
+      publicSpecifier.startsWith("@yansirplus/") &&
+      !allowedPublicSpecifiers.has(publicSpecifier)
+    ) {
+      failures.push(
+        `${distributionTool}:${record.line}:${record.column}: ${publicSpecifier} is not in the final public package/subpath set`,
+      );
+    }
+  }
+
+  return failures.sort(compare);
+};
+
+const checkConsumerImports = (args = []) => {
+  if (args.length !== 1 || args[0] !== "--final-public-set") {
+    throw new Error("consumer-imports: expected --final-public-set");
+  }
+  failIfAny("consumer imports", consumerImportFailures());
+};
+
 const checkDogfoodSmoke = (args = []) => {
   if (args.length !== 2 || args[0] !== "--batch") {
     throw new Error("dogfood-smoke: expected --batch <batch>");
   }
   const batch = args[1];
-  if (batch !== "core" && batch !== "runtime" && batch !== "client" && batch !== "cli") {
+  if (
+    batch !== "core" &&
+    batch !== "runtime" &&
+    batch !== "client" &&
+    batch !== "cli" &&
+    batch !== "projection" &&
+    batch !== "package-collapse" &&
+    batch !== "final-consumer"
+  ) {
     throw new Error(`dogfood-smoke: unsupported batch ${batch}`);
   }
 
   const failures = [];
   const records = workspacePackageRecords();
   const packageNames = new Set(records.map((record) => record.name));
+  const unitNames = packageUnitSourceNames();
   const retiredNames =
-    batch === "core"
-      ? [
-          "@agent-os/kernel",
-          "@agent-os/runtime-protocol",
-          "@agent-os/llm-protocol",
-          "@agent-os/telemetry-protocol",
-          "@agent-os/backend-protocol",
-        ]
-      : batch === "runtime"
+    batch === "package-collapse"
+      ? records
+          .map((record) => record.name)
+          .filter(
+            (name) =>
+              typeof name === "string" &&
+              name.startsWith("@agent-os/") &&
+              !unitNames.has(name) &&
+              name !== "@agent-os/docs-site",
+          )
+      : batch === "core"
         ? [
-            "@agent-os/backend-cloudflare-do",
-            "@agent-os/backend-in-memory",
-            "@agent-os/backend-node-postgres",
-            "@agent-os/llm-transport-effect-ai",
-            "@agent-os/telemetry-otlp",
+            "@agent-os/kernel",
+            "@agent-os/runtime-protocol",
+            "@agent-os/llm-protocol",
+            "@agent-os/telemetry-protocol",
+            "@agent-os/backend-protocol",
           ]
-        : batch === "client"
-          ? ["@agent-os/client-react", "@agent-os/client-svelte"]
-          : ["@agent-os/agentos-cli", "@agent-os/ops-api", "@agent-os/ops-htmx"];
+        : batch === "runtime"
+          ? [
+              "@agent-os/backend-cloudflare-do",
+              "@agent-os/backend-in-memory",
+              "@agent-os/backend-node-postgres",
+              "@agent-os/llm-transport-effect-ai",
+              "@agent-os/telemetry-otlp",
+            ]
+          : batch === "client"
+            ? ["@agent-os/client-react", "@agent-os/client-svelte"]
+            : batch === "cli"
+              ? ["@agent-os/agentos-cli", "@agent-os/ops-api", "@agent-os/ops-htmx"]
+              : [];
   for (const retiredName of retiredNames) {
     if (packageNames.has(retiredName)) {
       failures.push(`${retiredName}: retired ${batch} package remains in workspace`);
@@ -4050,6 +5108,15 @@ const checkDogfoodSmoke = (args = []) => {
   }
   if (batch === "cli" && !packageNames.has("@agent-os/cli")) {
     failures.push("@agent-os/cli: cli package is missing from workspace");
+  }
+  if (batch === "package-collapse") {
+    for (const unitName of unitNames) {
+      if (!packageNames.has(unitName)) {
+        failures.push(`${String(unitName)}: final package unit is missing from workspace`);
+      }
+    }
+    failures.push(...obsoletePublicPackageFailures());
+    failures.push(...packageUnitOptionalPeerFindings());
   }
 
   const sourceAliases = readJson("tsconfig.source-paths.json").compilerOptions?.paths ?? {};
@@ -4147,6 +5214,45 @@ const checkDogfoodSmoke = (args = []) => {
     }
   }
 
+  if (batch === "projection" && failures.length === 0) {
+    failures.push(...projectionFoldBoundaryFailures());
+    failures.push(
+      ...runProfileTypecheck({
+        batch: "projection-dogfood",
+        profile: { id: "projection", ambient: "neutral" },
+        sourceSpecifiers: ["@agent-os/runtime/run-projector", "@agent-os/client"],
+      }),
+    );
+  }
+
+  if (batch === "final-consumer" && failures.length === 0) {
+    failures.push(...consumerImportFailures());
+    const packageUnitsById = new Map(packageUnitRecords().map((unit) => [unit.id, unit]));
+    for (const profile of distributionRootsRegistry().targetProfiles ?? []) {
+      if (!isRecord(profile)) continue;
+      const sourceSpecifiers = [];
+      for (const unitId of profile.packageUnits ?? []) {
+        const unit = packageUnitsById.get(unitId);
+        if (unit === undefined) {
+          failures.push(`${profile.id}: target profile references missing package unit ${unitId}`);
+          continue;
+        }
+        sourceSpecifiers.push(...selectedSourceSpecifiersForProfileUnit({ profile, unit }));
+      }
+      if (sourceSpecifiers.length === 0) {
+        failures.push(`${profile.id}: final consumer profile selects no public subpaths`);
+        continue;
+      }
+      failures.push(
+        ...runProfileTypecheck({
+          batch: "final-consumer-dogfood",
+          profile,
+          sourceSpecifiers,
+        }),
+      );
+    }
+  }
+
   if (batch === "core" && failures.length === 0) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-core-dogfood-"));
     const scopeDir = path.join(dir, "node_modules", "@agent-os");
@@ -4190,12 +5296,14 @@ const checkerById = new Map([
   ["boundaries", checkBoundaryProjection],
   ["cli-surface", checkCliSurface],
   ["client-boundaries", checkClientBoundaries],
+  ["consumer-imports", checkConsumerImports],
   ["convergence-boundary", checkConvergenceBoundary],
   ["convergence-import-dag", checkConvergenceImportDag],
   ["convergence-public-surface", checkConvergencePublicSurface],
   ["d12-a155-substrate-absorption", checkBoundaryProjection],
   ["distribution-units", checkDistributionUnits],
   ["dogfood-smoke", checkDogfoodSmoke],
+  ["docs-link-integrity", checkDocsLinkIntegrity],
   ["docs-site-build", checkDocsSiteBuild],
   ["event-namespaces", checkEventNamespaces],
   ["limit-registry", checkLimitRegistry],
@@ -4203,10 +5311,12 @@ const checkerById = new Map([
   ["gate-tier-governance", checkGateTierGovernance],
   ["module-graph-oracle", checkModuleGraphOracle],
   ["module-buckets", checkModuleBuckets],
+  ["no-obsolete-public-packages", checkNoObsoletePublicPackages],
   ["owner-coupling", checkOwnerCoupling],
   ["owner-identity-boundary", checkOwnerIdentityBoundary],
   ["owner-ids", checkOwnerIds],
   ["profile-verification", checkProfileVerification],
+  ["projection-fold-boundary", checkProjectionFoldBoundary],
   ["public-api", checkPublicApi],
   ["repo-tooling-surface", checkRepoToolingSurface],
   ["source-aliases", checkSourceAliases],
@@ -4218,6 +5328,7 @@ const checkerById = new Map([
 const checkerIdsWithArgs = new Set([
   "distribution-units",
   "dogfood-smoke",
+  "consumer-imports",
   "module-buckets",
   "owner-coupling",
   "owner-identity-boundary",

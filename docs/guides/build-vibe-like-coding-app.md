@@ -10,7 +10,7 @@ modules inside the scoped spike until promotion is explicit.
 - [Durable truth](../concepts/durable-truth.md)
 - [Materialized projections](../concepts/materialized-projections.md)
 - [Attached streams](../concepts/attached-streams.md)
-- [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
+- [Runtime package](../packages/runtime.md)
 
 ## Steps
 
@@ -43,4 +43,4 @@ modules inside the scoped spike until promotion is explicit.
 ## References
 
 - [Runtime API](../api/runtime.md)
-- [Cloudflare DO API](../api/backend-cloudflare-do.md)
+- [Runtime package](../packages/runtime.md)

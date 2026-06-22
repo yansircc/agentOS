@@ -10,19 +10,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const tsc = path.join(root, "node_modules/.bin/tsc");
 const fixtureDir = path.join(root, "packages/runtime/test/cloudflare/consumer-fixture");
 const packageLinks = {
-  "ag-ui": "packages/wire-adapters/ag-ui",
-  "attached-stream": "packages/composers/attached-stream",
   core: "packages/core",
-  "decision-gate": "packages/carriers/decision-gate",
   runtime: "packages/runtime",
-  "run-stream": "packages/composers/run-stream",
-  "sse-http": "packages/transports/sse-http",
-  "turn-stream": "packages/composers/turn-stream",
-  "workspace-env": "packages/execution-domains/workspace-env",
-  "workspace-env-cloudflare": "packages/execution-domains/workspace-env-cloudflare",
-  "workspace-job": "packages/carriers/workspace-job",
-  "workspace-op": "packages/carriers/workspace-op",
-  "workspace-op-local": "packages/providers/workspace-op-local",
 };
 const dependencyLinks = ["@effect", "effect"];
 const scopedDependencyLinks = {

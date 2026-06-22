@@ -126,7 +126,6 @@ export class ResourceReservationClosed extends Data.TaggedError(
 export interface CoreClaimedEventNamespace {
   readonly ownerId: string;
   readonly sourcePackageName: string;
-  readonly packageId: string;
   readonly kindPrefixes: ReadonlyArray<string>;
 }
 
@@ -136,14 +135,12 @@ export interface CoreClaimedEventNamespace {
 export const CORE_CLAIMED_EVENT_NAMESPACES = [
   {
     ownerId: "@agent-os/runtime-protocol",
-    sourcePackageName: "@agent-os/runtime-protocol",
-    packageId: "@agent-os/runtime-protocol",
+    sourcePackageName: "@agent-os/core",
     kindPrefixes: ["agent.", "chat.", "llm.", "runtime.", "tool."],
   },
   {
     ownerId: "@agent-os/backend-protocol",
-    sourcePackageName: "@agent-os/backend-protocol",
-    packageId: "@agent-os/backend-protocol",
+    sourcePackageName: "@agent-os/core",
     kindPrefixes: ["dispatch.", "durable_trigger.", "quota.", "resource_pool."],
   },
 ] as const satisfies ReadonlyArray<CoreClaimedEventNamespace>;

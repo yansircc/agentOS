@@ -36,6 +36,25 @@ const writeJson = (file, value) => {
   fs.writeFileSync(target, expected);
 };
 
+const validateAllowedAdapters = ({ label, allowedAdapters, resolvePath }) => {
+  if (allowedAdapters === undefined) return;
+  if (!Array.isArray(allowedAdapters)) {
+    failures.push(`${label}.allowedAdapters must be an array`);
+    return;
+  }
+  for (const [index, adapter] of allowedAdapters.entries()) {
+    const adapterLabel = `${label}.allowedAdapters[${index}]`;
+    if (!isRecord(adapter) || typeof adapter.path !== "string" || adapter.path.length === 0) {
+      failures.push(`${adapterLabel}.path must be a non-empty string`);
+      continue;
+    }
+    const target = resolvePath(adapter.path);
+    if (!fs.existsSync(path.join(root, target))) {
+      failures.push(`${adapterLabel}.path references missing file ${target}`);
+    }
+  }
+};
+
 const workspacePackagePaths = () => {
   const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const workspaces = Array.isArray(rootPackage.workspaces)
@@ -115,6 +134,11 @@ const scannerPackagesFromWorkspaces = (rootSource) => {
 if (!isRecord(source.root)) {
   failures.push("docs/effect-skill.json missing root manifest");
 } else {
+  validateAllowedAdapters({
+    label: "docs/effect-skill.json.root",
+    allowedAdapters: source.root.allowedAdapters,
+    resolvePath: (adapterPath) => adapterPath,
+  });
   const {
     packageDefaults: _packageDefaults,
     packageOverrides: _packageOverrides,
@@ -144,6 +168,11 @@ if (packageManifests === null) {
       failures.push(`${packagePath} has an effect manifest but no package.json`);
       continue;
     }
+    validateAllowedAdapters({
+      label: `docs/effect-skill.json.packageManifests.${packagePath}`,
+      allowedAdapters: isRecord(manifest) ? manifest.allowedAdapters : undefined,
+      resolvePath: (adapterPath) => `${packagePath}/${adapterPath}`,
+    });
     writeJson(`${packagePath}/.effect-skill.json`, manifest);
   }
 

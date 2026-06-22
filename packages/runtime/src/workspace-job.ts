@@ -49,7 +49,7 @@ import {
   type WorkspaceJobStepProjection,
   type WorkspaceJobTerminalArtifact,
   type WorkspaceJobVerificationCheck,
-} from "@agent-os/workspace-job";
+} from "./workspace-job-carrier";
 import { projectSubmitResult } from "./run-projector";
 
 export interface WorkspaceJobSeedFile {
@@ -1071,7 +1071,7 @@ const runWorkspaceJobAttemptEffect = (
  *
  * @agentosPrimitive primitive.runtime.runWorkspaceJobEffect
  * @agentosInvariant invariant.workspace-job.verified-terminal
- * @agentosDocs docs/packages/workspace-job.md
+ * @agentosDocs docs/packages/runtime.md
  * @public
  */
 export const runWorkspaceJobEffect = (

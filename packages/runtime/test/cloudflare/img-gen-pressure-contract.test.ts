@@ -9,7 +9,7 @@ import {
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import { commitDurableTriggerIntent } from "../../src/cloudflare/due-work";
-import { EventBus } from "../../src/cloudflare/ledger";
+import { EventBus } from "../../src/cloudflare/ledger/event-bus";
 import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {

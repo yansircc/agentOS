@@ -17,7 +17,7 @@ through backend configuration generated or owned by the framework.
 ## Prerequisites
 
 - [Durable triggers guide](/guides/add-durable-trigger/)
-- [Cloudflare DO backend](/packages/backend-cloudflare-do/)
+- [Runtime API](/api/runtime/)
 - [Durable truth](/concepts/durable-truth/)
 
 ## Steps

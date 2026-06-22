@@ -12,8 +12,8 @@ import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 import { llmWireDescriptorFingerprint } from "@agent-os/core/llm-protocol";
 
-import { Ledger } from "../../../src/cloudflare/ledger";
-import { Admission, makeAdmissionSchemaSpec } from "../../../src/cloudflare/admission";
+import { Ledger, Admission } from "@agent-os/runtime";
+import { makeAdmissionSchemaSpec } from "@agent-os/core/runtime-protocol";
 import { finalTextResp, stubLlmTransport, stubLlmWireDescriptor } from "../_stub-ai";
 import { SCHEMA, makeRuntime, submitStructuredResp, testIdentity } from "./_helpers";
 

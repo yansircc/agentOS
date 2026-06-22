@@ -26,7 +26,7 @@ import {
   InvalidTraceContext,
   validateOptionalTraceContext,
 } from "@agent-os/core/telemetry-protocol";
-import { EventBus } from "../ledger";
+import { EventBus } from "../ledger/event-bus";
 import { materialRefKey } from "@agent-os/core/material-ref";
 import {
   Dispatch,
@@ -74,10 +74,6 @@ import { commitDurableTriggerIntent, ensureDueWorkSchema } from "../due-work";
 import { commitLedgerTransaction, type LedgerPayloadContext } from "../ledger/commit";
 import { cloudflareRouteKeyFromScopeRef } from "../ledger/identity";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
-
-// Re-export the receiver constant so callers that historically reached
-// for it from "./dispatch" keep working.
-export { DISPATCH_INBOUND_ACCEPTED } from "@agent-os/core/backend-protocol";
 
 export interface DispatchTargetNamespace {
   readonly idFromName: (name: string) => DurableObjectId;

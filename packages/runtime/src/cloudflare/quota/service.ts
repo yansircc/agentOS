@@ -21,7 +21,7 @@ import {
   QUOTA_EVENT_KIND,
   type GrantResult,
 } from "@agent-os/core/backend-protocol";
-import { EventBus } from "../ledger";
+import { EventBus } from "../ledger/event-bus";
 import { sqlText } from "../storage/sql-row";
 import { commitLedgerTransaction } from "../ledger/commit";
 import { eventIdentity, eventIdentityColumns } from "../ledger/identity";

@@ -13,9 +13,9 @@ import {
 import {
   durableObjectDispatchTarget,
   type DispatchTargetNamespace,
-} from "../../src/cloudflare/dispatch";
+} from "../../src/cloudflare/dispatch/dispatch";
 import { findNextDue } from "../../src/cloudflare/due-work";
-import { EventBus } from "../../src/cloudflare/ledger";
+import { EventBus } from "../../src/cloudflare/ledger/event-bus";
 import { cloudflareRouteKeyFromScopeRef } from "../../src/cloudflare/ledger/identity";
 import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";

@@ -262,7 +262,6 @@ export const boundaryPackage = (contract: BoundaryContract, version: string): Bo
   ({
     ownerId: contract.ownerId,
     sourcePackageName: contract.sourcePackageName,
-    packageId: contract.sourcePackageName,
     kindPrefixes: contract.kindPrefixes,
     version,
     boundaryContract: contract,

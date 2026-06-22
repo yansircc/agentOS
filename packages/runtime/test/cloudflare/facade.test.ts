@@ -24,12 +24,12 @@ import {
   defineAgentManifest,
   lowerSubmitRunInput,
 } from "@agent-os/core/runtime-protocol";
-import type { DispatchTargetNamespace } from "../../src/cloudflare/dispatch";
+import type { DispatchTargetNamespace } from "../../src/cloudflare/dispatch/dispatch";
 import {
   httpDispatchTarget,
   providerDispatchTarget,
   queueDispatchTarget,
-} from "../../src/cloudflare/dispatch";
+} from "../../src/cloudflare/dispatch/dispatch";
 
 interface TestEnv {
   readonly LLM_ENDPOINT: string;

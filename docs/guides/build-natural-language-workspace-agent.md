@@ -49,7 +49,6 @@ events.
 
 ```jsonc
 {
-  "$schema": "./node_modules/@agent-os/config/schema.json",
   "profile": "workspace@1",
   "agent": "./agent",
   "deployment": {
@@ -125,7 +124,7 @@ that accepts only Recordable facts owned by the runtime/carrier contract.
 ## References
 
 - [Usage surfaces](../usage-surfaces.md)
-- [Agent authoring package](../packages/agent-authoring.md)
-- [Workspace agent host](../packages/workspace-agent.md)
+- [CLI package](../packages/cli.md)
+- [Runtime package](../packages/runtime.md)
 - [Client core](../packages/client.md)
-- [Cloudflare DO backend](../packages/backend-cloudflare-do.md)
+- [Runtime API](../api/runtime.md)

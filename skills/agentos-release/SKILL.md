@@ -22,7 +22,7 @@ invariant: package lists and tarball paths come from agentOS distribution projec
 
    ```sh
    git status --short --branch
-   npm view @yansirplus/ag-ui version versions --json
+   npm view @yansirplus/runtime version versions --json
    ```
 
 2. Run the release script. It can bump package versions, run the release gate,
@@ -46,9 +46,10 @@ invariant: package lists and tarball paths come from agentOS distribution projec
 5. After success, verify the key consumer packages:
 
    ```sh
-   npm view @yansirplus/ag-ui version versions --json
+   npm view @yansirplus/core version versions --json
    npm view @yansirplus/runtime version versions --json
-   npm view @yansirplus/backend-cloudflare-do version versions --json
+   npm view @yansirplus/client version versions --json
+   npm view @yansirplus/cli version versions --json
    ```
 
 6. Commit only after the registry verifies the target version:

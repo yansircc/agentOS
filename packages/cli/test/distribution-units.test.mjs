@@ -4,12 +4,15 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  consumerFacingSpecifierFailuresForContent,
   distributionRootsRegistryFindings,
   distributionEffectPeerFindings,
   distributionFindingsForPackage,
   distributionManifestFindings,
   distributionUnitNegativeFixtureFailures,
   distributionUnitRegistryFindings,
+  markdownLinkFailuresForContent,
+  packageConstraintNameFailures,
   packageUnitOptionalPeerAllowsEdge,
   packageUnitsRegistryFindings,
 } from "../src/check/algorithmic-checks.mjs";
@@ -34,6 +37,13 @@ void test("distribution architecture sources are valid", () => {
   const ambientIds = new Set(moduleBuckets.ambients.map((ambient) => ambient.id));
   const packageUnitIds = new Set(packageUnits.packageUnits.map((unit) => unit.id));
   const targetProfileIds = new Set(distributionRoots.targetProfiles.map((profile) => profile.id));
+  const workspacePackageRecordsByName = new Map(
+    ["core", "runtime", "client", "cli"].map((id) => [
+      `@agent-os/${id}`,
+      { name: `@agent-os/${id}`, path: `packages/${id}` },
+    ]),
+  );
+  const packageUnitsById = new Map(packageUnits.packageUnits.map((unit) => [unit.id, unit]));
 
   assert.deepEqual(
     packageUnitsRegistryFindings({
@@ -41,6 +51,7 @@ void test("distribution architecture sources are valid", () => {
       bucketIds,
       ambientIds,
       targetProfileIds,
+      workspacePackageRecordsByName,
     }),
     [],
   );
@@ -49,8 +60,159 @@ void test("distribution architecture sources are valid", () => {
       registry: distributionRoots,
       packageUnitIds,
       ambientIds,
+      packageUnitsById,
     }),
     [],
+  );
+});
+
+void test("package-unit registry exactness rejects public/export drift", () => {
+  const findings = packageUnitsRegistryFindings({
+    registry: {
+      schemaVersion: 1,
+      policy: {
+        packageBoundary: "policy",
+        namespaceSplit: "policy",
+        effectPeer: "policy",
+      },
+      packageUnits: [
+        {
+          id: "runtime",
+          targetSourcePackageName: "@agent-os/runtime",
+          publicPackageName: "@yansirplus/not-runtime",
+          status: "target",
+          hardInstallEnvelope: {
+            dependencies: [],
+            installScripts: [],
+            nativeArtifacts: [],
+            packageWideMetadata: [],
+            requiredPeers: [],
+          },
+          runtimeConditions: ["neutral"],
+          targetProfiles: ["neutral"],
+          publicSubpaths: [{ subpath: ".", moduleBuckets: ["ledger"], optionalPeers: [] }],
+        },
+      ],
+    },
+    bucketIds: new Set(["ledger"]),
+    ambientIds: new Set(["neutral"]),
+    targetProfileIds: new Set(["neutral"]),
+    workspacePackageRecordsByName: new Map([
+      ["@agent-os/runtime", { name: "@agent-os/runtime", path: "packages/runtime" }],
+    ]),
+  });
+
+  assert.equal(
+    findings.some((finding) => finding.includes("publicPackageName must be @yansirplus/runtime")),
+    true,
+  );
+  assert.equal(
+    findings.some((finding) =>
+      finding.includes("publicSubpaths missing package.json export @agent-os/runtime/admission"),
+    ),
+    true,
+  );
+});
+
+void test("distribution roots require exact profile coverage for public subpaths", () => {
+  const packageUnitsById = new Map([
+    [
+      "runtime",
+      {
+        id: "runtime",
+        publicPackageName: "@yansirplus/runtime",
+        publicSubpaths: [
+          { subpath: ".", targetProfiles: ["neutral"] },
+          { subpath: "./cloudflare", targetProfiles: ["cloudflare-worker"] },
+        ],
+      },
+    ],
+  ]);
+  const base = {
+    schemaVersion: 1,
+    policy: {
+      rootTruth: "policy",
+      dogfoodWitness: "policy",
+      targetSelection: "policy",
+    },
+    roots: [
+      {
+        id: "public-runtime",
+        kind: "public-package",
+        packageUnit: "runtime",
+        publicPackageName: "@yansirplus/runtime",
+        consumerRoot: "runtime",
+      },
+    ],
+    dogfoodRoots: [
+      {
+        id: "spike",
+        kind: "external-consumer",
+        path: "spikes/",
+        witnessLevel: "capability",
+        gate: "gate",
+        requiredCapabilities: ["runtime"],
+      },
+    ],
+  };
+
+  const missing = distributionRootsRegistryFindings({
+    registry: {
+      ...base,
+      targetProfiles: [
+        {
+          id: "neutral",
+          ambient: "neutral",
+          packageUnits: ["runtime"],
+          selectedSubpaths: ["@yansirplus/runtime"],
+          forbiddenSpecifiers: [],
+        },
+        {
+          id: "cloudflare-worker",
+          ambient: "cloudflare-worker",
+          packageUnits: ["runtime"],
+          selectedSubpaths: [],
+          forbiddenSpecifiers: [],
+        },
+      ],
+    },
+    packageUnitIds: new Set(["runtime"]),
+    ambientIds: new Set(["neutral", "cloudflare-worker"]),
+    packageUnitsById,
+  });
+  assert.equal(
+    missing.some((finding) =>
+      finding.includes(
+        "selectedSubpaths is missing @yansirplus/runtime/cloudflare, which package-units assigns to targetProfile cloudflare-worker",
+      ),
+    ),
+    true,
+  );
+
+  const wrongProfile = distributionRootsRegistryFindings({
+    registry: {
+      ...base,
+      targetProfiles: [
+        {
+          id: "neutral",
+          ambient: "neutral",
+          packageUnits: ["runtime"],
+          selectedSubpaths: ["@yansirplus/runtime", "@yansirplus/runtime/cloudflare"],
+          forbiddenSpecifiers: [],
+        },
+      ],
+    },
+    packageUnitIds: new Set(["runtime"]),
+    ambientIds: new Set(["neutral", "cloudflare-worker"]),
+    packageUnitsById,
+  });
+  assert.equal(
+    wrongProfile.some((finding) =>
+      finding.includes(
+        "selectedSubpaths includes @yansirplus/runtime/cloudflare, which package-units does not assign to targetProfile neutral",
+      ),
+    ),
+    true,
   );
 });
 
@@ -290,4 +452,58 @@ void test("effect peer range scanner reports version drift", () => {
 
 void test("distribution unit negative fixtures prove enforce gates are live", () => {
   assert.deepEqual(distributionUnitNegativeFixtureFailures(), []);
+});
+
+void test("consumer-facing docs reject obsolete package specifiers", () => {
+  const findings = consumerFacingSpecifierFailuresForContent({
+    file: "docs/tutorials/example.md",
+    content: [
+      "Use @agent-os/runtime and @yansirplus/runtime.",
+      "Do not install @agent-os/agent-authoring or @yansirplus/backend-cloudflare-do.",
+      "Do not document wildcard install sets like @agent-os/* or @yansirplus/*.",
+      "",
+    ].join("\n"),
+    sourceSpecifiers: new Set(["@agent-os/runtime"]),
+    publicSpecifiers: new Set(["@yansirplus/runtime"]),
+    toolingSourceSpecifiers: new Set(),
+  });
+
+  assert.deepEqual(findings, [
+    "docs/tutorials/example.md:2:16: obsolete consumer-facing package specifier @agent-os/agent-authoring",
+    "docs/tutorials/example.md:2:45: obsolete consumer-facing package specifier @yansirplus/backend-cloudflare-do",
+    "docs/tutorials/example.md:3:44: obsolete consumer-facing package specifier @agent-os/*",
+    "docs/tutorials/example.md:3:59: obsolete consumer-facing package specifier @yansirplus/*",
+  ]);
+});
+
+void test("docs link integrity rejects relative links to deleted docs", () => {
+  const findings = markdownLinkFailuresForContent({
+    file: "docs/guides/example.md",
+    content:
+      "Read [old package](../packages/attached-stream.md) and [external](https://example.com).\n",
+  });
+
+  assert.deepEqual(findings, [
+    "docs/guides/example.md:1:6: markdown link target ../packages/attached-stream.md does not resolve to docs/packages/attached-stream.md",
+  ]);
+});
+
+void test("package import DAG constraints reject stale package names", () => {
+  const findings = packageConstraintNameFailures({
+    ruleId: "substrate-import-dag",
+    records: [{ name: "@agent-os/core", path: "packages/core" }],
+    constraints: {
+      forbiddenEdges: [
+        {
+          fromPackageNames: ["@agent-os/runtime-protocol"],
+          allowedTargetPackageNames: ["@agent-os/backend-protocol"],
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(findings, [
+    "substrate-import-dag: constraints.forbiddenEdges[0].fromPackageNames references non-workspace package @agent-os/runtime-protocol",
+    "substrate-import-dag: constraints.forbiddenEdges[0].allowedTargetPackageNames references non-workspace package @agent-os/backend-protocol",
+  ]);
 });

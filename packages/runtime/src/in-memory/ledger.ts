@@ -1,5 +1,5 @@
 import { Clock, Effect, Layer } from "effect";
-import { Ledger, recordLedgerPortEvents, runtimeStorageOrJsonError } from "@agent-os/runtime";
+import { Ledger, recordLedgerPortEvents, runtimeStorageOrJsonError } from "../ledger";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { InMemoryBackendState } from "./state";
 

@@ -18,6 +18,22 @@
       "types": "./src/run-projector.ts",
       "default": "./src/run-projector.ts"
     },
+    "./ag-ui": {
+      "types": "./src/ag-ui.ts",
+      "default": "./src/ag-ui.ts"
+    },
+    "./sse-http": {
+      "types": "./src/sse-http.ts",
+      "default": "./src/sse-http.ts"
+    },
+    "./workspace-agent": {
+      "types": "./src/workspace-agent.ts",
+      "default": "./src/workspace-agent.ts"
+    },
+    "./workspace-binding": {
+      "types": "./src/workspace-binding.ts",
+      "default": "./src/workspace-binding.ts"
+    },
     "./cloudflare": {
       "types": "./src/cloudflare/index.ts",
       "default": "./src/cloudflare/index.ts"
@@ -53,10 +69,7 @@
     "test:runtime": "vp test run --configLoader runner --config vitest.cloudflare.config.ts && vp test run --configLoader runner --config vitest.node.config.ts"
   },
   "dependencies": {
-    "@agent-os/attached-stream": "workspace:*",
     "@agent-os/core": "workspace:*",
-    "@agent-os/decision-gate": "workspace:*",
-    "@agent-os/workspace-job": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

@@ -22,7 +22,7 @@ Use this skill to integrate agentOS without re-inventing its substrate.
      of adding glue code or a docs-only route.
 
 2. Inspect the target repo before editing:
-   - installed `@agent-os/*` packages;
+   - installed `@yansirplus/{core,runtime,client,cli}` packages;
    - local agent loop, tool gate, ledger, scheduler, material resolver, and
      streaming code;
    - package READMEs and `PUBLIC_API.md` files for exact installed exports.
@@ -41,10 +41,10 @@ Use this skill to integrate agentOS without re-inventing its substrate.
      `ToolContract`;
    - durable truth -> ledger events and projections;
    - execution means -> facade `bindings` backed by `MaterialRef`;
-   - token progress -> `@agent-os/turn-stream`;
-   - consumer run stream -> `@agent-os/run-stream`;
-   - resource facts -> `@agent-os/resource-carrier`;
-   - Cloudflare resource materialization -> `@agent-os/resource-cloudflare`;
+   - token progress and run projections -> `@agent-os/runtime`;
+   - consumer run stream -> `@agent-os/client` or `@agent-os/runtime/ag-ui`;
+   - resource facts -> `@agent-os/core` boundary contracts plus `@agent-os/runtime`;
+   - Cloudflare resource materialization -> `@agent-os/runtime/cloudflare`;
 
 5. Keep the core invariant:
    - `PreClaim` names effect identity only:

@@ -25,10 +25,39 @@ void test("module bucket classifier marks product paths as ejection candidates",
   assert.equal(moduleBucketForPath("packages/core/src/index.ts"), "axioms");
   assert.equal(moduleBucketForPath("packages/runtime/src/ledger.ts"), "ledger");
   assert.equal(moduleBucketForPath("packages/runtime/src/continuation.ts"), "projection");
+  assert.equal(moduleBucketForPath("packages/runtime/src/ag-ui.ts"), "projection");
+  assert.equal(moduleBucketForPath("packages/runtime/src/sse-http.ts"), "projection");
+  assert.equal(
+    moduleBucketForPath("packages/runtime/src/attached-stream-protocol.ts"),
+    "projection",
+  );
+  assert.equal(
+    moduleBucketForPath("packages/runtime/src/decision-gate/definition.ts"),
+    "projection",
+  );
+  assert.equal(
+    moduleBucketForPath("packages/runtime/src/workspace-job-carrier/definition.ts"),
+    "projection",
+  );
+  assert.equal(
+    moduleBucketForPath("packages/runtime/src/workspace-op-carrier/definition.ts"),
+    "projection",
+  );
+  assert.equal(moduleBucketForPath("packages/runtime/src/workspace-binding.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/runtime/src/submit-agent.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/client/src/index.ts"), "projection");
   assert.equal(moduleBucketForPath("packages/client/src/react/index.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/runtime/src/cloudflare/ledger/ledger.ts"), "adapter");
+  assert.equal(
+    moduleBucketForPath("packages/runtime/src/cloudflare/storage/effect-sqlite-do.ts"),
+    "adapter",
+  );
+  assert.equal(
+    moduleBucketForPath("packages/runtime/src/cloudflare/materialized-projections.ts"),
+    "adapter",
+  );
+  assert.equal(moduleBucketForPath("packages/runtime/src/in-memory/ledger.ts"), "adapter");
+  assert.equal(moduleBucketForPath("packages/runtime/src/in-memory/state.ts"), "adapter");
   assert.equal(
     moduleBucketForPath("packages/carriers/workspace-op/src/safe-events.ts"),
     "projection",
@@ -55,8 +84,8 @@ void test("module bucket scanner reports downstream bucket and ambient imports",
   const findings = moduleBucketFindingsForEdges([
     {
       fromFile: "packages/core/src/index.ts",
-      toFile: "packages/providers/deploy-cloudflare/src/index.ts",
-      specifier: "@agent-os/deploy-cloudflare",
+      toFile: "packages/runtime/src/cloudflare/index.ts",
+      specifier: "@agent-os/runtime/cloudflare",
     },
     {
       fromFile: "packages/client/src/index.ts",

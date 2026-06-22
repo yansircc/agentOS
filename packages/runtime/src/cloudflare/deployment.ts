@@ -11,7 +11,7 @@ import {
   type CloudflareAgentBindings,
   type CloudflareAgentMount,
 } from "./mount";
-import type { DispatchTargetRegistry } from "./dispatch";
+import type { DispatchTargetRegistry } from "./dispatch/dispatch";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 

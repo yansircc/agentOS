@@ -6,15 +6,14 @@ import {
   ProjectionApplicationError,
   applyProjectionEventResult,
   getProjection,
-  runtimeStorageError,
   type AnyMaterializedProjectionDefinition,
   type MaterializedProjectionRebuildResult,
   type MaterializedProjectionRow,
   type MaterializedProjectionStatus,
   type ProjectionReducerReturnedThenable,
   type ProjectionRegistry,
-  type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../projection";
+import { runtimeStorageError, type RuntimeStorageError } from "../ledger";
 import { sqlText } from "./storage/sql-row";
 import {
   CloudflareLedgerSchemaError,

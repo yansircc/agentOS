@@ -347,6 +347,7 @@
       "diagnostics": [
         "root command surface must stay collapsed to the CLI package and approved distribution/runtime commands",
         "scripts/ must remain reserved for parallel-dev shell helpers",
+        "CLI package specifiers must be declared dependencies",
         "CLI must not import packages/* source outside packages/cli"
       ],
       "paths": [
@@ -395,7 +396,7 @@
         ],
         "scriptsDirectoryAllowPrefixes": ["scripts/parallel-dev/"],
         "scriptsDirectoryAllowedExtensions": [".sh"],
-        "forbiddenPackageSpecPrefixes": ["@agent-os/"],
+        "packageSpecPrefixesRequireDeclaredDependency": ["@agent-os/"],
         "forbiddenLegacyScriptReferencePattern": "scripts/(generate|check|audit|project|public-api|lib|backend-neutral|agent-doc|effect|carrier|source|spike|ag-ui|workspace|tool|failure|doc-)",
         "legacyReferenceScanRoots": ["AGENTS.md", "README.md", "docs", "tooling/refactor"]
       },
@@ -447,15 +448,14 @@
       "kind": "repo-boundary",
       "diagnostics": [
         "client core must remain transport-neutral and framework-free",
-        "client framework packages must expose hooks/stores only, not components or UI read-model DTOs",
-        "ag-ui framework packages must retire once client framework bridges exist"
+        "client framework subpaths must expose hooks/stores only, not components or UI read-model DTOs",
+        "AG-UI projection remains a runtime subpath capability, not a client read model"
       ],
       "paths": [
         "packages/cli/src/check/sources/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
-        "packages/composers/workspace-agent/**",
-        "packages/wire-adapters/ag-ui*/**"
+        "packages/runtime/src/ag-ui.ts"
       ],
       "commandGroup": "all",
       "acceptance": {
@@ -466,7 +466,7 @@
     },
     {
       "id": "convergence-boundary",
-      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/composers/agent-authoring/src/index.ts",
+      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/cli/src/build/agent-authoring.ts",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -479,9 +479,8 @@
         "packages/cli/src/check/sources/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
-        "packages/composers/workspace-agent/**",
-        "packages/composers/agent-authoring/src/index.ts",
-        "packages/composers/agent-authoring/test/agent-authoring.test.ts",
+        "packages/cli/src/build/agent-authoring.ts",
+        "packages/cli/test/build-command.test.mjs",
         ".gitignore",
         "packages/cli/src/check/algorithmic-checks.mjs",
         "packages/cli/src/main.mjs"
@@ -564,40 +563,8 @@
             "forbiddenTargetPackagePathPrefixes": ["packages", "tooling"]
           },
           {
-            "fromPackageNames": [
-              "@agent-os/attached-stream",
-              "@agent-os/backend-protocol",
-              "@agent-os/llm-protocol",
-              "@agent-os/runtime-protocol",
-              "@agent-os/telemetry-protocol"
-            ],
-            "forbiddenTargetPackagePathPrefixes": [
-              "packages/runtime",
-              "packages/runtime/src",
-              "packages/carriers",
-              "packages/composers",
-              "packages/execution-domains",
-              "packages/providers",
-              "packages/transports",
-              "packages/wire-adapters",
-              "packages/client",
-              "tooling"
-            ],
-            "allowedTargetPackageNames": ["@agent-os/backend-protocol"]
-          },
-          {
             "fromPackageNames": ["@agent-os/runtime"],
-            "forbiddenTargetPackagePathPrefixes": [
-              "packages/runtime/src",
-              "packages/composers",
-              "packages/execution-domains",
-              "packages/providers",
-              "packages/transports",
-              "packages/wire-adapters",
-              "packages/client",
-              "tooling"
-            ],
-            "allowedTargetPackageNames": ["@agent-os/attached-stream", "@agent-os/backend-protocol"]
+            "forbiddenTargetPackagePathPrefixes": ["packages/client", "packages/cli", "tooling"]
           }
         ]
       },
@@ -627,8 +594,9 @@
       "invariantId": "invariant.docs.agent-projection",
       "kind": "projection",
       "acceptance": {
-        "engine": "proofClass",
-        "proofClasses": ["docs"]
+        "engine": "algorithmic",
+        "checker": "docs-link-integrity",
+        "reason": "docs structure includes relative Markdown links that must resolve against live docs files after generated package/API pages are deleted"
       },
       "diagnostics": [
         "generated docs structure must match declared source facts and generator ownership"
@@ -687,7 +655,10 @@
       "invariantId": "invariant.workspace-job.verified-terminal",
       "kind": "carrier",
       "diagnostics": ["workspace-job terminal vocabulary remains carrier-owned"],
-      "paths": ["packages/carriers/workspace-job", "packages/runtime/test/workspace-job.test.ts"],
+      "paths": [
+        "packages/runtime/src/workspace-job-carrier",
+        "packages/runtime/test/workspace-job.test.ts"
+      ],
       "commandGroup": "all",
       "acceptance": {
         "engine": "proofClass",
@@ -722,13 +693,13 @@
     },
     {
       "id": "ag-ui-egress-allowlist",
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "kind": "wire-egress",
       "diagnostics": ["AG-UI egress exposes only owner-safe envelope and frame facts"],
       "paths": [
-        "packages/wire-adapters/ag-ui/src/index.ts",
-        "packages/wire-adapters/ag-ui/test/ag-ui.test.ts"
+        "packages/runtime/src/ag-ui.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ],
       "commandGroup": "all",
       "acceptance": {
@@ -800,7 +771,7 @@
       "diagnostics": [
         "failure diagnostics are projected from protocol categories, not SubmitResult"
       ],
-      "paths": ["packages/core/runtime-protocol/test/failure-diagnostics.test.ts"],
+      "paths": ["packages/core/test/runtime-protocol/failure-diagnostics.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
         "engine": "proofClass",
@@ -814,8 +785,8 @@
       "kind": "package-test",
       "diagnostics": ["tool replay witness is derived from execution domain law"],
       "paths": [
-        "packages/core/test/tools.test.ts",
-        "packages/core/runtime-protocol/test/runtime-events.test.ts"
+        "packages/core/test/kernel/tools.test.ts",
+        "packages/core/test/runtime-protocol/runtime-events.test.ts"
       ],
       "commandGroup": "package-owned",
       "acceptance": {
@@ -825,13 +796,13 @@
     },
     {
       "id": "workspace-tool-exposure-policy",
-      "owner": "@agent-os/workspace-binding",
+      "owner": "@agent-os/runtime",
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "kind": "package-test",
       "diagnostics": [
         "workspace tool exposure defaults to read-only and opts in to receipt-backed mutations"
       ],
-      "paths": ["packages/composers/workspace-binding/test/workspace-binding.test.ts"],
+      "paths": ["packages/runtime/test/submit-agent-runtime-events.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
         "engine": "proofClass",
@@ -844,7 +815,7 @@
       "invariantId": "invariant.workspace-op.carrier-single-writer",
       "kind": "package-test",
       "diagnostics": ["workspace-op terminals are carrier receipts, not inline runtime tool facts"],
-      "paths": ["packages/carriers/workspace-op/test/workspace-op.test.ts"],
+      "paths": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
         "engine": "proofClass",
@@ -853,11 +824,11 @@
     },
     {
       "id": "workspace-agui-integration-fixture",
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "kind": "package-test",
       "diagnostics": ["workspace AG-UI integration consumes owner-safe projections"],
-      "paths": ["packages/wire-adapters/ag-ui/test/workspace-agui-integration.test.ts"],
+      "paths": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"],
       "commandGroup": "package-owned",
       "acceptance": {
         "engine": "proofClass",
@@ -866,11 +837,11 @@
     },
     {
       "id": "ag-ui-resume-boundary",
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/wire-adapters/ag-ui/src/index.ts"],
+      "paths": ["packages/runtime/src/ag-ui.ts"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -879,14 +850,11 @@
     },
     {
       "id": "ag-ui-sse-axis",
-      "owner": "@agent-os/ag-ui",
+      "owner": "@agent-os/runtime/ag-ui",
       "invariantId": "invariant.ag-ui.sse-axis",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": [
-        "packages/wire-adapters/ag-ui/src/index.ts",
-        "packages/transports/sse-http/src/index.ts"
-      ],
+      "paths": ["packages/runtime/src/ag-ui.ts", "packages/runtime/src/sse-http.ts"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -977,7 +945,7 @@
       "invariantId": "invariant.algebra.single-code-source",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/runtime/src", "packages/providers"],
+      "paths": ["packages/runtime/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1052,11 +1020,11 @@
     },
     {
       "id": "carrier-projection-source-truth",
-      "owner": "defineCarrier declarations",
+      "owner": "runtime carrier declarations",
       "invariantId": "invariant.d10.namespace-integrity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/carriers"],
+      "paths": ["packages/runtime/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "generatedProjection",
@@ -1065,11 +1033,11 @@
     },
     {
       "id": "turn-stream-provider-wire-boundary",
-      "owner": "@agent-os/turn-stream",
+      "owner": "@agent-os/runtime",
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/composers/turn-stream", "packages/providers"],
+      "paths": ["packages/runtime/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1082,7 +1050,7 @@
       "invariantId": "invariant.d10.truth-identity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/carriers/decision-gate"],
+      "paths": ["packages/runtime/src/decision-gate"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1091,11 +1059,14 @@
     },
     {
       "id": "workspace-exec-material-ref-boundary",
-      "owner": "@agent-os/workspace-env",
+      "owner": "@agent-os/runtime",
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/execution-domains/workspace-env"],
+      "paths": [
+        "packages/runtime/src/workspace-env-core.ts",
+        "packages/runtime/src/cloudflare/workspace-env-adapter.ts"
+      ],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
@@ -1235,11 +1206,11 @@
     },
     {
       "id": "product-resource-boundary",
-      "owner": "@agent-os/resource-carrier",
+      "owner": "@agent-os/runtime",
       "invariantId": "invariant.d10.namespace-integrity",
       "kind": "repo-boundary",
       "diagnostics": [],
-      "paths": ["packages/carriers/resource", "packages/providers/resource-cloudflare"],
+      "paths": ["packages/runtime/src/cloudflare/resources"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
