@@ -169,6 +169,21 @@ const lowerSubmitBudget = (
   return Object.keys(lowered).length === 0 ? undefined : lowered;
 };
 
+const mergeSubmitDecisionInterrupts = (
+  bindings: SubmitRunBindings["decisionInterrupts"],
+  input: SubmitRunInput["decisionInterrupts"],
+): SubmitSpec["decisionInterrupts"] | undefined => {
+  if (bindings === undefined && input === undefined) return undefined;
+  const merged: SubmitDecisionInterrupt[] = [];
+  const seenToolNames = new Set<string>();
+  for (const interrupt of [...(bindings ?? []), ...(input ?? [])]) {
+    if (seenToolNames.has(interrupt.toolName)) continue;
+    seenToolNames.add(interrupt.toolName);
+    merged.push(interrupt);
+  }
+  return merged.length === 0 ? undefined : merged;
+};
+
 /**
  * Framework-owned lowering from app-authored input plus pre-runtime bindings to
  * the full runtime driver input.
@@ -190,6 +205,10 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
   }
   const toolContext = mergeSubmitToolContext(spec.bindings.toolContext, spec.input.toolContext);
   const budget = lowerSubmitBudget(spec.input.budget);
+  const decisionInterrupts = mergeSubmitDecisionInterrupts(
+    spec.bindings.decisionInterrupts,
+    spec.input.decisionInterrupts,
+  );
   return {
     intent: spec.input.intent,
     context: spec.input.context,
@@ -210,10 +229,7 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
       ? {}
       : { receiptBackedTools: spec.bindings.receiptBackedTools }),
     ...(spec.input.toolPolicy === undefined ? {} : { toolPolicy: spec.input.toolPolicy }),
-    ...(spec.input.decisionInterrupts === undefined &&
-    spec.bindings.decisionInterrupts === undefined
-      ? {}
-      : { decisionInterrupts: spec.input.decisionInterrupts ?? spec.bindings.decisionInterrupts }),
+    ...(decisionInterrupts === undefined ? {} : { decisionInterrupts }),
     ...(spec.input.resume === undefined ? {} : { resume: spec.input.resume }),
     ...(spec.bindings.executionIdentity === undefined
       ? {}

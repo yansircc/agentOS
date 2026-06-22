@@ -2342,6 +2342,18 @@ const generatedWorkspaceToolNames = ${workspaceToolArray};
 const generatedCustomTools = ${customToolRecord};
 const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
 
+const generatedWorkspaceToolInteractionFor = (
+  name: (typeof generatedWorkspaceToolNames)[number],
+): "never" | "approval" => {
+  const interaction = semanticManifest.tools?.[name]?.interaction;
+  if (interaction === "never" || interaction === "approval") return interaction;
+  throw Error(\`invalid workspace tool interaction for \${name}: \${String(interaction)}\`);
+};
+
+const generatedWorkspaceToolInteractions = Object.fromEntries(
+  generatedWorkspaceToolNames.map((name) => [name, generatedWorkspaceToolInteractionFor(name)]),
+) as Readonly<Partial<Record<(typeof generatedWorkspaceToolNames)[number], "never" | "approval">>>;
+
 const workspaceNamespaceFor = (env: AgentOSTargetEnv): DurableObjectNamespace<Sandbox> =>
   env[${jsString(normalized.workspace.binding)}] as DurableObjectNamespace<Sandbox>;
 
@@ -2491,6 +2503,7 @@ const generatedWorkspaceBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindin
         toolNames: generatedWorkspaceToolNames,
         mutationPolicy: ${usesMutationTools ? '"receipt-backed"' : '"disabled"'},
         shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
+        toolInteractions: generatedWorkspaceToolInteractions,
       });
 
 const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {

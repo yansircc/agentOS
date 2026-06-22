@@ -72,4 +72,26 @@ describe("submit lowering", () => {
     });
     expect("toolRetries" in spec.budget!).toBe(false);
   });
+
+  it("merges binding decision floors before run-scoped decision interrupts", () => {
+    const spec = lowerSubmitRunInput({
+      input: {
+        ...input(),
+        decisionInterrupts: [
+          { toolName: "publish", reason: "authorization_required" },
+          { toolName: "notify", reason: "user_input_required" },
+        ],
+      },
+      bindings: {
+        llmRoutes: { default: route },
+        decisionInterrupts: [{ toolName: "publish", reason: "approval_required" }],
+      },
+      effectAuthorityRef,
+    });
+
+    expect(spec.decisionInterrupts).toEqual([
+      { toolName: "publish", reason: "approval_required" },
+      { toolName: "notify", reason: "user_input_required" },
+    ]);
+  });
 });

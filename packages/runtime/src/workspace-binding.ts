@@ -10,6 +10,7 @@ import {
 import { ToolError } from "@agent-os/core/errors";
 import type {
   AgentSubmitBindings,
+  SubmitDecisionInterrupt,
   SubmitToolContext,
   SubmitToolIntent,
 } from "@agent-os/core/runtime-protocol";
@@ -31,6 +32,7 @@ import {
   type CreateWorkspaceToolsOptions,
   type WorkspaceEnv,
   type WorkspaceToolCategory,
+  type WorkspaceToolInteractionFloor,
   type WorkspaceToolName,
 } from "./workspace-env-core";
 
@@ -43,6 +45,9 @@ export interface WorkspaceToolExposurePolicy {
   readonly toolNames?: ReadonlyArray<WorkspaceToolName>;
   readonly mutationPolicy?: WorkspaceMutationPolicy;
   readonly shellPolicy?: WorkspaceShellPolicy;
+  readonly toolInteractions?: Readonly<
+    Partial<Record<WorkspaceToolName, WorkspaceToolInteractionFloor>>
+  >;
 }
 
 export interface BindWorkspaceToolsForRuntimeOptions
@@ -147,6 +152,17 @@ const selectTools = (
 const isWriteWorkspaceTool = (name: WorkspaceToolName): boolean =>
   WORKSPACE_TOOL_EXPOSURE_PROFILES.mutation.includes(name) ||
   WORKSPACE_TOOL_EXPOSURE_PROFILES.shell.includes(name);
+
+const decisionInterruptsForWorkspaceTools = (
+  names: ReadonlyArray<WorkspaceToolName>,
+  interactions: WorkspaceToolExposurePolicy["toolInteractions"],
+): ReadonlyArray<SubmitDecisionInterrupt> | undefined => {
+  const interrupts = names.flatMap((name): ReadonlyArray<SubmitDecisionInterrupt> => {
+    if (interactions?.[name] !== "approval") return [];
+    return [{ toolName: name, reason: "approval_required" }];
+  });
+  return interrupts.length === 0 ? undefined : interrupts;
+};
 
 const optionalString = (record: Record<string, unknown>, key: string): string | undefined =>
   typeof record[key] === "string" ? record[key] : undefined;
@@ -314,6 +330,10 @@ export const bindWorkspaceToolsForRuntime = (
   const selectedNames = selectedWorkspaceToolNames(options);
   const selectedTools = selectTools(tools, selectedNames);
   const receiptBackedToolNames = selectedNames.filter(isWriteWorkspaceTool);
+  const decisionInterrupts = decisionInterruptsForWorkspaceTools(
+    selectedNames,
+    options.toolInteractions,
+  );
   const runtimeTools = Object.fromEntries(
     Object.entries(selectedTools).map(([name, tool]) => [
       name,
@@ -353,6 +373,7 @@ export const bindWorkspaceToolsForRuntime = (
     ],
     materials: { workspace },
     ...(options.toolContext === undefined ? {} : { toolContext: options.toolContext }),
+    ...(decisionInterrupts === undefined ? {} : { decisionInterrupts }),
     toolIntents:
       receiptBackedToolNames.length === 0
         ? options.toolIntents
