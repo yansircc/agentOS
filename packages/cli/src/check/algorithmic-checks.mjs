@@ -4603,6 +4603,21 @@ const checkGeneratedStaticTargetLinking = () => {
     "const renderSvelteKitRemote =",
     "const renderStaticClient =",
   );
+  const renderCloudflareScopeHelperSource = sliceBetweenMarkers(
+    source,
+    "const renderCloudflareScopeHelper =",
+    "const renderCloudflareWorkerEntry =",
+  );
+  const renderCloudflareWorkerEntrySource = sliceBetweenMarkers(
+    source,
+    "const renderCloudflareWorkerEntry =",
+    "const renderCloudflareWranglerConfig =",
+  );
+  const renderCloudflareWranglerConfigSource = sliceBetweenMarkers(
+    source,
+    "const renderCloudflareWranglerConfig =",
+    "const generatedClientModuleImports =",
+  );
   const renderStaticClientSource = sliceBetweenMarkers(
     source,
     "const renderStaticClient =",
@@ -4618,6 +4633,21 @@ const checkGeneratedStaticTargetLinking = () => {
   }
   if (renderSvelteKitRemoteSource.length === 0) {
     failures.push(`${sourcePath}: generated-static-target-linking: missing renderSvelteKitRemote`);
+  }
+  if (renderCloudflareScopeHelperSource.length === 0) {
+    failures.push(
+      `${sourcePath}: generated-static-target-linking: missing renderCloudflareScopeHelper`,
+    );
+  }
+  if (renderCloudflareWorkerEntrySource.length === 0) {
+    failures.push(
+      `${sourcePath}: generated-static-target-linking: missing renderCloudflareWorkerEntry`,
+    );
+  }
+  if (renderCloudflareWranglerConfigSource.length === 0) {
+    failures.push(
+      `${sourcePath}: generated-static-target-linking: missing renderCloudflareWranglerConfig`,
+    );
   }
   if (renderStaticClientSource.length === 0) {
     failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticClient`);
@@ -4651,6 +4681,9 @@ const checkGeneratedStaticTargetLinking = () => {
   const requiredModuleKinds = [
     '"semantic-json"',
     '"target-runtime"',
+    '"target-scope-helper"',
+    '"target-worker"',
+    '"target-config"',
     '"provider-runtime"',
     '"workspace-host"',
     '"authored-tool"',
@@ -4700,10 +4733,10 @@ const checkGeneratedStaticTargetLinking = () => {
 
   const requiredRemoteBridgeMarkers = [
     'renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)',
-    "durableObjectRpcClient",
+    'renderNamedImport(["agentOSRpcClient"], "./cloudflare-scope")',
     "decodeSseHttpEvents",
     "responseToSseHttpChunks",
-    "manifestTruthIdentity",
+    "agentOSRpcClient<AgentOSRpc>(platformEnv)",
     "submitRunInput",
     "readWorkspaceFile",
     "streamEvents",
@@ -4737,6 +4770,63 @@ const checkGeneratedStaticTargetLinking = () => {
     failures.push(
       `${sourcePath}: generated-static-target-linking: SvelteKit target must emit sveltekit.remote.ts`,
     );
+  }
+  for (const generatedFile of [
+    '".agentos/generated/cloudflare-scope.ts"',
+    '".agentos/generated/worker.ts"',
+    '".agentos/generated/wrangler.jsonc"',
+  ]) {
+    if (!linkWorkspaceStaticTargetSource.includes(generatedFile)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: target shell must emit ${generatedFile}`,
+      );
+    }
+  }
+
+  const requiredScopeHelperMarkers = [
+    "durableObjectRpcClient",
+    "manifestTruthIdentity",
+    "agentOSTruthIdentity",
+    "agentOSScopeId",
+    "agentOSDurableObjectBinding",
+    "agentOSRpcClient",
+  ];
+  for (const marker of requiredScopeHelperMarkers) {
+    if (!renderCloudflareScopeHelperSource.includes(marker)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: scope helper missing ${marker}`,
+      );
+    }
+  }
+
+  const requiredWorkerEntryMarkers = [
+    "Sandbox",
+    '"./target"',
+    "export { ${normalized.target.durableObject.className}, Sandbox };",
+    "satisfies ExportedHandler<AgentOSTargetEnv>",
+  ];
+  for (const marker of requiredWorkerEntryMarkers) {
+    if (!renderCloudflareWorkerEntrySource.includes(marker)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: worker entry missing ${marker}`,
+      );
+    }
+  }
+
+  const requiredWranglerMarkers = [
+    'main: "./worker.ts"',
+    'compatibility_flags: ["nodejs_compat"]',
+    'class_name: "Sandbox"',
+    'image: "../../Dockerfile"',
+    "durable_objects",
+    "new_sqlite_classes",
+  ];
+  for (const marker of requiredWranglerMarkers) {
+    if (!renderCloudflareWranglerConfigSource.includes(marker)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: wrangler config missing ${marker}`,
+      );
+    }
   }
 
   failIfAny("generated static target linking", failures);

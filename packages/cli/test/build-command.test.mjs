@@ -84,7 +84,7 @@ void test("agentos build compiles an authored workspace tree into generated file
       encoding: "utf8",
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /generated 8 agentOS files/);
+    assert.match(result.stdout, /generated 11 agentOS files/);
     const manifest = JSON.parse(
       readFileSync(path.join(root, ".agentos/generated/manifest.json"), "utf8"),
     );
@@ -98,6 +98,41 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
     assert.doesNotMatch(target, /\.\.\/\.\.\/agent\/tools\/read_file/);
     assert.doesNotMatch(target, /MountPlan|mountPlan|registry\.get/);
+    const scopeHelper = readFileSync(
+      path.join(root, ".agentos/generated/cloudflare-scope.ts"),
+      "utf8",
+    );
+    assert.match(scopeHelper, /agentOSDurableObjectBinding = "AGENT_OS"/);
+    assert.match(scopeHelper, /agentOSScopeId = agentOSTruthIdentity\.scopeRef\.scopeId/);
+    assert.match(scopeHelper, /agentOSRpcClient/);
+    const worker = readFileSync(path.join(root, ".agentos/generated/worker.ts"), "utf8");
+    assert.match(worker, /import \{ Sandbox \} from "@cloudflare\/sandbox";/);
+    assert.match(worker, /import \{ AgentOS \} from "\.\/target";/);
+    assert.match(worker, /export \{ AgentOS, Sandbox \};/);
+    const wrangler = JSON.parse(
+      readFileSync(path.join(root, ".agentos/generated/wrangler.jsonc"), "utf8"),
+    );
+    assert.equal(wrangler.main, "./worker.ts");
+    assert.deepEqual(wrangler.compatibility_flags, ["nodejs_compat"]);
+    assert.deepEqual(wrangler.containers, [
+      {
+        class_name: "Sandbox",
+        image: "../../Dockerfile",
+        instance_type: "lite",
+        max_instances: 2,
+      },
+    ]);
+    assert.deepEqual(wrangler.durable_objects.bindings, [
+      { class_name: "Sandbox", name: "Sandbox" },
+      { class_name: "AgentOS", name: "AGENT_OS" },
+    ]);
+    assert.deepEqual(wrangler.migrations, [
+      { tag: "v1", new_sqlite_classes: ["Sandbox", "AgentOS"] },
+    ]);
+    const remote = readFileSync(path.join(root, ".agentos/generated/sveltekit.remote.ts"), "utf8");
+    assert.match(remote, /import \{ agentOSRpcClient \} from "\.\/cloudflare-scope";/);
+    assert.doesNotMatch(remote, /durableObjectRpcClient/);
+    assert.doesNotMatch(remote, /manifestTruthIdentity/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -103,6 +103,13 @@ The generated target is a static residual program:
 - `manifest.json` carries semantic declarations;
 - `deployment.json` carries deployment/provenance data such as generated
   workspace resource ids;
+- `target.ts` exports the Durable Object implementation;
+- `cloudflare-scope.ts` owns Durable Object scope addressing for generated
+  clients and remotes;
+- `worker.ts` exports the target Durable Object plus the Cloudflare Sandbox
+  class required by Wrangler;
+- `wrangler.jsonc` carries the deployable Worker shell, Durable Object binding,
+  container binding, and SQLite migration declarations;
 - runtime code must not choose provider, backend, tool, or capability
   implementations by interpreting strings from JSON.
 

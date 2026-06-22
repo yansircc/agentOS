@@ -1442,6 +1442,9 @@ export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
   | ".agentos/generated/target.ts"
+  | ".agentos/generated/cloudflare-scope.ts"
+  | ".agentos/generated/worker.ts"
+  | ".agentos/generated/wrangler.jsonc"
   | ".agentos/generated/sveltekit.remote.ts"
   | ".agentos/generated/client.ts"
   | ".agentos/generated/client.d.ts";
@@ -1453,6 +1456,9 @@ export interface StaticTargetGeneratedFile {
 
 export type StaticTargetModuleImportKind =
   | "target-runtime"
+  | "target-scope-helper"
+  | "target-worker"
+  | "target-config"
   | "provider-runtime"
   | "execution-domain-runtime"
   | "workspace-host"
@@ -2652,6 +2658,92 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
 `;
 };
 
+const renderCloudflareScopeHelper = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => `${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
+${renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol)}
+${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
+${renderTypeImport(["AgentManifest"], modules.runtimeProtocol)}
+import manifest from "./manifest.json";
+
+export type AgentOSTargetEnv = {
+  readonly [binding: string]: unknown;
+};
+
+export const agentOSTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
+export const agentOSScopeId = agentOSTruthIdentity.scopeRef.scopeId;
+export const agentOSDurableObjectBinding = ${jsString(normalized.target.durableObject.binding)};
+
+export const agentOSDurableObjectNamespace = (
+  env: AgentOSTargetEnv,
+): DurableObjectNamespace =>
+  env[agentOSDurableObjectBinding] as DurableObjectNamespace;
+
+export const agentOSRpcClient = <
+  Rpc extends Pick<AgentRuntimeClient, "events" | "streamEvents"> = AgentRuntimeClient,
+>(
+  env: AgentOSTargetEnv,
+  scopeId: string = agentOSScopeId,
+): Rpc => durableObjectRpcClient<Rpc>(agentOSDurableObjectNamespace(env), scopeId);
+`;
+
+const renderCloudflareWorkerEntry = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}
+${renderNamedImport([normalized.target.durableObject.className], "./target")}
+${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
+
+export { ${normalized.target.durableObject.className}, Sandbox };
+
+export default {
+  fetch(): Response {
+    return new Response("agentOS Cloudflare target", { status: 404 });
+  },
+} satisfies ExportedHandler<AgentOSTargetEnv>;
+`;
+
+const renderCloudflareWranglerConfig = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+): string =>
+  stableJson({
+    $schema: "node_modules/wrangler/config-schema.json",
+    name: normalized.deployment.deploymentId,
+    main: "./worker.ts",
+    compatibility_date: "2026-04-15",
+    compatibility_flags: ["nodejs_compat"],
+    vars: {
+      SANDBOX_TRANSPORT: "rpc",
+    },
+    containers: [
+      {
+        class_name: "Sandbox",
+        image: "../../Dockerfile",
+        instance_type: "lite",
+        max_instances: 2,
+      },
+    ],
+    durable_objects: {
+      bindings: [
+        {
+          class_name: "Sandbox",
+          name: normalized.workspace.binding,
+        },
+        {
+          class_name: normalized.target.durableObject.className,
+          name: normalized.target.durableObject.binding,
+        },
+      ],
+    },
+    migrations: [
+      {
+        tag: "v1",
+        new_sqlite_classes: ["Sandbox", normalized.target.durableObject.className],
+      },
+    ],
+  });
+
 const generatedClientModuleImports = (
   client: AgentOsConfigClient,
   modules: ReturnType<typeof staticTargetModules>,
@@ -2705,23 +2797,18 @@ const renderSvelteKitRemote = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
-${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
 ${renderNamedImport(["Result", "Schema"], modules.effect)}
 ${renderNamedImport(["WORKSPACE_AGENT_COMMAND"], modules.workspaceAgentHost)}
 ${renderNamedImport(
-  [
-    "decodeRuntimeLedgerEvent",
-    "isInputRequestRef",
-    "manifestTruthIdentity",
-    "parseInputRequestResumePayload",
-  ],
+  ["decodeRuntimeLedgerEvent", "isInputRequestRef", "parseInputRequestResumePayload"],
   modules.runtimeProtocol,
 )}
+${renderNamedImport(["agentOSRpcClient"], "./cloudflare-scope")}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
 ${renderTypeImport(["SseHttpEvent"], modules.sseHttp)}
 ${renderTypeImport(
-  ["AgentManifest", "RuntimeLedgerEvent", "SubmitResult", "SubmitRunInput"],
+  ["RuntimeLedgerEvent", "SubmitResult", "SubmitRunInput"],
   modules.runtimeProtocol,
 )}
 ${renderTypeImport(
@@ -2735,11 +2822,7 @@ ${renderTypeImport(
   ],
   modules.workspaceAgentHost,
 )}
-import manifest from "./manifest.json";
-
-type AgentOSTargetEnv = {
-  readonly [binding: string]: unknown;
-};
+${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
 type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
@@ -2769,7 +2852,6 @@ const commandInput = Schema.toStandardSchemaV1(
     input: Schema.Unknown,
   }),
 );
-const agentTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
 
 type GeneratedFailure = {
   readonly ok: false;
@@ -2802,10 +2884,7 @@ const env = (): GeneratedResult<AgentOSTargetEnv> => {
 };
 
 const agentOS = (platformEnv: AgentOSTargetEnv) =>
-  durableObjectRpcClient<AgentOSRpc>(
-    platformEnv[${jsString(normalized.target.durableObject.binding)}] as DurableObjectNamespace,
-    agentTruthIdentity.scopeRef.scopeId,
-  );
+  agentOSRpcClient<AgentOSRpc>(platformEnv);
 
 type AgentOSRemote = ReturnType<typeof agentOS>;
 type AgentOSSubmitRunInput = Parameters<AgentOSRemote["submitRunInput"]>[0];
@@ -3192,6 +3271,21 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       source: modules.effect,
       imports: ["Effect"],
     },
+    {
+      kind: "target-scope-helper",
+      source: "./cloudflare-scope",
+      imports: ["agentOSRpcClient", "AgentOSTargetEnv"],
+    },
+    {
+      kind: "target-worker",
+      source: "./worker",
+      imports: [normalized.target.durableObject.className, "Sandbox"],
+    },
+    {
+      kind: "target-config",
+      source: "./wrangler.jsonc",
+      imports: [],
+    },
     ...generatedClientModuleImports(normalized.client, modules),
   ];
   return {
@@ -3218,6 +3312,26 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
             toolNames,
             modules,
+          ),
+        ),
+        generatedPath(
+          ".agentos/generated/cloudflare-scope.ts",
+          renderCloudflareScopeHelper(
+            normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
+            modules,
+          ),
+        ),
+        generatedPath(
+          ".agentos/generated/worker.ts",
+          renderCloudflareWorkerEntry(
+            normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
+            modules,
+          ),
+        ),
+        generatedPath(
+          ".agentos/generated/wrangler.jsonc",
+          renderCloudflareWranglerConfig(
+            normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
           ),
         ),
         ...(normalized.client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
