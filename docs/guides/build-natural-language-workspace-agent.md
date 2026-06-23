@@ -13,6 +13,9 @@ The first path is:
 agent/
   instructions.md
   agent.json
+  skills/
+    plan.md              # optional authored skill
+    review/SKILL.md      # equivalent nested skill shape
   tools/                # optional custom execute code only
   workspace/reconcile.ts
 agentos.config.jsonc
@@ -30,6 +33,28 @@ instructions. `agent/agent.json` owns scalar pre-runtime intent such as the
 agent id and scope policy. `workspace@1` supplies the standard workspace tool
 declarations. `agent/tools/*.ts` exists only for custom execute code; path
 segments are identities for custom tools.
+
+`agent/skills/` is optional authoring-only instruction data. The v1 grammar has
+exactly two file shapes:
+
+```text
+agent/skills/<name>.md
+agent/skills/<name>/SKILL.md
+```
+
+Each skill file must start with YAML frontmatter containing `name: <name>`, and
+the frontmatter name must match the path identity. The skill body is the
+markdown text after the closing `---`. Sibling files under a skill directory,
+such as `references/` or `scripts/`, are rejected in v1 rather than copied into
+the build.
+
+Skills do not enter `AgentManifest`, materials, execution domains,
+interactions, runtime submit schema, ledger facts, or authored tool identity.
+They are compiled into the generated target only. When skills exist,
+`submitSpecFromRunInput` appends a system advert listing skill names, and the
+generated `AgentSubmitBindings.tools` includes one framework-owned deterministic
+tool named `load_skill`. The model must call `load_skill` with `{ "name":
+"<name>" }` before using the full skill text.
 
 Default workspace tool policy is controlled as data in `agent/agent.json`.
 Unknown slugs fail closed. A default can be disabled with `false`; disabling a
@@ -133,6 +158,9 @@ The generated target is a static residual program:
 - `deployment.json` carries deployment/provenance data such as generated
   workspace resource ids;
 - `target.ts` exports the Durable Object implementation;
+- if authored skills exist, `target.ts` embeds the generated skill catalog,
+  appends the submit-time skill advert, and injects the framework-owned
+  `load_skill` tool into submit bindings;
 - `cloudflare-scope.ts` owns Durable Object scope addressing for generated
   clients and remotes;
 - `worker.ts` exports the target Durable Object plus the Cloudflare Sandbox
