@@ -3,7 +3,6 @@ import type {
   DispatchToScopeSpec,
   EventHandler,
   EventQueryOptions,
-  LedgerEvent,
   LedgerEventRpc,
   QuotaState,
   QuotaStateSpec,
@@ -54,7 +53,6 @@ import {
   DispatchScopeMismatch,
   DispatchTargetNotFound,
   InvalidScheduleAt,
-  InvalidResourceAmount,
   ScopeMissingError,
   SqlError,
   TriggerFactoryError,
@@ -69,21 +67,18 @@ import type {
   MaterializedProjectionRebuildResult,
   MaterializedProjectionRow,
   MaterializedProjectionStatus,
-  InternalSubmitSpec,
 } from "@agent-os/runtime";
 import type {
   AgentManifestProjection,
   AgentSubmitBindings,
   AttemptKey,
   CapabilityLease,
-  InputRequestRef,
   SubmitResult,
   SubmitRunInput,
   SubmitSpec,
   SubmitToolIntent,
 } from "@agent-os/core/runtime-protocol";
 import {
-  Admission,
   AttachedStreams,
   Dispatch,
   DurableTriggerRegistry,
@@ -93,7 +88,6 @@ import {
   MaterializedProjections,
   Resources,
   TriggerPump,
-  internalSubmitSpec,
   recordLedgerPortEvent,
   runWorkspaceJobEffect,
   runtimeStorageOrJsonError,
@@ -109,11 +103,9 @@ import {
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   agentRunAbortedEvent,
-  decodeRuntimeLedgerEvent,
   lowerSubmitRunInput,
   manifestTruthIdentity,
   RUNTIME_FACT_OWNER,
-  RUNTIME_EVENT_KIND,
   submitResumeDecisionFromInputRequestRef,
 } from "@agent-os/core/runtime-protocol";
 import { ABORT, type AbortKind } from "@agent-os/core/abort";
@@ -132,11 +124,9 @@ import { eventToRpc } from "./ledger/ledger";
 import { createEventStreamResponse } from "./ledger/stream";
 import { Scheduler } from "./scheduler";
 import { isMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
-import { AdmissionLive } from "./admission/admission";
-import { RefResolverLive, RefResolverService, type RefResolver } from "@agent-os/core/ref-resolver";
+import { RefResolverService, type RefResolver } from "@agent-os/core/ref-resolver";
 import {
   type BoundaryPackage,
-  type ExtensionDeclaration,
   type ExtensionCapability,
   type ExtensionValidation,
   ExtensionCapabilityConflict,
@@ -158,7 +148,6 @@ import {
   projectSubmitResult,
   RUN_BEARING_KINDS,
 } from "@agent-os/runtime/run-projector";
-import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
 import type { WorkspaceJobProjection } from "../workspace-job-carrier";
 import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
@@ -168,7 +157,6 @@ import { DURABLE_OBJECT_RPC_INVOKE, durableObjectRpcInvoke } from "./do-rpc";
 import type { CloudflareAgentMount } from "./mount";
 import {
   materializeCloudflareAgentConfig,
-  type AgentDeclaredIntent,
   type AgentDurableObjectConfig,
   type CloudflareAgentEnv,
   type MaterializedAgentConfig,
@@ -188,6 +176,18 @@ import {
   projectDecisionGate,
 } from "../decision-gate";
 import { projectInputRequest } from "../input-request";
+import {
+  chatInputForResume,
+  declaredToolIntents,
+  errorTagFromCause,
+  invalidResourceAmount,
+  jsonErrorResponse,
+  lowerAgentSubmitSpec,
+  makeAgentRuntime,
+  promiseFromEffectResult,
+  scopedInternalSubmitSpec,
+  type CoreServices,
+} from "./agent-do-helpers";
 
 export interface AgentRuntimeReaderClient {
   readonly info: () => Promise<AgentManifestProjection>;
@@ -281,101 +281,6 @@ export interface AgentSubmitSpec {
   readonly decisionInterrupts?: SubmitRunInput["decisionInterrupts"];
   readonly resume?: SubmitSpec["resume"];
 }
-
-type CoreServices = CloudflareBackendCoreServices | LlmTransport | Admission | RefResolverService;
-
-const makeAgentRuntime = <Env extends CloudflareAgentEnv>(
-  ctx: DurableObjectState,
-  env: Env,
-  scope: string,
-  identity: BackendProtocolEventIdentity,
-  handlers: Map<string, Set<EventHandler>>,
-  refs: RefResolver,
-  llmTransport: Layer.Layer<LlmTransport, never, RefResolverService>,
-  dispatchTargets: DispatchTargetRegistry,
-  appTriggers: CloudflareTriggerSource<Env>,
-  appStreams: CloudflareAttachedStreamSource<Env>,
-  appProjections: ReadonlyArray<AnyMaterializedProjectionDefinition>,
-): ManagedRuntime.ManagedRuntime<
-  CoreServices,
-  SqlError | TriggerFactoryError | RuntimeStorageError
-> => {
-  const backendCoreLayer = makeCloudflareBackendCoreLayer(
-    ctx,
-    env,
-    scope,
-    identity,
-    handlers,
-    dispatchTargets,
-    appTriggers,
-    appStreams,
-    appProjections,
-  );
-  const refResolverLayer = RefResolverLive(refs);
-  const llmTransportLayer = llmTransport.pipe(Layer.provide(refResolverLayer));
-  const admissionLayer = AdmissionLive(ctx, identity).pipe(
-    Layer.provide(Layer.mergeAll(backendCoreLayer, llmTransportLayer)),
-  );
-  return ManagedRuntime.make(
-    Layer.mergeAll(backendCoreLayer, llmTransportLayer, admissionLayer, refResolverLayer),
-  );
-};
-
-const rejectAgentConfig = (message: string): never =>
-  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
-
-const declaredToolIntents = (
-  extensions: ReadonlyArray<ExtensionDeclaration>,
-  declaredIntents: ReadonlyArray<AgentDeclaredIntent>,
-): ReadonlyArray<SubmitToolIntent> => {
-  const boundaryPackages = new Map<string, BoundaryPackage>();
-  for (const extension of extensions) {
-    if (isBoundaryPackage(extension)) {
-      boundaryPackages.set(extension.ownerId, extension);
-    }
-  }
-
-  return declaredIntents.map((intent) => {
-    const boundaryPackage = boundaryPackages.get(intent.boundaryOwnerId);
-    if (boundaryPackage === undefined) {
-      return rejectAgentConfig(`declared intent ${intent.kind} references unbound boundary owner`);
-    }
-    if (!extensionOwnsEvent(boundaryPackage, intent.kind)) {
-      return rejectAgentConfig(
-        `declared intent ${intent.kind} is not owned by ${intent.boundaryOwnerId}`,
-      );
-    }
-    return {
-      kind: intent.kind,
-      boundaryPackage,
-    };
-  });
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
-const chatInputForResume = (
-  events: ReadonlyArray<LedgerEvent>,
-  ref: InputRequestRef,
-): { readonly intent: string; readonly context: Record<string, unknown> } | null => {
-  for (const event of events) {
-    const decoded = decodeRuntimeLedgerEvent(event);
-    if (
-      decoded._tag !== "runtime" ||
-      decoded.event.kind !== RUNTIME_EVENT_KIND.CHAT_INGESTED ||
-      decoded.event.payload.runId !== ref.runId
-    ) {
-      continue;
-    }
-    if (!isRecord(decoded.event.payload.context)) return null;
-    return {
-      intent: decoded.event.payload.intent,
-      context: decoded.event.payload.context,
-    };
-  }
-  return null;
-};
 
 export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentRuntimeReaderClient>
   extends DurableObject<Env>
@@ -702,22 +607,6 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     spec: AgentSubmitSpec,
     baseBindings: AgentSubmitBindings,
   ): Promise<SubmitResult> {
-    const routeBindingRef = spec.llmRouteBindingRef ?? "default";
-    const runInput: SubmitRunInput = {
-      intent: spec.intent,
-      context: spec.context ?? { input: spec.input },
-      ...(spec.system === undefined ? {} : { system: spec.system }),
-      ...(spec.budget === undefined ? {} : { budget: spec.budget }),
-      ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
-      ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
-      ...(spec.materials === undefined ? {} : { materials: spec.materials }),
-      ...(spec.toolContext === undefined ? {} : { toolContext: spec.toolContext }),
-      ...(spec.toolPolicy === undefined ? {} : { toolPolicy: spec.toolPolicy }),
-      ...(spec.decisionInterrupts === undefined
-        ? {}
-        : { decisionInterrupts: spec.decisionInterrupts }),
-      ...(spec.resume === undefined ? {} : { resume: spec.resume }),
-    };
     return this.scopedPromise((scope) => {
       const truthIdentity = this.defaultTruthIdentityForScope(scope);
       if (truthIdentity instanceof UnsupportedScopeRef) {
@@ -727,15 +616,12 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         return this.submitFullScoped(
           scope,
           truthIdentity,
-          lowerSubmitRunInput({
-            input: runInput,
-            bindings: {
-              ...baseBindings,
-              toolIntents: [...this._toolIntents, ...(baseBindings.toolIntents ?? [])],
-            },
-            routeBindingRef,
-            effectAuthorityRef: truthIdentity.effectAuthorityRef,
-          }),
+          lowerAgentSubmitSpec(
+            spec,
+            baseBindings,
+            this._toolIntents,
+            truthIdentity.effectAuthorityRef,
+          ),
         );
       } catch (cause) {
         return Promise.reject(cause);
@@ -970,15 +856,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     truthIdentity: BackendProtocolTruthIdentity,
     spec: SubmitSpec,
   ): Promise<SubmitResult> {
-    const scopedSpec: SubmitSpec = {
-      ...spec,
-      effectAuthorityRef: truthIdentity.effectAuthorityRef,
-    };
-    const internalSpec: InternalSubmitSpec = internalSubmitSpec(scopedSpec, {
-      scope,
-      scopeRef: truthIdentity.scopeRef,
-    });
-    const identity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+    const { identity, internalSpec } = scopedInternalSubmitSpec(scope, truthIdentity, spec);
     return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
   }
 
@@ -1118,17 +996,15 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   streamEvents(identity: BackendProtocolTruthIdentity, opts: StreamEventsOptions = {}): Response {
     const scope = this.scopeOrError();
     if (scope instanceof ScopeMissingError) {
-      return new Response(JSON.stringify({ error: scope._tag }), { status: 500 });
+      return jsonErrorResponse(scope._tag, 500);
     }
     try {
       const truthIdentity = cloudflareTruthIdentity(identity, "agent runtime stream identity");
       if (truthIdentity instanceof CloudflareLedgerSchemaError) {
-        return new Response(JSON.stringify({ error: truthIdentity._tag }), { status: 400 });
+        return jsonErrorResponse(truthIdentity._tag, 400);
       }
       if (cloudflareRouteKeyFromScopeRef(truthIdentity.scopeRef) !== scope) {
-        return new Response(JSON.stringify({ error: "agent_os.unsupported_scope_ref" }), {
-          status: 400,
-        });
+        return jsonErrorResponse("agent_os.unsupported_scope_ref", 400);
       }
       const runtimeIdentity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
       return createEventStreamResponse(
@@ -1137,11 +1013,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         opts,
       );
     } catch (cause) {
-      const tag =
-        cause !== null && typeof cause === "object" && "_tag" in cause
-          ? String((cause as { readonly _tag: unknown })._tag)
-          : "agent_os.stream_identity_error";
-      return new Response(JSON.stringify({ error: tag }), { status: 400 });
+      return jsonErrorResponse(errorTagFromCause(cause, "agent_os.stream_identity_error"), 400);
     }
   }
 
@@ -1372,9 +1244,8 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   }
 
   grantResource(spec: ResourceGrantSpec): Promise<ResourceGrantResult> {
-    if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
-      return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
-    }
+    const invalidAmount = invalidResourceAmount(spec.amount);
+    if (invalidAmount !== null) return Promise.reject(invalidAmount);
     return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
@@ -1384,20 +1255,14 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   }
 
   reserveResource(spec: ResourceReserveSpec): Promise<ResourceReserveResult> {
-    if (!Number.isFinite(spec.amount) || spec.amount <= 0) {
-      return Promise.reject(new InvalidResourceAmount({ amount: spec.amount }));
-    }
+    const invalidAmount = invalidResourceAmount(spec.amount);
+    if (invalidAmount !== null) return Promise.reject(invalidAmount);
     return this.runScoped((_scope, identity) =>
       Effect.gen(function* () {
         const resources = yield* Resources;
         return yield* resources.reserve(identity, spec).pipe(Effect.result);
       }),
-    ).then((result) => {
-      if (result._tag === "Failure") {
-        return Promise.reject(result.failure);
-      }
-      return result.success;
-    });
+    ).then(promiseFromEffectResult);
   }
 
   consumeResource(spec: ResourceReservationSpec): Promise<void> {
@@ -1406,11 +1271,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         const resources = yield* Resources;
         return yield* resources.consume(identity, spec).pipe(Effect.result);
       }),
-    ).then((result) => {
-      if (result._tag === "Failure") {
-        return Promise.reject(result.failure);
-      }
-    });
+    ).then(promiseFromEffectResult);
   }
 
   releaseResource(spec: ResourceReservationSpec): Promise<void> {
@@ -1419,11 +1280,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         const resources = yield* Resources;
         return yield* resources.release(identity, spec).pipe(Effect.result);
       }),
-    ).then((result) => {
-      if (result._tag === "Failure") {
-        return Promise.reject(result.failure);
-      }
-    });
+    ).then(promiseFromEffectResult);
   }
 
   /** Internal RPC target for DispatchLive. Public only because DO RPC can

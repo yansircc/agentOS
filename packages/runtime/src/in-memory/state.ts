@@ -5,26 +5,15 @@ import {
   SqlError,
   UnregisteredDurableTriggerKind,
 } from "@agent-os/core/errors";
-import type {
-  EventHandler,
-  EventQueryOptions,
-  LedgerEvent,
-  LedgerEventRpc,
-} from "@agent-os/core/types";
+import type { EventHandler, EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import {
   backendProtocolEventIdentityKey,
-  backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
-  durableProcessLifecycleState,
-  durableTriggerDuePayload,
   scheduledEventIntentPayload,
   type BackendProtocolEventIdentity,
-  type BackendProtocolProjectionKey,
   type BackendProtocolTruthIdentity,
   type DurableProcessLifecycleState,
-  type IntentPointerDuePayload,
 } from "@agent-os/core/backend-protocol";
-import { fireBackendEventHandlers } from "@agent-os/core/backend-protocol/reference";
 import {
   applyProjectionEvent,
   getProjection,
@@ -42,20 +31,47 @@ import {
 } from "../projection";
 import { type AttachedStreamTerminal, type AttachedStreamTx } from "../attached-stream";
 import { getDurableTrigger, type TriggerRegistry, type TriggerTx } from "../trigger";
-import {
-  assertRuntimeLedgerTransitions,
-  RUNTIME_FACT_OWNER,
-} from "@agent-os/core/runtime-protocol";
+import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
+import { type AuthorityRef, type ScopeRef } from "@agent-os/core/effect-claim";
 import {
-  authorityRefKey,
-  scopeRefKey,
-  type AuthorityRef,
-  type ScopeRef,
-} from "@agent-os/core/effect-claim";
-
-const DEFAULT_EVENT_LIMIT = 1000;
-const MAX_EVENT_LIMIT = 1000;
+  canonicalLedgerEvent,
+  canonicalLedgerEventSync,
+  canonicalLedgerEvents,
+  cloneProjectionMeta,
+  cloneProjectionRows,
+  eventDisplayScope,
+  eventIdentity,
+  eventMatches,
+  eventMatchesQueryOptions,
+  normalizeProjectionLimit,
+  projectionMetaKey,
+  projectionRowKey,
+} from "./state-helpers";
+import {
+  appendRowsToLedgerIndexes,
+  assertInMemoryRuntimeLedgerTransitionBatch,
+  queryInMemoryLedgerRows,
+  sqlErrorFromUnknown,
+} from "./ledger-state";
+import {
+  claimInMemoryDueWorkRow,
+  createInMemoryDueWorkRow,
+  dueClaimableRows,
+  duePendingRows,
+  dueRowsByTriggerIntent,
+  durableProcessLifecycleRows,
+  nextDueAtForIdentity,
+  requestDueCancellation,
+  stuckDueWorkRows,
+  type InMemoryDueWorkRow,
+} from "./due-work-state";
+import { fireInMemoryEvents, type InMemoryEventSink } from "./telemetry-state";
+export {
+  inMemoryConversationRuntimeIdentity,
+  inMemoryConversationTruthIdentity,
+  inMemoryRuntimeEventIdentity,
+} from "./state-helpers";
 
 export interface InMemoryEventSubscription {
   readonly unsubscribe: () => void;
@@ -93,29 +109,7 @@ export interface InMemoryEventContentSpec {
   readonly factOwnerRef?: never;
 }
 
-interface EventSink {
-  readonly kinds?: ReadonlySet<string>;
-  readonly sink: (event: LedgerEvent) => void;
-}
-
-interface InMemoryDueWorkRow {
-  readonly id: number;
-  readonly identity: BackendProtocolEventIdentity;
-  readonly identityKey: string;
-  readonly fireAt: number;
-  readonly kind: string;
-  readonly payload: IntentPointerDuePayload;
-  completedAt: number | null;
-  claimedAt: number | null;
-  claimToken: string | null;
-  claimDeadlineAt: number | null;
-  redriveCount: number;
-  cancelRequestedAt: number | null;
-  cancelReason: string | null;
-  cancelledAt: number | null;
-}
-
-interface InMemoryProjectionMeta {
+export interface InMemoryProjectionMeta {
   version: number;
   status: "current" | "needs_rebuild";
   lastAppliedEventId: number;
@@ -128,178 +122,13 @@ export interface InMemoryBackendStateOptions {
   readonly projections?: Iterable<AnyMaterializedProjectionDefinition>;
 }
 
-const canonicalSerializablePayload = (
-  payload: unknown,
-): Effect.Effect<unknown, JsonStringifyError> =>
-  Effect.gen(function* () {
-    const serialized = yield* Effect.try({
-      try: () => JSON.stringify(payload),
-      catch: (cause) => new JsonStringifyError({ cause }),
-    });
-    if (typeof serialized !== "string") {
-      return yield* Effect.fail(
-        new JsonStringifyError({ cause: "ledger event payload must be JSON serializable" }),
-      );
-    }
-    return JSON.parse(serialized) as unknown;
-  });
-
-const canonicalSerializablePayloadSync = (payload: unknown): unknown =>
-  Effect.runSync(canonicalSerializablePayload(payload)); // eff-ignore EFF400 reason="in-memory transaction callbacks are synchronous and must observe the same canonical payload decoder"
-
-const canonicalLedgerEventSync = (event: LedgerEvent): LedgerEvent => ({
-  ...event,
-  payload: canonicalSerializablePayloadSync(event.payload),
-});
-
-const canonicalLedgerEvent = (event: LedgerEvent): Effect.Effect<LedgerEvent, JsonStringifyError> =>
-  Effect.map(canonicalSerializablePayload(event.payload), (payload) => ({ ...event, payload }));
-
-const canonicalLedgerEvents = (
-  events: ReadonlyArray<LedgerEvent>,
-): Effect.Effect<ReadonlyArray<LedgerEvent>, JsonStringifyError> =>
-  Effect.forEach(events, canonicalLedgerEvent);
-
-const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
-  value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
-
-const describeFanoutCause = (cause: unknown): string => {
-  if (typeof cause === "string") return cause;
-  if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
-  return Object.prototype.toString.call(cause);
-};
-
-export const inMemoryRuntimeEventIdentity = (
-  identity: BackendProtocolTruthIdentity,
-): BackendProtocolEventIdentity => ({
-  scopeRef: identity.scopeRef,
-  effectAuthorityRef: identity.effectAuthorityRef,
-  factOwnerRef: RUNTIME_FACT_OWNER,
-});
-
-export const inMemoryConversationTruthIdentity = (
-  scopeId: string,
-): BackendProtocolTruthIdentity => ({
-  scopeRef: { kind: "conversation", scopeId },
-  effectAuthorityRef: { authorityClass: "effect", authorityId: scopeId },
-});
-
-export const inMemoryConversationRuntimeIdentity = (
-  scopeId: string,
-): BackendProtocolEventIdentity =>
-  inMemoryRuntimeEventIdentity(inMemoryConversationTruthIdentity(scopeId));
-
-const eventIdentity = (event: LedgerEvent): BackendProtocolEventIdentity => ({
-  scopeRef: event.scopeRef,
-  effectAuthorityRef: event.effectAuthorityRef,
-  factOwnerRef: event.factOwnerRef,
-});
-
-const eventTruthIdentity = (event: LedgerEvent): BackendProtocolTruthIdentity => ({
-  scopeRef: event.scopeRef,
-  effectAuthorityRef: event.effectAuthorityRef,
-});
-
-const eventMatches = (event: LedgerEvent, identity: BackendProtocolEventIdentity): boolean =>
-  backendProtocolEventIdentityKey(eventIdentity(event)) ===
-  backendProtocolEventIdentityKey(identity);
-
-const eventDisplayScope = (identity: BackendProtocolEventIdentity): string =>
-  backendProtocolEventIdentityKey(identity);
-
-interface RuntimeTransitionEventGroup {
-  readonly identity: BackendProtocolTruthIdentity;
-  readonly events: LedgerEvent[];
-  hasRuntimeEvent: boolean;
-}
-
-const groupRuntimeTransitionEventsByTruthIdentity = (
-  events: ReadonlyArray<LedgerEvent>,
-): ReadonlyArray<RuntimeTransitionEventGroup> => {
-  const groups = new Map<string, RuntimeTransitionEventGroup>();
-  for (const event of events) {
-    const identity = eventTruthIdentity(event);
-    const key = backendProtocolTruthIdentityKey(identity);
-    const group = groups.get(key);
-    if (group === undefined) {
-      groups.set(key, {
-        identity,
-        events: [event],
-        hasRuntimeEvent: event.factOwnerRef === RUNTIME_FACT_OWNER,
-      });
-    } else {
-      group.events.push(event);
-      group.hasRuntimeEvent ||= event.factOwnerRef === RUNTIME_FACT_OWNER;
-    }
-  }
-  return Array.from(groups.values()).filter((group) => group.hasRuntimeEvent);
-};
-
-const eventMatchesQueryOptions = (
-  event: LedgerEvent,
-  opts: Pick<EventQueryOptions, "afterId" | "kinds">,
-): boolean => {
-  const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-  if (event.id <= afterId) return false;
-  if (opts.kinds !== undefined) {
-    const kinds = new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
-    if (kinds.size > 0 && !kinds.has(event.kind)) return false;
-  }
-  return true;
-};
-
-const eventToRpc = (event: LedgerEvent): LedgerEventRpc => ({
-  id: event.id,
-  ts: event.ts,
-  kind: event.kind,
-  scopeRef: event.scopeRef,
-  factOwnerRef: event.factOwnerRef,
-  effectAuthorityRef: event.effectAuthorityRef,
-  payload: event.payload,
-});
-
-const projectionKeyFor = (
-  identity: BackendProtocolEventIdentity,
-  projectionKind: string,
-  projectionId: string,
-): BackendProtocolProjectionKey => ({
-  ...identity,
-  projectionKind,
-  projectionId,
-});
-
-const projectionRowKey = (
-  identity: BackendProtocolEventIdentity,
-  kind: string,
-  projectionId: string,
-): string => backendProtocolProjectionKey(projectionKeyFor(identity, kind, projectionId));
-
-const projectionMetaKey = (identity: BackendProtocolEventIdentity, kind: string): string =>
-  backendProtocolProjectionKey(projectionKeyFor(identity, kind, "__meta__"));
-
-const cloneProjectionRows = (
-  rows: ReadonlyMap<string, MaterializedProjectionRow>,
-): Map<string, MaterializedProjectionRow> => new Map(rows);
-
-const cloneProjectionMeta = (
-  meta: ReadonlyMap<string, InMemoryProjectionMeta>,
-): Map<string, InMemoryProjectionMeta> => new Map(meta);
-
-const normalizeProjectionLimit = (limit: number | undefined): number =>
-  limit === undefined
-    ? DEFAULT_EVENT_LIMIT
-    : Math.max(
-        0,
-        Math.min(MAX_EVENT_LIMIT, normalizeNonNegativeInteger(limit, DEFAULT_EVENT_LIMIT)),
-      );
-
 export class InMemoryBackendState {
   private nextEventId = 1;
   private nextDueWorkId = 1;
   private readonly rows: LedgerEvent[] = [];
   private readonly rowsByTruthIdentityKey = new Map<string, LedgerEvent[]>();
   private readonly rowsByEventIdentityKey = new Map<string, LedgerEvent[]>();
-  private readonly sinks = new Set<EventSink>();
+  private readonly sinks = new Set<InMemoryEventSink>();
   private readonly telemetryDiagnosticsLog: TelemetryFanoutDiagnostic[] = [];
   private readonly handlers = new Map<string, Set<EventHandler>>();
   private readonly dueWork: InMemoryDueWorkRow[] = [];
@@ -317,38 +146,23 @@ export class InMemoryBackendState {
   }
 
   private appendRows(events: ReadonlyArray<LedgerEvent>): void {
-    this.rows.push(...events);
-    for (const event of events) {
-      const truthKey = backendProtocolTruthIdentityKey(eventTruthIdentity(event));
-      const eventKey = backendProtocolEventIdentityKey(eventIdentity(event));
-      const truthRows = this.rowsByTruthIdentityKey.get(truthKey);
-      if (truthRows === undefined) {
-        this.rowsByTruthIdentityKey.set(truthKey, [event]);
-      } else {
-        truthRows.push(event);
-      }
-      const eventRows = this.rowsByEventIdentityKey.get(eventKey);
-      if (eventRows === undefined) {
-        this.rowsByEventIdentityKey.set(eventKey, [event]);
-      } else {
-        eventRows.push(event);
-      }
-    }
+    appendRowsToLedgerIndexes(
+      events,
+      this.rows,
+      this.rowsByTruthIdentityKey,
+      this.rowsByEventIdentityKey,
+    );
   }
 
   private assertRuntimeLedgerTransitionBatch(
     events: ReadonlyArray<LedgerEvent>,
   ): Effect.Effect<void, SqlError> {
     return Effect.try({
-      try: () => {
-        for (const group of groupRuntimeTransitionEventsByTruthIdentity(events)) {
-          assertRuntimeLedgerTransitions({
-            history: this.rowsForTruthIdentity(group.identity),
-            events: group.events,
-          });
-        }
-      },
-      catch: (cause) => new SqlError({ cause }),
+      try: () =>
+        assertInMemoryRuntimeLedgerTransitionBatch(events, (identity) =>
+          this.rowsForTruthIdentity(identity),
+        ),
+      catch: sqlErrorFromUnknown,
     });
   }
 
@@ -364,44 +178,7 @@ export class InMemoryBackendState {
     identity: BackendProtocolTruthIdentity,
     opts: EventQueryOptions = {},
   ): ReadonlyArray<LedgerEvent> {
-    const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-    const limit =
-      opts.limit === undefined
-        ? DEFAULT_EVENT_LIMIT
-        : Math.max(0, Math.min(MAX_EVENT_LIMIT, normalizeNonNegativeInteger(opts.limit, 0)));
-    const kinds =
-      opts.kinds === undefined
-        ? undefined
-        : new Set(Array.from(new Set(opts.kinds)).filter((kind) => kind.length > 0));
-    if (
-      opts.scopeRef !== undefined &&
-      scopeRefKey(opts.scopeRef) !== scopeRefKey(identity.scopeRef)
-    ) {
-      return [];
-    }
-    if (
-      opts.effectAuthorityRef !== undefined &&
-      authorityRefKey(opts.effectAuthorityRef) !== authorityRefKey(identity.effectAuthorityRef)
-    ) {
-      return [];
-    }
-    const factOwnerRefs =
-      opts.factOwnerRefs === undefined
-        ? undefined
-        : new Set(Array.from(new Set(opts.factOwnerRefs)).filter((owner) => owner.length > 0));
-    const selected = this.rowsForTruthIdentity(identity).filter((row) => {
-      if (row.id <= afterId) return false;
-      if (kinds !== undefined && kinds.size > 0 && !kinds.has(row.kind)) return false;
-      if (
-        factOwnerRefs !== undefined &&
-        factOwnerRefs.size > 0 &&
-        !factOwnerRefs.has(row.factOwnerRef)
-      ) {
-        return false;
-      }
-      return true;
-    });
-    return selected.slice(0, limit);
+    return queryInMemoryLedgerRows(this.rowsForTruthIdentity(identity), identity, opts);
   }
 
   setProjectionRegistry(registry: ProjectionRegistry): void {
@@ -674,7 +451,7 @@ export class InMemoryBackendState {
     readonly kinds?: ReadonlyArray<string>;
     readonly sink: (event: LedgerEvent) => void;
   }): InMemoryEventSubscription {
-    const subscription: EventSink = {
+    const subscription: InMemoryEventSink = {
       ...(opts.kinds === undefined || opts.kinds.length === 0
         ? {}
         : { kinds: new Set(opts.kinds) }),
@@ -794,28 +571,20 @@ export class InMemoryBackendState {
       });
       yield* this.assertRuntimeLedgerTransitionBatch([event]);
       const projectionState = yield* this.prepareProjectionState([event]);
-      const identityKey = backendProtocolEventIdentityKey(identity);
       const committed = yield* Effect.sync(() => {
         this.nextEventId += 1;
         this.appendRows([event]);
         this.replaceProjectionState(projectionState.rows, projectionState.meta);
         const dueId = this.nextDueWorkId++;
-        this.dueWork.push({
-          id: dueId,
-          identity,
-          identityKey,
-          fireAt,
-          kind: trigger.kind,
-          payload: durableTriggerDuePayload(event.id),
-          completedAt: null,
-          claimedAt: null,
-          claimToken: null,
-          claimDeadlineAt: null,
-          redriveCount: 0,
-          cancelRequestedAt: null,
-          cancelReason: null,
-          cancelledAt: null,
-        });
+        this.dueWork.push(
+          createInMemoryDueWorkRow({
+            id: dueId,
+            identity,
+            fireAt,
+            kind: trigger.kind,
+            intentEventId: event.id,
+          }),
+        );
         return event;
       });
       yield* this.fireMany([committed]);
@@ -868,41 +637,18 @@ export class InMemoryBackendState {
     identity: BackendProtocolEventIdentity,
     now: number,
   ): ReadonlyArray<InMemoryDueWorkRow> {
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    return this.dueWork
-      .filter(
-        (row) => row.identityKey === identityKey && row.completedAt === null && row.fireAt <= now,
-      )
-      .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
+    return duePendingRows(this.dueWork, identity, now);
   }
 
   dueClaimable(
     identity: BackendProtocolEventIdentity,
     now: number,
   ): ReadonlyArray<InMemoryDueWorkRow> {
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    return this.dueWork
-      .filter(
-        (row) =>
-          row.identityKey === identityKey &&
-          row.completedAt === null &&
-          row.fireAt <= now &&
-          (row.claimToken === null || (row.claimDeadlineAt !== null && row.claimDeadlineAt <= now)),
-      )
-      .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
+    return dueClaimableRows(this.dueWork, identity, now);
   }
 
   nextDueAt(identity: BackendProtocolEventIdentity): number | null {
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    let minDueAt: number | null = null;
-    for (const row of this.dueWork) {
-      if (row.identityKey !== identityKey) continue;
-      if (row.completedAt !== null) continue;
-      const next = row.claimToken === null ? row.fireAt : row.claimDeadlineAt;
-      if (next === null) continue;
-      if (minDueAt === null || next < minDueAt) minDueAt = next;
-    }
-    return minDueAt;
+    return nextDueAtForIdentity(this.dueWork, identity);
   }
 
   completeDueWork(id: number, completedAt: number): void {
@@ -919,23 +665,7 @@ export class InMemoryBackendState {
     fireAt: number,
   ): number {
     const id = this.nextDueWorkId++;
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    this.dueWork.push({
-      id,
-      identity,
-      identityKey,
-      fireAt,
-      kind,
-      payload: durableTriggerDuePayload(intentEventId),
-      completedAt: null,
-      claimedAt: null,
-      claimToken: null,
-      claimDeadlineAt: null,
-      redriveCount: 0,
-      cancelRequestedAt: null,
-      cancelReason: null,
-      cancelledAt: null,
-    });
+    this.dueWork.push(createInMemoryDueWorkRow({ id, identity, fireAt, kind, intentEventId }));
     return id;
   }
 
@@ -945,16 +675,7 @@ export class InMemoryBackendState {
     token: string,
     deadlineAt: number,
   ): InMemoryDueWorkRow | null {
-    if (row.completedAt !== null || row.fireAt > now) return null;
-    if (row.claimToken !== null && (row.claimDeadlineAt === null || row.claimDeadlineAt > now)) {
-      return null;
-    }
-    const redrive = row.claimToken !== null;
-    row.claimedAt = now;
-    row.claimToken = token;
-    row.claimDeadlineAt = deadlineAt;
-    if (redrive) row.redriveCount += 1;
-    return row;
+    return claimInMemoryDueWorkRow(row, now, token, deadlineAt);
   }
 
   dueByTriggerIntent(
@@ -962,26 +683,11 @@ export class InMemoryBackendState {
     kind: string,
     intentEventId: number,
   ): ReadonlyArray<InMemoryDueWorkRow> {
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    return this.dueWork
-      .filter(
-        (row) =>
-          row.identityKey === identityKey &&
-          row.completedAt === null &&
-          row.kind === kind &&
-          row.payload.intentEventId === intentEventId,
-      )
-      .sort((a, b) => a.fireAt - b.fireAt || a.id - b.id);
+    return dueRowsByTriggerIntent(this.dueWork, identity, kind, intentEventId);
   }
 
   requestCancellation(row: InMemoryDueWorkRow, now: number, reason?: string): boolean {
-    if (row.completedAt !== null) return false;
-    row.cancelRequestedAt ??= now;
-    row.cancelReason ??= reason ?? null;
-    if (row.claimToken !== null && (row.claimDeadlineAt === null || row.claimDeadlineAt > now)) {
-      row.claimDeadlineAt = now;
-    }
-    return true;
+    return requestDueCancellation(row, now, reason);
   }
 
   stuckDueWork(
@@ -994,55 +700,17 @@ export class InMemoryBackendState {
     readonly claimDeadlineAt: number;
     readonly redriveCount: number;
   }> {
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    return this.dueWork
-      .filter(
-        (row) =>
-          row.identityKey === identityKey &&
-          row.completedAt === null &&
-          row.claimToken !== null &&
-          row.claimDeadlineAt !== null &&
-          row.claimDeadlineAt <= now,
-      )
-      .sort((a, b) => (a.claimDeadlineAt ?? 0) - (b.claimDeadlineAt ?? 0) || a.id - b.id)
-      .map((row) => ({
-        dueWorkId: row.id,
-        triggerKind: row.kind,
-        intentEventId: row.payload.intentEventId,
-        claimDeadlineAt: row.claimDeadlineAt ?? now,
-        redriveCount: row.redriveCount,
-      }));
+    return stuckDueWorkRows(this.dueWork, identity, now);
   }
 
   durableProcessLifecycle(
     identity: BackendProtocolEventIdentity,
   ): Effect.Effect<ReadonlyArray<DurableProcessLifecycleState>, SqlError> {
     return Effect.gen({ self: this }, function* () {
-      const identityKey = backendProtocolEventIdentityKey(identity);
-      const states: DurableProcessLifecycleState[] = [];
-      for (const row of [...this.dueWork]
-        .filter((row) => row.identityKey === identityKey)
-        .sort((left, right) => left.id - right.id)) {
-        const result = durableProcessLifecycleState({
-          id: row.id,
-          fireAt: row.fireAt,
-          kind: row.kind,
-          intentEventId: row.payload.intentEventId,
-          completedAt: row.completedAt,
-          claimedAt: row.claimedAt,
-          claimToken: row.claimToken,
-          claimDeadlineAt: row.claimDeadlineAt,
-          redriveCount: row.redriveCount,
-          cancelRequestedAt: row.cancelRequestedAt,
-          cancelReason: row.cancelReason,
-          cancelledAt: row.cancelledAt,
-        });
-        if (!result.ok) {
-          return yield* Effect.fail(new SqlError({ cause: result.cause }));
-        }
-        states.push(result.state);
-      }
-      return states;
+      return yield* Effect.try({
+        try: () => durableProcessLifecycleRows(this.dueWork, identity),
+        catch: sqlErrorFromUnknown,
+      });
     });
   }
 
@@ -1134,7 +802,6 @@ export class InMemoryBackendState {
       const startId = this.nextEventId;
       const written: LedgerEvent[] = [];
       const identity = row.identity;
-      const identityKey = row.identityKey;
       let rejected: UnregisteredDurableTriggerKind | null = null;
       const due: Array<{
         readonly triggerKind: string;
@@ -1215,22 +882,15 @@ export class InMemoryBackendState {
         if (options.cancelled === true) row.cancelledAt = now;
         for (const spec of due) {
           const dueId = this.nextDueWorkId++;
-          this.dueWork.push({
-            id: dueId,
-            identity,
-            identityKey,
-            fireAt: spec.fireAt,
-            kind: spec.triggerKind,
-            payload: durableTriggerDuePayload(spec.intentEventId),
-            completedAt: null,
-            claimedAt: null,
-            claimToken: null,
-            claimDeadlineAt: null,
-            redriveCount: 0,
-            cancelRequestedAt: null,
-            cancelReason: null,
-            cancelledAt: null,
-          });
+          this.dueWork.push(
+            createInMemoryDueWorkRow({
+              id: dueId,
+              identity,
+              fireAt: spec.fireAt,
+              kind: spec.triggerKind,
+              intentEventId: spec.intentEventId,
+            }),
+          );
         }
       });
       yield* this.fireMany(committed);
@@ -1239,44 +899,11 @@ export class InMemoryBackendState {
   }
 
   private fireMany(events: ReadonlyArray<LedgerEvent>): Effect.Effect<void> {
-    if (events.length === 0) return Effect.void;
-    const fireSinks = Effect.sync(() => {
-      const sinks = Array.from(this.sinks);
-      for (const event of events) {
-        for (const subscription of sinks) {
-          if (subscription.kinds === undefined || subscription.kinds.has(event.kind)) {
-            try {
-              subscription.sink(event);
-            } catch (cause) {
-              this.telemetryDiagnosticsLog.push({
-                phase: "sink",
-                eventId: event.id,
-                kind: event.kind,
-                identityKey: backendProtocolTruthIdentityKey(eventTruthIdentity(event)),
-                message: describeFanoutCause(cause),
-              });
-            }
-          }
-        }
-      }
+    return fireInMemoryEvents(events, {
+      sinks: this.sinks,
+      handlers: this.handlers,
+      diagnostics: this.telemetryDiagnosticsLog,
     });
-    return fireSinks.pipe(
-      Effect.andThen(
-        Effect.forEach(
-          events,
-          (event) => {
-            const handlers = this.handlers.get(event.kind);
-            if (handlers === undefined || handlers.size === 0) return Effect.void;
-            return fireBackendEventHandlers(
-              Array.from(handlers),
-              eventToRpc(event),
-              "event handler",
-            );
-          },
-          { concurrency: 1, discard: true },
-        ),
-      ),
-    );
   }
 }
 

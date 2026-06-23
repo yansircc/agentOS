@@ -1,24 +1,6 @@
 import { randomUUID } from "node:crypto";
-import {
-  CapabilityRejected,
-  DispatchScopeMismatch,
-  DispatchTargetNotFound,
-  InvalidResourceAmount,
-  JsonStringifyError,
-  ResourceInsufficient,
-  ResourceReservationClosed,
-  ResourceReservationNotFound,
-  SqlError,
-  UnsupportedScopeRef,
-  isCoreClaimedEventKind,
-} from "@agent-os/core/errors";
-import {
-  isAuthorityRef,
-  isScopeRef,
-  makeOperationRef,
-  makePreClaim,
-  type FactOwnerRef,
-} from "@agent-os/core/effect-claim";
+import { SqlError } from "@agent-os/core/errors";
+import { type FactOwnerRef } from "@agent-os/core/effect-claim";
 import { materialRefKey, type BindingMaterialRef } from "@agent-os/core/material-ref";
 import type {
   DispatchToScopeResult,
@@ -35,27 +17,21 @@ import {
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
-  DISPATCH_RETRY_POLICY,
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
-  QUOTA_EVENT_KIND,
   RESOURCE_EVENT_KIND,
   SCHEDULED_EVENT_TRIGGER_KIND,
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
-  copyTraceContext,
   describeDispatchCause,
   dispatchBackoffMs,
-  dispatchLedgerDeliveryReceipt,
   dispatchTargetDelivered,
   emptyResourceProjection,
   parseDispatchLivedClaim,
   parseScheduledEventIntentPayload,
   parseRequestedPayloadValue,
-  projectQuotaGrantUsage,
   projectResourceEvents,
   scheduledEventIntentPayload,
-  settleDispatchInboundAccepted,
   settleDispatchOutboundEnqueued,
   settleDispatchOutboundDelivered,
   settleDispatchOutboundRetryPending,
@@ -73,15 +49,10 @@ import {
 } from "@agent-os/core/backend-protocol";
 import {
   assertRuntimeLedgerTransitions,
-  RUNTIME_FACT_OWNER,
   type LedgerCommitEventSpec,
   type LedgerTruthIdentity,
 } from "@agent-os/core/runtime-protocol";
-import {
-  InvalidTraceContext,
-  type TelemetryFanoutDiagnostic,
-} from "@agent-os/core/telemetry-protocol";
-import { validateOptionalTraceContext } from "@agent-os/core/telemetry-protocol";
+import { type TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 import {
   PsqlCli,
   quoteIdentifier,
@@ -91,6 +62,36 @@ import {
   systemTimeNow,
   type NodePostgresNow,
 } from "./host";
+import {
+  DEFAULT_EVENT_LIMIT,
+  MAX_EVENT_LIMIT,
+  eventRowSelect,
+  finiteNumberField,
+  groupRuntimeEventsByIdentityKey,
+  ledgerWriteLockKey,
+  positiveAmount,
+  recordOf,
+  resourceLockKey,
+  resourceProjectionCtes,
+  runtimeIdentity,
+  schemaName,
+  sqlPayload,
+} from "./backend-helpers";
+import { type NodePostgresDueWorkRow, withNodePostgresDueDrainLock } from "./due-work";
+import { fireNodePostgresEvents, type NodePostgresEventSink } from "./telemetry";
+import {
+  assertNodePostgresDispatchEnvelope,
+  nodePostgresDispatchAcceptedPayload,
+  nodePostgresDispatchReceipt,
+  prepareNodePostgresDispatchRequest,
+} from "./dispatch";
+import { nodePostgresQuotaGrantDecision } from "./quota";
+import {
+  assertNodePostgresResourceTerminalResult,
+  nodePostgresResourceReserveResult,
+  type ResourceReserveTransactionRow,
+  type ResourceTerminalTransactionRow,
+} from "./resource";
 
 export interface NodePostgresBackendOptions {
   readonly databaseUrl: string;
@@ -103,209 +104,12 @@ export interface NodePostgresEventSubscription {
   readonly unsubscribe: () => void;
 }
 
-interface EventSink {
-  readonly identityKey: string;
-  readonly kind: string;
-  readonly sink: (event: LedgerEvent) => void;
-}
-
-interface DueWorkRow {
-  readonly id: number;
-  readonly identity: BackendProtocolEventIdentity;
-  readonly identityKey: string;
-  readonly fireAt: number;
-  readonly kind: string;
-  readonly payload: { readonly intentEventId: number };
-  readonly claimToken: string | null;
-  readonly redriveCount: number;
-  readonly cancelRequestedAt: number | null;
-  readonly cancelReason: string | null;
-  readonly dispatchIntent: LedgerEvent | null;
-  readonly dispatchSuccessCount: number;
-  readonly dispatchAttemptCount: number;
-}
-
-interface ResourceReserveTransactionRow {
-  readonly status: "existing" | "reserved" | "insufficient";
-  readonly reservationId: string;
-  readonly available: number;
-  readonly event: LedgerEvent | null;
-}
-
-interface ResourceTerminalTransactionRow {
-  readonly status: "written" | "noop" | "missing" | "closed";
-  readonly closedStatus: "consumed" | "released" | null;
-  readonly event: LedgerEvent | null;
-}
-
-const DEFAULT_EVENT_LIMIT = 1000;
-const MAX_EVENT_LIMIT = 1000;
-
-const schemaName = (schema: string | undefined): string =>
-  schema ?? `agentos_node_postgres_${randomUUID().replace(/-/g, "_")}`;
-
-const runtimeIdentity = (identity: BackendProtocolTruthIdentity): BackendProtocolEventIdentity => ({
-  scopeRef: identity.scopeRef,
-  effectAuthorityRef: identity.effectAuthorityRef,
-  factOwnerRef: RUNTIME_FACT_OWNER,
-});
-
-const eventToRpc = (event: LedgerEvent): LedgerEvent => ({
-  id: event.id,
-  ts: event.ts,
-  kind: event.kind,
-  scopeRef: event.scopeRef,
-  factOwnerRef: event.factOwnerRef,
-  effectAuthorityRef: event.effectAuthorityRef,
-  payload: event.payload,
-});
-
-const groupRuntimeEventsByIdentityKey = (
-  events: ReadonlyArray<LedgerEvent>,
-): Map<string, LedgerEvent[]> => {
-  const groups = new Map<string, LedgerEvent[]>();
-  for (const event of events) {
-    if (event.factOwnerRef !== RUNTIME_FACT_OWNER) continue;
-    const key = backendProtocolEventIdentityKey(event);
-    const group = groups.get(key);
-    if (group === undefined) {
-      groups.set(key, [event]);
-    } else {
-      group.push(event);
-    }
-  }
-  return groups;
-};
-
-const validateSerializablePayload = (payload: unknown): void => {
-  try {
-    const encoded = JSON.stringify(payload);
-    if (typeof encoded !== "string") {
-      throw new TypeError("ledger event payload must be JSON serializable");
-    }
-  } catch (cause) {
-    throw new JsonStringifyError({ cause });
-  }
-};
-
-const sqlPayload = (payload: unknown): string => {
-  validateSerializablePayload(payload);
-  return sqlJson(payload);
-};
-
-const positiveAmount = (amount: number): void => {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new InvalidResourceAmount({ amount });
-  }
-};
-
-const recordOf = (value: unknown, label: string): Record<string, unknown> => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new SqlError({ cause: `${label} payload must be object` });
-  }
-  return value as Record<string, unknown>;
-};
-
-const finiteNumberField = (value: Record<string, unknown>, key: string): number => {
-  const field = value[key];
-  if (typeof field !== "number" || !Number.isFinite(field)) {
-    throw new SqlError({ cause: `${key} must be finite number` });
-  }
-  return field;
-};
-
-const eventRowSelect = `
-  SELECT
-    id::int AS "id",
-    ts AS "ts",
-    kind AS "kind",
-    scope_ref AS "scopeRef",
-    fact_owner_ref #>> '{}' AS "factOwnerRef",
-    effect_authority_ref AS "effectAuthorityRef",
-    payload AS "payload"
-  FROM agentos_events
-`;
-
-const ledgerWriteLockKey = (identityKey: string): string => `agentos:ledger:${identityKey}`;
-
-const resourceLockKey = (identityKey: string): string => `agentos:resource:${identityKey}`;
-
-const resourceProjectionCtes = (identityKey: string): string => `
-  resource_events AS (
-    SELECT id, kind, payload
-    FROM agentos_events
-    WHERE identity_key = ${sqlString(identityKey)}
-      AND kind LIKE 'resource_pool.%'
-    ORDER BY id ASC
-  ),
-  resource_grants AS (
-    SELECT
-      id,
-      payload ->> 'key' AS resource_key,
-      (payload ->> 'amount')::double precision AS amount
-    FROM resource_events
-    WHERE kind = ${sqlString(RESOURCE_EVENT_KIND.GRANTED)}
-  ),
-  resource_reserved AS (
-    SELECT
-      id,
-      payload ->> 'reservationId' AS reservation_id,
-      payload ->> 'idempotencyKey' AS idempotency_key,
-      payload ->> 'key' AS resource_key,
-      (payload ->> 'amount')::double precision AS amount
-    FROM resource_events
-    WHERE kind = ${sqlString(RESOURCE_EVENT_KIND.RESERVED)}
-  ),
-  resource_rejections AS (
-    SELECT
-      id,
-      payload ->> 'idempotencyKey' AS idempotency_key,
-      payload ->> 'key' AS resource_key,
-      (payload ->> 'amount')::double precision AS amount,
-      (payload ->> 'available')::double precision AS available
-    FROM resource_events
-    WHERE kind = ${sqlString(RESOURCE_EVENT_KIND.RESERVE_REJECTED)}
-  ),
-  resource_terminal AS (
-    SELECT
-      payload ->> 'reservationId' AS reservation_id,
-      kind,
-      id,
-      row_number() OVER (PARTITION BY payload ->> 'reservationId' ORDER BY id DESC) AS ordinal
-    FROM resource_events
-    WHERE kind IN (
-      ${sqlString(RESOURCE_EVENT_KIND.CONSUMED)},
-      ${sqlString(RESOURCE_EVENT_KIND.RELEASED)}
-    )
-  ),
-  resource_reservations AS (
-    SELECT
-      reserved.id,
-      reserved.reservation_id,
-      reserved.idempotency_key,
-      reserved.resource_key,
-      reserved.amount,
-      terminal.kind AS terminal_kind
-    FROM resource_reserved reserved
-    LEFT JOIN resource_terminal terminal
-      ON terminal.reservation_id = reserved.reservation_id
-     AND terminal.ordinal = 1
-  ),
-  resource_projection_validation AS (
-    SELECT
-      (SELECT COUNT(*) FROM resource_grants)
-      + (SELECT COUNT(*) FROM resource_reserved)
-      + (SELECT COUNT(*) FROM resource_rejections)
-      + (SELECT COUNT(*) FROM resource_terminal) AS row_count
-  )
-`;
-
 export class NodePostgresBackend {
   readonly bindingRef: BindingMaterialRef;
   readonly #sql: PsqlCli;
   readonly #schema: string;
   readonly #handlers = new Map<string, Set<EventHandler>>();
-  readonly #sinks = new Set<EventSink>();
+  readonly #sinks = new Set<NodePostgresEventSink>();
   readonly #diagnostics: TelemetryFanoutDiagnostic[] = [];
   readonly #targets = new Map<string, DispatchTargetAdapter>();
   readonly #dueDrainLocks = new Map<string, Promise<void>>();
@@ -567,56 +371,9 @@ export class NodePostgresBackend {
       readonly traceContext?: unknown;
     },
   ): Promise<DispatchToScopeResult> {
-    if (isCoreClaimedEventKind(spec.event)) {
-      throw new CapabilityRejected({ event: spec.event, capability: "cap_app" });
-    }
-    const bindingKey = materialRefKey(spec.target.bindingRef);
-    if (!this.#targets.has(bindingKey)) {
-      throw new DispatchTargetNotFound({ bindingRef: bindingKey });
-    }
-    if (!isScopeRef(spec.target.scopeRef)) {
-      throw new UnsupportedScopeRef({ scopeId: "malformed", position: "target" });
-    }
-    if (!isAuthorityRef(spec.target.effectAuthorityRef)) {
-      throw new SqlError({ cause: "dispatch target effectAuthorityRef malformed" });
-    }
-    const traceContextResult = validateOptionalTraceContext(spec.traceContext);
-    if (!traceContextResult.ok) {
-      throw new InvalidTraceContext({
-        position: "dispatch",
-        reason: traceContextResult.reason,
-      });
-    }
-    const sourceScope = backendProtocolTruthIdentityKey(identity);
-    const targetScope = backendProtocolTruthIdentityKey(spec.target);
-    const claim = makePreClaim({
-      operationRef: makeOperationRef("dispatch", [
-        sourceScope,
-        bindingKey,
-        targetScope,
-        spec.idempotencyKey,
-      ]),
-      scopeRef: spec.target.scopeRef,
-      effectAuthorityRef: {
-        authorityId: "cap_dispatch",
-        authorityClass: "effect",
-      },
-      originRef: {
-        originId: sourceScope,
-        originKind: "agent_do",
-      },
-    });
-    const requested = {
-      target: spec.target,
-      event: spec.event,
-      data: spec.data,
-      idempotencyKey: spec.idempotencyKey,
-      retryPolicy: DISPATCH_RETRY_POLICY,
-      claim,
-      ...(traceContextResult.traceContext === undefined
-        ? {}
-        : { traceContext: copyTraceContext(traceContextResult.traceContext) }),
-    };
+    const requested = prepareNodePostgresDispatchRequest(identity, spec, (bindingKey) =>
+      this.#targets.has(bindingKey),
+    );
     const now = this.#now();
     const event = await this.#appendEventAndDueWork(
       {
@@ -636,51 +393,18 @@ export class NodePostgresBackend {
     identity: BackendProtocolEventIdentity,
     envelope: DispatchEnvelope,
   ): Promise<DispatchReceiverResult> {
-    const scopeLabel = backendProtocolTruthIdentityKey(identity);
-    if (envelope.targetScope !== scopeLabel) {
-      throw new DispatchScopeMismatch({ expected: scopeLabel, actual: envelope.targetScope });
-    }
-    if (isCoreClaimedEventKind(envelope.event)) {
-      throw new CapabilityRejected({ event: envelope.event, capability: "cap_app" });
-    }
+    const scopeLabel = assertNodePostgresDispatchEnvelope(identity, envelope);
     const accepted = await this.#findAcceptedDeliveryId(identity, envelope);
     if (accepted !== null) {
-      return {
-        deliveredEventId: accepted,
-        receipt: dispatchLedgerDeliveryReceipt({
-          targetScope: scopeLabel,
-          deliveredEventId: accepted,
-        }),
-      };
-    }
-    const traceContextResult = validateOptionalTraceContext(envelope.traceContext);
-    if (!traceContextResult.ok) {
-      throw new InvalidTraceContext({
-        position: "dispatch",
-        reason: traceContextResult.reason,
-      });
+      return nodePostgresDispatchReceipt(scopeLabel, accepted);
     }
     const deliveredEventId = await this.#nextEventId(1);
     const acceptedEventId = deliveredEventId - 1;
-    const claim = settleDispatchInboundAccepted(envelope.claim, {
-      sourceScope: envelope.sourceScope,
-      targetScope: scopeLabel,
-      deliveredEventId,
-    });
     const events = await this.#appendDispatchReceiveEvents({
       identity,
       acceptedEventId,
       deliveredEventId,
-      acceptedPayload: {
-        sourceScope: envelope.sourceScope,
-        outboundEventId: envelope.outboundEventId,
-        idempotencyKey: envelope.idempotencyKey,
-        deliveredEventId,
-        claim,
-        ...(traceContextResult.traceContext === undefined
-          ? {}
-          : { traceContext: copyTraceContext(traceContextResult.traceContext) }),
-      },
+      acceptedPayload: nodePostgresDispatchAcceptedPayload(envelope, scopeLabel, deliveredEventId),
       deliveredKind: envelope.event,
       deliveredPayload: envelope.data,
     });
@@ -689,24 +413,12 @@ export class NodePostgresBackend {
       if (concurrentAccepted === null) {
         throw new SqlError({ cause: "dispatch receive conflict returned no accepted event" });
       }
-      return {
-        deliveredEventId: concurrentAccepted,
-        receipt: dispatchLedgerDeliveryReceipt({
-          targetScope: scopeLabel,
-          deliveredEventId: concurrentAccepted,
-        }),
-      };
+      return nodePostgresDispatchReceipt(scopeLabel, concurrentAccepted);
     }
     const delivered = events.find((event) => event.id === deliveredEventId);
     if (delivered === undefined)
       throw new SqlError({ cause: "dispatch receive returned no event" });
-    return {
-      deliveredEventId: delivered.id,
-      receipt: dispatchLedgerDeliveryReceipt({
-        targetScope: scopeLabel,
-        deliveredEventId: delivered.id,
-      }),
-    };
+    return nodePostgresDispatchReceipt(scopeLabel, delivered.id);
   }
 
   async #appendDispatchReceiveEvents(spec: {
@@ -936,16 +648,8 @@ export class NodePostgresBackend {
       FROM agentos_json_rows;
       COMMIT
     `);
-    if (row === undefined) throw new SqlError({ cause: "resource reserve returned no result" });
     if (row.event !== null) await this.#fireMany([row.event]);
-    if (row.status === "insufficient") {
-      throw new ResourceInsufficient({
-        key: spec.key,
-        requested: spec.amount,
-        available: row.available,
-      });
-    }
-    return { reservationId: row.reservationId };
+    return nodePostgresResourceReserveResult(row, spec);
   }
 
   async consumeResource(
@@ -977,47 +681,21 @@ export class NodePostgresBackend {
     operationRef: string,
   ): Promise<GrantResult> {
     const now = this.#now();
-    const windowStart = windowMs === Number.POSITIVE_INFINITY ? 0 : now - windowMs;
     const events = await this.#events(identity);
-    let usage: ReturnType<typeof projectQuotaGrantUsage>;
-    try {
-      usage = projectQuotaGrantUsage(events, {
-        key: key.projectionId,
-        windowStart,
-        operationRef,
-      });
-    } catch (cause) {
-      throw new SqlError({ cause });
+    const decision = nodePostgresQuotaGrantDecision(events, {
+      now,
+      identity,
+      key,
+      amount,
+      windowMs,
+      limit,
+      toolName,
+      operationRef,
+    });
+    if (decision.event !== undefined) {
+      await this.#appendEvents([decision.event]);
     }
-    if (usage.alreadyGranted) return { granted: true, consumed: usage.consumed, limit };
-    const consumed = usage.consumed;
-    if (consumed + amount > limit) {
-      await this.#appendEvents([
-        {
-          ts: now,
-          kind: QUOTA_EVENT_KIND.RATE_LIMITED,
-          identity,
-          payload: {
-            key: key.projectionId,
-            attempted: amount,
-            consumed,
-            limit,
-            windowMs,
-            toolName,
-          },
-        },
-      ]);
-      return { granted: false, consumed, limit };
-    }
-    await this.#appendEvents([
-      {
-        ts: now,
-        kind: QUOTA_EVENT_KIND.CONSUMED,
-        identity,
-        payload: { key: key.projectionId, amount, toolName, operationRef },
-      },
-    ]);
-    return { granted: true, consumed, limit };
+    return decision.result;
   }
 
   async #drainDue(
@@ -1043,7 +721,7 @@ export class NodePostgresBackend {
     }
   }
 
-  async #commitScheduled(row: DueWorkRow, now: number): Promise<void> {
+  async #commitScheduled(row: NodePostgresDueWorkRow, now: number): Promise<void> {
     const [intent] = await this.#eventById(row.identity, row.payload.intentEventId);
     if (intent === undefined) {
       await this.#completeDue(row, now);
@@ -1068,7 +746,7 @@ export class NodePostgresBackend {
     );
   }
 
-  async #commitDispatchRetry(row: DueWorkRow, now: number): Promise<void> {
+  async #commitDispatchRetry(row: NodePostgresDueWorkRow, now: number): Promise<void> {
     const intent = row.dispatchIntent;
     if (intent === null) {
       await this.#completeDue(row, now);
@@ -1293,7 +971,6 @@ export class NodePostgresBackend {
     terminalKind: typeof RESOURCE_EVENT_KIND.CONSUMED | typeof RESOURCE_EVENT_KIND.RELEASED,
   ): Promise<void> {
     const identityKey = backendProtocolEventIdentityKey(identity);
-    const terminalStatus = terminalKind === RESOURCE_EVENT_KIND.CONSUMED ? "consumed" : "released";
     const now = this.#now();
     const [row] = await this.#sql.jsonArrayStatement<ResourceTerminalTransactionRow>(`
       BEGIN;
@@ -1378,17 +1055,8 @@ export class NodePostgresBackend {
       FROM agentos_json_rows;
       COMMIT
     `);
-    if (row === undefined) throw new SqlError({ cause: "resource terminal returned no result" });
     if (row.event !== null) await this.#fireMany([row.event]);
-    if (row.status === "missing") {
-      throw new ResourceReservationNotFound({ reservationId: spec.reservationId });
-    }
-    if (row.status === "closed") {
-      throw new ResourceReservationClosed({
-        reservationId: spec.reservationId,
-        status: row.closedStatus ?? terminalStatus,
-      });
-    }
+    assertNodePostgresResourceTerminalResult(row, spec, terminalKind);
   }
 
   async #loadResourceState(identity: LedgerTruthIdentity): Promise<ProjectedResourceState> {
@@ -1474,7 +1142,7 @@ export class NodePostgresBackend {
       readonly identity: BackendProtocolEventIdentity;
       readonly payload: unknown;
     }>,
-    row: DueWorkRow,
+    row: NodePostgresDueWorkRow,
     now: number,
     nextDue?: {
       readonly kind: string;
@@ -1580,11 +1248,14 @@ export class NodePostgresBackend {
     return rows;
   }
 
-  async #claimDue(identity: BackendProtocolEventIdentity, now: number): Promise<DueWorkRow | null> {
+  async #claimDue(
+    identity: BackendProtocolEventIdentity,
+    now: number,
+  ): Promise<NodePostgresDueWorkRow | null> {
     const identityKey = backendProtocolEventIdentityKey(identity);
     const token = randomUUID();
     const deadlineAt = now + 60_000;
-    const rows = await this.#sql.jsonArrayStatement<DueWorkRow>(`
+    const rows = await this.#sql.jsonArrayStatement<NodePostgresDueWorkRow>(`
       WITH lock AS (
         SELECT pg_try_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(identityKey))}, 0)) AS acquired
       ),
@@ -1671,26 +1342,12 @@ export class NodePostgresBackend {
     identity: BackendProtocolEventIdentity,
     now: number,
   ): Promise<{ readonly drained: number }> {
-    const identityKey = backendProtocolEventIdentityKey(identity);
-    const previous = this.#dueDrainLocks.get(identityKey) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const chained = previous.catch(() => undefined).then(() => current);
-    this.#dueDrainLocks.set(identityKey, chained);
-    await previous.catch(() => undefined);
-    try {
-      return await this.#drainDue(identity, now);
-    } finally {
-      release();
-      if (this.#dueDrainLocks.get(identityKey) === chained) {
-        this.#dueDrainLocks.delete(identityKey);
-      }
-    }
+    return withNodePostgresDueDrainLock(this.#dueDrainLocks, identity, () =>
+      this.#drainDue(identity, now),
+    );
   }
 
-  async #completeDue(row: DueWorkRow, now: number): Promise<void> {
+  async #completeDue(row: NodePostgresDueWorkRow, now: number): Promise<void> {
     await this.#sql.exec(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(row.identityKey))}, 0));
@@ -1866,33 +1523,11 @@ export class NodePostgresBackend {
   }
 
   async #fireMany(events: ReadonlyArray<LedgerEvent>): Promise<void> {
-    for (const event of events) {
-      const identityKey = backendProtocolEventIdentityKey(event);
-      for (const sink of Array.from(this.#sinks)) {
-        if (sink.identityKey !== identityKey || sink.kind !== event.kind) continue;
-        try {
-          sink.sink(event);
-        } catch (cause) {
-          this.#diagnostics.push({
-            phase: "sink",
-            eventId: event.id,
-            kind: event.kind,
-            identityKey: backendProtocolTruthIdentityKey(event),
-            message: describeDispatchCause(cause),
-          });
-        }
-      }
-      const handlers = this.#handlers.get(event.kind);
-      if (handlers === undefined) continue;
-      for (const handler of handlers) {
-        try {
-          await handler(eventToRpc(event));
-        } catch {
-          // Handler failures are post-commit diagnostics; a failed handler must
-          // not prevent later handlers from observing the committed fact.
-        }
-      }
-    }
+    await fireNodePostgresEvents(events, {
+      sinks: this.#sinks,
+      handlers: this.#handlers,
+      diagnostics: this.#diagnostics,
+    });
   }
 }
 
