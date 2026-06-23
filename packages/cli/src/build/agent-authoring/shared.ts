@@ -1,6 +1,7 @@
 import { WORKSPACE_TOOL_NAMES, type WorkspaceToolName } from "@agent-os/runtime";
 
 export const AUTHORING_DEFAULTS_VERSION = "framework-defaults@agentos/v1" as const;
+export const GENERATED_LOAD_SKILL_TOOL_NAME = "load_skill" as const;
 
 export type JsonRecord = Readonly<Record<string, unknown>>;
 

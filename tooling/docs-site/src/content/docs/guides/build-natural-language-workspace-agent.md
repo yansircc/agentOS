@@ -46,11 +46,13 @@ agent/skills/<name>.md
 agent/skills/<name>/SKILL.md
 ```
 
-Each skill file must start with YAML frontmatter containing `name: <name>`, and
-the frontmatter name must match the path identity. The skill body is the
-markdown text after the closing `---`. Sibling files under a skill directory,
-such as `references/` or `scripts/`, are rejected in v1 rather than copied into
-the build.
+Each skill file must start with the agentOS v1 frontmatter grammar: an opening
+`---` line, one `name: <name>` line, and a closing `---` line. The name value may
+be unquoted or wrapped in matching single or double quotes, and no other
+frontmatter fields are accepted. The frontmatter name must match the path
+identity. The skill body is the markdown text after the closing `---`. Sibling
+files under a skill directory, such as `references/` or `scripts/`, are rejected
+in v1 rather than copied into the build.
 
 Skills do not enter `AgentManifest`, materials, execution domains,
 interactions, runtime submit schema, ledger facts, or authored tool identity.
@@ -58,7 +60,9 @@ They are compiled into the generated target only. When skills exist,
 `submitSpecFromRunInput` appends a system advert listing skill names, and the
 generated `AgentSubmitBindings.tools` includes one framework-owned deterministic
 tool named `load_skill`. The model must call `load_skill` with `{ "name":
-"<name>" }` before using the full skill text.
+"<name>" }` before using the full skill text. `load_skill` is reserved by this
+framework projection and cannot be used as an authored `agent/tools/*.ts` tool
+name.
 
 Default workspace tool policy is controlled as data in `agent/agent.json`.
 Unknown slugs fail closed. A default can be disabled with `false`; disabling a

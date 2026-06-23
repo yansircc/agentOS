@@ -24,6 +24,7 @@ import {
   AUTHORING_DEFAULTS_VERSION,
   digestText,
   findFunctionPath,
+  GENERATED_LOAD_SKILL_TOOL_NAME,
   hasFunction,
   isNonEmptyString,
   isRecord,
@@ -188,6 +189,7 @@ export type CompileAgentTreeIssue =
       readonly path: string;
       readonly existingPath: string;
     }
+  | { readonly kind: "reserved_tool_name"; readonly path: string; readonly toolId: string }
   | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string }
   | { readonly kind: "function_in_manifest"; readonly path: string };
 
@@ -992,6 +994,7 @@ const parseSkillFrontmatter = (
     invalidAuthoredValue(state, path, "/frontmatter", "frontmatter_not_closed");
     return null;
   }
+  const issueCount = state.issues.length;
   const fields: Record<string, string> = {};
   for (let index = 1; index < end; index += 1) {
     const line = lines[index]?.trim() ?? "";
@@ -1002,11 +1005,15 @@ const parseSkillFrontmatter = (
       continue;
     }
     const [, key, rawValue] = match;
+    if (Object.prototype.hasOwnProperty.call(fields, key)) {
+      invalidAuthoredValue(state, path, `/frontmatter/${key}`, "frontmatter_field_duplicate");
+      continue;
+    }
     fields[key] = stripYamlQuotes(rawValue.trim());
   }
   assertAllowedFields(state, path, fields, new Set(["name"]));
   const name = parseStringField(state, path, "/frontmatter/name", fields.name);
-  if (name === null) return null;
+  if (name === null || state.issues.length > issueCount) return null;
   return {
     name,
     body: lines
@@ -1055,7 +1062,7 @@ const recordSkillFile = (
   state.skills.set(expectedName, {
     name: expectedName,
     path: authoredPath(path),
-    digest: digestText(text),
+    digest: digestText(parsed.body),
     text: parsed.body,
   });
 };
@@ -1095,6 +1102,10 @@ const recordToolFile = (
   const toolId = parts[1].slice(0, -".ts".length);
   if (toolId.length === 0) {
     state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
+    return;
+  }
+  if (toolId === GENERATED_LOAD_SKILL_TOOL_NAME) {
+    state.issues.push({ kind: "reserved_tool_name", path, toolId });
     return;
   }
   state.toolFilePaths.set(toolId, path);

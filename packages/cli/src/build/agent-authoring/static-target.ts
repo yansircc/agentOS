@@ -1,7 +1,7 @@
 import type { ProviderResourceId } from "@agent-os/core/runtime-protocol";
 import type { HandlerKind } from "@agent-os/core/runtime-protocol";
 import { WORKSPACE_TOOL_EXPOSURE_PROFILES, type WorkspaceToolName } from "@agent-os/runtime";
-import { digestText, isWorkspaceToolName } from "./shared";
+import { digestText, GENERATED_LOAD_SKILL_TOOL_NAME, isWorkspaceToolName } from "./shared";
 import type { AuthoredAgentManifest, CompiledAgentSkill } from "./manifest-compiler";
 import {
   AGENTOS_CONFIG_CLIENT,
@@ -176,8 +176,6 @@ const renderNamedImport = (names: ReadonlyArray<string>, source: string): string
 const renderTypeImport = (names: ReadonlyArray<string>, source: string): string =>
   `import type { ${names.join(", ")} } ${"from"} ${jsString(source)};`;
 
-const LOAD_SKILL_TOOL_NAME = "load_skill";
-
 const generatedToolImports = (
   toolNames: ReadonlyArray<string>,
 ): ReadonlyArray<StaticTargetModuleImport> =>
@@ -207,6 +205,9 @@ const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string =
   return entries.length === 0 ? "[]" : `[\n${entries.join(",\n")}\n]`;
 };
 
+const renderSkillNameSchema = (skills: ReadonlyArray<CompiledAgentSkill>): string =>
+  `Schema.Literals(${JSON.stringify(sortedSkills(skills).map((skill) => skill.name))})`;
+
 const renderSkillSupport = (skills: ReadonlyArray<CompiledAgentSkill>): string => {
   if (skills.length === 0) return "";
   return `
@@ -218,17 +219,17 @@ type GeneratedSkill = {
 };
 
 const generatedSkillCatalog = ${renderSkillCatalog(skills)} satisfies ReadonlyArray<GeneratedSkill>;
+const generatedSkillNames = generatedSkillCatalog.map((skill) => skill.name);
 const generatedSkillByName = Object.fromEntries(
   generatedSkillCatalog.map((skill) => [skill.name, skill]),
-) as Readonly<Record<string, GeneratedSkill>>;
-const generatedSkillNames = generatedSkillCatalog.map((skill) => skill.name);
+) as Readonly<Record<(typeof generatedSkillNames)[number], GeneratedSkill>>;
 const generatedSkillsSystemAdvert = [
   "Available agent skills are not loaded by default.",
   ...generatedSkillCatalog.map(
     (skill) =>
-      \`- \${skill.name}: call ${LOAD_SKILL_TOOL_NAME} with {"name":\${JSON.stringify(skill.name)}} to load \${skill.path} (\${skill.digest}).\`,
+      \`- \${skill.name}: call ${GENERATED_LOAD_SKILL_TOOL_NAME} with {"name":\${JSON.stringify(skill.name)}} to load \${skill.path} (\${skill.digest}).\`,
   ),
-  "Do not assume a skill's full instructions until ${LOAD_SKILL_TOOL_NAME} returns it.",
+  "Do not assume a skill's full instructions until ${GENERATED_LOAD_SKILL_TOOL_NAME} returns it.",
 ].join("\\n");
 
 const generatedSystemPrompt = (system: string | undefined): string =>
@@ -237,24 +238,16 @@ const generatedSystemPrompt = (system: string | undefined): string =>
     : \`\${system}\\n\\n\${generatedSkillsSystemAdvert}\`;
 
 const generatedLoadSkillTool = defineProductTool({
-  name: ${jsString(LOAD_SKILL_TOOL_NAME)},
+  name: ${jsString(GENERATED_LOAD_SKILL_TOOL_NAME)},
   description: "Load the full text of a CLI-authored agent skill by name.",
-  args: Schema.Struct({ name: Schema.String }),
+  args: Schema.Struct({ name: ${renderSkillNameSchema(skills)} }),
   authority: "agentos.generated.skills",
   authorityId: "agentos.generated.skills.load_skill",
   admit: () => Effect.succeed({ ok: true as const }),
-  execute: ({ name }) =>
-    Effect.succeed(
-      generatedSkillByName[name] ?? {
-        ok: false as const,
-        reason: "unknown_skill",
-        name,
-        available: generatedSkillNames,
-      },
-    ),
+  execute: ({ name }) => Effect.succeed(generatedSkillByName[name]),
 });
 const generatedFrameworkTools = {
-  ${jsString(LOAD_SKILL_TOOL_NAME)}: generatedLoadSkillTool,
+  ${jsString(GENERATED_LOAD_SKILL_TOOL_NAME)}: generatedLoadSkillTool,
 } satisfies Readonly<Record<string, Tool>>;
 `;
 };

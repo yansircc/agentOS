@@ -282,7 +282,7 @@ export const createStaticTargetChecks = ({ read, failIfAny }) => {
     }
 
     const requiredSkillSupportMarkers = [
-      'const LOAD_SKILL_TOOL_NAME = "load_skill";',
+      "GENERATED_LOAD_SKILL_TOOL_NAME",
       "const renderSkillSupport =",
       "const generatedLoadSkillTool = defineProductTool",
       "const generatedSkillsSystemAdvert =",

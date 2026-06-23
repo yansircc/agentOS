@@ -10,6 +10,15 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const cli = path.join(repoRoot, "packages/cli/src/main.mjs");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
 
+const digestText = (text) => {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `fnv1a32:${hash.toString(16).padStart(8, "0")}:${text.length}`;
+};
+
 void test("compileAgentTree keeps skills as authoring-only output", () => {
   const result = spawnSync(
     "bun",
@@ -59,7 +68,8 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
     ],
   );
   assert.deepEqual(output.normalizedSkills, output.skills);
-  assert.match(output.skills[0].digest, /^fnv1a32:[0-9a-f]+:\d+$/u);
+  assert.equal(output.skills[0].digest, digestText("Use echo."));
+  assert.equal(output.skills[1].digest, digestText("Review carefully."));
   assert.equal(output.manifestHasSkills, false);
   assert.deepEqual(output.manifestToolNames, []);
 });
@@ -76,13 +86,18 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
         "  file,",
         "] });",
         'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\n---\\nUse echo." });',
+        'const duplicateName = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: wrong\\nname: echo\\n---\\nUse echo." });',
         'const sibling = compile({ path: "agent/skills/echo/references/ref.md", kind: "markdown", text: "Ref." });',
         "const duplicate = compileAgentTree({ files: [",
         '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
         '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nOne." },',
         '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\n---\\nTwo." },',
         "] });",
-        "console.log(JSON.stringify({ mismatch, sibling, duplicate }));",
+        "const reservedTool = compileAgentTree({ files: [",
+        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+        '  { path: "agent/tools/load_skill.ts", kind: "tool", declaration: {} },',
+        "] });",
+        "console.log(JSON.stringify({ mismatch, duplicateName, sibling, duplicate, reservedTool }));",
       ].join("\n"),
     ],
     { cwd: repoRoot, encoding: "utf8" },
@@ -96,6 +111,15 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
       path: "skills/echo.md",
       expectedName: "echo",
       actualName: "other",
+    },
+  ]);
+  assert.equal(output.duplicateName.ok, false);
+  assert.deepEqual(output.duplicateName.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/echo.md",
+      field: "/frontmatter/name",
+      reason: "frontmatter_field_duplicate",
     },
   ]);
   assert.equal(output.sibling.ok, false);
@@ -113,6 +137,14 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
       name: "echo",
       path: "skills/echo/SKILL.md",
       existingPath: "agent/skills/echo.md",
+    },
+  ]);
+  assert.equal(output.reservedTool.ok, false);
+  assert.deepEqual(output.reservedTool.issues, [
+    {
+      kind: "reserved_tool_name",
+      path: "tools/load_skill.ts",
+      toolId: "load_skill",
     },
   ]);
 });
@@ -514,10 +546,19 @@ void test("agentos build emits skill artifact and load_skill executes determinis
           "    const loaded = await Effect.runPromise(",
           '      unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "echo" })),',
           "    );",
+          "    let unknownRejected = false;",
+          "    try {",
+          "      await Effect.runPromise(",
+          '        unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "missing" })),',
+          "      );",
+          "    } catch {",
+          "      unknownRejected = true;",
+          "    }",
           "    return {",
           "      toolNames: Object.keys(tools).sort(),",
           '      systemIncludesAdvert: spec.system.includes("Available agent skills"),',
           "      loaded,",
+          "      unknownRejected,",
           "    };",
           "  };",
           '  return await agent.submitRunInput({ intent: "smoke", context: {} });',
@@ -537,6 +578,7 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     assert.equal(output.systemIncludesAdvert, true);
     assert.equal(output.loaded.name, "echo");
     assert.equal(output.loaded.text, "ECHO_MARKER_560");
+    assert.equal(output.unknownRejected, true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
