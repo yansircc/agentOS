@@ -208,6 +208,22 @@ const loadToolDeclaration = async (file: string): Promise<AuthoredToolDeclaratio
   return mod.declaration;
 };
 
+const collectFiles = async (dir: string): Promise<ReadonlyArray<string>> => {
+  const files: string[] = [];
+  const entries = (await readdir(dir, { withFileTypes: true })).sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
+  for (const entry of entries) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectFiles(file)));
+      continue;
+    }
+    if (entry.isFile()) files.push(file);
+  }
+  return files;
+};
+
 const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<AuthoredAgentTree> => {
   const files: AuthoredAgentTree["files"][number][] = [
     {
@@ -237,6 +253,17 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
         path: toAuthoredPath(cwd, file),
         kind: "tool",
         declaration: await loadToolDeclaration(file),
+      });
+    }
+  }
+
+  const skillsDir = path.join(agentDir, "skills");
+  if (await pathExists(skillsDir)) {
+    for (const file of await collectFiles(skillsDir)) {
+      files.push({
+        path: toAuthoredPath(cwd, file),
+        kind: "markdown",
+        text: await readFile(file, "utf8"),
       });
     }
   }

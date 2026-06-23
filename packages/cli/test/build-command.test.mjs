@@ -434,6 +434,114 @@ void test("static target injects skill advert and load_skill for workspace and c
   }
 });
 
+void test("agentos build emits skill artifact and load_skill executes deterministically", () => {
+  const root = mkdtempSync(path.join(repoRoot, ".agentos-skill-smoke-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent/skills"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
+    writeFileSync(path.join(root, "agent/skills/echo.md"), "---\nname: echo\n---\nECHO_MARKER_560");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "skill-smoke-fixture",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "skill-smoke-fixture-scope",
+          },
+          effectAuthorityRef: {
+            authorityClass: "effect",
+            authorityId: "skill-smoke-fixture",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "chat@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "skill-smoke-fixture", "version": "0.1.0" },',
+        '  "target": {',
+        '    "kind": "cloudflare-do@1",',
+        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+        "  },",
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-model"',
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const build = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.equal(build.status, 0, build.stderr);
+    const manifest = JSON.parse(
+      readFileSync(path.join(root, ".agentos/generated/manifest.json"), "utf8"),
+    );
+    assert.equal(Object.hasOwn(manifest, "skills"), false);
+    const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
+    assert.match(target, /ECHO_MARKER_560/);
+    assert.match(target, /name: "load_skill"/);
+
+    const smoke = spawnSync(
+      "bun",
+      [
+        "--eval",
+        [
+          'import { readFileSync, writeFileSync } from "node:fs";',
+          'let source = readFileSync(".agentos/generated/target.ts", "utf8");',
+          "source = source",
+          '  .replace(\'import { createAgentDurableObject } from "@agent-os/runtime/cloudflare";\', "const createAgentDurableObject = () => class {};")',
+          '  .replace(\'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/runtime/llm-effect-ai";\', "const OpenAiCompatibleLlmTransportLive = {};");',
+          "source += `",
+          "export const __agentosSkillSmoke = async () => {",
+          "  const agent = Object.create(AgentOS.prototype);",
+          '  agent.targetEnv = { AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model" };',
+          "  agent.submitWithBindings = async (spec, bindings) => {",
+          "    const tools = bindings.tools ?? {};",
+          "    const loaded = await Effect.runPromise(",
+          '      unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "echo" })),',
+          "    );",
+          "    return {",
+          "      toolNames: Object.keys(tools).sort(),",
+          '      systemIncludesAdvert: spec.system.includes("Available agent skills"),',
+          "      loaded,",
+          "    };",
+          "  };",
+          '  return await agent.submitRunInput({ intent: "smoke", context: {} });',
+          "};",
+          "`;",
+          'writeFileSync(".agentos/generated/target.smoke.ts", source);',
+          'const { __agentosSkillSmoke } = await import("./.agentos/generated/target.smoke.ts");',
+          "const result = await __agentosSkillSmoke();",
+          "console.log(JSON.stringify(result));",
+        ].join("\n"),
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    assert.equal(smoke.status, 0, smoke.stderr);
+    const output = JSON.parse(smoke.stdout);
+    assert.deepEqual(output.toolNames, ["load_skill"]);
+    assert.equal(output.systemIncludesAdvert, true);
+    assert.equal(output.loaded.name, "echo");
+    assert.equal(output.loaded.text, "ECHO_MARKER_560");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test("agentos build omits load_skill support when no skills are authored", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-no-skills-build-"));
   try {
