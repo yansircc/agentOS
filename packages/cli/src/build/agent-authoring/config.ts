@@ -27,6 +27,7 @@ import type {
   AgentManifestFactKey,
   AgentManifestOrigin,
   AuthoredAgentManifest,
+  CompiledAgentSkill,
   CompiledAgentManifest,
   WorkspaceDefaultToolControl,
 } from "./manifest-compiler";
@@ -184,6 +185,7 @@ export interface NormalizedAgentOsConfigBase<M extends AgentManifest = AgentMani
   readonly deployment: DeploymentSpec<M>;
   readonly deploymentVersion?: string;
   readonly authoredToolNames: ReadonlyArray<string>;
+  readonly skills: ReadonlyArray<CompiledAgentSkill>;
   readonly target: AgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
   readonly llm: AgentOsConfigLlm;
@@ -927,6 +929,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
           ? {}
           : { deploymentVersion: value.deployment.version }),
         authoredToolNames: Object.keys(compiled.toolFilePaths).sort(),
+        skills: compiled.skills,
         target: value.target,
         client: value.client,
         llm: value.llm,
@@ -1012,6 +1015,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         ? {}
         : { deploymentVersion: value.deployment.version }),
       authoredToolNames: Object.keys(compiled.toolFilePaths).sort(),
+      skills: compiled.skills,
       target: value.target,
       client: value.client,
       llm: value.llm,

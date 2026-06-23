@@ -16,6 +16,7 @@ export type {
   AuthoredToolFile,
   AuthoredWorkspaceDefaultToolControl,
   AuthoredWorkspaceDefaultToolOverride,
+  CompiledAgentSkill,
   CompiledAgentManifest,
   CompileAgentTreeIssue,
   CompileAgentTreeResult,

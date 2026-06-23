@@ -81,6 +81,13 @@ export interface AuthoredToolFile {
   readonly declaration?: AuthoredToolDeclaration;
 }
 
+export interface CompiledAgentSkill {
+  readonly name: string;
+  readonly path: string;
+  readonly digest: string;
+  readonly text: string;
+}
+
 export interface AuthoredWorkspaceDefaultToolOverride {
   readonly interaction?: WorkspaceToolInteractionFloor;
 }
@@ -111,6 +118,7 @@ export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
     Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>>
   >;
   readonly toolFilePaths: Readonly<Record<string, string>>;
+  readonly skills: ReadonlyArray<CompiledAgentSkill>;
 }
 
 export type CompileAgentTreeIssue =
@@ -168,6 +176,18 @@ export type CompileAgentTreeIssue =
       readonly path: string;
       readonly toolId: string;
     }
+  | {
+      readonly kind: "skill_identity_mismatch";
+      readonly path: string;
+      readonly expectedName: string;
+      readonly actualName: string;
+    }
+  | {
+      readonly kind: "duplicate_skill";
+      readonly name: string;
+      readonly path: string;
+      readonly existingPath: string;
+    }
   | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string }
   | { readonly kind: "function_in_manifest"; readonly path: string };
 
@@ -190,6 +210,7 @@ interface CompilerState {
   readonly pathKeys: Map<string, string>;
   readonly toolIds: Set<string>;
   readonly toolFilePaths: Map<string, string>;
+  readonly skills: Map<string, CompiledAgentSkill>;
   readonly workspaceToolControls: Map<WorkspaceToolName, WorkspaceDefaultToolControl>;
 }
 
@@ -931,7 +952,120 @@ const recordJsonFile = (state: CompilerState, path: string, value: unknown): voi
   }
 };
 
+const skillIdentityForPath = (path: string): string | null => {
+  const parts = path.split("/");
+  if (parts[0] !== "skills") return null;
+  if (parts.length === 2 && parts[1]?.endsWith(".md")) {
+    const name = parts[1].slice(0, -".md".length);
+    return name.length === 0 ? null : name;
+  }
+  if (parts.length === 3 && parts[2] === "SKILL.md") {
+    return parts[1]?.length === 0 ? null : (parts[1] ?? null);
+  }
+  return null;
+};
+
+const stripYamlQuotes = (value: string): string => {
+  if (
+    ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))) &&
+    value.length >= 2
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+};
+
+const parseSkillFrontmatter = (
+  state: CompilerState,
+  path: string,
+  text: string,
+): { readonly name: string; readonly body: string } | null => {
+  const normalized = text.replace(/\r\n?/gu, "\n");
+  const lines = normalized.split("\n");
+  if (lines[0]?.trim() !== "---") {
+    invalidAuthoredValue(state, path, "/frontmatter", "frontmatter_required");
+    return null;
+  }
+  const end = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  if (end < 0) {
+    invalidAuthoredValue(state, path, "/frontmatter", "frontmatter_not_closed");
+    return null;
+  }
+  const fields: Record<string, string> = {};
+  for (let index = 1; index < end; index += 1) {
+    const line = lines[index]?.trim() ?? "";
+    if (line.length === 0) continue;
+    const match = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/u.exec(line);
+    if (match === null) {
+      invalidAuthoredValue(state, path, `/frontmatter/${index}`, "frontmatter_line_invalid");
+      continue;
+    }
+    const [, key, rawValue] = match;
+    fields[key] = stripYamlQuotes(rawValue.trim());
+  }
+  assertAllowedFields(state, path, fields, new Set(["name"]));
+  const name = parseStringField(state, path, "/frontmatter/name", fields.name);
+  if (name === null) return null;
+  return {
+    name,
+    body: lines.slice(end + 1).join("\n").replace(/^\n/u, "").replace(/\s+$/u, ""),
+  };
+};
+
+const recordSkillFile = (
+  state: CompilerState,
+  path: string,
+  expectedName: string,
+  text: string,
+): void => {
+  if (!isManifestMapId(expectedName)) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "skill_name_invalid" });
+    return;
+  }
+  const parsed = parseSkillFrontmatter(state, path, text);
+  if (parsed === null) return;
+  if (!isManifestMapId(parsed.name)) {
+    invalidAuthoredValue(state, path, "/frontmatter/name", "skill_name_invalid");
+    return;
+  }
+  if (parsed.name !== expectedName) {
+    state.issues.push({
+      kind: "skill_identity_mismatch",
+      path,
+      expectedName,
+      actualName: parsed.name,
+    });
+    return;
+  }
+  const existing = state.skills.get(expectedName);
+  if (existing !== undefined) {
+    state.issues.push({
+      kind: "duplicate_skill",
+      name: expectedName,
+      path,
+      existingPath: existing.path,
+    });
+    return;
+  }
+  state.skills.set(expectedName, {
+    name: expectedName,
+    path: authoredPath(path),
+    digest: digestText(text),
+    text: parsed.body,
+  });
+};
+
 const recordMarkdownFile = (state: CompilerState, path: string, text: string): void => {
+  const skillName = skillIdentityForPath(path);
+  if (path.startsWith("skills/")) {
+    if (skillName === null) {
+      state.issues.push({ kind: "unsupported_path", path, reason: "skill_path_not_in_grammar" });
+      return;
+    }
+    recordSkillFile(state, path, skillName, text);
+    return;
+  }
   if (path !== "instructions.md") {
     state.issues.push({ kind: "unsupported_path", path, reason: "markdown_path_not_in_grammar" });
     return;
@@ -1154,6 +1288,9 @@ const buildToolFilePaths = (state: CompilerState): Readonly<Record<string, strin
   return paths;
 };
 
+const buildSkills = (state: CompilerState): ReadonlyArray<CompiledAgentSkill> =>
+  [...state.skills.values()].sort((left, right) => left.name.localeCompare(right.name));
+
 /**
  * Compile an authored `agent/` tree into one normalized manifest plus
  * provenance. This is the app-author entrypoint; runtime facts and provider
@@ -1173,6 +1310,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     pathKeys: new Map(),
     toolIds: new Set(),
     toolFilePaths: new Map(),
+    skills: new Map(),
     workspaceToolControls: new Map(),
   };
 
@@ -1212,6 +1350,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       provenance: buildProvenance(state),
       workspaceToolControls: buildWorkspaceToolControls(state),
       toolFilePaths: buildToolFilePaths(state),
+      skills: buildSkills(state),
     },
   };
 };

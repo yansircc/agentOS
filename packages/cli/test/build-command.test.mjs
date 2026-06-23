@@ -10,6 +10,113 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const cli = path.join(repoRoot, "packages/cli/src/main.mjs");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
 
+void test("compileAgentTree keeps skills as authoring-only output", () => {
+  const result = spawnSync(
+    "bun",
+    [
+      "--eval",
+      [
+        'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+        "const compiled = compileAgentTree({",
+        "  files: [",
+        '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+        '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
+        '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse echo." },',
+        '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nReview carefully." },',
+        "  ],",
+        "});",
+        "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+        "const normalized = normalizeAgentOsConfig({",
+        '  profile: "chat@1",',
+        '  agent: "./agent",',
+        '  deployment: { id: "skills-fixture" },',
+        '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
+        '  client: { kind: "browser-direct@1" },',
+        '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+        "}, compiled.value);",
+        "if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
+        "console.log(JSON.stringify({",
+        "  skills: compiled.value.skills,",
+        "  normalizedSkills: normalized.value.skills,",
+        '  manifestHasSkills: Object.hasOwn(compiled.value.manifest, "skills"),',
+        '  manifestToolNames: Object.keys(compiled.value.manifest.tools ?? {}).sort(),',
+        "}));",
+      ].join("\n"),
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(
+    output.skills.map((skill) => ({
+      name: skill.name,
+      path: skill.path,
+      text: skill.text,
+    })),
+    [
+      { name: "echo", path: "agent/skills/echo.md", text: "Use echo." },
+      { name: "review", path: "agent/skills/review/SKILL.md", text: "Review carefully." },
+    ],
+  );
+  assert.deepEqual(output.normalizedSkills, output.skills);
+  assert.match(output.skills[0].digest, /^fnv1a32:[0-9a-f]+:\d+$/u);
+  assert.equal(output.manifestHasSkills, false);
+  assert.deepEqual(output.manifestToolNames, []);
+});
+
+void test("compileAgentTree rejects invalid skill identity and v1 sibling files", () => {
+  const result = spawnSync(
+    "bun",
+    [
+      "--eval",
+      [
+        'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
+        "const compile = (file) => compileAgentTree({ files: [",
+        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+        "  file,",
+        "] });",
+        "const mismatch = compile({ path: \"agent/skills/echo.md\", kind: \"markdown\", text: \"---\\nname: other\\n---\\nUse echo.\" });",
+        "const sibling = compile({ path: \"agent/skills/echo/references/ref.md\", kind: \"markdown\", text: \"Ref.\" });",
+        "const duplicate = compileAgentTree({ files: [",
+        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+        '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nOne." },',
+        '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\n---\\nTwo." },',
+        "] });",
+        "console.log(JSON.stringify({ mismatch, sibling, duplicate }));",
+      ].join("\n"),
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.mismatch.ok, false);
+  assert.deepEqual(output.mismatch.issues, [
+    {
+      kind: "skill_identity_mismatch",
+      path: "skills/echo.md",
+      expectedName: "echo",
+      actualName: "other",
+    },
+  ]);
+  assert.equal(output.sibling.ok, false);
+  assert.deepEqual(output.sibling.issues, [
+    {
+      kind: "unsupported_path",
+      path: "skills/echo/references/ref.md",
+      reason: "skill_path_not_in_grammar",
+    },
+  ]);
+  assert.equal(output.duplicate.ok, false);
+  assert.deepEqual(output.duplicate.issues, [
+    {
+      kind: "duplicate_skill",
+      name: "echo",
+      path: "skills/echo/SKILL.md",
+      existingPath: "agent/skills/echo.md",
+    },
+  ]);
+});
+
 void test("agentos build compiles an authored workspace tree into generated files", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-build-"));
   try {
