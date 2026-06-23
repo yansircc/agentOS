@@ -15,12 +15,8 @@
  * which injects scope from ctx.id.name (SSoT) and runs this effect.
  */
 
-import { Clock, Context, Data, Duration, Effect, Predicate, Ref } from "effect";
-import {
-  DECISION_GATE_KIND,
-  projectDecisionGate,
-  settleDecisionGateConsumed,
-} from "./decision-gate";
+import { Clock, Duration, Effect, Ref } from "effect";
+import { projectDecisionGate, settleDecisionGateConsumed } from "./decision-gate";
 import {
   JsonStringifyError,
   safeStringify,
@@ -28,32 +24,21 @@ import {
   ToolError,
   UpstreamFailure,
 } from "@agent-os/core/errors";
-import { ABORT, type AbortKind } from "@agent-os/core/abort";
+import { ABORT } from "@agent-os/core/abort";
 import {
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
   type LlmToolCall,
   type LlmMessage,
   type LlmRoute,
-  type LlmToolChoice,
 } from "@agent-os/core/llm-protocol";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
-import type { ToolDefinition } from "@agent-os/core/tools";
-import type { LedgerEvent } from "@agent-os/core/types";
-import {
-  isMaterialRef,
-  materialRefKey,
-  materialRefSatisfiesRequirement,
-  type MaterialRef,
-} from "@agent-os/core/material-ref";
 import {
   InvalidTraceContext,
   copyTraceContext,
   validateOptionalTraceContext,
-  type TraceContext,
 } from "@agent-os/core/telemetry-protocol";
 import {
-  agentRunAbortedEvent,
   agentRunCompletedEvent,
   agentRunInterruptedEvent,
   agentRunResumedEvent,
@@ -65,48 +50,27 @@ import {
   llmRequestedEvent,
   llmResponseEvent,
   parseInputRequestResumePayload,
-  RUNTIME_FACT_OWNER,
   RUNTIME_EVENT_KIND,
   receiptBackedToolResultFromUnknown,
   runtimeCompletedAfterToolsEvent,
   runtimeHistoryCompactedEvent,
   toolExecutedEvent,
-  toolReplayArtifactFromExecutedPayload,
   toolRejectedEvent,
-  replayToolFromArtifact,
   type InputRequestResumePayload,
-  type SubmitDecisionInterrupt,
   type SubmitResult,
-  type ToolArgumentSummary,
-  type ToolRejectedDiagnostics,
   type TurnRef,
 } from "@agent-os/core/runtime-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import type { InternalSubmitSpec } from "./internal-submit";
 import { Ledger, runtimeStorageError, type RuntimeStorageError } from "./ledger";
-import {
-  RefResolverService,
-  type RefResolutionFailed,
-  type ResolvedMaterial,
-  type ResolvedMaterialService,
-} from "@agent-os/core/ref-resolver";
-import { openLive } from "@agent-os/core/live-edge";
+import { RefResolverService, type RefResolutionFailed } from "@agent-os/core/ref-resolver";
 import { Quota } from "./quota-service";
 import {
   decodeToolArgs,
   executeTool,
-  planMaterialBrokerSubstitution,
   resolveToolExecution,
   validateExecutionDomainRegistry,
   validateToolRegistry,
-  type ExecutionDomainDeclaration,
-  type MaterialBrokerReceipt,
-  type MaterialBrokerSubstitutionIssue,
-  type ResolvedToolExecution,
-  type Tool,
-  type ToolExecutionContextInput,
-  type ToolProjectionWaitSpec,
-  type ResolvedToolMaterials,
 } from "@agent-os/core/tools";
 import { makeAdmissionSchemaSpec } from "@agent-os/core/runtime-protocol";
 import { Admission } from "./admission";
@@ -116,7 +80,6 @@ import {
   makeOperationRef,
   makePreClaim,
   normalizeAdmitVerdict,
-  type PreClaim,
   type RejectionRef,
 } from "@agent-os/core/effect-claim";
 import {
@@ -132,234 +95,58 @@ import { publicRuntimeCauseReason } from "./failure-classification";
 import { BoundaryEvents } from "./boundary-events";
 import type { BoundaryCommitRejected } from "./boundary-commit";
 import { appendNextDriverAction, appendRuntimeDriverAction } from "./driver";
-import { MaterializedProjections, waitForProjection } from "./projection";
-import type { BoundaryContract } from "@agent-os/core/boundary-contract";
+import { MaterializedProjections } from "./projection";
 import { normalizeSubmitToolRetryPolicy } from "./submit-retry-policy";
-
-export const DEFAULT_LLM_CALL_TIMEOUT_MS = 60_000;
-
-export const turnRefOf = (runId: number, index: number): TurnRef => ({
-  id: runId,
-  index,
-});
-
-class LlmCallTimedOut extends Data.TaggedError("agent_os.llm_call_timed_out")<{
-  readonly mode: "budget" | "provider";
-  readonly elapsedMs: number;
-  readonly timeoutMs: number;
-}> {}
-
-const toolDefinitionsOf = (tools: Record<string, Tool>): ReadonlyArray<ToolDefinition> =>
-  Object.values(tools).map((t) => t.definition);
-
-const toolDefinitionsForRuntimePolicy = (
-  tools: Record<string, Tool>,
-  requiredToolNames: ReadonlyArray<string>,
-  executedToolNames: ReadonlySet<string>,
-): ReadonlyArray<ToolDefinition> => {
-  if (requiredToolNames.length === 0) return toolDefinitionsOf(tools);
-  const policyTools = new Set(requiredToolNames);
-  return Object.entries(tools)
-    .filter(([toolName]) => !policyTools.has(toolName) || !executedToolNames.has(toolName))
-    .map(([, tool]) => tool.definition);
-};
-
-const toolArgumentSummaryEncoder = new TextEncoder();
-
-const summarizeToolArguments = (value: unknown): ToolArgumentSummary => {
-  if (typeof value === "string") {
-    return {
-      type: "string",
-      bytes: toolArgumentSummaryEncoder.encode(value).byteLength,
-      truncated: false,
-    };
-  }
-  if (Array.isArray(value)) {
-    return { type: "array", keys: [], truncated: value.length > 0 };
-  }
-  if (Predicate.isObject(value)) {
-    const keys = Object.keys(value).sort();
-    return {
-      type: "object",
-      keys: keys.slice(0, 20),
-      truncated: keys.length > 20,
-    };
-  }
-  return { type: value === null ? "null" : typeof value };
-};
-
-const schemaIssuesFromToolError = (
-  error: ToolError,
-): ToolRejectedDiagnostics["schemaIssues"] | undefined => {
-  const cause = error.cause;
-  if (!Predicate.isObject(cause) || !Array.isArray(cause.schemaIssues)) return undefined;
-  const issues = cause.schemaIssues.filter(
-    (issue): issue is { readonly path: string; readonly issue: string } =>
-      Predicate.isObject(issue) &&
-      typeof issue.path === "string" &&
-      typeof issue.issue === "string",
-  );
-  return issues.length === 0 ? undefined : issues;
-};
-
-const receiptBackedToolBindingReason = (
-  spec: InternalSubmitSpec,
-  toolName: string,
-): string | null => {
-  const binding = spec.receiptBackedTools?.[toolName];
-  if (binding === undefined) return EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON;
-  const declaredIntentKinds = new Set((spec.toolIntents ?? []).map((intent) => intent.kind));
-  return binding.intentKinds.every((kind) => declaredIntentKinds.has(kind))
-    ? null
-    : "receipt_backed_tool_missing_declared_intent";
-};
-
-const claimMatchesPreClaim = (
-  claim: {
-    readonly operationRef: string;
-    readonly scopeRef: PreClaim["scopeRef"];
-    readonly effectAuthorityRef: PreClaim["effectAuthorityRef"];
-    readonly originRef: PreClaim["originRef"];
-  },
-  preClaim: PreClaim,
-): boolean =>
-  claim.operationRef === preClaim.operationRef &&
-  claim.scopeRef.kind === preClaim.scopeRef.kind &&
-  claim.scopeRef.scopeId === preClaim.scopeRef.scopeId &&
-  (claim.scopeRef.kind !== "external" ||
-    (preClaim.scopeRef.kind === "external" &&
-      claim.scopeRef.systemRef === preClaim.scopeRef.systemRef)) &&
-  claim.effectAuthorityRef.authorityClass === preClaim.effectAuthorityRef.authorityClass &&
-  claim.effectAuthorityRef.authorityId === preClaim.effectAuthorityRef.authorityId &&
-  claim.effectAuthorityRef.version === preClaim.effectAuthorityRef.version &&
-  claim.originRef.originKind === preClaim.originRef.originKind &&
-  claim.originRef.originId === preClaim.originRef.originId &&
-  claim.originRef.version === preClaim.originRef.version;
-
-const payloadWithToolPreClaim = (
-  contract: BoundaryContract,
-  kind: string,
-  payload: unknown,
-  claim: PreClaim,
-): unknown => {
-  const claimContract = contract.events[kind]?.claim;
-  if (claimContract?.phase !== "pre") return payload;
-  return Predicate.isObject(payload) ? { ...payload, [claimContract.key]: claim } : payload;
-};
-
-const runtimeToolContext = (
-  spec: InternalSubmitSpec,
-  boundaryEvents: Context.Service.Shape<typeof BoundaryEvents>,
-  projections: Context.Service.Shape<typeof MaterializedProjections>,
-  claim: PreClaim,
-  resume: unknown,
-  materialBrokerReceipts: ReadonlyArray<MaterialBrokerReceipt> = [],
-): ToolExecutionContextInput => {
-  const declaredIntents = new Map((spec.toolIntents ?? []).map((intent) => [intent.kind, intent]));
-  return {
-    ...spec.toolContext,
-    ...(resume === undefined ? {} : { resume }),
-    ...(materialBrokerReceipts.length === 0 ? {} : { materialBrokerReceipts }),
-    ...(declaredIntents.size === 0
-      ? {}
-      : {
-          emitIntent: (kind, payload) => {
-            const declared = declaredIntents.get(kind);
-            if (declared === undefined) {
-              return Effect.fail(
-                new ToolError({
-                  toolName: "emitIntent",
-                  cause: { reason: "undeclared_intent", kind },
-                }),
-              );
-            }
-            return boundaryEvents
-              .commit(
-                declared.boundaryPackage.boundaryContract,
-                kind,
-                payloadWithToolPreClaim(
-                  declared.boundaryPackage.boundaryContract,
-                  kind,
-                  payload,
-                  claim,
-                ),
-              )
-              .pipe(
-                Effect.map((event) => ({ id: event.id })),
-                Effect.mapError((cause) => new ToolError({ toolName: "emitIntent", cause })),
-              );
-          },
-        }),
-    awaitProjection: <State = unknown>(projectionSpec: ToolProjectionWaitSpec<State>) => {
-      const ready = projectionSpec.ready;
-      return waitForProjection({
-        kind: projectionSpec.kind,
-        scopeRef: projectionSpec.scopeRef ?? spec.scopeRef,
-        effectAuthorityRef: projectionSpec.effectAuthorityRef ?? spec.effectAuthorityRef,
-        factOwnerRef: projectionSpec.factOwnerRef ?? RUNTIME_FACT_OWNER,
-        identity: projectionSpec.identity,
-        maxAttempts: projectionSpec.maxAttempts,
-        pollIntervalMs: projectionSpec.pollIntervalMs,
-        ready:
-          ready === undefined
-            ? undefined
-            : (row) =>
-                ready({
-                  kind: row.kind,
-                  projectionKind: row.kind,
-                  identityKey: row.identityKey,
-                  state: row.state as State,
-                  updatedEventId: row.updatedEventId,
-                }),
-      }).pipe(
-        Effect.provideService(MaterializedProjections, projections),
-        Effect.map((row) => ({
-          kind: row.kind,
-          projectionKind: row.kind,
-          identityKey: row.identityKey,
-          state: row.state as State,
-          updatedEventId: row.updatedEventId,
-        })),
-        Effect.mapError((cause) => new ToolError({ toolName: "awaitProjection", cause })),
-      );
-    },
-  };
-};
-
-const toolBudgetTimeCause = (
-  elapsedMs: number,
-  maxMs: number,
-): {
-  readonly reason: "budget_time";
-  readonly elapsedMs: number;
-  readonly maxMs: number;
-} => ({
-  reason: "budget_time",
-  elapsedMs,
-  maxMs,
-});
-
-const isToolBudgetTimeError = (error: ToolError): boolean => {
-  const cause = error.cause;
-  return (
-    typeof cause === "object" &&
-    cause !== null &&
-    (cause as { readonly reason?: unknown }).reason === "budget_time"
-  );
-};
-
-const toolBudgetTimePayload = (
-  error: ToolError,
-): { readonly elapsedMs: number; readonly maxMs: number } => {
-  const cause = error.cause as {
-    readonly elapsedMs?: unknown;
-    readonly maxMs?: unknown;
-  };
-  return {
-    elapsedMs: typeof cause.elapsedMs === "number" ? cause.elapsedMs : 0,
-    maxMs: typeof cause.maxMs === "number" ? cause.maxMs : 0,
-  };
-};
+import {
+  decisionGateClaimFor,
+  decisionGateRefFor,
+  decisionInterruptFor,
+  decisionInterruptIdFor,
+  decisionSubjectRefFor,
+  matchingDecisionEvent,
+  matchingInterruptionEvent,
+} from "./submit-agent/decision-interrupts";
+import {
+  isLlmCallTimedOut,
+  llmCallTimeoutBudgetMs,
+  llmTimeoutFor,
+  runTimedLlmAttempt,
+  timeoutAbortResult,
+  turnRefOf,
+} from "./submit-agent/llm-timeout";
+export { DEFAULT_LLM_CALL_TIMEOUT_MS, turnRefOf } from "./submit-agent/llm-timeout";
+import {
+  planToolMaterials,
+  withLocalResolvedToolMaterials,
+} from "./submit-agent/material-planning";
+import {
+  compactProviderHistoryToolCall,
+  providerHistoryArgumentsJson,
+  replayMessagesToInterruptedTool,
+} from "./submit-agent/provider-history";
+import { finalAbort, submitResultFromEvents } from "./submit-agent/result";
+import {
+  allPolicyToolsExecuted,
+  completeAfterToolPolicyNames,
+  hasExecutedTool,
+  policyToolViolationReason,
+  remainingRequiredToolNames,
+  requiredToolPolicyNames,
+  routeModelId,
+  safeToolChoiceSummary,
+  toolChoiceForRuntimePolicy,
+  toolDefinitionsForRuntimePolicy,
+} from "./submit-agent/tool-policy";
+import {
+  claimMatchesPreClaim,
+  isToolBudgetTimeError,
+  receiptBackedToolBindingReason,
+  runtimeToolContext,
+  schemaIssuesFromToolError,
+  summarizeToolArguments,
+  toolBudgetTimeCause,
+  toolBudgetTimePayload,
+} from "./submit-agent/tool-runtime";
 
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
@@ -377,672 +164,6 @@ export const buildInitialMessages = (
       ] satisfies ReadonlyArray<LlmMessage>;
     }),
   );
-
-const submitResultFromEvents = (
-  events: ReadonlyArray<LedgerEvent>,
-  runId: number,
-): Effect.Effect<SubmitResult, RuntimeStorageError> => {
-  const result = projectSubmitResult(events, runId);
-  if (result !== null) return Effect.succeed(result);
-  return Effect.fail(
-    runtimeStorageError("submit", {
-      reason: "missing_terminal_ledger_fact",
-      runId,
-    }),
-  );
-};
-
-const decisionInterruptFor = (
-  spec: InternalSubmitSpec,
-  toolName: string,
-): SubmitDecisionInterrupt | undefined =>
-  spec.decisionInterrupts?.find((interrupt) => interrupt.toolName === toolName);
-
-const refSuffixFor = (operationRef: string): string => encodeURIComponent(operationRef);
-
-const decisionGateRefFor = (interrupt: SubmitDecisionInterrupt, operationRef: string): string =>
-  `${interrupt.gateRefPrefix ?? "decision_gate"}:${refSuffixFor(operationRef)}`;
-
-const decisionInterruptIdFor = (interrupt: SubmitDecisionInterrupt, operationRef: string): string =>
-  `${interrupt.interruptIdPrefix ?? "decision"}:${refSuffixFor(operationRef)}`;
-
-const decisionSubjectRefFor = (claim: { readonly operationRef: string }): string =>
-  claim.operationRef;
-
-const decisionGateClaimFor = (
-  spec: Pick<InternalSubmitSpec, "effectAuthorityRef" | "scopeRef">,
-  runId: number,
-  gateRef: string,
-): PreClaim =>
-  makePreClaim({
-    operationRef: makeOperationRef("decision_gate", [gateRef]),
-    scopeRef: spec.scopeRef,
-    effectAuthorityRef: spec.effectAuthorityRef,
-    originRef: {
-      originId: `run:${runId}`,
-      originKind: "submit",
-    },
-  });
-
-const materialRejection = (
-  claim: { readonly operationRef: string },
-  reason: string,
-  kind: RejectionRef["rejectionKind"] = "resource_denied",
-): RejectionRef => ({
-  rejectionId: claim.operationRef,
-  rejectionKind: kind,
-  reason,
-});
-
-interface LocalToolMaterialRef {
-  readonly slot: string;
-  readonly ref: MaterialRef;
-}
-
-interface RuntimeToolMaterialPlan {
-  readonly materials: ResolvedToolMaterials;
-  readonly localRefs: ReadonlyArray<LocalToolMaterialRef>;
-  readonly brokerReceipts: ReadonlyArray<MaterialBrokerReceipt>;
-}
-
-const materialBrokerIssueLabel = (issue: MaterialBrokerSubstitutionIssue): string => {
-  switch (issue.kind) {
-    case "invalid_registry":
-      return "invalid_registry";
-    case "invalid_material_ref":
-      return "invalid_material_ref";
-    case "invalid_material_requirement":
-      return "invalid_material_requirement";
-    case "missing_broker_declaration":
-      return `missing_broker:${issue.domain.kind}:${issue.domain.ref}`;
-    case "unsupported_material_kind":
-      return `unsupported_kind:${issue.materialKind}`;
-    case "requirement_mismatch":
-      return `requirement_mismatch:${materialRefKey(issue.materialRef)}`;
-  }
-};
-
-const planToolMaterials = (
-  spec: InternalSubmitSpec,
-  tool: Tool,
-  claim: { readonly operationRef: string },
-  resolvedExecution: ResolvedToolExecution,
-):
-  | {
-      readonly ok: true;
-      readonly plan: RuntimeToolMaterialPlan;
-    }
-  | {
-      readonly ok: false;
-      readonly rejectionRef: RejectionRef;
-    } => {
-  const materials: Record<string, ResolvedMaterial> = {};
-  const localRefs: LocalToolMaterialRef[] = [];
-  const brokerReceipts: MaterialBrokerReceipt[] = [];
-
-  for (const requirement of tool.contract.requiredMaterials) {
-    const ref = spec.materials?.[requirement.slot];
-    if (ref === undefined) {
-      if (requirement.required) {
-        return {
-          ok: false,
-          rejectionRef: materialRejection(
-            claim,
-            `material_missing:${requirement.slot}`,
-            "resource_denied",
-          ),
-        };
-      }
-      continue;
-    }
-    if (!isMaterialRef(ref)) {
-      return {
-        ok: false,
-        rejectionRef: materialRejection(
-          claim,
-          `material_invalid:${requirement.slot}`,
-          "validation_failed",
-        ),
-      };
-    }
-    if (!materialRefSatisfiesRequirement(ref, requirement)) {
-      return {
-        ok: false,
-        rejectionRef: materialRejection(
-          claim,
-          `material_invalid:${requirement.slot}:${materialRefKey(ref)}`,
-          "validation_failed",
-        ),
-      };
-    }
-    if (resolvedExecution.kind === "external") {
-      const brokerPlan = planMaterialBrokerSubstitution({
-        registry: { domains: spec.executionDomains ?? [] },
-        domain: resolvedExecution.execution.domain,
-        materialRef: ref,
-        requirement,
-      });
-      if (!brokerPlan.ok) {
-        return {
-          ok: false,
-          rejectionRef: materialRejection(
-            claim,
-            `material_broker_unavailable:${requirement.slot}:${brokerPlan.issues.map(materialBrokerIssueLabel).join(",")}`,
-            "resource_denied",
-          ),
-        };
-      }
-      materials[requirement.slot] = brokerPlan.plan.placeholder;
-      brokerReceipts.push(brokerPlan.plan.receipt);
-    } else {
-      localRefs.push({ slot: requirement.slot, ref });
-    }
-  }
-  return { ok: true, plan: { materials, localRefs, brokerReceipts } };
-};
-
-const materialResolutionToolError = (
-  toolName: string,
-  material: LocalToolMaterialRef,
-  failure: RefResolutionFailed,
-): ToolError =>
-  new ToolError({
-    toolName,
-    cause: {
-      reason:
-        failure.reason === "resolver_threw" ? "material_resolution_failed" : "material_unresolved",
-      slot: material.slot,
-      ref: materialRefKey(material.ref),
-    },
-  });
-
-const withLocalResolvedToolMaterials = <A, E, R>(
-  refs: ResolvedMaterialService,
-  toolName: string,
-  localRefs: ReadonlyArray<LocalToolMaterialRef>,
-  use: (materials: ResolvedToolMaterials) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | ToolError, R> => {
-  const loop = (
-    index: number,
-    materials: Record<string, ResolvedMaterial>,
-  ): Effect.Effect<A, E | ToolError, R> => {
-    const local = localRefs[index];
-    if (local === undefined) return use(materials);
-    return Effect.acquireUseRelease(
-      refs
-        .material(local.ref)
-        .pipe(Effect.mapError((failure) => materialResolutionToolError(toolName, local, failure))),
-      (handle) => loop(index + 1, { ...materials, [local.slot]: openLive(handle.value) }),
-      (handle) => handle.dispose(),
-    );
-  };
-  return loop(0, {});
-};
-
-const payloadRecord = (event: LedgerEvent): Readonly<Record<string, unknown>> | null =>
-  Predicate.isObject(event.payload) ? event.payload : null;
-
-const matchingDecisionEvent = (
-  events: ReadonlyArray<LedgerEvent>,
-  gateRef: string,
-  decisionRef: string,
-): LedgerEvent | undefined =>
-  events.find((event) => {
-    const payload = payloadRecord(event);
-    return (
-      event.kind === DECISION_GATE_KIND.DECIDED &&
-      payload?.gateRef === gateRef &&
-      payload.decisionRef === decisionRef
-    );
-  });
-
-const matchingInterruptionEvent = (
-  events: ReadonlyArray<LedgerEvent>,
-  resume: NonNullable<InternalSubmitSpec["resume"]>,
-): LedgerEvent | undefined =>
-  events.find((event) => {
-    const decoded = decodeRuntimeLedgerEvent(event);
-    return (
-      decoded._tag === "runtime" &&
-      decoded.event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED &&
-      decoded.event.payload.runId === resume.runId &&
-      decoded.event.payload.turn.id === resume.turn.id &&
-      decoded.event.payload.turn.index === resume.turn.index &&
-      decoded.event.payload.interruptId === resume.interruptId &&
-      decoded.event.payload.decision?.gateRef === resume.gateRef
-    );
-  });
-
-const MAX_PROVIDER_HISTORY_STRING_BYTES = 512;
-
-type ProviderHistoryValueCompaction = {
-  readonly value: unknown;
-  readonly didRedact: boolean;
-};
-
-const compactProviderHistoryValue = (value: unknown): ProviderHistoryValueCompaction => {
-  if (typeof value === "string") {
-    const bytes = toolArgumentSummaryEncoder.encode(value).byteLength;
-    if (bytes <= MAX_PROVIDER_HISTORY_STRING_BYTES) return { value, didRedact: false };
-    return {
-      value: `[agentOS redacted provider history string: ${bytes} bytes]`,
-      didRedact: true,
-    };
-  }
-  if (Array.isArray(value)) {
-    let didRedact = false;
-    const compacted = value.map((entry) => {
-      const result = compactProviderHistoryValue(entry);
-      didRedact = didRedact || result.didRedact;
-      return result.value;
-    });
-    return { value: compacted, didRedact };
-  }
-  if (Predicate.isObject(value)) {
-    let didRedact = false;
-    const compacted = Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => {
-        const result = compactProviderHistoryValue(entry);
-        didRedact = didRedact || result.didRedact;
-        return [key, result.value];
-      }),
-    );
-    return { value: compacted, didRedact };
-  }
-  return { value, didRedact: false };
-};
-
-const providerHistoryArgumentsJson = (
-  tool: Tool,
-  toolName: string,
-  args: unknown,
-  originalArguments: string,
-): Effect.Effect<
-  { readonly argumentsJson: string; readonly didRedact: boolean },
-  JsonStringifyError
-> =>
-  Effect.gen(function* () {
-    const compacted = compactProviderHistoryValue(args);
-    if (!compacted.didRedact) return { argumentsJson: originalArguments, didRedact: false };
-    const decoded = yield* Effect.result(decodeToolArgs(tool, compacted.value, toolName));
-    if (decoded._tag === "Failure") {
-      return { argumentsJson: originalArguments, didRedact: false };
-    }
-    const argumentsJson = yield* safeStringify(compacted.value);
-    return { argumentsJson, didRedact: true };
-  });
-
-type ProviderHistoryCompaction = {
-  readonly originalBytes: number;
-  readonly compactedBytes: number;
-};
-
-const compactProviderHistoryToolCall = (
-  messages: LlmMessage[],
-  toolCallId: string,
-  argumentsJson: string,
-  didRedact: boolean,
-): ProviderHistoryCompaction | null => {
-  if (!didRedact) return null;
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index];
-    if (message?.role !== "assistant" || message.tool_calls === undefined) continue;
-    if (!message.tool_calls.some((call) => call.id === toolCallId)) continue;
-    const existingCall = message.tool_calls.find((call) => call.id === toolCallId);
-    const originalArguments = existingCall?.function.arguments;
-    if (originalArguments === undefined) return null;
-    const originalBytes = toolArgumentSummaryEncoder.encode(originalArguments).byteLength;
-    const compactedBytes = toolArgumentSummaryEncoder.encode(argumentsJson).byteLength;
-    messages[index] = {
-      ...message,
-      tool_calls: message.tool_calls.map((call) =>
-        call.id === toolCallId
-          ? {
-              ...call,
-              function: {
-                ...call.function,
-                arguments: argumentsJson,
-              },
-            }
-          : call,
-      ),
-    };
-    return { originalBytes, compactedBytes };
-  }
-  return null;
-};
-
-const replayMessagesToInterruptedTool = (
-  initialMessages: ReadonlyArray<LlmMessage>,
-  events: ReadonlyArray<LedgerEvent>,
-  resume: NonNullable<InternalSubmitSpec["resume"]>,
-  interruptedToolCallId: string,
-  executionDomains: ReadonlyArray<ExecutionDomainDeclaration>,
-): Effect.Effect<
-  {
-    readonly messages: LlmMessage[];
-    readonly call: LlmToolCall;
-    readonly sourceEventId: number;
-  },
-  RuntimeStorageError | JsonStringifyError
-> =>
-  Effect.gen(function* () {
-    const messages: LlmMessage[] = [...initialMessages];
-
-    for (let index = 0; index <= resume.turn.index; index++) {
-      const llmEvent = events.find((event) => {
-        const decoded = decodeRuntimeLedgerEvent(event);
-        return (
-          decoded._tag === "runtime" &&
-          decoded.event.kind === RUNTIME_EVENT_KIND.LLM_RESPONSE &&
-          decoded.event.payload.turn.id === resume.runId &&
-          decoded.event.payload.turn.index === index
-        );
-      });
-      if (llmEvent === undefined) {
-        return yield* Effect.fail(
-          runtimeStorageError("submit", {
-            reason: "resume_missing_llm_turn",
-            runId: resume.runId,
-            turnIndex: index,
-          }),
-        );
-      }
-
-      const decoded = decodeRuntimeLedgerEvent(llmEvent);
-      if (decoded._tag !== "runtime" || decoded.event.kind !== RUNTIME_EVENT_KIND.LLM_RESPONSE) {
-        return yield* Effect.fail(runtimeStorageError("submit", { reason: "resume_bad_llm_turn" }));
-      }
-      const responseText = textFromLlmOutputItems(decoded.event.payload.items);
-      const responseToolCalls = toolCallsFromLlmOutputItems(decoded.event.payload.items);
-      messages.push({
-        role: "assistant",
-        content: responseText,
-        tool_calls: responseToolCalls.length > 0 ? responseToolCalls : undefined,
-      });
-
-      for (const call of responseToolCalls) {
-        if (index === resume.turn.index && call.id === interruptedToolCallId) {
-          return { messages, call, sourceEventId: llmEvent.id };
-        }
-
-        const toolEvent = events.find((event) => {
-          const decodedTool = decodeRuntimeLedgerEvent(event);
-          return (
-            decodedTool._tag === "runtime" &&
-            decodedTool.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED &&
-            decodedTool.event.payload.runId === resume.runId &&
-            decodedTool.event.payload.toolCallId === call.id
-          );
-        });
-        if (toolEvent === undefined) continue;
-        const decodedTool = decodeRuntimeLedgerEvent(toolEvent);
-        if (
-          decodedTool._tag === "runtime" &&
-          decodedTool.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED
-        ) {
-          const resolvedExecution = resolveToolExecution(decodedTool.event.payload.execution, {
-            domains: executionDomains,
-          });
-          if (!resolvedExecution.ok) {
-            return yield* Effect.fail(
-              runtimeStorageError("submit", {
-                reason: "tool_execution_witness_resolution_failed",
-                issues: resolvedExecution.issues,
-                runId: resume.runId,
-                toolCallId: call.id,
-                toolName: call.function.name,
-              }),
-            );
-          }
-          const artifact = toolReplayArtifactFromExecutedPayload(
-            decodedTool.event.payload,
-            resolvedExecution.resolved,
-          );
-          if (!artifact.ok) {
-            return yield* Effect.fail(
-              runtimeStorageError("submit", {
-                reason: artifact.reason,
-                runId: resume.runId,
-                toolCallId: call.id,
-                toolName: call.function.name,
-              }),
-            );
-          }
-          const replayed = replayToolFromArtifact(artifact.artifact);
-          const resultStr = yield* safeStringify(replayed.result);
-          messages.push({
-            role: "tool",
-            tool_call_id: call.id,
-            name: call.function.name,
-            content: resultStr,
-          });
-        }
-      }
-    }
-
-    return yield* Effect.fail(
-      runtimeStorageError("submit", {
-        reason: "resume_missing_interrupted_tool_call",
-        runId: resume.runId,
-        interruptId: resume.interruptId,
-      }),
-    );
-  });
-
-/** The single termination funnel. All recoverable aborts route through here.
- *  Logs an agent.aborted.* ledger event then constructs SubmitResult.fail. */
-const finalAbort = (
-  kind: AbortKind,
-  payload: Record<string, unknown>,
-  identity: LedgerTruthIdentity,
-  runId: number,
-  tokensUsed: number,
-  traceContext?: TraceContext,
-): Effect.Effect<SubmitResult, RuntimeStorageError | JsonStringifyError, Ledger> =>
-  Effect.gen(function* () {
-    const ledger = yield* Ledger;
-    yield* appendRuntimeDriverAction(ledger, {
-      kind: "abort",
-      event: agentRunAbortedEvent({
-        ...identity,
-        kind,
-        runId,
-        tokensUsed,
-        payload,
-        traceContext,
-      }),
-    });
-    const events = yield* ledger.events(identity);
-    return yield* submitResultFromEvents(events, runId);
-  });
-
-const llmTimeoutFor = (
-  startTime: number,
-  now: number,
-  budgetTimeMs: number,
-  llmCallTimeoutMs: number,
-):
-  | {
-      readonly ok: true;
-      readonly mode: "budget" | "provider";
-      readonly timeoutMs: number;
-    }
-  | {
-      readonly ok: false;
-      readonly elapsedMs: number;
-    } => {
-  const elapsedMs = now - startTime;
-  if (Number.isFinite(budgetTimeMs)) {
-    const remaining = budgetTimeMs - elapsedMs;
-    if (remaining <= 0) return { ok: false, elapsedMs };
-    if (remaining <= llmCallTimeoutMs) {
-      return { ok: true, mode: "budget", timeoutMs: remaining };
-    }
-  }
-  return { ok: true, mode: "provider", timeoutMs: llmCallTimeoutMs };
-};
-
-const llmCallTimeoutBudgetMs = (value: unknown): number =>
-  typeof value === "number" && Number.isFinite(value) && value > 0
-    ? Math.trunc(value)
-    : DEFAULT_LLM_CALL_TIMEOUT_MS;
-
-const timeoutAbortResult = (
-  timeout: LlmCallTimedOut,
-  identity: LedgerTruthIdentity,
-  runId: number,
-  tokensUsed: number,
-  traceContext?: TraceContext,
-): Effect.Effect<SubmitResult, RuntimeStorageError | JsonStringifyError, Ledger> => {
-  if (timeout.mode === "budget") {
-    return finalAbort(
-      ABORT.BUDGET_TIME,
-      { elapsedMs: timeout.elapsedMs, maxMs: timeout.timeoutMs },
-      identity,
-      runId,
-      tokensUsed,
-      traceContext,
-    );
-  }
-  return finalAbort(
-    ABORT.UPSTREAM_FAILURE,
-    { cause: "provider_timeout", timeoutMs: timeout.timeoutMs },
-    identity,
-    runId,
-    tokensUsed,
-    traceContext,
-  );
-};
-
-const isLlmCallTimedOut = (error: unknown): error is LlmCallTimedOut =>
-  error instanceof LlmCallTimedOut;
-
-type LlmTimeoutWindow = Extract<ReturnType<typeof llmTimeoutFor>, { readonly ok: true }>;
-
-const abortLlmController = (controller: AbortController, reason: string): Effect.Effect<void> =>
-  Effect.sync(() => {
-    if (!controller.signal.aborted) controller.abort(reason);
-  });
-
-const llmTimeoutError = (timeout: LlmTimeoutWindow, budgetTimeMs: number): LlmCallTimedOut =>
-  new LlmCallTimedOut({
-    mode: timeout.mode,
-    elapsedMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-    timeoutMs: timeout.mode === "budget" ? budgetTimeMs : timeout.timeoutMs,
-  });
-
-const runTimedLlmAttempt = <A, E, R>(
-  timeout: LlmTimeoutWindow,
-  budgetTimeMs: number,
-  attempt: (signal: AbortSignal) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | LlmCallTimedOut, R> =>
-  Effect.gen(function* () {
-    const controller = new AbortController();
-    return yield* attempt(controller.signal).pipe(
-      Effect.timeoutOrElse({
-        duration: Duration.millis(timeout.timeoutMs),
-        orElse: () =>
-          Effect.gen(function* () {
-            yield* abortLlmController(controller, "agent_os.llm_call_timeout");
-            return yield* Effect.fail(llmTimeoutError(timeout, budgetTimeMs));
-          }),
-      }),
-      Effect.onInterrupt(() => abortLlmController(controller, "llm_call_interrupted")),
-    );
-  });
-
-const singleRequiredToolPolicyName = (spec: InternalSubmitSpec): string | null => {
-  const toolName = spec.toolPolicy?.requiredUntilToolExecuted?.toolName;
-  return typeof toolName === "string" && toolName.length > 0 ? toolName : null;
-};
-
-const completeAfterToolPolicyNames = (spec: InternalSubmitSpec): ReadonlyArray<string> => {
-  const toolNames = spec.toolPolicy?.completeAfterToolsExecuted?.toolNames ?? [];
-  return [...new Set(toolNames.filter((toolName) => toolName.length > 0))];
-};
-
-const routeModelId = (route: LlmRoute): string | undefined =>
-  typeof route.modelId === "string" && route.modelId.length > 0 ? route.modelId : undefined;
-
-const requiredToolPolicyNames = (spec: InternalSubmitSpec): ReadonlyArray<string> => [
-  ...new Set(
-    [singleRequiredToolPolicyName(spec), ...completeAfterToolPolicyNames(spec)].filter(
-      (toolName): toolName is string => toolName !== null,
-    ),
-  ),
-];
-
-const hasExecutedTool = (
-  events: ReadonlyArray<LedgerEvent>,
-  runId: number,
-  toolName: string,
-): boolean =>
-  events.some((event) => {
-    const decoded = decodeRuntimeLedgerEvent(event);
-    return (
-      decoded._tag === "runtime" &&
-      decoded.event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED &&
-      decoded.event.payload.runId === runId &&
-      decoded.event.payload.name === toolName
-    );
-  });
-
-const safeToolChoiceSummary = (toolChoice: LlmToolChoice | undefined): string | undefined => {
-  if (toolChoice === undefined) return undefined;
-  if (typeof toolChoice === "string") return toolChoice;
-  const functionName = toolChoice.function.name;
-  return functionName.length > 0 ? `function:${functionName}` : "function";
-};
-
-const toolChoiceForRuntimePolicy = (input: {
-  readonly requiredToolNames: ReadonlyArray<string>;
-  readonly executedToolNames: ReadonlySet<string>;
-  readonly ordered: boolean;
-}): LlmToolChoice | undefined => {
-  const missing = input.requiredToolNames.filter(
-    (toolName) => !input.executedToolNames.has(toolName),
-  );
-  if (missing.length === 0) return undefined;
-  const hasExecutedPolicyTool = input.requiredToolNames.some((toolName) =>
-    input.executedToolNames.has(toolName),
-  );
-  if (!hasExecutedPolicyTool) return "required";
-  if (input.ordered || missing.length === 1) {
-    return { type: "function", function: { name: missing[0] as string } };
-  }
-  return "required";
-};
-
-const remainingRequiredToolNames = (
-  requiredToolNames: ReadonlyArray<string>,
-  executedToolNames: ReadonlySet<string>,
-): ReadonlyArray<string> =>
-  requiredToolNames.filter((toolName) => !executedToolNames.has(toolName));
-
-const allPolicyToolsExecuted = (
-  toolNames: ReadonlyArray<string>,
-  executedToolNames: ReadonlySet<string>,
-): boolean =>
-  toolNames.length > 0 && toolNames.every((toolName) => executedToolNames.has(toolName));
-
-const policyToolViolationReason = (input: {
-  readonly toolName: string;
-  readonly requiredToolNames: ReadonlyArray<string>;
-  readonly executedToolNames: ReadonlySet<string>;
-  readonly ordered: boolean;
-}): "policy_tool_already_executed" | "policy_tool_out_of_order" | null => {
-  if (!input.requiredToolNames.includes(input.toolName)) return null;
-  if (input.executedToolNames.has(input.toolName)) return "policy_tool_already_executed";
-  if (!input.ordered) return null;
-  const expectedToolName = remainingRequiredToolNames(
-    input.requiredToolNames,
-    input.executedToolNames,
-  )[0];
-  return expectedToolName !== undefined && input.toolName !== expectedToolName
-    ? "policy_tool_out_of_order"
-    : null;
-};
 
 export const submitAgentEffect = (
   spec: InternalSubmitSpec,

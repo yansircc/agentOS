@@ -222,14 +222,14 @@
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/runtime.md",
       "fix": "Propagate LLM call timeout through submit and commit a runtime-owned terminal abort fact.",
-      "sourceFiles": ["packages/runtime/src/submit-agent.ts"]
+      "sourceFiles": ["packages/runtime/src/submit-agent/llm-timeout.ts"]
     },
     {
       "tag": "agent_os.llm_call_timeout",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/runtime.md",
       "fix": "Use the timeout marker only as abort metadata and let runtime terminal events expose the durable failure.",
-      "sourceFiles": ["packages/runtime/src/submit-agent.ts"]
+      "sourceFiles": ["packages/runtime/src/submit-agent/llm-timeout.ts"]
     },
     {
       "tag": "agent_os.missing_submit_run_binding",

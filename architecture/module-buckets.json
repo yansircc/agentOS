@@ -157,6 +157,12 @@
       "bucket": "adapter"
     },
     {
+      "id": "runtime-submit-agent-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/submit-agent/",
+      "bucket": "adapter"
+    },
+    {
       "id": "runtime-projection-files",
       "match": "regex",
       "value": "^packages/runtime/src/(continuation|input-request|projection|run-projector|workspace-job-observability)\\.ts$",

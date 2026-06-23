@@ -45,6 +45,7 @@ void test("module bucket classifier marks product paths as ejection candidates",
   );
   assert.equal(moduleBucketForPath("packages/runtime/src/workspace-binding.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/runtime/src/submit-agent.ts"), "adapter");
+  assert.equal(moduleBucketForPath("packages/runtime/src/submit-agent/tool-runtime.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/client/src/index.ts"), "projection");
   assert.equal(moduleBucketForPath("packages/client/src/react/index.ts"), "adapter");
   assert.equal(moduleBucketForPath("packages/runtime/src/cloudflare/ledger/ledger.ts"), "adapter");
