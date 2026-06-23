@@ -466,7 +466,7 @@
     },
     {
       "id": "convergence-boundary",
-      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/cli/src/build/agent-authoring.ts",
+      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/cli/src/build/agent-authoring/static-target.ts",
       "invariantId": "invariant.client.projection-sink-boundary",
       "kind": "repo-boundary",
       "diagnostics": [
@@ -479,7 +479,7 @@
         "packages/cli/src/check/sources/client-workspace-host-boundary.md",
         "docs/surface.json",
         "packages/client/**",
-        "packages/cli/src/build/agent-authoring.ts",
+        "packages/cli/src/build/agent-authoring/static-target.ts",
         "packages/cli/test/build-command.test.mjs",
         ".gitignore",
         "packages/cli/src/check/algorithmic-checks.mjs",

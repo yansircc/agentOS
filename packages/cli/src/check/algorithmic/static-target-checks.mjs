@@ -8,7 +8,7 @@ export const createStaticTargetChecks = ({ read, failIfAny }) => {
 
   const checkGeneratedStaticTargetLinking = () => {
     const failures = [];
-    const sourcePath = "packages/cli/src/build/agent-authoring.ts";
+    const sourcePath = "packages/cli/src/build/agent-authoring/static-target.ts";
     const workspaceAgentSourcePath = "packages/core/src/workspace-agent.ts";
     const source = read(sourcePath);
     const workspaceAgentSource = read(workspaceAgentSourcePath);

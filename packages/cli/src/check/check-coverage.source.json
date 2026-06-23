@@ -323,7 +323,7 @@
         "kind": "mainlineChecker",
         "path": "packages/cli/src/check/algorithmic-checks.mjs"
       },
-      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/cli/src/build/agent-authoring.ts",
+      "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/cli/src/build/agent-authoring/static-target.ts",
       "ruleId": "convergence-boundary",
       "target": {
         "kind": "algorithmic",
