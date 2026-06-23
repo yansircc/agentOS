@@ -2602,6 +2602,13 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
       : rejectTargetFailure(bindings);
   }
 
+  decideInputRequest(input: WorkspaceAgentDecideInputRequestCommandInput): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.decideInputRequestWithBindings(input, bindings.value)
+      : rejectTargetFailure(bindings);
+  }
+
   readWorkspaceState(
     input: WorkspaceAgentReadStateCommandInput = {},
   ): Promise<WorkspaceAgentReadStateCommandOutput> {
@@ -2815,6 +2822,7 @@ ${renderTypeImport(
   [
     "WorkspaceAgentDestroyCommandInput",
     "WorkspaceAgentCommandOutputByName",
+    "WorkspaceAgentDecideInputRequestCommandInput",
     "WorkspaceAgentReadFileCommandInput",
     "WorkspaceAgentResumeInputRequestCommandInput",
     "WorkspaceAgentReadStateCommandInput",
@@ -2828,6 +2836,9 @@ type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
   readonly resumeInputRequest: (
     input: WorkspaceAgentResumeInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
+  readonly decideInputRequest: (
+    input: WorkspaceAgentDecideInputRequestCommandInput,
   ) => Promise<SubmitResult>;
   readonly readWorkspaceFile: (
     input: WorkspaceAgentReadFileCommandInput,
@@ -2927,6 +2938,79 @@ const resumeInputRequestFromUnknown = (
       },
     },
   };
+};
+
+const decideInputRequestFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentDecideInputRequestCommandInput> => {
+  if (!isRecord(value)) return fail(400, "invalid decideInputRequest command input");
+  if (!isInputRequestRef(value.ref)) return fail(400, "invalid decideInputRequest ref");
+  if (!isRecord(value.decision) || typeof value.decision.kind !== "string") {
+    return fail(400, "invalid decideInputRequest decision");
+  }
+  const ref = value.ref;
+  const decision = value.decision;
+  if (decision.kind === "approved") {
+    if (typeof decision.decidedBy !== "string" || decision.decidedBy.length === 0) {
+      return fail(400, "invalid decideInputRequest decidedBy");
+    }
+    if (!isRecord(decision.answer) || typeof decision.answer.decisionRef !== "string") {
+      return fail(400, "invalid decideInputRequest answer");
+    }
+    const parsed = parseInputRequestResumePayload(ref.requestKind, decision.answer.resume);
+    if (!parsed.ok) return fail(400, parsed.reason);
+    return {
+      ok: true,
+      value: {
+        ref,
+        decision: {
+          kind: "approved",
+          decidedBy: decision.decidedBy,
+          answer: {
+            decisionRef: decision.answer.decisionRef,
+            resume: parsed.resume,
+          },
+        },
+      },
+    };
+  }
+  if (decision.kind === "rejected") {
+    if (typeof decision.decisionRef !== "string" || decision.decisionRef.length === 0) {
+      return fail(400, "invalid decideInputRequest decisionRef");
+    }
+    if (typeof decision.decidedBy !== "string" || decision.decidedBy.length === 0) {
+      return fail(400, "invalid decideInputRequest decidedBy");
+    }
+    return {
+      ok: true,
+      value: {
+        ref,
+        decision: {
+          kind: "rejected",
+          decisionRef: decision.decisionRef,
+          decidedBy: decision.decidedBy,
+          ...(typeof decision.reason === "string" ? { reason: decision.reason } : {}),
+        },
+      },
+    };
+  }
+  if (decision.kind === "cancelled" || decision.kind === "expired") {
+    if (typeof decision.closeRef !== "string" || decision.closeRef.length === 0) {
+      return fail(400, "invalid decideInputRequest closeRef");
+    }
+    return {
+      ok: true,
+      value: {
+        ref,
+        decision: {
+          kind: decision.kind,
+          closeRef: decision.closeRef,
+          ...(typeof decision.reason === "string" ? { reason: decision.reason } : {}),
+        },
+      },
+    };
+  }
+  return fail(400, "unsupported decideInputRequest decision");
 };
 
 const readStateInputFromUnknown = (
@@ -3059,6 +3143,12 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
     return resumeInput.ok
       ? runtime.resumeInputRequest(resumeInput.value)
       : rejectFailure(resumeInput);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST) {
+    const decideInput = decideInputRequestFromUnknown(input);
+    return decideInput.ok
+      ? runtime.decideInputRequest(decideInput.value)
+      : rejectFailure(decideInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.READ_STATE) {
     const readStateInput = readStateInputFromUnknown(input);

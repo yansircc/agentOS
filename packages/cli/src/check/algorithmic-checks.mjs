@@ -4587,7 +4587,9 @@ const sliceBetweenMarkers = (source, startMarker, endMarker) => {
 const checkGeneratedStaticTargetLinking = () => {
   const failures = [];
   const sourcePath = "packages/cli/src/build/agent-authoring.ts";
+  const workspaceAgentSourcePath = "packages/core/src/workspace-agent.ts";
   const source = read(sourcePath);
+  const workspaceAgentSource = read(workspaceAgentSourcePath);
   const renderStaticTargetSource = sliceBetweenMarkers(
     source,
     "const renderStaticTarget =",
@@ -4651,6 +4653,86 @@ const checkGeneratedStaticTargetLinking = () => {
   }
   if (renderStaticClientSource.length === 0) {
     failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticClient`);
+  }
+
+  const commandBlock =
+    workspaceAgentSource.match(
+      /export const WORKSPACE_AGENT_COMMAND = \{([\s\S]*?)\} as const;/u,
+    )?.[1] ?? "";
+  const workspaceCommandKeys = [...commandBlock.matchAll(/^\s*([A-Z_]+):\s*"([^"]+)"/gmu)].map(
+    (match) => match[1],
+  );
+  if (workspaceCommandKeys.length === 0) {
+    failures.push(
+      `${workspaceAgentSourcePath}: generated-static-target-linking: missing WORKSPACE_AGENT_COMMAND`,
+    );
+  }
+  const generatedCommandProjection = {
+    SUBMIT: {
+      method: "submitRunInput",
+      parser: "submitInputFromUnknown",
+    },
+    RESUME_INPUT_REQUEST: {
+      method: "resumeInputRequest",
+      parser: "resumeInputRequestFromUnknown",
+    },
+    DECIDE_INPUT_REQUEST: {
+      method: "decideInputRequest",
+      parser: "decideInputRequestFromUnknown",
+    },
+    READ_STATE: {
+      method: "readWorkspaceState",
+      parser: "readStateInputFromUnknown",
+    },
+    READ_FILE: {
+      method: "readWorkspaceFile",
+      parser: "readFileInputFromUnknown",
+    },
+    RESET: {
+      method: "resetWorkspace",
+      parser: "resetInputFromUnknown",
+    },
+    DESTROY: {
+      method: "destroyWorkspace",
+      parser: "destroyInputFromUnknown",
+    },
+  };
+  for (const commandKey of workspaceCommandKeys) {
+    if (commandKey === "CUSTOM") continue;
+    const projection = generatedCommandProjection[commandKey];
+    if (projection === undefined) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: generated target missing projection for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+      continue;
+    }
+    if (!renderStaticTargetSource.includes(`${projection.method}(`)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: renderStaticTarget missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+    if (!renderSvelteKitRemoteSource.includes(`readonly ${projection.method}:`)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: AgentOSRpc missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+    if (
+      !renderSvelteKitRemoteSource.includes(`if (name === WORKSPACE_AGENT_COMMAND.${commandKey})`)
+    ) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: invokeAgentCommand missing WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+    if (!renderSvelteKitRemoteSource.includes(projection.parser)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: invokeAgentCommand missing ${projection.parser} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+    if (!renderSvelteKitRemoteSource.includes(`runtime.${projection.method}(`)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: invokeAgentCommand missing runtime.${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
   }
 
   const requiredStaticWiringMarkers = [
