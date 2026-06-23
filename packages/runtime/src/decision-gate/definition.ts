@@ -53,6 +53,24 @@ export const decisionGateCarrier = defineCarrier({
       }),
       claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
     }),
+    cancelled: event({
+      kind: "cancelled",
+      payload: Schema.Struct({
+        gateRef: Schema.String,
+        closeRef: Schema.String,
+        reason: Schema.optional(Schema.String),
+      }),
+      claim: none(),
+    }),
+    expired: event({
+      kind: "expired",
+      payload: Schema.Struct({
+        gateRef: Schema.String,
+        closeRef: Schema.String,
+        reason: Schema.optional(Schema.String),
+      }),
+      claim: none(),
+    }),
   },
 });
 

@@ -66,6 +66,9 @@ export const RUNTIME_EVENT_KIND = {
   AGENT_ABORTED_UPSTREAM_FAILURE: "agent.aborted.upstream_failure",
   AGENT_ABORTED_RETRIES: "agent.aborted.retries",
   AGENT_ABORTED_CLIENT_DISCONNECT: "agent.aborted.client_disconnect",
+  AGENT_ABORTED_DECISION_REJECTED: "agent.aborted.rejected",
+  AGENT_ABORTED_DECISION_CANCELLED: "agent.aborted.cancelled",
+  AGENT_ABORTED_DECISION_EXPIRED: "agent.aborted.expired",
 } as const;
 
 export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
@@ -562,6 +565,9 @@ export type RuntimeEventPayloadByKind = {
   readonly [ABORT.UPSTREAM_FAILURE]: AgentRunAbortedPayload;
   readonly [ABORT.RETRIES]: AgentRunAbortedPayload;
   readonly [ABORT.CLIENT_DISCONNECT]: AgentRunAbortedPayload;
+  readonly [ABORT.DECISION_REJECTED]: AgentRunAbortedPayload;
+  readonly [ABORT.DECISION_CANCELLED]: AgentRunAbortedPayload;
+  readonly [ABORT.DECISION_EXPIRED]: AgentRunAbortedPayload;
 };
 
 type RuntimeLedgerEventShapeByKind<K extends RuntimeEventKind> = Omit<
@@ -672,6 +678,9 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
     case ABORT.UPSTREAM_FAILURE:
     case ABORT.RETRIES:
     case ABORT.CLIENT_DISCONNECT:
+    case ABORT.DECISION_REJECTED:
+    case ABORT.DECISION_CANCELLED:
+    case ABORT.DECISION_EXPIRED:
       return Schema.decodeUnknownSync(AgentRunAbortedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
@@ -737,6 +746,9 @@ const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
     case ABORT.UPSTREAM_FAILURE:
     case ABORT.RETRIES:
     case ABORT.CLIENT_DISCONNECT:
+    case ABORT.DECISION_REJECTED:
+    case ABORT.DECISION_CANCELLED:
+    case ABORT.DECISION_EXPIRED:
       return Schema.decodeUnknownOption(AgentRunAbortedPayloadSchema)(payload) as Option.Option<
         RuntimeEventPayloadByKind[K]
       >;
@@ -953,6 +965,9 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
     case ABORT.UPSTREAM_FAILURE:
     case ABORT.RETRIES:
     case ABORT.CLIENT_DISCONNECT:
+    case ABORT.DECISION_REJECTED:
+    case ABORT.DECISION_CANCELLED:
+    case ABORT.DECISION_EXPIRED:
       return event.payload.runId;
   }
 };
@@ -1030,6 +1045,9 @@ const applyHistoricalRuntimeRunEvent = (
     case ABORT.UPSTREAM_FAILURE:
     case ABORT.RETRIES:
     case ABORT.CLIENT_DISCONNECT:
+    case ABORT.DECISION_REJECTED:
+    case ABORT.DECISION_CANCELLED:
+    case ABORT.DECISION_EXPIRED:
       state.terminalEventId ??= event.id;
       state.terminalKind ??= event.kind;
       break;
@@ -1283,6 +1301,9 @@ export const validateRuntimeLedgerTransitions = (input: {
       case ABORT.UPSTREAM_FAILURE:
       case ABORT.RETRIES:
       case ABORT.CLIENT_DISCONNECT:
+      case ABORT.DECISION_REJECTED:
+      case ABORT.DECISION_CANCELLED:
+      case ABORT.DECISION_EXPIRED:
         if (hasStarted && !hasTerminal) {
           runState.terminalEventId = event.id;
           runState.terminalKind = event.kind;

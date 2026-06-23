@@ -218,6 +218,7 @@
 - `.:WorkspaceAgentCommandName`
 - `.:WorkspaceAgentCommandOutputByName`
 - `.:WorkspaceAgentCustomCommandInput`
+- `.:WorkspaceAgentDecideInputRequestCommandInput`
 - `.:WorkspaceAgentDestroyCommandInput`
 - `.:WorkspaceAgentDriverMount`
 - `.:WorkspaceAgentFileEntry`
@@ -509,6 +510,7 @@
 - `./workspace-agent:WorkspaceAgentCommandName`
 - `./workspace-agent:WorkspaceAgentCommandOutputByName`
 - `./workspace-agent:WorkspaceAgentCustomCommandInput`
+- `./workspace-agent:WorkspaceAgentDecideInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`
 - `./workspace-agent:WorkspaceAgentDriverMount`
 - `./workspace-agent:WorkspaceAgentFileEntry`

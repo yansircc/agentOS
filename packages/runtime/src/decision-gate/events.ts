@@ -26,6 +26,12 @@ export type DecisionGateDecidedPayload =
 export type DecisionGateConsumedPayload =
   DecisionGatePayloads[(typeof DECISION_GATE_KIND)["CONSUMED"]];
 
+export type DecisionGateCancelledPayload =
+  DecisionGatePayloads[(typeof DECISION_GATE_KIND)["CANCELLED"]];
+
+export type DecisionGateExpiredPayload =
+  DecisionGatePayloads[(typeof DECISION_GATE_KIND)["EXPIRED"]];
+
 export type DecisionGateEventKind = keyof typeof DECISION_GATE_EVENTS;
 
 export interface DecisionGateLedgerEvent {
@@ -36,10 +42,19 @@ export interface DecisionGateLedgerEvent {
 
 export interface DecisionGateProjection {
   readonly gateRef: string;
-  readonly status: "missing" | "requested" | "approved" | "rejected" | "consumed";
+  readonly status:
+    | "missing"
+    | "requested"
+    | "approved"
+    | "rejected"
+    | "consumed"
+    | "cancelled"
+    | "expired";
   readonly request?: DecisionGateRequestedPayload;
   readonly decision?: DecisionGateDecidedPayload;
   readonly consumed?: DecisionGateConsumedPayload;
+  readonly cancelled?: DecisionGateCancelledPayload;
+  readonly expired?: DecisionGateExpiredPayload;
 }
 
 const stringField = (payload: Record<string, unknown>, key: string): string | undefined =>
@@ -114,10 +129,29 @@ const consumedFrom = (
   return { gateRef, decisionRef, consumedBy, claim };
 };
 
+const closedFrom = <Payload extends DecisionGateCancelledPayload | DecisionGateExpiredPayload>(
+  payload: Record<string, unknown>,
+): Payload | undefined => {
+  const gateRef = stringField(payload, "gateRef");
+  const closeRef = stringField(payload, "closeRef");
+  if (gateRef === undefined || closeRef === undefined) return undefined;
+  return {
+    gateRef,
+    closeRef,
+    ...(typeof payload.reason === "string" ? { reason: payload.reason } : {}),
+  } as Payload;
+};
+
 const isTerminalLifecycle = (
   decision: DecisionGateDecidedPayload | undefined,
   consumed: DecisionGateConsumedPayload | undefined,
-): boolean => consumed !== undefined || decision?.decision === "rejected";
+  cancelled: DecisionGateCancelledPayload | undefined,
+  expired: DecisionGateExpiredPayload | undefined,
+): boolean =>
+  consumed !== undefined ||
+  decision?.decision === "rejected" ||
+  cancelled !== undefined ||
+  expired !== undefined;
 
 export const projectDecisionGate = (
   events: Iterable<DecisionGateLedgerEvent>,
@@ -126,11 +160,13 @@ export const projectDecisionGate = (
   let request: DecisionGateRequestedPayload | undefined;
   let decision: DecisionGateDecidedPayload | undefined;
   let consumed: DecisionGateConsumedPayload | undefined;
+  let cancelled: DecisionGateCancelledPayload | undefined;
+  let expired: DecisionGateExpiredPayload | undefined;
 
   for (const event of events) {
     if (!Predicate.isObject(event.payload)) continue;
     if (event.payload.gateRef !== gateRef) continue;
-    if (isTerminalLifecycle(decision, consumed)) continue;
+    if (isTerminalLifecycle(decision, consumed, cancelled, expired)) continue;
     switch (event.kind) {
       case DECISION_GATE_KIND.REQUESTED: {
         const next = requestedFrom(event.payload);
@@ -158,19 +194,37 @@ export const projectDecisionGate = (
         }
         break;
       }
+      case DECISION_GATE_KIND.CANCELLED: {
+        const next = closedFrom<DecisionGateCancelledPayload>(event.payload);
+        if (next !== undefined && request !== undefined && cancelled === undefined) {
+          cancelled = next;
+        }
+        break;
+      }
+      case DECISION_GATE_KIND.EXPIRED: {
+        const next = closedFrom<DecisionGateExpiredPayload>(event.payload);
+        if (next !== undefined && request !== undefined && expired === undefined) {
+          expired = next;
+        }
+        break;
+      }
     }
   }
 
   const status =
     consumed !== undefined
       ? "consumed"
-      : decision?.decision === "approved"
-        ? "approved"
-        : decision?.decision === "rejected"
-          ? "rejected"
-          : request !== undefined
-            ? "requested"
-            : "missing";
+      : cancelled !== undefined
+        ? "cancelled"
+        : expired !== undefined
+          ? "expired"
+          : decision?.decision === "approved"
+            ? "approved"
+            : decision?.decision === "rejected"
+              ? "rejected"
+              : request !== undefined
+                ? "requested"
+                : "missing";
 
-  return { gateRef, status, request, decision, consumed };
+  return { gateRef, status, request, decision, consumed, cancelled, expired };
 };

@@ -52,6 +52,7 @@ Status: 0.5.x active development for the canonical agent client package. Root ex
 - `./workspace-agent:WorkspaceAgentCommandName`
 - `./workspace-agent:WorkspaceAgentCommandOutputByName`
 - `./workspace-agent:WorkspaceAgentCustomCommandInput`
+- `./workspace-agent:WorkspaceAgentDecideInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`
 - `./workspace-agent:WorkspaceAgentFileEntry`
 - `./workspace-agent:WorkspaceAgentMutationCommandOutput`

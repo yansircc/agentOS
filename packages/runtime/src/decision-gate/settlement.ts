@@ -45,6 +45,10 @@ export const admitDecisionGate = (
         : { ok: false, rejectionRef: projection.decision.rejectionRef };
     case "consumed":
       return rejection(claim, "decision_gate_consumed", "capability_denied");
+    case "cancelled":
+      return rejection(claim, "decision_gate_cancelled", "capability_denied");
+    case "expired":
+      return rejection(claim, "decision_gate_expired", "capability_denied");
     case "requested":
       return rejection(claim, "decision_gate_pending");
     case "missing":

@@ -15,6 +15,9 @@ export const ABORT = {
   UPSTREAM_FAILURE: "agent.aborted.upstream_failure",
   RETRIES: "agent.aborted.retries",
   CLIENT_DISCONNECT: "agent.aborted.client_disconnect",
+  DECISION_REJECTED: "agent.aborted.rejected",
+  DECISION_CANCELLED: "agent.aborted.cancelled",
+  DECISION_EXPIRED: "agent.aborted.expired",
 } as const;
 
 export type AbortKind = (typeof ABORT)[keyof typeof ABORT];

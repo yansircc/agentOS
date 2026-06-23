@@ -825,9 +825,11 @@
 - `.:WorkspaceAgentCommandName`
 - `.:WorkspaceAgentCommandOutputByName`
 - `.:WorkspaceAgentCustomCommandInput`
+- `.:WorkspaceAgentDecideInputRequestCommandInput`
 - `.:WorkspaceAgentDestroyCommandInput`
 - `.:WorkspaceAgentDriverMount`
 - `.:WorkspaceAgentFileEntry`
+- `.:WorkspaceAgentInputRequestDecision`
 - `.:WorkspaceAgentFilesProjection`
 - `.:WorkspaceAgentFilesProjectionShape`
 - `.:WorkspaceAgentGeneratedMount`
@@ -1683,9 +1685,11 @@
 - `./workspace-agent:WorkspaceAgentCommandName`
 - `./workspace-agent:WorkspaceAgentCommandOutputByName`
 - `./workspace-agent:WorkspaceAgentCustomCommandInput`
+- `./workspace-agent:WorkspaceAgentDecideInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`
 - `./workspace-agent:WorkspaceAgentDriverMount`
 - `./workspace-agent:WorkspaceAgentFileEntry`
+- `./workspace-agent:WorkspaceAgentInputRequestDecision`
 - `./workspace-agent:WorkspaceAgentFilesProjection`
 - `./workspace-agent:WorkspaceAgentFilesProjectionShape`
 - `./workspace-agent:WorkspaceAgentGeneratedMount`

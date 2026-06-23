@@ -219,6 +219,149 @@ describe("defineAgentDO facade submit", () => {
     });
   });
 
+  it("closes a pending input request as rejected without resuming tool execution", async () => {
+    const scope = "facade-submit-reject-input-request";
+    const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
+
+    const first = await runInDurableObject(stub, (instance) =>
+      instance.submit({
+        intent: "write first only",
+        input: { key: "abc" },
+        decisionInterrupts: [{ toolName: "write_first", reason: "approval_required" }],
+        budget: { maxTurns: 1 },
+      }),
+    );
+
+    if (first.status !== "interrupted" || first.inputRequest === undefined) {
+      expect.fail("expected interrupted result with input request");
+    }
+
+    const rejected = await runInDurableObject(stub, (instance) =>
+      instance.decideInputRequest({
+        ref: first.inputRequest!.ref,
+        decision: {
+          kind: "rejected",
+          decisionRef: "decision/facade-reject",
+          decidedBy: "operator/bob",
+          reason: "not_allowed",
+        },
+      }),
+    );
+
+    const duplicate = await runInDurableObject(stub, (instance) =>
+      instance.decideInputRequest({
+        ref: first.inputRequest!.ref,
+        decision: {
+          kind: "rejected",
+          decisionRef: "decision/facade-reject",
+          decidedBy: "operator/bob",
+          reason: "not_allowed",
+        },
+      }),
+    );
+
+    await expect(
+      runInDurableObject(stub, (instance) =>
+        instance.decideInputRequest({
+          ref: first.inputRequest!.ref,
+          decision: {
+            kind: "approved",
+            decidedBy: "operator/alice",
+            answer: {
+              decisionRef: "decision/facade-approve-after-reject",
+              resume: { kind: "approval", approved: true },
+            },
+          },
+        }),
+      ),
+    ).rejects.toThrow(/terminal conflict|not resumable/);
+
+    const eventReader = stub as unknown as {
+      readonly events: (
+        identity: ReturnType<typeof testTruthIdentity>,
+      ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
+    };
+    const events = await eventReader.events(testTruthIdentity(scope));
+    const status = await runInDurableObject(stub, (instance) => instance.runStatus(1));
+
+    expect(rejected).toEqual({
+      ok: false,
+      status: "aborted",
+      runId: 1,
+      reason: "rejected",
+      eventCount: 8,
+      tokensUsed: 5,
+    });
+    expect(duplicate).toEqual(rejected);
+    expect(status).toEqual({
+      kind: "aborted",
+      at: expect.any(Number),
+      abortKind: "agent.aborted.rejected",
+    });
+    expect(events.map((event) => event.kind)).toEqual([
+      "agent.run.started",
+      "chat.ingested",
+      "llm.requested",
+      "llm.response",
+      "decision_gate.requested",
+      "agent.run.interrupted",
+      "decision_gate.decided",
+      "agent.aborted.rejected",
+    ]);
+    expect(events.filter((event) => event.kind === "decision_gate.decided")).toHaveLength(1);
+    expect(events.filter((event) => event.kind === "agent.aborted.rejected")).toHaveLength(1);
+    expect(events.some((event) => event.kind === "decision_gate.consumed")).toBe(false);
+    expect(events.some((event) => event.kind === "agent.run.resumed")).toBe(false);
+    expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
+  });
+
+  it("closes a pending input request as cancelled or expired without a decider", async () => {
+    for (const [kind, closeRef, abortKind] of [
+      ["cancelled", "cancel/facade", "agent.aborted.cancelled"],
+      ["expired", "expire/facade", "agent.aborted.expired"],
+    ] as const) {
+      const scope = `facade-submit-${kind}-input-request`;
+      const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));
+      const first = await runInDurableObject(stub, (instance) =>
+        instance.submit({
+          intent: "write first only",
+          input: { key: "abc" },
+          decisionInterrupts: [{ toolName: "write_first", reason: "approval_required" }],
+          budget: { maxTurns: 1 },
+        }),
+      );
+      if (first.status !== "interrupted" || first.inputRequest === undefined) {
+        expect.fail("expected interrupted result with input request");
+      }
+
+      const result = await runInDurableObject(stub, (instance) =>
+        instance.decideInputRequest({
+          ref: first.inputRequest!.ref,
+          decision: { kind, closeRef, reason: kind },
+        }),
+      );
+      const status = await runInDurableObject(stub, (instance) => instance.runStatus(1));
+      const events = await (
+        stub as unknown as {
+          readonly events: (
+            identity: ReturnType<typeof testTruthIdentity>,
+          ) => Promise<ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>>;
+        }
+      ).events(testTruthIdentity(scope));
+
+      expect(result).toMatchObject({
+        ok: false,
+        status: "aborted",
+        reason: kind,
+      });
+      expect(status).toMatchObject({ kind: "aborted", abortKind });
+      expect(events.some((event) => event.kind === `decision_gate.${kind}`)).toBe(true);
+      expect(events.some((event) => event.kind === "decision_gate.decided")).toBe(false);
+      expect(events.some((event) => event.kind === "agent.run.resumed")).toBe(false);
+      expect(events.some((event) => event.kind === "tool.executed")).toBe(false);
+    }
+  });
+
   it("passes submit tool policy through facade lowering", async () => {
     const scope = "facade-submit-tool-policy";
     const stub = testEnv.FACADE_SUBMIT_DO.get(testEnv.FACADE_SUBMIT_DO.idFromName(scope));

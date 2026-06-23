@@ -88,6 +88,9 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
     case ABORT.UPSTREAM_FAILURE:
     case ABORT.RETRIES:
     case ABORT.CLIENT_DISCONNECT:
+    case ABORT.DECISION_REJECTED:
+    case ABORT.DECISION_CANCELLED:
+    case ABORT.DECISION_EXPIRED:
       return event.payload.runId;
   }
 };
@@ -497,14 +500,16 @@ const submitResultProjection = defineProjectionSpec<
     }
     if (terminal?.kind === "aborted") {
       const payload = terminal.payload as RuntimeLedgerEventByKind<AbortKind>["payload"];
+      const reason = reasonOf(terminal.event as AbortKind);
+      const decisionAbort = reason === "rejected" || reason === "cancelled" || reason === "expired";
       return ctx.ok({
         ok: false,
-        status: "failed",
+        status: decisionAbort ? "aborted" : "failed",
         runId,
-        reason: reasonOf(terminal.event as AbortKind),
+        reason,
         eventCount,
         tokensUsed: payload.tokensUsed,
-      });
+      } as SubmitResult);
     }
 
     const activeInterruption = activeInterruptionFor(runtimeEvents, runId);

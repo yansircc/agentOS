@@ -11,6 +11,7 @@ export type {
   WorkspaceAgentCommandName,
   WorkspaceAgentCommandOutputByName,
   WorkspaceAgentCustomCommandInput,
+  WorkspaceAgentDecideInputRequestCommandInput,
   WorkspaceAgentDestroyCommandInput,
   WorkspaceAgentDriverMount,
   WorkspaceAgentFileEntry,

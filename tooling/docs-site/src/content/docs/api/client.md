@@ -52,6 +52,7 @@ title: "@agent-os/client Public API Intent"
 - `./workspace-agent:WorkspaceAgentCommandName`
 - `./workspace-agent:WorkspaceAgentCommandOutputByName`
 - `./workspace-agent:WorkspaceAgentCustomCommandInput`
+- `./workspace-agent:WorkspaceAgentDecideInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`
 - `./workspace-agent:WorkspaceAgentFileEntry`
 - `./workspace-agent:WorkspaceAgentMutationCommandOutput`

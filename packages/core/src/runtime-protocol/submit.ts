@@ -341,6 +341,14 @@ export type SubmitResult =
       readonly reason: string;
       readonly eventCount: number;
       readonly tokensUsed: number;
+    }
+  | {
+      readonly ok: false;
+      readonly status: "aborted";
+      readonly runId: number;
+      readonly reason: "rejected" | "cancelled" | "expired";
+      readonly eventCount: number;
+      readonly tokensUsed: number;
     };
 
 export interface TurnRef {
@@ -389,6 +397,18 @@ export const decodeSubmitResult = (value: unknown): SubmitResult | null => {
       ? {
           ok: false,
           status: "failed",
+          runId: value.runId,
+          reason: value.reason,
+          eventCount: value.eventCount,
+          tokensUsed: value.tokensUsed,
+        }
+      : null;
+  }
+  if (value.ok === false && value.status === "aborted") {
+    return value.reason === "rejected" || value.reason === "cancelled" || value.reason === "expired"
+      ? {
+          ok: false,
+          status: "aborted",
           runId: value.runId,
           reason: value.reason,
           eventCount: value.eventCount,

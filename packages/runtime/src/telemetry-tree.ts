@@ -64,6 +64,9 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
     case ABORT.UPSTREAM_FAILURE:
     case ABORT.RETRIES:
     case ABORT.CLIENT_DISCONNECT:
+    case ABORT.DECISION_REJECTED:
+    case ABORT.DECISION_CANCELLED:
+    case ABORT.DECISION_EXPIRED:
       return event.payload.runId;
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:

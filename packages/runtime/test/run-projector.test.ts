@@ -183,6 +183,32 @@ describe("runtime run projectors", () => {
       at: 20,
       abortKind: "agent.aborted.tool_error",
     });
+    const rejectedRows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "approval" })),
+      event(
+        2,
+        agentRunAbortedEvent({
+          ...runtimeIdentity,
+          kind: ABORT.DECISION_REJECTED,
+          runId: 1,
+          tokensUsed: 7,
+          payload: { reason: "rejected", gateRef: "gate-1", terminalRef: "decision-1" },
+        }),
+      ),
+    ];
+    expect(projectRunStatus(rejectedRows, 1)).toEqual({
+      kind: "aborted",
+      at: 20,
+      abortKind: "agent.aborted.rejected",
+    });
+    expect(projectSubmitResult(rejectedRows, 1)).toEqual({
+      ok: false,
+      status: "aborted",
+      runId: 1,
+      reason: "rejected",
+      eventCount: 2,
+      tokensUsed: 7,
+    });
     expect(
       projectRunStatus(
         [

@@ -265,4 +265,56 @@ describe("runtime InputRequest projection", () => {
       }),
     ).toMatchObject({ ok: true });
   });
+
+  it("projects non-resumable cancelled and expired gate closures", () => {
+    const cancelledEvents: ReadonlyArray<LedgerEvent> = [
+      ...requestedEvents(),
+      {
+        id: 4,
+        ts: 40,
+        kind: DECISION_GATE_KIND.CANCELLED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          closeRef: "cancel/1",
+          reason: "operator_cancelled",
+        },
+      },
+    ];
+    const cancelledRef = refFrom(cancelledEvents);
+    const cancelled = projectInputRequest(cancelledEvents, cancelledRef);
+    expect(cancelled).toMatchObject({
+      status: "cancelled",
+      cancelled: { closeRef: "cancel/1" },
+    });
+    expect(
+      submitResumeDecisionFromInputRequestProjection(cancelled, {
+        kind: "approval",
+        approved: true,
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "input_request_cancelled",
+      projection: cancelled,
+    });
+
+    const expiredEvents: ReadonlyArray<LedgerEvent> = [
+      ...requestedEvents(),
+      {
+        id: 4,
+        ts: 40,
+        kind: DECISION_GATE_KIND.EXPIRED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          closeRef: "expire/1",
+          reason: "deadline",
+        },
+      },
+    ];
+    expect(projectInputRequest(expiredEvents, refFrom(expiredEvents))).toMatchObject({
+      status: "expired",
+      expired: { closeRef: "expire/1" },
+    });
+  });
 });

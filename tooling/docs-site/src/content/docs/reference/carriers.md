@@ -12,7 +12,7 @@ Generated from live `defineCarrier` declarations. Package docs explain intent; t
 
 | Owner                     | Source package      | Prefix           | Events | Roles                             |
 | ------------------------- | ------------------- | ---------------- | ------ | --------------------------------- |
-| `@agent-os/decision-gate` | `@agent-os/runtime` | `decision_gate.` | 3      | `admitter`, `reader`              |
+| `@agent-os/decision-gate` | `@agent-os/runtime` | `decision_gate.` | 5      | `admitter`, `reader`              |
 | `@agent-os/workspace-job` | `@agent-os/runtime` | `workspace_job.` | 10     | `generator`, `reader`             |
 | `@agent-os/workspace-op`  | `@agent-os/runtime` | `workspace_op.`  | 3      | `generator`, `resolver`, `reader` |
 
@@ -32,8 +32,10 @@ Roles: `admitter`, `reader`
 
 | Event kind                | Claim                                 | Payload fields                                                                                                                                                                                                            |
 | ------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `decision_gate.cancelled` | none                                  | `gateRef`: string (required)<br>`closeRef`: string (required)<br>`reason`: string (optional)                                                                                                                              |
 | `decision_gate.consumed`  | lived `claim`; anchors `ledger_event` | `gateRef`: string (required)<br>`decisionRef`: string (required)<br>`consumedBy`: string (required)                                                                                                                       |
 | `decision_gate.decided`   | none                                  | `gateRef`: string (required)<br>`decisionRef`: string (required)<br>`decision`: enum(approved, rejected) (required)<br>`decidedBy`: string (required)<br>`reason`: string (optional)<br>`rejectionRef`: object (optional) |
+| `decision_gate.expired`   | none                                  | `gateRef`: string (required)<br>`closeRef`: string (required)<br>`reason`: string (optional)                                                                                                                              |
 | `decision_gate.requested` | pre `claim`                           | `gateRef`: string (required)<br>`subjectRef`: string (required)<br>`policyRef`: string (optional)<br>`summary`: string (optional)                                                                                         |
 
 ### Settlement Vocabulary

@@ -829,9 +829,11 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceAgentCommandName`
 - `.:WorkspaceAgentCommandOutputByName`
 - `.:WorkspaceAgentCustomCommandInput`
+- `.:WorkspaceAgentDecideInputRequestCommandInput`
 - `.:WorkspaceAgentDestroyCommandInput`
 - `.:WorkspaceAgentDriverMount`
 - `.:WorkspaceAgentFileEntry`
+- `.:WorkspaceAgentInputRequestDecision`
 - `.:WorkspaceAgentFilesProjection`
 - `.:WorkspaceAgentFilesProjectionShape`
 - `.:WorkspaceAgentGeneratedMount`
@@ -1687,9 +1689,11 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./workspace-agent:WorkspaceAgentCommandName`
 - `./workspace-agent:WorkspaceAgentCommandOutputByName`
 - `./workspace-agent:WorkspaceAgentCustomCommandInput`
+- `./workspace-agent:WorkspaceAgentDecideInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`
 - `./workspace-agent:WorkspaceAgentDriverMount`
 - `./workspace-agent:WorkspaceAgentFileEntry`
+- `./workspace-agent:WorkspaceAgentInputRequestDecision`
 - `./workspace-agent:WorkspaceAgentFilesProjection`
 - `./workspace-agent:WorkspaceAgentFilesProjectionShape`
 - `./workspace-agent:WorkspaceAgentGeneratedMount`

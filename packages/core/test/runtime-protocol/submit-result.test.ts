@@ -14,7 +14,7 @@ const continuation = {
 };
 
 describe("SubmitResult decoder", () => {
-  it("accepts delivered and failed terminal projections", () => {
+  it("accepts delivered, failed, and non-error aborted terminal projections", () => {
     const delivered: SubmitResult = {
       ok: true,
       status: "delivered",
@@ -31,9 +31,19 @@ describe("SubmitResult decoder", () => {
       eventCount: 3,
       tokensUsed: 5,
     };
+    const aborted: SubmitResult = {
+      ok: false,
+      status: "aborted",
+      runId: 1,
+      reason: "rejected",
+      eventCount: 4,
+      tokensUsed: 5,
+    };
 
     expect(decodeSubmitResult(delivered)).toEqual(delivered);
     expect(decodeSubmitResult(failed)).toEqual(failed);
+    expect(decodeSubmitResult(aborted)).toEqual(aborted);
+    expect(decodeSubmitResult({ ...aborted, reason: "tool_error" })).toBeNull();
   });
 
   it("requires owner-shaped continuation for interrupted terminal projections", () => {

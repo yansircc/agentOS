@@ -5,6 +5,8 @@ import {
   projectDecisionGate,
   type DecisionGateConsumedPayload,
   type DecisionGateDecidedPayload,
+  type DecisionGateCancelledPayload,
+  type DecisionGateExpiredPayload,
 } from "./decision-gate";
 import {
   decodeRuntimeLedgerEvent,
@@ -53,6 +55,24 @@ export type InputRequestProjection =
       readonly decisionEventId: number;
     }
   | {
+      readonly status: "cancelled";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+      readonly interruption: RuntimeLedgerEventByKind<
+        typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
+      >;
+      readonly cancelled: DecisionGateCancelledPayload;
+    }
+  | {
+      readonly status: "expired";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+      readonly interruption: RuntimeLedgerEventByKind<
+        typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
+      >;
+      readonly expired: DecisionGateExpiredPayload;
+    }
+  | {
       readonly status: "consumed";
       readonly ref: InputRequestRef;
       readonly request: InputRequestDescriptor;
@@ -71,6 +91,8 @@ export type InputRequestResumeDecisionResult =
         | "input_request_missing_interruption"
         | "input_request_pending"
         | "input_request_rejected"
+        | "input_request_cancelled"
+        | "input_request_expired"
         | "input_request_consumed"
         | "input_request_resume_kind_mismatch"
         | "input_request_resume_malformed"
@@ -184,6 +206,22 @@ export const projectInputRequest = (
         decisionEventIdFor(events, ref.gateRef, gate.decision.decisionRef) ?? ref.afterEventId,
     };
   }
+  if (gate.status === "cancelled" && gate.cancelled !== undefined) {
+    return {
+      status: "cancelled",
+      ref,
+      ...interruption,
+      cancelled: gate.cancelled,
+    };
+  }
+  if (gate.status === "expired" && gate.expired !== undefined) {
+    return {
+      status: "expired",
+      ref,
+      ...interruption,
+      expired: gate.expired,
+    };
+  }
   return { status: "pending", ref, ...interruption };
 };
 
@@ -232,6 +270,10 @@ export const submitResumeDecisionFromInputRequestProjection = (
       return { ok: false, reason: "input_request_pending", projection };
     case "rejected":
       return { ok: false, reason: "input_request_rejected", projection };
+    case "cancelled":
+      return { ok: false, reason: "input_request_cancelled", projection };
+    case "expired":
+      return { ok: false, reason: "input_request_expired", projection };
     case "consumed":
       return { ok: false, reason: "input_request_consumed", projection };
   }

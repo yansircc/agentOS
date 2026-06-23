@@ -108,6 +108,7 @@ import {
 } from "@agent-os/runtime";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
+  agentRunAbortedEvent,
   decodeRuntimeLedgerEvent,
   lowerSubmitRunInput,
   manifestTruthIdentity,
@@ -115,6 +116,7 @@ import {
   RUNTIME_EVENT_KIND,
   submitResumeDecisionFromInputRequestRef,
 } from "@agent-os/core/runtime-protocol";
+import { ABORT, type AbortKind } from "@agent-os/core/abort";
 import {
   backendProtocolEventIdentityKey,
   QUOTA_EVENT_KIND,
@@ -144,12 +146,16 @@ import {
   validateExtensionDeclarations,
 } from "@agent-os/core/extensions";
 import { isScopeRef, scopeRefKey } from "@agent-os/core/effect-claim";
-import type { WorkspaceAgentResumeInputRequestCommandInput } from "@agent-os/core/workspace-agent";
+import type {
+  WorkspaceAgentDecideInputRequestCommandInput,
+  WorkspaceAgentResumeInputRequestCommandInput,
+} from "@agent-os/core/workspace-agent";
 import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
 import {
   projectRunsPage,
   projectRunStatus,
   projectRunTrace,
+  projectSubmitResult,
   RUN_BEARING_KINDS,
 } from "@agent-os/runtime/run-projector";
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
@@ -177,6 +183,7 @@ import {
 import {
   DECISION_GATE_KIND,
   decisionGateBoundaryContract,
+  decisionGateSettlementRef,
   projectDecisionGate,
 } from "../decision-gate";
 import { projectInputRequest } from "../input-request";
@@ -249,6 +256,9 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   readonly submit: (spec: AgentSubmitSpec) => Promise<SubmitResult>;
   readonly resumeInputRequest: (
     spec: WorkspaceAgentResumeInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
+  readonly decideInputRequest: (
+    spec: WorkspaceAgentDecideInputRequestCommandInput,
   ) => Promise<SubmitResult>;
   readonly runWorkspaceJob: (spec: AgentWorkspaceJobSpec) => Promise<WorkspaceJobProjection>;
 }
@@ -784,6 +794,151 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
             effectAuthorityRef: truthIdentity.effectAuthorityRef,
           }),
         ),
+      );
+    });
+  }
+
+  protected decideInputRequestWithBindings(
+    spec: WorkspaceAgentDecideInputRequestCommandInput,
+    baseBindings: AgentSubmitBindings,
+  ): Promise<SubmitResult> {
+    if (spec.decision.kind === "approved") {
+      return this.resumeInputRequestWithBindings(
+        {
+          ref: spec.ref,
+          decidedBy: spec.decision.decidedBy,
+          answer: spec.decision.answer,
+        },
+        baseBindings,
+      );
+    }
+    return this.closeInputRequest(spec);
+  }
+
+  private closeInputRequest(
+    spec: WorkspaceAgentDecideInputRequestCommandInput,
+  ): Promise<SubmitResult> {
+    const closeDecision = spec.decision;
+    if (closeDecision.kind === "approved") {
+      return Promise.reject(new TypeError("approved input requests must resume"));
+    }
+    return this.scopedPromise((scope) => {
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
+      }
+      if (scopeRefKey(spec.ref.scopeRef) !== scopeRefKey(truthIdentity.scopeRef)) {
+        return Promise.reject(
+          new UnsupportedScopeRef({ scopeId: scopeRefKey(spec.ref.scopeRef), position: "source" }),
+        );
+      }
+      const runtimeIdentity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+      return this.runScopedEffect(
+        scope,
+        Effect.gen(function* () {
+          const ledger = yield* Ledger;
+          const boundaryEvents = yield* BoundaryEvents;
+          const events = yield* ledger.events(runtimeIdentity);
+          const gate = projectDecisionGate(events, spec.ref.gateRef);
+          const inputRequest = projectInputRequest(events, spec.ref);
+          const resultFromLedger = () => {
+            const result = projectSubmitResult(events, spec.ref.runId);
+            return result === null
+              ? Effect.fail(new TypeError("input request close missing terminal run fact"))
+              : Effect.succeed(result);
+          };
+          const sameTerminal =
+            (closeDecision.kind === "rejected" &&
+              gate.status === "rejected" &&
+              gate.decision?.decisionRef === closeDecision.decisionRef) ||
+            (closeDecision.kind === "cancelled" &&
+              gate.status === "cancelled" &&
+              gate.cancelled?.closeRef === closeDecision.closeRef) ||
+            (closeDecision.kind === "expired" &&
+              gate.status === "expired" &&
+              gate.expired?.closeRef === closeDecision.closeRef);
+          if (sameTerminal) {
+            return yield* resultFromLedger();
+          }
+          if (gate.status !== "requested" || inputRequest.status !== "pending") {
+            return yield* Effect.fail(
+              new TypeError(`input request terminal conflict: ${gate.status}`),
+            );
+          }
+          const terminal =
+            closeDecision.kind === "rejected"
+              ? {
+                  event: DECISION_GATE_KIND.DECIDED,
+                  payload: {
+                    gateRef: spec.ref.gateRef,
+                    decisionRef: closeDecision.decisionRef,
+                    decision: "rejected",
+                    decidedBy: closeDecision.decidedBy,
+                    reason: closeDecision.reason ?? "rejected",
+                    rejectionRef: {
+                      rejectionId: decisionGateSettlementRef(
+                        "rejected",
+                        spec.ref.gateRef,
+                        closeDecision.decisionRef,
+                      ),
+                      rejectionKind: "policy_denied",
+                      reason: closeDecision.reason ?? "rejected",
+                    },
+                  },
+                  abortKind: ABORT.DECISION_REJECTED,
+                  terminalRef: closeDecision.decisionRef,
+                  reason: "rejected",
+                }
+              : closeDecision.kind === "cancelled"
+                ? {
+                    event: DECISION_GATE_KIND.CANCELLED,
+                    payload: {
+                      gateRef: spec.ref.gateRef,
+                      closeRef: closeDecision.closeRef,
+                      reason: closeDecision.reason ?? "cancelled",
+                    },
+                    abortKind: ABORT.DECISION_CANCELLED,
+                    terminalRef: closeDecision.closeRef,
+                    reason: "cancelled",
+                  }
+                : {
+                    event: DECISION_GATE_KIND.EXPIRED,
+                    payload: {
+                      gateRef: spec.ref.gateRef,
+                      closeRef: closeDecision.closeRef,
+                      reason: closeDecision.reason ?? "expired",
+                    },
+                    abortKind: ABORT.DECISION_EXPIRED,
+                    terminalRef: closeDecision.closeRef,
+                    reason: "expired",
+                  };
+          yield* boundaryEvents.commitWithRuntimeEvents(
+            decisionGateBoundaryContract,
+            terminal.event,
+            terminal.payload,
+            () => [
+              agentRunAbortedEvent({
+                scopeRef: runtimeIdentity.scopeRef,
+                effectAuthorityRef: runtimeIdentity.effectAuthorityRef,
+                kind: terminal.abortKind as AbortKind,
+                runId: spec.ref.runId,
+                tokensUsed: inputRequest.interruption.payload.tokensUsed,
+                payload: {
+                  reason: terminal.reason,
+                  gateRef: spec.ref.gateRef,
+                  terminalRef: terminal.terminalRef,
+                },
+                traceContext: inputRequest.interruption.payload.traceContext,
+              }),
+            ],
+          );
+          const nextEvents = yield* ledger.events(runtimeIdentity);
+          const result = projectSubmitResult(nextEvents, spec.ref.runId);
+          return result === null
+            ? yield* Effect.fail(new TypeError("input request close missing terminal run fact"))
+            : result;
+        }),
+        runtimeIdentity,
       );
     });
   }
@@ -1338,6 +1493,10 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     resumeInputRequest(spec: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
       return this.resumeInputRequestWithBindings(spec, this._mount.driverConfig.bindings);
+    }
+
+    decideInputRequest(spec: WorkspaceAgentDecideInputRequestCommandInput): Promise<SubmitResult> {
+      return this.decideInputRequestWithBindings(spec, this._mount.driverConfig.bindings);
     }
 
     runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {
