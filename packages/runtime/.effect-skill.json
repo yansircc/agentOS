@@ -14,6 +14,12 @@
       "rules": ["EFF025", "EFF402"]
     },
     {
+      "path": "src/cloudflare/agent-do-helpers.ts",
+      "owner": "@agent-os/runtime/cloudflare/cf-do",
+      "reason": "Cloudflare Durable Object helper owns extracted streamEvents error Response construction while the DO class remains the terminal facade",
+      "rules": ["EFF402"]
+    },
+    {
       "path": "src/cloudflare/attached-stream-wire.ts",
       "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
       "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
@@ -62,6 +68,60 @@
       "rules": ["EFF402"]
     },
     {
+      "path": "src/in-memory/state.ts",
+      "owner": "@agent-os/runtime/in-memory-state",
+      "reason": "in-memory backend state owns synchronous post-commit sink isolation; sink failures are diagnostics and must not roll back committed facts",
+      "rules": ["EFF001"]
+    },
+    {
+      "path": "src/in-memory/due-work-state.ts",
+      "owner": "@agent-os/runtime/in-memory-state",
+      "reason": "in-memory due-work state helper owns fail-fast synchronous lifecycle projection errors on malformed in-memory rows",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/in-memory/telemetry-state.ts",
+      "owner": "@agent-os/runtime/in-memory-state",
+      "reason": "in-memory telemetry helper owns synchronous post-commit sink isolation; sink failures are diagnostics and must not roll back committed facts",
+      "rules": ["EFF001"]
+    },
+    {
+      "path": "src/node/index.ts",
+      "owner": "@agent-os/runtime/node/postgres-backend",
+      "reason": "terminal Node/Postgres backend adapter owns Promise SQL execution, dispatch delivery callbacks, and post-commit fanout diagnostics",
+      "rules": ["EFF001", "EFF004", "EFF025"]
+    },
+    {
+      "path": "src/node/dispatch.ts",
+      "owner": "@agent-os/runtime/node/postgres-backend",
+      "reason": "Node/Postgres dispatch helper owns fail-fast validation for the terminal dispatch adapter before ledger writes",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/node/due-work.ts",
+      "owner": "@agent-os/runtime/node/postgres-backend",
+      "reason": "Node/Postgres due-work helper owns Promise lock sequencing for the terminal backend adapter",
+      "rules": ["EFF001", "EFF003", "EFF004"]
+    },
+    {
+      "path": "src/node/quota.ts",
+      "owner": "@agent-os/runtime/node/postgres-backend",
+      "reason": "Node/Postgres quota helper owns fail-fast projection error mapping at the terminal backend adapter boundary",
+      "rules": ["EFF001", "EFF025"]
+    },
+    {
+      "path": "src/node/resource.ts",
+      "owner": "@agent-os/runtime/node/postgres-backend",
+      "reason": "Node/Postgres resource helper owns fail-fast SQL transaction result mapping at the terminal backend adapter boundary",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/node/telemetry.ts",
+      "owner": "@agent-os/runtime/node/postgres-backend",
+      "reason": "Node/Postgres telemetry helper owns Promise event-handler fanout and post-commit sink diagnostics",
+      "rules": ["EFF001", "EFF003", "EFF004"]
+    },
+    {
       "path": "src/node/host.ts",
       "owner": "@agent-os/runtime/node/psql-host-adapter",
       "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
@@ -78,6 +138,18 @@
       "owner": "@agent-os/runtime/workspace-env-core",
       "reason": "WorkspaceEnv core owns fail-fast AbortSignal and workspace path validation before provider side effects",
       "rules": ["EFF024", "EFF025"]
+    },
+    {
+      "path": "src/workspace-env-core/path-policy.ts",
+      "owner": "@agent-os/runtime/workspace-env-core",
+      "reason": "WorkspaceEnv core path policy owns fail-fast AbortSignal, regex parsing, path validation, and provider traversal Promise calls before workspace side effects",
+      "rules": ["EFF001", "EFF003", "EFF004", "EFF024", "EFF025"]
+    },
+    {
+      "path": "src/workspace-env-core/file-ops.ts",
+      "owner": "@agent-os/runtime/workspace-env-core",
+      "reason": "WorkspaceEnv core file operations own Promise provider calls for read, write, glob, grep, and diff tool boundaries",
+      "rules": ["EFF003", "EFF004"]
     },
     {
       "path": "test/cloudflare/_in-memory-do.ts",
@@ -102,6 +174,36 @@
       "owner": "@agent-os/runtime/cloudflare/test-host-helpers",
       "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
       "rules": ["EFF402"]
+    },
+    {
+      "path": "test/_submit-agent-interrupt-resume-cases.ts",
+      "owner": "@agent-os/runtime/submit-agent-tests",
+      "reason": "submit-agent interrupt/resume tests own throwing tool fixtures to prove consumer failure handling without changing production error channels",
+      "rules": ["EFF024", "EFF025"]
+    },
+    {
+      "path": "test/_workspace-job-harness.ts",
+      "owner": "@agent-os/runtime/workspace-job-tests",
+      "reason": "workspace-job harness owns async data-plane fixture callbacks that model host provider promises",
+      "rules": ["EFF003"]
+    },
+    {
+      "path": "test/_workspace-job-data-plane-cases.ts",
+      "owner": "@agent-os/runtime/workspace-job-tests",
+      "reason": "workspace-job data-plane tests own async fixture callbacks for terminal artifact build, write, readback, and verifier providers",
+      "rules": ["EFF003"]
+    },
+    {
+      "path": "test/_workspace-job-failure-reconcile-cases.ts",
+      "owner": "@agent-os/runtime/workspace-job-tests",
+      "reason": "workspace-job failure/reconcile tests own async fixture callbacks for failing provider and verifier surfaces",
+      "rules": ["EFF003"]
+    },
+    {
+      "path": "test/_workspace-job-idempotency-cases.ts",
+      "owner": "@agent-os/runtime/workspace-job-tests",
+      "reason": "workspace-job idempotency tests own async fixture callbacks for replayed artifact provider surfaces",
+      "rules": ["EFF003"]
     }
   ]
 }
