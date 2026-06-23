@@ -23,6 +23,7 @@
       "fix": "Commit through the owning BoundaryContract with matching event vocabulary, scopeRef, effectAuthorityRef, and claim identity.",
       "sourceFiles": [
         "packages/runtime/src/boundary-commit.ts",
+        "packages/runtime/test/cloudflare/do-rpc.test.ts",
         "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts"
       ]
     },
@@ -352,6 +353,23 @@
       "docs": "docs/packages/runtime.md",
       "fix": "Commit or look up the resource reservation under the exact ledger identity before consuming or releasing it.",
       "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.rpc_method_missing",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Invoke Durable Object methods through the supported agentOS RPC helper and keep generated client method names aligned with the Durable Object class.",
+      "sourceFiles": ["packages/runtime/src/cloudflare/do-rpc.ts"]
+    },
+    {
+      "tag": "agent_os.rpc_untyped_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Throw tagged domain errors at supported Durable Object RPC boundaries; untyped failures are serialized as RPC boundary errors without fabricated domain fields.",
+      "sourceFiles": [
+        "packages/runtime/src/cloudflare/do-rpc.ts",
+        "packages/runtime/test/cloudflare/do-rpc.test.ts"
+      ]
     },
     {
       "tag": "agent_os.runtime_ledger_transition_rejected",

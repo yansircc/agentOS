@@ -4590,21 +4590,51 @@ const checkGeneratedStaticTargetLinking = () => {
   const workspaceAgentSourcePath = "packages/core/src/workspace-agent.ts";
   const source = read(sourcePath);
   const workspaceAgentSource = read(workspaceAgentSourcePath);
-  const renderStaticTargetSource = sliceBetweenMarkers(
+  const renderWorkspaceStaticTargetSource = sliceBetweenMarkers(
+    source,
+    "const renderWorkspaceStaticTarget =",
+    "const renderChatStaticTarget =",
+  );
+  const renderChatStaticTargetSource = sliceBetweenMarkers(
+    source,
+    "const renderChatStaticTarget =",
+    "const renderStaticTarget =",
+  );
+  const renderStaticTargetDispatchSource = sliceBetweenMarkers(
     source,
     "const renderStaticTarget =",
-    "const generatedClientModuleImports =",
+    "const renderCloudflareScopeHelper =",
+  );
+  const renderStaticTargetSource = [
+    renderWorkspaceStaticTargetSource,
+    renderChatStaticTargetSource,
+    renderStaticTargetDispatchSource,
+  ].join("\n");
+  const renderWorkspaceSvelteKitRemoteSource = sliceBetweenMarkers(
+    source,
+    "const renderWorkspaceSvelteKitRemote =",
+    "const renderChatSvelteKitRemote =",
+  );
+  const renderChatSvelteKitRemoteSource = sliceBetweenMarkers(
+    source,
+    "const renderChatSvelteKitRemote =",
+    "const renderSvelteKitRemote =",
   );
   const linkWorkspaceStaticTargetSource = sliceBetweenMarkers(
     source,
     "export const linkWorkspaceStaticTarget =",
     "const renderAgentOsConfigSchema =",
   );
-  const renderSvelteKitRemoteSource = sliceBetweenMarkers(
+  const renderSvelteKitRemoteDispatchSource = sliceBetweenMarkers(
     source,
     "const renderSvelteKitRemote =",
-    "const renderStaticClient =",
+    "const renderWorkspaceStaticClient =",
   );
+  const renderSvelteKitRemoteSource = [
+    renderWorkspaceSvelteKitRemoteSource,
+    renderChatSvelteKitRemoteSource,
+    renderSvelteKitRemoteDispatchSource,
+  ].join("\n");
   const renderCloudflareScopeHelperSource = sliceBetweenMarkers(
     source,
     "const renderCloudflareScopeHelper =",
@@ -4620,11 +4650,26 @@ const checkGeneratedStaticTargetLinking = () => {
     "const renderCloudflareWranglerConfig =",
     "const generatedClientModuleImports =",
   );
-  const renderStaticClientSource = sliceBetweenMarkers(
+  const renderWorkspaceStaticClientSource = sliceBetweenMarkers(
+    source,
+    "const renderWorkspaceStaticClient =",
+    "const renderChatStaticClient =",
+  );
+  const renderChatStaticClientSource = sliceBetweenMarkers(
+    source,
+    "const renderChatStaticClient =",
+    "const renderStaticClient =",
+  );
+  const renderStaticClientDispatchSource = sliceBetweenMarkers(
     source,
     "const renderStaticClient =",
     "const renderStaticClientTypes =",
   );
+  const renderStaticClientSource = [
+    renderWorkspaceStaticClientSource,
+    renderChatStaticClientSource,
+    renderStaticClientDispatchSource,
+  ].join("\n");
   if (renderStaticTargetSource.length === 0) {
     failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticTarget`);
   }
@@ -4680,6 +4725,10 @@ const checkGeneratedStaticTargetLinking = () => {
       method: "decideInputRequest",
       parser: "decideInputRequestFromUnknown",
     },
+    CUSTOM: {
+      method: "customCommand",
+      parser: "customInputFromUnknown",
+    },
     READ_STATE: {
       method: "readWorkspaceState",
       parser: "readStateInputFromUnknown",
@@ -4697,40 +4746,88 @@ const checkGeneratedStaticTargetLinking = () => {
       parser: "destroyInputFromUnknown",
     },
   };
+  const commonGeneratedCommandKeys = [
+    "SUBMIT",
+    "RESUME_INPUT_REQUEST",
+    "DECIDE_INPUT_REQUEST",
+    "CUSTOM",
+  ];
+  const workspaceOnlyGeneratedCommandKeys = ["READ_STATE", "READ_FILE", "RESET", "DESTROY"];
+  const knownGeneratedCommandKeys = new Set([
+    ...commonGeneratedCommandKeys,
+    ...workspaceOnlyGeneratedCommandKeys,
+  ]);
   for (const commandKey of workspaceCommandKeys) {
-    if (commandKey === "CUSTOM") continue;
+    if (!knownGeneratedCommandKeys.has(commandKey)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: generated target missing profile classification for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+  }
+  const assertCommandProjection = ({ commandKey, targetSource, remoteSource, profile }) => {
     const projection = generatedCommandProjection[commandKey];
     if (projection === undefined) {
       failures.push(
         `${sourcePath}: generated-static-target-linking: generated target missing projection for WORKSPACE_AGENT_COMMAND.${commandKey}`,
       );
-      continue;
+      return;
     }
-    if (!renderStaticTargetSource.includes(`${projection.method}(`)) {
+    if (!targetSource.includes(`${projection.method}(`)) {
       failures.push(
-        `${sourcePath}: generated-static-target-linking: renderStaticTarget missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+        `${sourcePath}: generated-static-target-linking: ${profile} renderStaticTarget missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
       );
     }
-    if (!renderSvelteKitRemoteSource.includes(`readonly ${projection.method}:`)) {
+    if (!remoteSource.includes(`readonly ${projection.method}:`)) {
       failures.push(
-        `${sourcePath}: generated-static-target-linking: AgentOSRpc missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+        `${sourcePath}: generated-static-target-linking: ${profile} AgentOSRpc missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
       );
     }
+    if (!remoteSource.includes(`if (name === WORKSPACE_AGENT_COMMAND.${commandKey})`)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: ${profile} invokeAgentCommand missing WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+    if (!remoteSource.includes(projection.parser)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: ${profile} invokeAgentCommand missing ${projection.parser} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+    if (!remoteSource.includes(`runtime.${projection.method}(`)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: ${profile} invokeAgentCommand missing runtime.${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+      );
+    }
+  };
+  for (const commandKey of commonGeneratedCommandKeys) {
+    assertCommandProjection({
+      commandKey,
+      targetSource: renderWorkspaceStaticTargetSource,
+      remoteSource: renderWorkspaceSvelteKitRemoteSource,
+      profile: "workspace@1",
+    });
+    assertCommandProjection({
+      commandKey,
+      targetSource: renderChatStaticTargetSource,
+      remoteSource: renderChatSvelteKitRemoteSource,
+      profile: "chat@1",
+    });
+  }
+  for (const commandKey of workspaceOnlyGeneratedCommandKeys) {
+    const projection = generatedCommandProjection[commandKey];
+    assertCommandProjection({
+      commandKey,
+      targetSource: renderWorkspaceStaticTargetSource,
+      remoteSource: renderWorkspaceSvelteKitRemoteSource,
+      profile: "workspace@1",
+    });
     if (
-      !renderSvelteKitRemoteSource.includes(`if (name === WORKSPACE_AGENT_COMMAND.${commandKey})`)
+      projection !== undefined &&
+      (renderChatStaticTargetSource.includes(`${projection.method}(`) ||
+        renderChatSvelteKitRemoteSource.includes(`WORKSPACE_AGENT_COMMAND.${commandKey}`) ||
+        renderChatSvelteKitRemoteSource.includes(projection.parser))
     ) {
       failures.push(
-        `${sourcePath}: generated-static-target-linking: invokeAgentCommand missing WORKSPACE_AGENT_COMMAND.${commandKey}`,
-      );
-    }
-    if (!renderSvelteKitRemoteSource.includes(projection.parser)) {
-      failures.push(
-        `${sourcePath}: generated-static-target-linking: invokeAgentCommand missing ${projection.parser} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
-      );
-    }
-    if (!renderSvelteKitRemoteSource.includes(`runtime.${projection.method}(`)) {
-      failures.push(
-        `${sourcePath}: generated-static-target-linking: invokeAgentCommand missing runtime.${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+        `${sourcePath}: generated-static-target-linking: chat@1 must not project WORKSPACE_AGENT_COMMAND.${commandKey}`,
       );
     }
   }
@@ -4784,16 +4881,21 @@ const checkGeneratedStaticTargetLinking = () => {
     }
   }
 
-  const durableObjectConfigStart = renderStaticTargetSource.indexOf("createAgentDurableObject<");
-  const durableObjectConfig =
-    durableObjectConfigStart === -1 ? "" : renderStaticTargetSource.slice(durableObjectConfigStart);
-  if (durableObjectConfig.length === 0) {
+  const durableObjectConfigSections = [
+    renderWorkspaceStaticTargetSource,
+    renderChatStaticTargetSource,
+  ]
+    .map((profileSource) =>
+      sliceBetweenMarkers(profileSource, "createAgentDurableObject<", "export class"),
+    )
+    .filter((section) => section.length > 0);
+  if (durableObjectConfigSections.length === 0) {
     failures.push(
       `${sourcePath}: generated-static-target-linking: target must call createAgentDurableObject`,
     );
   }
   for (const forbidden of ["deploymentProvenance", "targetDeployment"]) {
-    if (durableObjectConfig.includes(forbidden)) {
+    if (durableObjectConfigSections.some((section) => section.includes(forbidden))) {
       failures.push(
         `${sourcePath}: generated-static-target-linking: runtime wiring must not consume ${forbidden}`,
       );
@@ -4815,7 +4917,7 @@ const checkGeneratedStaticTargetLinking = () => {
 
   const requiredRemoteBridgeMarkers = [
     'renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)',
-    'renderNamedImport(["agentOSRpcClient"], "./cloudflare-scope")',
+    'renderNamedImport(["agentOSRpcClient", "agentOSTruthIdentity"], "./cloudflare-scope")',
     "decodeSseHttpEvents",
     "responseToSseHttpChunks",
     "agentOSRpcClient<AgentOSRpc>(platformEnv)",
@@ -4884,7 +4986,7 @@ const checkGeneratedStaticTargetLinking = () => {
   const requiredWorkerEntryMarkers = [
     "Sandbox",
     '"./target"',
-    "export { ${normalized.target.durableObject.className}, Sandbox };",
+    'normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""',
     "satisfies ExportedHandler<AgentOSTargetEnv>",
   ];
   for (const marker of requiredWorkerEntryMarkers) {

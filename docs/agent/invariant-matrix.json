@@ -116,6 +116,8 @@
         "agent_os.postgres_harness_error",
         "agent_os.provider_http_failure",
         "agent_os.ref_resolution_failed",
+        "agent_os.rpc_method_missing",
+        "agent_os.rpc_untyped_error",
         "agent_os.witness_port_rejected"
       ],
       "docs": [

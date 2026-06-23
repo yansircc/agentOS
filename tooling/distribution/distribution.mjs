@@ -1317,6 +1317,32 @@ const checkDistribution = () => {
   console.log(`checked distribution contract for ${publishedRecords().length} packages`);
 };
 
+const assertPackedTarballManifests = (tarballs) => {
+  const issues = [];
+  for (const entry of tarballs) {
+    const dir = mkdtempFixture("agentos-packed-manifest-");
+    const target = path.join(dir, "package");
+    try {
+      unpackTarballInto(entry.file, target);
+      const manifest = readJson(path.join(target, "package.json"));
+      const manifestText = JSON.stringify(manifest);
+      if (/workspace:|catalog:/u.test(manifestText)) {
+        issues.push(
+          `${entry.record.packageJson.name}: packed manifest leaks workspace/catalog protocol`,
+        );
+      }
+      if (manifestText.includes(`${sourcePackageScope}/`)) {
+        issues.push(
+          `${entry.record.packageJson.name}: packed manifest leaks source package scope ${sourcePackageScope}`,
+        );
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  if (issues.length > 0) fail(issues.join("\n"));
+};
+
 const packInternal = () => {
   checkDistribution();
   fs.mkdirSync(tarballRoot, { recursive: true });
@@ -1333,6 +1359,7 @@ const packInternal = () => {
     const addressed = contentAddressedTarball(path.join(tarballRoot, filename));
     tarballs.push({ record, ...addressed });
   }
+  assertPackedTarballManifests(tarballs);
   writeInstallManifest(tarballs);
   console.log(
     `packed ${tarballs.length} tarballs into ${repoPath(tarballRoot)} and wrote ${repoPath(installManifestPath)}`,
@@ -1434,6 +1461,105 @@ const writeConsumerApp = (dir, extraDeps = {}) => {
     },
     include: ["index.ts", "cf-entry.ts"],
   });
+};
+
+const writeGeneratedTargetConsumerApp = (dir) => {
+  fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
+  writeJson(path.join(dir, "package.json"), {
+    name: "agentos-generated-target-consumer-fixture",
+    private: true,
+    type: "module",
+    dependencies: {
+      ...packageDepsFromTarballs(),
+      "@cloudflare/sandbox": "^0.12.1",
+      "@effect/ai-anthropic": catalog()["@effect/ai-anthropic"],
+      effect: catalog().effect,
+      "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
+    },
+  });
+  fs.writeFileSync(path.join(dir, "Dockerfile"), 'FROM alpine:3.20\nCMD ["sleep", "infinity"]\n');
+  fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the workspace.\n");
+  writeJson(path.join(dir, "agent", "agent.json"), {
+    agentId: "generated-target-consumer",
+    scope: {
+      kind: "session",
+      idSource: "manifest",
+      stableScopeId: "generated-target-consumer",
+    },
+    effectAuthorityRef: {
+      authorityClass: "effect",
+      authorityId: "generated-target-consumer",
+    },
+    materials: {
+      workspace: {
+        kind: "external_resource",
+        provider: "agent-os",
+        resourceKind: "workspace-env",
+        ref: "cloudflare-sandbox:generated-target-consumer",
+      },
+    },
+    executionDomains: {
+      workspace: { bindingRef: "workspace" },
+    },
+  });
+  fs.writeFileSync(
+    path.join(dir, "agentos.config.jsonc"),
+    [
+      "{",
+      '  "profile": "workspace@1",',
+      '  "agent": "./agent",',
+      '  "deployment": { "id": "generated-target-consumer", "version": "0.1.0" },',
+      '  "target": {',
+      '    "kind": "cloudflare-do@1",',
+      '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+      "  },",
+      '  "client": { "kind": "svelte-kit-remote@1" },',
+      '  "llm": {',
+      '    "route": "openai-chat-compatible",',
+      '    "endpointRef": "openrouter",',
+      '    "credentialRef": "openrouter-key",',
+      '    "modelRef": "openrouter-default-text-model"',
+      "  },",
+      '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  run(
+    "node",
+    [
+      path.join(repoRoot, "packages", "cli", "src", "main.mjs"),
+      "build",
+      "--cwd",
+      dir,
+      "--package-scope",
+      publishScope(),
+    ],
+    { capture: true },
+  );
+  const generatedFiles = allFiles(path.join(dir, ".agentos", "generated")).filter((file) =>
+    /\.(?:ts|json|jsonc)$/u.test(file),
+  );
+  const generatedText = generatedFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  if (!generatedText.includes(`${publishScope()}/runtime`)) {
+    fail("generated target consumer did not project runtime imports to public package scope");
+  }
+  if (generatedText.includes(`${sourcePackageScope}/`)) {
+    fail(`generated target consumer leaked source package scope ${sourcePackageScope}`);
+  }
+  if (/workspace:\*|catalog:/u.test(generatedText)) {
+    fail("generated target consumer leaked workspace/catalog protocol");
+  }
+};
+
+const assertNoAgentOsSymlinkPackages = (dir) => {
+  for (const packageName of tarballsByPackage().keys()) {
+    const target = packageTargetDir(path.join(dir, "node_modules"), packageName);
+    if (!fs.existsSync(target)) fail(`${packageName}: missing installed consumer package`);
+    if (fs.lstatSync(target).isSymbolicLink()) {
+      fail(`${packageName}: consumer package must be installed package content, not a symlink`);
+    }
+  }
 };
 
 const npmInstall = (dir, omitPeer = false) => {
@@ -1564,6 +1690,27 @@ const negativeContractTests = () => {
   console.log("verified negative distribution contract fixtures");
 };
 
+const assertGeneratedTargetConsumer = () => {
+  const dir = mkdtempFixture("agentos-generated-target-consumer-");
+  writeGeneratedTargetConsumerApp(dir);
+  npmInstall(dir);
+  assertNoAgentOsSymlinkPackages(dir);
+  run(
+    "bun",
+    [
+      "build",
+      ".agentos/generated/worker.ts",
+      "--target=browser",
+      "--format=esm",
+      "--packages=external",
+      "--external=cloudflare:workers",
+      "--outfile=.agentos/generated/worker.bundle.js",
+    ],
+    { cwd: dir, capture: true },
+  );
+  console.log("verified generated target consumer uses public package imports without symlinks");
+};
+
 const testInternalConsumer = () => {
   packInternal();
   negativeContractTests();
@@ -1590,6 +1737,7 @@ const testInternalConsumer = () => {
     ],
     { cwd: dir, capture: true },
   );
+  assertGeneratedTargetConsumer();
   console.log("verified internal npm consumer fixtures");
 };
 

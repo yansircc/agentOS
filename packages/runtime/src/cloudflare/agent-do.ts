@@ -164,6 +164,7 @@ import { commitDurableTriggerIntent } from "./due-work";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import { createAttachedStreamResponse } from "./attached-stream-wire";
+import { DURABLE_OBJECT_RPC_INVOKE, durableObjectRpcInvoke } from "./do-rpc";
 import type { CloudflareAgentMount } from "./mount";
 import {
   materializeCloudflareAgentConfig,
@@ -492,6 +493,17 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private scopedPromise<T>(fn: (scope: string) => Promise<T>): Promise<T> {
     const scope = this.scopeOrError();
     return scope instanceof ScopeMissingError ? Promise.reject(scope) : fn(scope);
+  }
+
+  [DURABLE_OBJECT_RPC_INVOKE](
+    method: string,
+    args: ReadonlyArray<unknown>,
+  ): ReturnType<typeof durableObjectRpcInvoke> {
+    return durableObjectRpcInvoke(
+      this as unknown as Readonly<Record<string, unknown>>,
+      method,
+      args,
+    );
   }
 
   private runScopedEffect<T, E>(

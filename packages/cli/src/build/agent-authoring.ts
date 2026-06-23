@@ -1288,6 +1288,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
 
 export const AGENTOS_CONFIG_PROFILE = {
   WORKSPACE_V1: "workspace@1",
+  CHAT_V1: "chat@1",
 } as const;
 
 export type AgentOsConfigProfile =
@@ -1349,7 +1350,7 @@ export interface AgentOsConfigWorkspace {
   readonly topology?: AgentOsConfigWorkspaceTopology;
 }
 
-export interface AgentOsConfigV1 {
+export interface AgentOsConfigBase {
   readonly $schema?: string;
   readonly profile: AgentOsConfigProfile;
   readonly agent: string;
@@ -1357,14 +1358,26 @@ export interface AgentOsConfigV1 {
   readonly target: AgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
   readonly llm: AgentOsConfigLlm;
+}
+
+export interface AgentOsWorkspaceConfigV1 extends AgentOsConfigBase {
+  readonly profile: typeof AGENTOS_CONFIG_PROFILE.WORKSPACE_V1;
   readonly workspace: AgentOsConfigWorkspace;
 }
+
+export interface AgentOsChatConfigV1 extends AgentOsConfigBase {
+  readonly profile: typeof AGENTOS_CONFIG_PROFILE.CHAT_V1;
+  readonly workspace?: never;
+}
+
+export type AgentOsConfigV1 = AgentOsWorkspaceConfigV1 | AgentOsChatConfigV1;
 
 export type AgentOsConfigFactKey = `/${string}`;
 
 export type AgentOsConfigOrigin =
   | `author:agentos.config.jsonc#${AgentOsConfigFactKey}`
   | `macro(${typeof AGENTOS_CONFIG_PROFILE.WORKSPACE_V1})#${AgentOsConfigFactKey}`
+  | `macro(${typeof AGENTOS_CONFIG_PROFILE.CHAT_V1})#${AgentOsConfigFactKey}`
   | `derived:${string}`;
 
 export type AgentOsConfigIssue =
@@ -1382,6 +1395,12 @@ export type AgentOsConfigIssue =
       readonly kind: "workspace_scope_not_manifest_owned";
       readonly path: "agent/agent.json#/scope";
       readonly reason: "scope_not_manifest_owned" | "stable_scope_id_missing";
+    }
+  | {
+      readonly kind: "llm_material_env_name_collision";
+      readonly path: "agentos.config.jsonc#/llm";
+      readonly envName: string;
+      readonly refs: readonly [string, string];
     }
   | {
       readonly kind: "workspace_default_tool_shadowed";
@@ -1414,7 +1433,8 @@ export type DecodeAgentOsConfigResult =
   | { readonly ok: true; readonly value: AgentOsConfigV1 }
   | { readonly ok: false; readonly issues: ReadonlyArray<AgentOsConfigIssue> };
 
-export interface NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest> {
+export interface NormalizedAgentOsConfigBase<M extends AgentManifest = AgentManifest> {
+  readonly profile: AgentOsConfigProfile;
   readonly config: AgentOsConfigV1;
   readonly deployment: DeploymentSpec<M>;
   readonly deploymentVersion?: string;
@@ -1422,15 +1442,33 @@ export interface NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest
   readonly target: AgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
   readonly llm: AgentOsConfigLlm;
+  readonly origins: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
+  readonly provenance: StaticTargetProvenance;
+}
+
+export interface NormalizedWorkspaceAgentOsConfig<
+  M extends AgentManifest = AgentManifest,
+> extends NormalizedAgentOsConfigBase<M> {
+  readonly profile: typeof AGENTOS_CONFIG_PROFILE.WORKSPACE_V1;
+  readonly config: AgentOsWorkspaceConfigV1;
   readonly workspace: AgentOsConfigWorkspace & {
     readonly topology: AgentOsConfigWorkspaceTopology;
     readonly bindingRef: WorkspaceBindingRef;
     readonly providerResourceId: ProviderResourceId;
     readonly cloudflareSandboxId: string;
   };
-  readonly origins: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
-  readonly provenance: StaticTargetProvenance;
 }
+
+export interface NormalizedChatAgentOsConfig<
+  M extends AgentManifest = AgentManifest,
+> extends NormalizedAgentOsConfigBase<M> {
+  readonly profile: typeof AGENTOS_CONFIG_PROFILE.CHAT_V1;
+  readonly config: AgentOsChatConfigV1;
+}
+
+export type NormalizedAgentOsConfig<M extends AgentManifest = AgentManifest> =
+  | NormalizedWorkspaceAgentOsConfig<M>
+  | NormalizedChatAgentOsConfig<M>;
 
 export type NormalizeAgentOsConfigResult<M extends AgentManifest = AgentManifest> =
   | { readonly ok: true; readonly value: NormalizedAgentOsConfig<M> }
@@ -1479,10 +1517,11 @@ export interface StaticTargetModuleImport {
 }
 
 export interface CanonicalDeploymentIR {
+  readonly profile: AgentOsConfigProfile;
   readonly target: typeof AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1;
   readonly llmRoute: typeof AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE;
   readonly client: AgentOsConfigClientKind;
-  readonly workspaceTopology: AgentOsConfigWorkspaceTopology;
+  readonly workspaceTopology?: AgentOsConfigWorkspaceTopology;
   readonly toolNames: ReadonlyArray<string>;
 }
 
@@ -1499,7 +1538,7 @@ export interface MountIR {
     | "runtime.events"
     | "runtime.input_requests"
   >;
-  readonly providerResourceId: ProviderResourceId;
+  readonly providerResourceId?: ProviderResourceId;
 }
 
 export interface StaticTargetLink {
@@ -1536,6 +1575,72 @@ const configAuthorOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigin 
 
 const workspaceMacroOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigin =>
   `macro(${AGENTOS_CONFIG_PROFILE.WORKSPACE_V1})#${factKey}`;
+
+const chatMacroOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigin =>
+  `macro(${AGENTOS_CONFIG_PROFILE.CHAT_V1})#${factKey}`;
+
+export type LlmMaterialEnvKind = "endpoint" | "credential" | "model";
+
+export interface LlmMaterialEnvBinding {
+  readonly kind: LlmMaterialEnvKind;
+  readonly ref: string;
+  readonly envName: string;
+}
+
+const materialEnvPrefix = (kind: LlmMaterialEnvKind): string =>
+  kind === "endpoint"
+    ? "AGENTOS_ENDPOINT"
+    : kind === "credential"
+      ? "AGENTOS_CREDENTIAL"
+      : "AGENTOS_MODEL";
+
+const materialEnvSuffix = (ref: string): string =>
+  ref
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "REF";
+
+export const materialEnvNameForRef = (kind: LlmMaterialEnvKind, ref: string): string =>
+  `${materialEnvPrefix(kind)}_${materialEnvSuffix(ref)}`;
+
+export const llmMaterialEnvBindingsForRefs = (
+  refs: ReadonlyArray<{ readonly kind: LlmMaterialEnvKind; readonly ref: string }>,
+): ReadonlyArray<LlmMaterialEnvBinding> =>
+  refs.map(({ kind, ref }) => ({ kind, ref, envName: materialEnvNameForRef(kind, ref) }));
+
+export const llmMaterialEnvNameCollisionIssues = (
+  bindings: ReadonlyArray<LlmMaterialEnvBinding>,
+): ReadonlyArray<
+  Extract<AgentOsConfigIssue, { readonly kind: "llm_material_env_name_collision" }>
+> => {
+  const byEnv = new Map<string, string>();
+  const issues: Extract<
+    AgentOsConfigIssue,
+    { readonly kind: "llm_material_env_name_collision" }
+  >[] = [];
+  for (const binding of bindings) {
+    const materialRef = `${binding.kind}:${binding.ref}`;
+    const existing = byEnv.get(binding.envName);
+    if (existing === undefined) {
+      byEnv.set(binding.envName, materialRef);
+    } else if (existing !== materialRef) {
+      issues.push({
+        kind: "llm_material_env_name_collision",
+        path: "agentos.config.jsonc#/llm",
+        envName: binding.envName,
+        refs: [existing, materialRef],
+      });
+    }
+  }
+  return issues;
+};
+
+const llmMaterialEnvBindings = (llm: AgentOsConfigLlm): ReadonlyArray<LlmMaterialEnvBinding> =>
+  llmMaterialEnvBindingsForRefs([
+    { kind: "endpoint", ref: llm.endpointRef },
+    { kind: "credential", ref: llm.credentialRef },
+    { kind: "model", ref: llm.modelRef },
+  ]);
 
 const configAllowedFields = new Set([
   "$schema",
@@ -1810,7 +1915,10 @@ export const decodeAgentOsConfig = (value: unknown): DecodeAgentOsConfigResult =
     "/$schema",
     value.$schema,
   );
-  if (value.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1) {
+  if (
+    value.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 &&
+    value.profile !== AGENTOS_CONFIG_PROFILE.CHAT_V1
+  ) {
     issueInvalidConfigValue(issues, "agentos.config.jsonc", "/profile", "profile_invalid");
   }
   const agent = configStringField(issues, "agentos.config.jsonc", "/agent", value.agent);
@@ -1818,7 +1926,21 @@ export const decodeAgentOsConfig = (value: unknown): DecodeAgentOsConfigResult =
   const target = decodeTargetConfig(issues, value.target);
   const client = decodeClientConfig(issues, value.client);
   const llm = decodeLlmConfig(issues, value.llm);
-  const workspace = decodeWorkspaceConfig(issues, value.workspace);
+  const workspace =
+    value.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? decodeWorkspaceConfig(issues, value.workspace)
+      : null;
+  if (
+    value.profile === AGENTOS_CONFIG_PROFILE.CHAT_V1 &&
+    Object.prototype.hasOwnProperty.call(value, "workspace")
+  ) {
+    issueInvalidConfigValue(
+      issues,
+      "agentos.config.jsonc",
+      "/workspace",
+      "workspace_forbidden_for_chat_profile",
+    );
+  }
   if (
     issues.length > 0 ||
     agent === null ||
@@ -1826,21 +1948,33 @@ export const decodeAgentOsConfig = (value: unknown): DecodeAgentOsConfigResult =
     target === null ||
     client === null ||
     llm === null ||
-    workspace === null
+    (value.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 && workspace === null)
   ) {
     return { ok: false, issues };
+  }
+  const base = {
+    ...(schema === undefined ? {} : { $schema: schema }),
+    agent,
+    deployment,
+    target,
+    client,
+    llm,
+  };
+  if (value.profile === AGENTOS_CONFIG_PROFILE.CHAT_V1) {
+    return {
+      ok: true,
+      value: {
+        ...base,
+        profile: AGENTOS_CONFIG_PROFILE.CHAT_V1,
+      },
+    };
   }
   return {
     ok: true,
     value: {
-      ...(schema === undefined ? {} : { $schema: schema }),
+      ...base,
       profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
-      agent,
-      deployment,
-      target,
-      client,
-      llm,
-      workspace,
+      workspace: workspace as AgentOsConfigWorkspace,
     },
   };
 };
@@ -2071,12 +2205,23 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   const decoded = decodeAgentOsConfig(config);
   if (!decoded.ok) return decoded;
   const value = decoded.value;
-  const workspaceDefaults = applyWorkspaceDefaultTools(compiled);
-  if (workspaceDefaults.issues.length > 0) {
-    return { ok: false, issues: workspaceDefaults.issues };
+  const llmEnvIssues = llmMaterialEnvNameCollisionIssues(llmMaterialEnvBindings(value.llm));
+  if (llmEnvIssues.length > 0) {
+    return { ok: false, issues: llmEnvIssues };
   }
-  const topology = value.workspace.topology ?? defaultWorkspaceTopology();
-  const scopeRef = manifestScopeRefResult(workspaceDefaults.manifest);
+  const profileManifest =
+    value.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? applyWorkspaceDefaultTools(compiled)
+      : {
+          manifest: compiled.manifest,
+          provenance: compiled.provenance,
+          exclusions: {},
+          issues: [],
+        };
+  if (profileManifest.issues.length > 0) {
+    return { ok: false, issues: profileManifest.issues };
+  }
+  const scopeRef = manifestScopeRefResult(profileManifest.manifest);
   if (!scopeRef.ok) {
     return {
       ok: false,
@@ -2089,6 +2234,61 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       ],
     };
   }
+  if (value.profile === AGENTOS_CONFIG_PROFILE.CHAT_V1) {
+    const referenceIssues = validateManifestToolReferences(profileManifest.manifest);
+    if (referenceIssues.length > 0) {
+      return { ok: false, issues: referenceIssues };
+    }
+    const origins: Record<AgentOsConfigFactKey, AgentOsConfigOrigin> = {
+      "/profile": configAuthorOrigin("/profile"),
+      "/agent": configAuthorOrigin("/agent"),
+      "/deployment/id": configAuthorOrigin("/deployment/id"),
+      ...(value.deployment.version === undefined
+        ? {}
+        : { "/deployment/version": configAuthorOrigin("/deployment/version") }),
+      "/target/kind": configAuthorOrigin("/target/kind"),
+      "/target/durableObject/className": configAuthorOrigin("/target/durableObject/className"),
+      "/target/durableObject/binding": configAuthorOrigin("/target/durableObject/binding"),
+      "/client/kind": configAuthorOrigin("/client/kind"),
+      "/llm/route": configAuthorOrigin("/llm/route"),
+      "/llm/endpointRef": configAuthorOrigin("/llm/endpointRef"),
+      "/llm/credentialRef": configAuthorOrigin("/llm/credentialRef"),
+      "/llm/modelRef": configAuthorOrigin("/llm/modelRef"),
+      "/deployment/backend": `derived:/target/kind`,
+      "/deployment/adapter": `derived:/target/kind`,
+      "/deployment/codec": chatMacroOrigin("/deployment/codec"),
+      "/deployment/providerStrategy": `derived:/llm/route`,
+    };
+    return {
+      ok: true,
+      value: {
+        profile: AGENTOS_CONFIG_PROFILE.CHAT_V1,
+        config: value,
+        deployment: {
+          deploymentId: value.deployment.id,
+          manifest: profileManifest.manifest,
+          backend: "cloudflare-do",
+          adapter: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          codec: "agentos-json@1",
+          providerStrategy: value.llm.route,
+        },
+        ...(value.deployment.version === undefined
+          ? {}
+          : { deploymentVersion: value.deployment.version }),
+        authoredToolNames: Object.keys(compiled.toolFilePaths).sort(),
+        target: value.target,
+        client: value.client,
+        llm: value.llm,
+        origins,
+        provenance: {
+          manifest: profileManifest.provenance,
+          deployment: origins,
+          exclusions: profileManifest.exclusions,
+        },
+      },
+    };
+  }
+  const topology = value.workspace.topology ?? defaultWorkspaceTopology();
   const bindingRef = workspaceBindingRef(value.workspace.binding);
   const providerResourceId = workspaceProviderResourceId({
     deploymentNamespace: value.deployment.id,
@@ -2103,8 +2303,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     providerResourceId,
   });
   const manifestWithWorkspaceMaterial = addWorkspaceMaterial(
-    workspaceDefaults.manifest,
-    workspaceDefaults.provenance,
+    profileManifest.manifest,
+    profileManifest.provenance,
     providerResourceId,
   );
   const referenceIssues = validateManifestToolReferences(manifestWithWorkspaceMaterial.manifest);
@@ -2147,6 +2347,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   return {
     ok: true,
     value: {
+      profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
       config: value,
       deployment: {
         deploymentId: value.deployment.id,
@@ -2175,7 +2376,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       provenance: {
         manifest: manifestWithWorkspaceMaterial.provenance,
         deployment: origins,
-        exclusions: workspaceDefaults.exclusions,
+        exclusions: profileManifest.exclusions,
       },
     },
   };
@@ -2226,6 +2427,7 @@ const staticTargetModules = (scope: string) => ({
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
+  coreTools: publicPackageSpecifier(scope, "core/tools"),
   sseHttp: publicPackageSpecifier(scope, "runtime/sse-http"),
   cloudflareSandbox: "@cloudflare/sandbox",
   svelteKitServer: "$app/server",
@@ -2249,8 +2451,8 @@ const generatedToolImports = (
     imports: [`default as tool_${index}`],
   }));
 
-const renderStaticTarget = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+const renderWorkspaceStaticTarget = (
+  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
@@ -2279,6 +2481,12 @@ const renderStaticTarget = (
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
+  const llmEnvByKind = Object.fromEntries(
+    llmMaterialEnvBindings(normalized.llm).map((binding) => [binding.kind, binding.envName]),
+  ) as Readonly<Record<LlmMaterialEnvKind, string>>;
+  const generatedLlmEnvFields = Object.values(llmEnvByKind)
+    .map((envName) => `  readonly ${envName}?: string;`)
+    .join("\n");
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
@@ -2294,6 +2502,7 @@ const renderStaticTarget = (
     renderNamedImport(["bindWorkspaceToolsForRuntime"], modules.workspaceBinding),
     renderNamedImport(["makeCloudflareWorkspaceEnv"], modules.workspaceEnvCloudflare),
     renderNamedImport(["getSandbox"], modules.cloudflareSandbox),
+    renderNamedImport(["deterministicToolInvocation", "unsafeRunToolByName"], modules.coreTools),
     renderNamedImport(["Effect"], modules.effect),
     renderTypeImport(
       ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
@@ -2302,6 +2511,8 @@ const renderStaticTarget = (
     renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
     renderTypeImport(
       [
+        "WorkspaceAgentDecideInputRequestCommandInput",
+        "WorkspaceAgentCustomCommandInput",
         "WorkspaceAgentFileEntry",
         "WorkspaceAgentMutationCommandOutput",
         "WorkspaceAgentReadStateCommandInput",
@@ -2312,6 +2523,7 @@ const renderStaticTarget = (
       ],
       modules.workspaceAgentHost,
     ),
+    renderTypeImport(["Tool"], modules.coreTools),
     renderTypeImport(["Sandbox", "SandboxTransport"], modules.cloudflareSandbox),
     ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
@@ -2326,9 +2538,7 @@ const generatedHandler = () => undefined;
 type AgentOSTargetEnv = {
   readonly [binding: string]: unknown;
   readonly SANDBOX_TRANSPORT?: SandboxTransport;
-  readonly OPENROUTER_KEY?: string;
-  readonly OPENROUTER_ENDPOINT?: string;
-  readonly OPENROUTER_DEFAULT_TEXT_MODEL?: string;
+${generatedLlmEnvFields}
 };
 
 type GeneratedTargetFailure = {
@@ -2346,7 +2556,7 @@ const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
   Promise.reject(Error(failure.message));
 
 const generatedWorkspaceToolNames = ${workspaceToolArray};
-const generatedCustomTools = ${customToolRecord};
+const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
 const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
 
 const generatedWorkspaceToolInteractionFor = (
@@ -2447,28 +2657,23 @@ const workspaceOperationInstallFor = (env: AgentOSTargetEnv) =>
     env: workspaceEnvFor(env),
   });
 
-const openRouterEndpoint = (env: AgentOSTargetEnv): string =>
-  env.OPENROUTER_ENDPOINT ?? "https://openrouter.ai/api/v1";
-
-const openRouterDefaultTextModel = (env: AgentOSTargetEnv): string | null =>
-  env.OPENROUTER_DEFAULT_TEXT_MODEL === undefined || env.OPENROUTER_DEFAULT_TEXT_MODEL.length === 0
-    ? null
-    : env.OPENROUTER_DEFAULT_TEXT_MODEL;
+const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
+  const value = env[name];
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
 
 const materialValue = (
   env: AgentOSTargetEnv,
   ref: { readonly kind: string; readonly ref: string },
 ): NonNullable<unknown> | null => {
   if (ref.kind === "endpoint" && ref.ref === ${jsString(normalized.llm.endpointRef)}) {
-    return openRouterEndpoint(env);
+    return materialEnvValue(env, ${jsString(llmEnvByKind.endpoint)});
   }
   if (ref.kind === "credential" && ref.ref === ${jsString(normalized.llm.credentialRef)}) {
-    return env.OPENROUTER_KEY === undefined || env.OPENROUTER_KEY.length === 0
-      ? null
-      : env.OPENROUTER_KEY;
+    return materialEnvValue(env, ${jsString(llmEnvByKind.credential)});
   }
   if (ref.kind === "model" && ref.ref === ${jsString(normalized.llm.modelRef)}) {
-    return openRouterDefaultTextModel(env);
+    return materialEnvValue(env, ${jsString(llmEnvByKind.model)});
   }
   return null;
 };
@@ -2609,6 +2814,15 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
       : rejectTargetFailure(bindings);
   }
 
+  customCommand(input: WorkspaceAgentCustomCommandInput): Promise<unknown> {
+    return Effect.runPromise(
+      unsafeRunToolByName(
+        generatedCustomTools,
+        deterministicToolInvocation(input.method, input.input),
+      ),
+    );
+  }
+
   readWorkspaceState(
     input: WorkspaceAgentReadStateCommandInput = {},
   ): Promise<WorkspaceAgentReadStateCommandOutput> {
@@ -2665,12 +2879,235 @@ export class ${normalized.target.durableObject.className} extends Base${normaliz
 `;
 };
 
+const renderChatStaticTarget = (
+  normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>,
+  toolNames: ReadonlyArray<string>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => {
+  const authoredToolNames = new Set(normalized.authoredToolNames);
+  const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
+  const toolImports = customToolNames
+    .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
+    .join("\n");
+  const customToolRecord =
+    customToolNames.length === 0
+      ? "{}"
+      : `{\n${customToolNames
+          .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
+          .join("\n")}\n}`;
+  const handlerRecord = `{\n${normalized.deployment.manifest.handlers
+    .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
+    .join("\n")}\n}`;
+  const llmEnvByKind = Object.fromEntries(
+    llmMaterialEnvBindings(normalized.llm).map((binding) => [binding.kind, binding.envName]),
+  ) as Readonly<Record<LlmMaterialEnvKind, string>>;
+  const generatedLlmEnvFields = Object.values(llmEnvByKind)
+    .map((envName) => `  readonly ${envName}?: string;`)
+    .join("\n");
+  const imports = [
+    `import semanticDeclarations from "./manifest.json";`,
+    `import deploymentProvenance from "./deployment.json";`,
+    renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
+    renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
+    renderNamedImport(["deterministicToolInvocation", "unsafeRunToolByName"], modules.coreTools),
+    renderNamedImport(["Effect"], modules.effect),
+    renderTypeImport(
+      ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
+      modules.runtimeProtocol,
+    ),
+    renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
+    renderTypeImport(
+      [
+        "WorkspaceAgentCustomCommandInput",
+        "WorkspaceAgentDecideInputRequestCommandInput",
+        "WorkspaceAgentResumeInputRequestCommandInput",
+      ],
+      modules.workspaceAgentHost,
+    ),
+    renderTypeImport(["Tool"], modules.coreTools),
+    ...(toolImports.length === 0 ? [] : [toolImports]),
+  ].join("\n");
+  return `${imports}
+
+export const targetDeclarations = semanticDeclarations;
+export const targetDeployment = deploymentProvenance;
+
+const semanticManifest = semanticDeclarations as AgentManifest;
+const generatedHandler = () => undefined;
+
+type AgentOSTargetEnv = {
+  readonly [binding: string]: unknown;
+${generatedLlmEnvFields}
+};
+
+type GeneratedTargetFailure = {
+  readonly ok: false;
+  readonly message: string;
+};
+
+type GeneratedTargetResult<Value> =
+  | { readonly ok: true; readonly value: Value }
+  | GeneratedTargetFailure;
+
+const targetFailure = (message: string): GeneratedTargetFailure => ({ ok: false, message });
+
+const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
+  Promise.reject(Error(failure.message));
+
+const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
+
+const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
+  const value = env[name];
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const materialValue = (
+  env: AgentOSTargetEnv,
+  ref: { readonly kind: string; readonly ref: string },
+): NonNullable<unknown> | null => {
+  if (ref.kind === "endpoint" && ref.ref === ${jsString(normalized.llm.endpointRef)}) {
+    return materialEnvValue(env, ${jsString(llmEnvByKind.endpoint)});
+  }
+  if (ref.kind === "credential" && ref.ref === ${jsString(normalized.llm.credentialRef)}) {
+    return materialEnvValue(env, ${jsString(llmEnvByKind.credential)});
+  }
+  if (ref.kind === "model" && ref.ref === ${jsString(normalized.llm.modelRef)}) {
+    return materialEnvValue(env, ${jsString(llmEnvByKind.model)});
+  }
+  return null;
+};
+
+const requiredStringMaterial = (
+  kind: string,
+  ref: string,
+  value: NonNullable<unknown> | null,
+): GeneratedTargetResult<string> => {
+  if (typeof value === "string" && value.length > 0) return { ok: true, value };
+  return targetFailure(\`missing \${kind} material: \${ref}\`);
+};
+
+const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonNullable<AgentSubmitBindings["llmRoutes"]>["default"]> => {
+  const modelId = requiredStringMaterial(
+    "model",
+    ${jsString(normalized.llm.modelRef)},
+    materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} }),
+  );
+  if (!modelId.ok) return modelId;
+  return {
+    ok: true,
+    value: {
+      kind: "openai-chat-compatible",
+      endpointRef: ${jsString(normalized.llm.endpointRef)},
+      credentialRef: ${jsString(normalized.llm.credentialRef)},
+      modelId: modelId.value,
+    },
+  };
+};
+
+const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {
+  const route = generatedLlmRouteFor(env);
+  if (!route.ok) return route;
+  return {
+    ok: true,
+    value: {
+      llmRoutes: {
+        default: route.value,
+      },
+      tools: generatedCustomTools,
+    },
+  };
+};
+
+const submitSpecFromRunInput = (input: SubmitRunInput): AgentSubmitSpec => ({
+  input,
+  intent: input.intent,
+  context: input.context,
+  ...(input.system === undefined ? {} : { system: input.system }),
+  ...(input.budget === undefined ? {} : { budget: input.budget }),
+  ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
+  ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  ...(input.materials === undefined ? {} : { materials: input.materials }),
+  ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
+  ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
+  ...(input.decisionInterrupts === undefined ? {} : { decisionInterrupts: input.decisionInterrupts }),
+  ...(input.resume === undefined ? {} : { resume: input.resume }),
+});
+
+const Base${normalized.target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
+  manifest: semanticManifest,
+  agentBindings: {
+    handlers: ${handlerRecord},
+  },
+  refResolver: (env) => ({
+    material: (ref) => materialValue(env, ref),
+  }),
+  llmTransport: () => OpenAiCompatibleLlmTransportLive,
+});
+
+export class ${normalized.target.durableObject.className} extends Base${normalized.target.durableObject.className} {
+  private readonly targetEnv: AgentOSTargetEnv;
+
+  constructor(ctx: DurableObjectState, env: AgentOSTargetEnv) {
+    super(ctx, env);
+    this.targetEnv = env;
+  }
+
+  override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.submitWithBindings(spec, bindings.value)
+      : rejectTargetFailure(bindings);
+  }
+
+  submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.submitWithBindings(submitSpecFromRunInput(input), bindings.value)
+      : rejectTargetFailure(bindings);
+  }
+
+  resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.resumeInputRequestWithBindings(input, bindings.value)
+      : rejectTargetFailure(bindings);
+  }
+
+  decideInputRequest(input: WorkspaceAgentDecideInputRequestCommandInput): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.decideInputRequestWithBindings(input, bindings.value)
+      : rejectTargetFailure(bindings);
+  }
+
+  customCommand(input: WorkspaceAgentCustomCommandInput): Promise<unknown> {
+    return Effect.runPromise(
+      unsafeRunToolByName(
+        generatedCustomTools,
+        deterministicToolInvocation(input.method, input.input),
+      ),
+    );
+  }
+}
+`;
+};
+
+const renderStaticTarget = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  toolNames: ReadonlyArray<string>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string =>
+  normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+    ? renderWorkspaceStaticTarget(normalized, toolNames, modules)
+    : renderChatStaticTarget(normalized, toolNames, modules);
+
 const renderCloudflareScopeHelper = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
 ${renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol)}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
+${renderTypeImport(["DurableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
 ${renderTypeImport(["AgentManifest"], modules.runtimeProtocol)}
 import manifest from "./manifest.json";
 
@@ -2692,17 +3129,16 @@ export const agentOSRpcClient = <
 >(
   env: AgentOSTargetEnv,
   scopeId: string = agentOSScopeId,
-): Rpc => durableObjectRpcClient<Rpc>(agentOSDurableObjectNamespace(env), scopeId);
+): DurableObjectRpcClient<Rpc> => durableObjectRpcClient<Rpc>(agentOSDurableObjectNamespace(env), scopeId);
 `;
 
 const renderCloudflareWorkerEntry = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
-): string => `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}
-${renderNamedImport([normalized.target.durableObject.className], "./target")}
+): string => `${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n` : ""}${renderNamedImport([normalized.target.durableObject.className], "./target")}
 ${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
-export { ${normalized.target.durableObject.className}, Sandbox };
+export { ${normalized.target.durableObject.className}${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""} };
 
 export default {
   fetch(): Response {
@@ -2713,58 +3149,89 @@ export default {
 
 const renderCloudflareWranglerConfig = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
-): string =>
-  stableJson({
+): string => {
+  const workspaceConfig =
+    normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? {
+          vars: {
+            SANDBOX_TRANSPORT: "rpc",
+          },
+          containers: [
+            {
+              class_name: "Sandbox",
+              image: "../../Dockerfile",
+              instance_type: "lite",
+              max_instances: 2,
+            },
+          ],
+          durable_objects: {
+            bindings: [
+              {
+                class_name: "Sandbox",
+                name: normalized.workspace.binding,
+              },
+              {
+                class_name: normalized.target.durableObject.className,
+                name: normalized.target.durableObject.binding,
+              },
+            ],
+          },
+          migrations: [
+            {
+              tag: "v1",
+              new_sqlite_classes: ["Sandbox", normalized.target.durableObject.className],
+            },
+          ],
+        }
+      : {
+          durable_objects: {
+            bindings: [
+              {
+                class_name: normalized.target.durableObject.className,
+                name: normalized.target.durableObject.binding,
+              },
+            ],
+          },
+          migrations: [
+            {
+              tag: "v1",
+              new_sqlite_classes: [normalized.target.durableObject.className],
+            },
+          ],
+        };
+  return stableJson({
     $schema: "node_modules/wrangler/config-schema.json",
     name: normalized.deployment.deploymentId,
     main: "./worker.ts",
     compatibility_date: "2026-04-15",
     compatibility_flags: ["nodejs_compat"],
-    vars: {
-      SANDBOX_TRANSPORT: "rpc",
-    },
-    containers: [
-      {
-        class_name: "Sandbox",
-        image: "../../Dockerfile",
-        instance_type: "lite",
-        max_instances: 2,
-      },
-    ],
-    durable_objects: {
-      bindings: [
-        {
-          class_name: "Sandbox",
-          name: normalized.workspace.binding,
-        },
-        {
-          class_name: normalized.target.durableObject.className,
-          name: normalized.target.durableObject.binding,
-        },
-      ],
-    },
-    migrations: [
-      {
-        tag: "v1",
-        new_sqlite_classes: ["Sandbox", normalized.target.durableObject.className],
-      },
-    ],
+    ...workspaceConfig,
   });
+};
 
 const generatedClientModuleImports = (
-  client: AgentOsConfigClient,
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): ReadonlyArray<StaticTargetModuleImport> => [
   {
     kind: "workspace-client",
     source: modules.workspaceAgentClient,
-    imports: [
-      "createWorkspaceAgentClientBridge",
-      "CreateWorkspaceAgentClientOptions",
-      "WorkspaceAgentClientBridge",
-    ],
+    imports:
+      normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+        ? [
+            "createWorkspaceAgentClientBridge",
+            "CreateWorkspaceAgentClientOptions",
+            "WorkspaceAgentClientBridge",
+          ]
+        : [
+            "WORKSPACE_AGENT_COMMAND",
+            "createWorkspaceAgentClient",
+            "CreateWorkspaceAgentClientOptions",
+            "WorkspaceAgentClient",
+            "WorkspaceAgentCommandOutputByName",
+          ],
   },
-  ...(client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
+  ...(normalized.client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
     ? [
         {
           kind: "client-transport" as const,
@@ -2800,8 +3267,8 @@ const generatedClientModuleImports = (
     : []),
 ];
 
-const renderSvelteKitRemote = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+const renderWorkspaceSvelteKitRemote = (
+  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
@@ -2811,7 +3278,7 @@ ${renderNamedImport(
   ["decodeRuntimeLedgerEvent", "isInputRequestRef", "parseInputRequestResumePayload"],
   modules.runtimeProtocol,
 )}
-${renderNamedImport(["agentOSRpcClient"], "./cloudflare-scope")}
+${renderNamedImport(["agentOSRpcClient", "agentOSTruthIdentity"], "./cloudflare-scope")}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
 ${renderTypeImport(["SseHttpEvent"], modules.sseHttp)}
 ${renderTypeImport(
@@ -2820,6 +3287,7 @@ ${renderTypeImport(
 )}
 ${renderTypeImport(
   [
+    "WorkspaceAgentCustomCommandInput",
     "WorkspaceAgentDestroyCommandInput",
     "WorkspaceAgentCommandOutputByName",
     "WorkspaceAgentDecideInputRequestCommandInput",
@@ -2840,6 +3308,9 @@ type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly decideInputRequest: (
     input: WorkspaceAgentDecideInputRequestCommandInput,
   ) => Promise<SubmitResult>;
+  readonly customCommand: (
+    input: WorkspaceAgentCustomCommandInput,
+  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
   readonly readWorkspaceFile: (
     input: WorkspaceAgentReadFileCommandInput,
   ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.READ_FILE]>;
@@ -3013,6 +3484,15 @@ const decideInputRequestFromUnknown = (
   return fail(400, "unsupported decideInputRequest decision");
 };
 
+const customInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentCustomCommandInput> => {
+  if (!isRecord(value) || typeof value.method !== "string" || value.method.length === 0) {
+    return fail(400, "invalid custom command input");
+  }
+  return { ok: true, value: { method: value.method, input: value.input } };
+};
+
 const readStateInputFromUnknown = (
   value: unknown,
 ): GeneratedResult<WorkspaceAgentReadStateCommandInput> => {
@@ -3150,6 +3630,10 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
       ? runtime.decideInputRequest(decideInput.value)
       : rejectFailure(decideInput);
   }
+  if (name === WORKSPACE_AGENT_COMMAND.CUSTOM) {
+    const customInput = customInputFromUnknown(input);
+    return customInput.ok ? runtime.customCommand(customInput.value) : rejectFailure(customInput);
+  }
   if (name === WORKSPACE_AGENT_COMMAND.READ_STATE) {
     const readStateInput = readStateInputFromUnknown(input);
     return readStateInput.ok
@@ -3180,13 +3664,336 @@ export const runEventStream = query.live(optionalAfterIdInput, (input) => {
   const platformEnv = env();
   if (!platformEnv.ok) return rejectFailure(platformEnv);
   return agentOS(platformEnv.value)
-    .streamEvents(agentTruthIdentity, afterId > 0 ? { afterId } : {})
+    .streamEvents(agentOSTruthIdentity, afterId > 0 ? { afterId } : {})
     .then(runtimeEventsFromSse);
 });
 `;
 
-const renderStaticClient = (
+const renderChatSvelteKitRemote = (
+  normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
+${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
+${renderNamedImport(["Result", "Schema"], modules.effect)}
+${renderNamedImport(["WORKSPACE_AGENT_COMMAND"], modules.workspaceAgentHost)}
+${renderNamedImport(
+  ["decodeRuntimeLedgerEvent", "isInputRequestRef", "parseInputRequestResumePayload"],
+  modules.runtimeProtocol,
+)}
+${renderNamedImport(["agentOSRpcClient", "agentOSTruthIdentity"], "./cloudflare-scope")}
+${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
+${renderTypeImport(["SseHttpEvent"], modules.sseHttp)}
+${renderTypeImport(
+  ["RuntimeLedgerEvent", "SubmitResult", "SubmitRunInput"],
+  modules.runtimeProtocol,
+)}
+${renderTypeImport(
+  [
+    "WorkspaceAgentCommandOutputByName",
+    "WorkspaceAgentCustomCommandInput",
+    "WorkspaceAgentDecideInputRequestCommandInput",
+    "WorkspaceAgentResumeInputRequestCommandInput",
+  ],
+  modules.workspaceAgentHost,
+)}
+${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
+
+type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
+  readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
+  readonly resumeInputRequest: (
+    input: WorkspaceAgentResumeInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
+  readonly decideInputRequest: (
+    input: WorkspaceAgentDecideInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
+  readonly customCommand: (
+    input: WorkspaceAgentCustomCommandInput,
+  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
+};
+
+const optionalAfterIdInput = Schema.toStandardSchemaV1(
+  Schema.Struct({ afterId: Schema.optional(Schema.Number) }),
+);
+const commandInput = Schema.toStandardSchemaV1(
+  Schema.Struct({
+    name: Schema.String,
+    input: Schema.Unknown,
+  }),
+);
+
+type GeneratedFailure = {
+  readonly ok: false;
+  readonly status: number;
+  readonly message: string;
+};
+
+type GeneratedResult<Value> =
+  | { readonly ok: true; readonly value: Value }
+  | GeneratedFailure;
+
+const fail = (status: number, message: string): GeneratedFailure => ({
+  ok: false,
+  status,
+  message,
+});
+
+const rejectFailure = (failure: GeneratedFailure): Promise<never> =>
+  Promise.reject(
+    Object.assign(Error(failure.message), {
+      status: failure.status,
+      body: { message: failure.message },
+    }),
+  );
+
+const env = (): GeneratedResult<AgentOSTargetEnv> => {
+  const platformEnv = getRequestEvent().platform?.env;
+  if (platformEnv === undefined) return fail(500, "Cloudflare platform env missing");
+  return { ok: true, value: platformEnv as AgentOSTargetEnv };
+};
+
+const agentOS = (platformEnv: AgentOSTargetEnv) =>
+  agentOSRpcClient<AgentOSRpc>(platformEnv);
+
+type AgentOSRemote = ReturnType<typeof agentOS>;
+type AgentOSSubmitRunInput = Parameters<AgentOSRemote["submitRunInput"]>[0];
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const submitInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<{ readonly input: AgentOSSubmitRunInput }> => {
+  if (!isRecord(value) || !isRecord(value.input)) return fail(400, "invalid submit command input");
+  if (typeof value.input.intent !== "string" || !isRecord(value.input.context)) {
+    return fail(400, "invalid submit run input");
+  }
+  return { ok: true, value: { input: value.input as unknown as AgentOSSubmitRunInput } };
+};
+
+const resumeInputRequestFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentResumeInputRequestCommandInput> => {
+  if (!isRecord(value)) return fail(400, "invalid resumeInputRequest command input");
+  if (!isInputRequestRef(value.ref)) return fail(400, "invalid resumeInputRequest ref");
+  const ref = value.ref;
+  if (typeof value.decidedBy !== "string" || value.decidedBy.length === 0) {
+    return fail(400, "invalid resumeInputRequest decidedBy");
+  }
+  if (!isRecord(value.answer) || typeof value.answer.decisionRef !== "string") {
+    return fail(400, "invalid resumeInputRequest answer");
+  }
+  const parsed = parseInputRequestResumePayload(ref.requestKind, value.answer.resume);
+  if (!parsed.ok) return fail(400, parsed.reason);
+  return {
+    ok: true,
+    value: {
+      ref,
+      decidedBy: value.decidedBy,
+      answer: {
+        decisionRef: value.answer.decisionRef,
+        resume: parsed.resume,
+      },
+    },
+  };
+};
+
+const decideInputRequestFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentDecideInputRequestCommandInput> => {
+  if (!isRecord(value)) return fail(400, "invalid decideInputRequest command input");
+  if (!isInputRequestRef(value.ref)) return fail(400, "invalid decideInputRequest ref");
+  if (!isRecord(value.decision) || typeof value.decision.kind !== "string") {
+    return fail(400, "invalid decideInputRequest decision");
+  }
+  const ref = value.ref;
+  const decision = value.decision;
+  if (decision.kind === "approved") {
+    if (typeof decision.decidedBy !== "string" || decision.decidedBy.length === 0) {
+      return fail(400, "invalid decideInputRequest decidedBy");
+    }
+    if (!isRecord(decision.answer) || typeof decision.answer.decisionRef !== "string") {
+      return fail(400, "invalid decideInputRequest answer");
+    }
+    const parsed = parseInputRequestResumePayload(ref.requestKind, decision.answer.resume);
+    if (!parsed.ok) return fail(400, parsed.reason);
+    return {
+      ok: true,
+      value: {
+        ref,
+        decision: {
+          kind: "approved",
+          decidedBy: decision.decidedBy,
+          answer: {
+            decisionRef: decision.answer.decisionRef,
+            resume: parsed.resume,
+          },
+        },
+      },
+    };
+  }
+  if (decision.kind === "rejected") {
+    if (typeof decision.decisionRef !== "string" || decision.decisionRef.length === 0) {
+      return fail(400, "invalid decideInputRequest decisionRef");
+    }
+    if (typeof decision.decidedBy !== "string" || decision.decidedBy.length === 0) {
+      return fail(400, "invalid decideInputRequest decidedBy");
+    }
+    return {
+      ok: true,
+      value: {
+        ref,
+        decision: {
+          kind: "rejected",
+          decisionRef: decision.decisionRef,
+          decidedBy: decision.decidedBy,
+          ...(typeof decision.reason === "string" ? { reason: decision.reason } : {}),
+        },
+      },
+    };
+  }
+  if (decision.kind === "cancelled" || decision.kind === "expired") {
+    if (typeof decision.closeRef !== "string" || decision.closeRef.length === 0) {
+      return fail(400, "invalid decideInputRequest closeRef");
+    }
+    return {
+      ok: true,
+      value: {
+        ref,
+        decision: {
+          kind: decision.kind,
+          closeRef: decision.closeRef,
+          ...(typeof decision.reason === "string" ? { reason: decision.reason } : {}),
+        },
+      },
+    };
+  }
+  return fail(400, "unsupported decideInputRequest decision");
+};
+
+const customInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentCustomCommandInput> => {
+  if (!isRecord(value) || typeof value.method !== "string" || value.method.length === 0) {
+    return fail(400, "invalid custom command input");
+  }
+  return { ok: true, value: { method: value.method, input: value.input } };
+};
+
+const runtimeEventFromLedger = (
+  event: Parameters<typeof decodeRuntimeLedgerEvent>[0],
+): RuntimeLedgerEvent | null => {
+  const decoded = decodeRuntimeLedgerEvent(event);
+  return decoded._tag === "runtime" ? decoded.event : null;
+};
+
+const jsonValueFromString = (data: string): GeneratedResult<unknown> =>
+  Result.match(
+    Result.try({
+      try: () => JSON.parse(data) as unknown,
+      catch: () => "invalid ledger stream event: malformed JSON",
+    }),
+    {
+      onFailure: (message) => fail(502, message),
+      onSuccess: (value) => ({ ok: true, value }),
+    },
+  );
+
+const ledgerEventFromSse = (
+  event: SseHttpEvent,
+): GeneratedResult<Parameters<typeof decodeRuntimeLedgerEvent>[0] | null> => {
+  if (event.event !== "ledger") return { ok: true, value: null };
+  if (event.data.trim().length === 0) {
+    return fail(502, "invalid ledger stream event: empty data");
+  }
+  const parsed = jsonValueFromString(event.data);
+  return parsed.ok
+    ? { ok: true, value: parsed.value as Parameters<typeof decodeRuntimeLedgerEvent>[0] }
+    : parsed;
+};
+
+const emptyRuntimeEvents = (): AsyncIterable<RuntimeLedgerEvent> => ({
+  [Symbol.asyncIterator]() {
+    return {
+      next: () => Promise.resolve({ done: true as const, value: undefined }),
+    };
+  },
+});
+
+const runtimeEventsFromSse = (response: Response): AsyncIterable<RuntimeLedgerEvent> => {
+  if (response.body === null) return emptyRuntimeEvents();
+  const source = decodeSseHttpEvents(responseToSseHttpChunks(response));
+  return {
+    [Symbol.asyncIterator]() {
+      const iterator = source[Symbol.asyncIterator]();
+      const next = (): Promise<IteratorResult<RuntimeLedgerEvent>> =>
+        iterator.next().then((result) => {
+          if (result.done === true) return { done: true, value: undefined };
+          const ledgerEvent = ledgerEventFromSse(result.value);
+          if (!ledgerEvent.ok) return rejectFailure(ledgerEvent);
+          if (ledgerEvent.value === null) return next();
+          const runtimeEvent = runtimeEventFromLedger(ledgerEvent.value);
+          return runtimeEvent === null ? next() : { done: false, value: runtimeEvent };
+        });
+      return {
+        next,
+        return: () =>
+          iterator.return === undefined
+            ? Promise.resolve({ done: true, value: undefined })
+            : iterator.return(undefined).then(() => ({ done: true, value: undefined })),
+      };
+    },
+  };
+};
+
+export const invokeAgentCommand = command(commandInput, ({ name, input }): Promise<unknown> => {
+  const platformEnv = env();
+  if (!platformEnv.ok) return rejectFailure(platformEnv);
+  const runtime = agentOS(platformEnv.value);
+  if (name === WORKSPACE_AGENT_COMMAND.SUBMIT) {
+    const submitInput = submitInputFromUnknown(input);
+    return submitInput.ok
+      ? runtime.submitRunInput(submitInput.value.input)
+      : rejectFailure(submitInput);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST) {
+    const resumeInput = resumeInputRequestFromUnknown(input);
+    return resumeInput.ok
+      ? runtime.resumeInputRequest(resumeInput.value)
+      : rejectFailure(resumeInput);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST) {
+    const decideInput = decideInputRequestFromUnknown(input);
+    return decideInput.ok
+      ? runtime.decideInputRequest(decideInput.value)
+      : rejectFailure(decideInput);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.CUSTOM) {
+    const customInput = customInputFromUnknown(input);
+    return customInput.ok ? runtime.customCommand(customInput.value) : rejectFailure(customInput);
+  }
+  return rejectFailure(fail(501, \`unsupported generated chat command \${name}\`));
+});
+
+export const runEventStream = query.live(optionalAfterIdInput, (input) => {
+  const afterId = input.afterId ?? 0;
+  const platformEnv = env();
+  if (!platformEnv.ok) return rejectFailure(platformEnv);
+  return agentOS(platformEnv.value)
+    .streamEvents(agentOSTruthIdentity, afterId > 0 ? { afterId } : {})
+    .then(runtimeEventsFromSse);
+});
+`;
+
+const renderSvelteKitRemote = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string =>
+  normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+    ? renderWorkspaceSvelteKitRemote(normalized, modules)
+    : renderChatSvelteKitRemote(normalized, modules);
+
+const renderWorkspaceStaticClient = (
+  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
   if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
@@ -3260,6 +4067,131 @@ export const createAgentOSClient = (
 `;
 };
 
+const renderChatStaticClient = (
+  normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => {
+  const commonImports = `${renderNamedImport(
+    ["WORKSPACE_AGENT_COMMAND", "createWorkspaceAgentClient"],
+    modules.workspaceAgentClient,
+  )}
+${renderTypeImport(["SubmitRunInput"], modules.runtimeProtocol)}
+${renderTypeImport(["AgentClientCommandOptions", "AgentClientSnapshot"], modules.clientCore)}
+${renderTypeImport(
+  [
+    "CreateWorkspaceAgentClientOptions",
+    "WorkspaceAgentClient",
+    "WorkspaceAgentCommandOutputByName",
+    "WorkspaceAgentCustomCommandInput",
+    "WorkspaceAgentDecideInputRequestCommandInput",
+    "WorkspaceAgentResumeInputRequestCommandInput",
+  ],
+  modules.workspaceAgentClient,
+)}`;
+  const commonTypes = `
+export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
+
+export interface GeneratedAgentClient {
+  readonly client: WorkspaceAgentClient;
+  submit(
+    input: SubmitRunInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.SUBMIT]>;
+  resumeInputRequest(
+    input: WorkspaceAgentResumeInputRequestCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<
+    WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST]
+  >;
+  decideInputRequest(
+    input: WorkspaceAgentDecideInputRequestCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<
+    WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST]
+  >;
+  custom(
+    input: WorkspaceAgentCustomCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
+`;
+  const commonMethods = `
+    client,
+    submit(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.SUBMIT, { input }, commandOptions);
+    },
+    resumeInputRequest(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST, input, commandOptions);
+    },
+    decideInputRequest(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST, input, commandOptions);
+    },
+    custom(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.CUSTOM, input, commandOptions);
+    },`;
+  if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
+    return `${commonImports}
+${commonTypes}
+}
+
+export const createAgentOSClient = (
+  options: GeneratedAgentClientOptions = {},
+): GeneratedAgentClient => {
+  const client = createWorkspaceAgentClient(options);
+  return {${commonMethods}
+  };
+};
+`;
+  }
+
+  return `${commonImports}
+import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";
+${renderNamedImport(["clientReadable", "selectClientReadable"], modules.clientSvelte)}
+${renderTypeImport(["Readable"], modules.svelteStore)}
+${commonTypes}
+  readonly snapshot: Readable<AgentClientSnapshot>;
+  readonly events: Readable<AgentClientSnapshot["events"]>;
+  readonly connection: Readable<AgentClientSnapshot["connection"]>;
+  readonly run: Readable<AgentClientSnapshot["run"]>;
+  readonly inputRequests: Readable<AgentClientSnapshot["run"]["inputRequests"]>;
+}
+
+const generatedStreamSource: NonNullable<GeneratedAgentClientOptions["streamSource"]> = {
+  open: (cursor) =>
+    runEventStream({
+      ...(cursor.afterEventId === undefined ? {} : { afterId: cursor.afterEventId }),
+    }),
+};
+
+const generatedRpcInvoker: WorkspaceAgentClient["invoke"] = (name, input) =>
+  invokeAgentCommand({ name, input }) as Promise<WorkspaceAgentCommandOutputByName[typeof name]>;
+
+export const createAgentOSClient = (
+  options: GeneratedAgentClientOptions = {},
+): GeneratedAgentClient => {
+  const client = createWorkspaceAgentClient({
+    ...options,
+    streamSource: options.streamSource ?? generatedStreamSource,
+    rpcInvoker: options.rpcInvoker ?? generatedRpcInvoker,
+  });
+  return {${commonMethods}
+    snapshot: clientReadable(client),
+    events: selectClientReadable(client, (snapshot) => snapshot.events),
+    connection: selectClientReadable(client, (snapshot) => snapshot.connection),
+    run: selectClientReadable(client, (snapshot) => snapshot.run),
+    inputRequests: selectClientReadable(client, (snapshot) => snapshot.run.inputRequests),
+  };
+};
+`;
+};
+
+const renderStaticClient = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string =>
+  normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+    ? renderWorkspaceStaticClient(normalized, modules)
+    : renderChatStaticClient(normalized, modules);
+
 const renderStaticClientTypes = (): string => `export type {
   GeneratedAgentClient,
   GeneratedAgentClientOptions,
@@ -3313,14 +4245,18 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     ...(normalized.deployment.providerStrategy === undefined
       ? {}
       : { providerStrategy: normalized.deployment.providerStrategy }),
-    workspace: {
-      binding: normalized.workspace.binding,
-      bindingRef: normalized.workspace.bindingRef,
-      root: normalized.workspace.root,
-      topology: normalized.workspace.topology,
-      providerResourceId: normalized.workspace.providerResourceId,
-      cloudflareSandboxId: normalized.workspace.cloudflareSandboxId,
-    },
+    ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? {
+          workspace: {
+            binding: normalized.workspace.binding,
+            bindingRef: normalized.workspace.bindingRef,
+            root: normalized.workspace.root,
+            topology: normalized.workspace.topology,
+            providerResourceId: normalized.workspace.providerResourceId,
+            cloudflareSandboxId: normalized.workspace.cloudflareSandboxId,
+          },
+        }
+      : {}),
   };
   const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
     { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
@@ -3328,7 +4264,10 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     {
       kind: "target-runtime",
       source: modules.cloudflareDoRuntime,
-      imports: ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
+      imports:
+        normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+          ? ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"]
+          : ["createAgentDurableObject"],
     },
     {
       kind: "provider-runtime",
@@ -3338,24 +4277,31 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     {
       kind: "workspace-host",
       source: modules.workspaceAgentHost,
-      imports: ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
+      imports:
+        normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+          ? ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"]
+          : ["WORKSPACE_AGENT_COMMAND"],
     },
     ...generatedToolImports(authoredManifestToolNames),
-    {
-      kind: "workspace-binding",
-      source: modules.workspaceBinding,
-      imports: ["bindWorkspaceToolsForRuntime"],
-    },
-    {
-      kind: "execution-domain-runtime",
-      source: modules.workspaceEnvCloudflare,
-      imports: ["makeCloudflareWorkspaceEnv"],
-    },
-    {
-      kind: "platform-runtime",
-      source: modules.cloudflareSandbox,
-      imports: ["getSandbox", "Sandbox", "SandboxTransport"],
-    },
+    ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? [
+          {
+            kind: "workspace-binding" as const,
+            source: modules.workspaceBinding,
+            imports: ["bindWorkspaceToolsForRuntime"],
+          },
+          {
+            kind: "execution-domain-runtime" as const,
+            source: modules.workspaceEnvCloudflare,
+            imports: ["makeCloudflareWorkspaceEnv"],
+          },
+          {
+            kind: "platform-runtime" as const,
+            source: modules.cloudflareSandbox,
+            imports: ["getSandbox", "Sandbox", "SandboxTransport"],
+          },
+        ]
+      : []),
     {
       kind: "effect-runtime",
       source: modules.effect,
@@ -3369,14 +4315,20 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     {
       kind: "target-worker",
       source: "./worker",
-      imports: [normalized.target.durableObject.className, "Sandbox"],
+      imports:
+        normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+          ? [normalized.target.durableObject.className, "Sandbox"]
+          : [normalized.target.durableObject.className],
     },
     {
       kind: "target-config",
       source: "./wrangler.jsonc",
       imports: [],
     },
-    ...generatedClientModuleImports(normalized.client, modules),
+    ...generatedClientModuleImports(
+      normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
+      modules,
+    ),
   ];
   return {
     ok: true,
@@ -3443,10 +4395,13 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       ],
       moduleGraph,
       canonicalDeployment: {
+        profile: normalized.profile,
         target: normalized.target.kind,
         llmRoute: normalized.llm.route,
         client: normalized.client.kind,
-        workspaceTopology: normalized.workspace.topology,
+        ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+          ? { workspaceTopology: normalized.workspace.topology }
+          : {}),
         toolNames,
       },
       mount: {
@@ -3455,14 +4410,19 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           className: normalized.target.durableObject.className,
           binding: normalized.target.durableObject.binding,
         },
-        projectionSinks: [
-          "agent.info",
-          "workspace.state",
-          "workspace.files",
-          "runtime.events",
-          "runtime.input_requests",
-        ],
-        providerResourceId: normalized.workspace.providerResourceId,
+        projectionSinks:
+          normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+            ? [
+                "agent.info",
+                "workspace.state",
+                "workspace.files",
+                "runtime.events",
+                "runtime.input_requests",
+              ]
+            : ["agent.info", "runtime.events", "runtime.input_requests"],
+        ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+          ? { providerResourceId: normalized.workspace.providerResourceId }
+          : {}),
       },
     },
   };

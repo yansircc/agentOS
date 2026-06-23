@@ -9,6 +9,18 @@ source workspace packages. Source package manifests stay private and may keep
 `workspace:` / `catalog:` for monorepo development. `tooling/distribution`
 generates publish-only package projections under `dist/internal-npm`.
 
+Generated Cloudflare targets must also project imports to the public package
+scope before they leave the monorepo:
+
+```sh
+bun run agentos -- build --cwd /path/to/consumer --package-scope @yansirplus
+```
+
+`--package-scope @yansirplus` is the switch that makes generated target files
+import `@yansirplus/*` packages. Source names such as `@agent-os/*`, package
+manager protocols such as `workspace:*` and `catalog:`, and manual symlinks are
+not consumer surfaces.
+
 ## Install
 
 Install agentOS packages plus required peers:
@@ -114,6 +126,11 @@ bun run test:internal-consumer
 The checks reject generated package manifests or tarballs that expose
 `workspace:`, `catalog:`, `private`, source `.ts` entrypoints, tests, config,
 or deep `/src/` declaration paths.
+
+`test:internal-consumer` also builds an external generated target with
+`--package-scope @yansirplus`, installs packed public packages into a clean
+consumer `node_modules`, rejects symlinked agentOS packages, and bundles the
+generated Cloudflare worker entry.
 
 ## Source Maps
 

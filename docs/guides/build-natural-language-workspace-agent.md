@@ -37,6 +37,26 @@ default releases that slug for an authored replacement file. Interaction
 overrides are safety-monotone, and receipt policy is not overrideable through
 this surface.
 
+For `workspace@1`, `agent/agent.json` must own a stable manifest scope. The
+generated workspace resource id and Durable Object route are derived from that
+scope; the build fails closed instead of inventing an implicit workspace
+identity.
+
+```json
+{
+  "agentId": "web-cursor-demo",
+  "scope": {
+    "kind": "session",
+    "idSource": "manifest",
+    "stableScopeId": "web-cursor-demo"
+  },
+  "effectAuthorityRef": {
+    "authorityClass": "effect",
+    "authorityId": "web-cursor-demo"
+  }
+}
+```
+
 Authored files may contain symbolic refs such as LLM route refs, material refs,
 workspace command names, custom tool declarations, interaction policy, and
 reconcile policy. They must not contain resolved credentials, provider URLs,
@@ -85,6 +105,19 @@ events.
 The config is not executable TypeScript. It cannot read env, clock, random, or
 IO. The normalized deployment is a pure function of the authored files and this
 JSONC data.
+
+## Profiles
+
+`workspace@1` is the workspace agent profile. It requires `/workspace` config,
+adds the default workspace tools, derives the Sandbox resource from the
+manifest-owned scope, and emits workspace state/file projections plus
+read/reset/destroy commands.
+
+`chat@1` is the chat profile. It still requires manifest-owned `scope`, LLM,
+target, deployment, and client config, and it still supports `agent/tools/*.ts`
+custom tools plus decision interrupts through submit/resume/decide. It forbids
+`/workspace` and emits no workspace tools, workspace material, Sandbox binding,
+container config, workspace projections, or workspace-only commands.
 
 ## Generated Surface
 

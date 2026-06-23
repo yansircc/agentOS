@@ -426,8 +426,14 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./cloudflare:ProviderDispatchTargetSpec`
 - `./cloudflare:queueDispatchTarget`
 - `./cloudflare:QueueDispatchTargetBinding`
+- `./cloudflare/do-rpc:DURABLE_OBJECT_RPC_INVOKE`
 - `./cloudflare/do-rpc:durableObjectRpcClient`
+- `./cloudflare/do-rpc:durableObjectRpcInvoke`
 - `./cloudflare/do-rpc:DurableObjectRpcClient`
+- `./cloudflare/do-rpc:DurableObjectRpcErrorV1`
+- `./cloudflare/do-rpc:DurableObjectRpcRejected`
+- `./cloudflare/do-rpc:DurableObjectRpcResult`
+- `./cloudflare/do-rpc:DurableObjectRpcServer`
 - `./cloudflare/do-rpc:FunctionFree`
 - `./cloudflare/ops-api:AgentDOIntrospection`
 - `./cloudflare/ops-api:AttemptKey`

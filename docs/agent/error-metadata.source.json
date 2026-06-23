@@ -26,6 +26,18 @@
       "fix": "Start and clean up the runtime contract Postgres harness at the test boundary, mapping Docker, psql, and config failures into the harness error channel."
     },
     {
+      "tag": "agent_os.rpc_method_missing",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Invoke Durable Object methods through the supported agentOS RPC helper and keep generated client method names aligned with the Durable Object class."
+    },
+    {
+      "tag": "agent_os.rpc_untyped_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Throw tagged domain errors at supported Durable Object RPC boundaries; untyped failures are serialized as RPC boundary errors without fabricated domain fields."
+    },
+    {
       "tag": "agent_os.json_stringify_error",
       "invariants": ["invariant.ledger.single-commit-source"],
       "docs": "docs/concepts/durable-truth.md",
