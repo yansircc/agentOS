@@ -39,7 +39,7 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
         "  skills: compiled.value.skills,",
         "  normalizedSkills: normalized.value.skills,",
         '  manifestHasSkills: Object.hasOwn(compiled.value.manifest, "skills"),',
-        '  manifestToolNames: Object.keys(compiled.value.manifest.tools ?? {}).sort(),',
+        "  manifestToolNames: Object.keys(compiled.value.manifest.tools ?? {}).sort(),",
         "}));",
       ].join("\n"),
     ],
@@ -75,8 +75,8 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
         '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
         "  file,",
         "] });",
-        "const mismatch = compile({ path: \"agent/skills/echo.md\", kind: \"markdown\", text: \"---\\nname: other\\n---\\nUse echo.\" });",
-        "const sibling = compile({ path: \"agent/skills/echo/references/ref.md\", kind: \"markdown\", text: \"Ref.\" });",
+        'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\n---\\nUse echo." });',
+        'const sibling = compile({ path: "agent/skills/echo/references/ref.md", kind: "markdown", text: "Ref." });',
         "const duplicate = compileAgentTree({ files: [",
         '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
         '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nOne." },',
@@ -376,6 +376,121 @@ void test("agentos build compiles chat profile without workspace surface", () =>
     assert.doesNotMatch(client, /readFile\(/);
     assert.doesNotMatch(client, /reset\(/);
     assert.doesNotMatch(client, /destroy\(/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("static target injects skill advert and load_skill for workspace and chat profiles", () => {
+  const result = spawnSync(
+    "bun",
+    [
+      "--eval",
+      [
+        'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+        "const compiled = compileAgentTree({ files: [",
+        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+        '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
+        '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse workspace echo skill." },',
+        '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nUse chat review skill." },',
+        "] });",
+        "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+        "const baseConfig = {",
+        '  agent: "./agent",',
+        '  deployment: { id: "target-skills" },',
+        '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
+        '  client: { kind: "browser-direct@1" },',
+        '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+        "};",
+        "const targetFor = (config) => {",
+        "  const normalized = normalizeAgentOsConfig(config, compiled.value);",
+        "  if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
+        "  const linked = linkWorkspaceStaticTarget(normalized.value);",
+        "  if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
+        '  return linked.value.files.find((file) => file.path === ".agentos/generated/target.ts").text;',
+        "};",
+        'const workspaceTarget = targetFor({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } });',
+        'const chatTarget = targetFor({ ...baseConfig, profile: "chat@1" });',
+        "const markers = (text) => ({",
+        "  defineProductTool: text.includes('defineProductTool'),",
+        "  advert: text.includes('generatedSkillsSystemAdvert'),",
+        "  loadSkill: text.includes('name: \"load_skill\"'),",
+        "  system: text.includes('system: generatedSystemPrompt(input.system)'),",
+        "  echo: text.includes('Use workspace echo skill.'),",
+        "  review: text.includes('Use chat review skill.'),",
+        "  frameworkTools: text.includes('...generatedFrameworkTools'),",
+        "});",
+        "console.log(JSON.stringify({ workspace: markers(workspaceTarget), chat: markers(chatTarget) }));",
+      ].join("\n"),
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  for (const profile of ["workspace", "chat"]) {
+    for (const [marker, present] of Object.entries(output[profile])) {
+      assert.equal(present, true, `${profile} target missing ${marker}`);
+    }
+  }
+});
+
+void test("agentos build omits load_skill support when no skills are authored", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-no-skills-build-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Answer without skills.");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "no-skills-fixture",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "no-skills-fixture-scope",
+          },
+          effectAuthorityRef: {
+            authorityClass: "effect",
+            authorityId: "no-skills-fixture",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "chat@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "no-skills-fixture", "version": "0.1.0" },',
+        '  "target": {',
+        '    "kind": "cloudflare-do@1",',
+        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+        "  },",
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
+    assert.doesNotMatch(target, /defineProductTool/);
+    assert.doesNotMatch(target, /generatedSkillsSystemAdvert/);
+    assert.doesNotMatch(target, /name: "load_skill"/);
+    assert.doesNotMatch(target, /generatedSystemPrompt/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -1009,7 +1009,11 @@ const parseSkillFrontmatter = (
   if (name === null) return null;
   return {
     name,
-    body: lines.slice(end + 1).join("\n").replace(/^\n/u, "").replace(/\s+$/u, ""),
+    body: lines
+      .slice(end + 1)
+      .join("\n")
+      .replace(/^\n/u, "")
+      .replace(/\s+$/u, ""),
   };
 };
 

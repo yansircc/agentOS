@@ -2,7 +2,7 @@ import type { ProviderResourceId } from "@agent-os/core/runtime-protocol";
 import type { HandlerKind } from "@agent-os/core/runtime-protocol";
 import { WORKSPACE_TOOL_EXPOSURE_PROFILES, type WorkspaceToolName } from "@agent-os/runtime";
 import { digestText, isWorkspaceToolName } from "./shared";
-import type { AuthoredAgentManifest } from "./manifest-compiler";
+import type { AuthoredAgentManifest, CompiledAgentSkill } from "./manifest-compiler";
 import {
   AGENTOS_CONFIG_CLIENT,
   AGENTOS_CONFIG_LLM_ROUTE,
@@ -176,6 +176,8 @@ const renderNamedImport = (names: ReadonlyArray<string>, source: string): string
 const renderTypeImport = (names: ReadonlyArray<string>, source: string): string =>
   `import type { ${names.join(", ")} } ${"from"} ${jsString(source)};`;
 
+const LOAD_SKILL_TOOL_NAME = "load_skill";
+
 const generatedToolImports = (
   toolNames: ReadonlyArray<string>,
 ): ReadonlyArray<StaticTargetModuleImport> =>
@@ -185,11 +187,101 @@ const generatedToolImports = (
     imports: [`default as tool_${index}`],
   }));
 
+const sortedSkills = (
+  skills: ReadonlyArray<CompiledAgentSkill>,
+): ReadonlyArray<CompiledAgentSkill> =>
+  [...skills].sort((left, right) => left.name.localeCompare(right.name));
+
+const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string => {
+  const entries = sortedSkills(skills).map(
+    (skill) =>
+      `  ${JSON.stringify(
+        stableJsonValue({
+          digest: skill.digest,
+          name: skill.name,
+          path: skill.path,
+          text: skill.text,
+        }),
+      )}`,
+  );
+  return entries.length === 0 ? "[]" : `[\n${entries.join(",\n")}\n]`;
+};
+
+const renderSkillSupport = (skills: ReadonlyArray<CompiledAgentSkill>): string => {
+  if (skills.length === 0) return "";
+  return `
+type GeneratedSkill = {
+  readonly name: string;
+  readonly path: string;
+  readonly digest: string;
+  readonly text: string;
+};
+
+const generatedSkillCatalog = ${renderSkillCatalog(skills)} satisfies ReadonlyArray<GeneratedSkill>;
+const generatedSkillByName = Object.fromEntries(
+  generatedSkillCatalog.map((skill) => [skill.name, skill]),
+) as Readonly<Record<string, GeneratedSkill>>;
+const generatedSkillNames = generatedSkillCatalog.map((skill) => skill.name);
+const generatedSkillsSystemAdvert = [
+  "Available agent skills are not loaded by default.",
+  ...generatedSkillCatalog.map(
+    (skill) =>
+      \`- \${skill.name}: call ${LOAD_SKILL_TOOL_NAME} with {"name":\${JSON.stringify(skill.name)}} to load \${skill.path} (\${skill.digest}).\`,
+  ),
+  "Do not assume a skill's full instructions until ${LOAD_SKILL_TOOL_NAME} returns it.",
+].join("\\n");
+
+const generatedSystemPrompt = (system: string | undefined): string =>
+  system === undefined || system.length === 0
+    ? generatedSkillsSystemAdvert
+    : \`\${system}\\n\\n\${generatedSkillsSystemAdvert}\`;
+
+const generatedLoadSkillTool = defineProductTool({
+  name: ${jsString(LOAD_SKILL_TOOL_NAME)},
+  description: "Load the full text of a CLI-authored agent skill by name.",
+  args: Schema.Struct({ name: Schema.String }),
+  authority: "agentos.generated.skills",
+  authorityId: "agentos.generated.skills.load_skill",
+  admit: () => Effect.succeed({ ok: true as const }),
+  execute: ({ name }) =>
+    Effect.succeed(
+      generatedSkillByName[name] ?? {
+        ok: false as const,
+        reason: "unknown_skill",
+        name,
+        available: generatedSkillNames,
+      },
+    ),
+});
+const generatedFrameworkTools = {
+  ${jsString(LOAD_SKILL_TOOL_NAME)}: generatedLoadSkillTool,
+} satisfies Readonly<Record<string, Tool>>;
+`;
+};
+
+const renderSubmitSpecFromRunInput = (
+  hasSkills: boolean,
+): string => `const submitSpecFromRunInput = (input: SubmitRunInput): AgentSubmitSpec => ({
+  input,
+  intent: input.intent,
+  context: input.context,
+  ${hasSkills ? "system: generatedSystemPrompt(input.system)," : "...(input.system === undefined ? {} : { system: input.system }),"}
+  ...(input.budget === undefined ? {} : { budget: input.budget }),
+  ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
+  ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  ...(input.materials === undefined ? {} : { materials: input.materials }),
+  ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
+  ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
+  ...(input.decisionInterrupts === undefined ? {} : { decisionInterrupts: input.decisionInterrupts }),
+  ...(input.resume === undefined ? {} : { resume: input.resume }),
+});`;
+
 const renderWorkspaceStaticTarget = (
   normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
+  const hasSkills = normalized.skills.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
     (toolName): toolName is WorkspaceToolName =>
@@ -236,8 +328,15 @@ const renderWorkspaceStaticTarget = (
     renderNamedImport(["bindWorkspaceToolsForRuntime"], modules.workspaceBinding),
     renderNamedImport(["makeCloudflareWorkspaceEnv"], modules.workspaceEnvCloudflare),
     renderNamedImport(["getSandbox"], modules.cloudflareSandbox),
-    renderNamedImport(["deterministicToolInvocation", "unsafeRunToolByName"], modules.coreTools),
-    renderNamedImport(["Effect"], modules.effect),
+    renderNamedImport(
+      [
+        "deterministicToolInvocation",
+        ...(hasSkills ? ["defineProductTool"] : []),
+        "unsafeRunToolByName",
+      ],
+      modules.coreTools,
+    ),
+    renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
     renderTypeImport(
       ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
@@ -291,6 +390,7 @@ const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
 
 const generatedWorkspaceToolNames = ${workspaceToolArray};
 const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
+${renderSkillSupport(normalized.skills)}
 const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
 
 const generatedWorkspaceToolInteractionFor = (
@@ -466,25 +566,13 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
       tools: {
         ...(workspaceBindings.tools ?? {}),
         ...generatedCustomTools,
+        ${hasSkills ? "...generatedFrameworkTools," : ""}
       },
     },
   };
 };
 
-const submitSpecFromRunInput = (input: SubmitRunInput): AgentSubmitSpec => ({
-  input,
-  intent: input.intent,
-  context: input.context,
-  ...(input.system === undefined ? {} : { system: input.system }),
-  ...(input.budget === undefined ? {} : { budget: input.budget }),
-  ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
-  ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
-  ...(input.materials === undefined ? {} : { materials: input.materials }),
-  ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
-  ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
-  ...(input.decisionInterrupts === undefined ? {} : { decisionInterrupts: input.decisionInterrupts }),
-  ...(input.resume === undefined ? {} : { resume: input.resume }),
-});
+${renderSubmitSpecFromRunInput(hasSkills)}
 
 export const workspaceMount = defineWorkspaceAgentMount({
   driver: { kind: "driver_mount", client: undefined as never },
@@ -618,6 +706,7 @@ const renderChatStaticTarget = (
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
+  const hasSkills = normalized.skills.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
   const toolImports = customToolNames
@@ -643,8 +732,15 @@ const renderChatStaticTarget = (
     `import deploymentProvenance from "./deployment.json";`,
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
-    renderNamedImport(["deterministicToolInvocation", "unsafeRunToolByName"], modules.coreTools),
-    renderNamedImport(["Effect"], modules.effect),
+    renderNamedImport(
+      [
+        "deterministicToolInvocation",
+        ...(hasSkills ? ["defineProductTool"] : []),
+        "unsafeRunToolByName",
+      ],
+      modules.coreTools,
+    ),
+    renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
     renderTypeImport(
       ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
@@ -689,6 +785,7 @@ const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
   Promise.reject(Error(failure.message));
 
 const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
+${renderSkillSupport(normalized.skills)}
 
 const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
   const value = env[name];
@@ -747,25 +844,19 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
       llmRoutes: {
         default: route.value,
       },
-      tools: generatedCustomTools,
+      tools: ${
+        hasSkills
+          ? `{
+        ...generatedCustomTools,
+        ...generatedFrameworkTools,
+      }`
+          : "generatedCustomTools"
+      },
     },
   };
 };
 
-const submitSpecFromRunInput = (input: SubmitRunInput): AgentSubmitSpec => ({
-  input,
-  intent: input.intent,
-  context: input.context,
-  ...(input.system === undefined ? {} : { system: input.system }),
-  ...(input.budget === undefined ? {} : { budget: input.budget }),
-  ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
-  ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
-  ...(input.materials === undefined ? {} : { materials: input.materials }),
-  ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
-  ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
-  ...(input.decisionInterrupts === undefined ? {} : { decisionInterrupts: input.decisionInterrupts }),
-  ...(input.resume === undefined ? {} : { resume: input.resume }),
-});
+${renderSubmitSpecFromRunInput(hasSkills)}
 
 const Base${normalized.target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
   manifest: semanticManifest,

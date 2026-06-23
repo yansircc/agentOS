@@ -281,6 +281,47 @@ export const createStaticTargetChecks = ({ read, failIfAny }) => {
       }
     }
 
+    const requiredSkillSupportMarkers = [
+      'const LOAD_SKILL_TOOL_NAME = "load_skill";',
+      "const renderSkillSupport =",
+      "const generatedLoadSkillTool = defineProductTool",
+      "const generatedSkillsSystemAdvert =",
+      "const generatedFrameworkTools =",
+      "const renderSubmitSpecFromRunInput =",
+      "system: generatedSystemPrompt(input.system)",
+    ];
+    for (const marker of requiredSkillSupportMarkers) {
+      if (!source.includes(marker)) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: generated skills support missing ${marker}`,
+        );
+      }
+    }
+    const assertProfileSkillProjection = ({ targetSource, profile }) => {
+      for (const marker of [
+        "const hasSkills = normalized.skills.length > 0;",
+        '...(hasSkills ? ["defineProductTool"] : [])',
+        'renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect)',
+        "${renderSkillSupport(normalized.skills)}",
+        "${renderSubmitSpecFromRunInput(hasSkills)}",
+        "...generatedFrameworkTools",
+      ]) {
+        if (!targetSource.includes(marker)) {
+          failures.push(
+            `${sourcePath}: generated-static-target-linking: ${profile} missing generated skills projection marker ${marker}`,
+          );
+        }
+      }
+    };
+    assertProfileSkillProjection({
+      targetSource: renderWorkspaceStaticTargetSource,
+      profile: "workspace@1",
+    });
+    assertProfileSkillProjection({
+      targetSource: renderChatStaticTargetSource,
+      profile: "chat@1",
+    });
+
     const requiredModuleKinds = [
       '"semantic-json"',
       '"target-runtime"',
