@@ -23,7 +23,7 @@
     },
     "packages/cli": {
       "name": "@agent-os/cli",
-      "version": "0.5.16",
+      "version": "0.5.17",
       "bin": {
         "agentos": "./src/main.mjs",
       },
@@ -38,7 +38,7 @@
     },
     "packages/client": {
       "name": "@agent-os/client",
-      "version": "0.5.16",
+      "version": "0.5.17",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -62,7 +62,7 @@
     },
     "packages/core": {
       "name": "@agent-os/core",
-      "version": "0.5.16",
+      "version": "0.5.17",
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/vitest": "catalog:",
@@ -78,7 +78,7 @@
     },
     "packages/runtime": {
       "name": "@agent-os/runtime",
-      "version": "0.5.16",
+      "version": "0.5.17",
       "dependencies": {
         "@agent-os/core": "workspace:*",
         "effect": "catalog:",
