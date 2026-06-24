@@ -1,10 +1,7 @@
 import { Effect, ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
 import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
-import {
-  createTestInMemoryBackendState,
-  createTestInMemoryRuntimeBackend,
-} from "./runtime-helper";
+import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 import {
   runDurableProcessLifecycleContract,
   type DurableProcessLifecycleDriver,

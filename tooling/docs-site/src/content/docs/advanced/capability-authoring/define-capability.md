@@ -9,7 +9,7 @@ slug: "advanced/capability-authoring/define-capability"
 
 ## Invariant
 
-`invariant.capability.single-generator`: `CapabilityContract` installation facts are validated by `defineCapability()`: `capabilityId` must equal `carrier.ownerId`, `sourcePackageName` is derived from the carrier, and install output is a description rather than backend state mutation.
+`invariant.capability.single-generator`: `CapabilityContract` installation facts are validated by `defineCapability()`: `capabilityId` must equal `carrier.ownerId`, `sourcePackageName` is derived from the carrier, `version` is the resolver-visible peer contract version, and install output is a description rather than backend state mutation.
 
 ## Usage
 
@@ -17,6 +17,7 @@ slug: "advanced/capability-authoring/define-capability"
 import { defineCapability } from "@agent-os/runtime";
 export const myCapability = defineCapability({
   capabilityId: "@your-org/my-capability",
+  version: "1",
   carrier: myCarrier,
   requires: {
     hostFacts: ["fs.workspace"],

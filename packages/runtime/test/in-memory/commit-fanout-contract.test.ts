@@ -8,10 +8,7 @@ import {
 } from "@agent-os/core/backend-protocol";
 import { Dispatch, defineProjection, projectionFail, projectionIdentity } from "@agent-os/runtime";
 import { truthIdentity } from "./identity";
-import {
-  createTestInMemoryBackendState,
-  createTestInMemoryRuntimeBackend,
-} from "./runtime-helper";
+import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 
 const failingDispatchDeliveredProjection = defineProjection({
   kind: "dispatch.delivered.failure",

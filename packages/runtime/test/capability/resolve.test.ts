@@ -1,6 +1,19 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { resolveRuntime, nodeHost, defineCapability, defineHost } from "../../src/capability";
+import { Schema } from "effect";
+import { defineCarrier, event, none } from "@agent-os/core/carrier";
+import { eventNamespace } from "@agent-os/core/extensions";
+import { credentialMaterialRef } from "@agent-os/core/material-ref";
+import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
+import type { LlmRoute } from "@agent-os/core/llm-protocol";
+import {
+  resolveRuntime,
+  nodeHost,
+  defineCapability,
+  defineHost,
+  type CapabilityContract,
+  type CapabilityInstallation,
+} from "../../src/capability";
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
@@ -8,6 +21,80 @@ import {
 } from "../../src/workspace-op-carrier";
 import { RUNTIME_DIAGNOSTIC_KIND } from "../../src/runtime-diagnostic-carrier";
 import { inMemoryConversationTruthIdentity } from "../../src/in-memory/state-helpers";
+import type { AnyDurableTrigger } from "../../src/trigger";
+import type { AnyMaterializedProjectionDefinition } from "../../src/projection";
+
+const testCarrier = (ownerId: string, prefix: string) =>
+  defineCarrier({
+    ownerId,
+    sourcePackageName: ownerId,
+    prefix,
+    roles: ["generator"],
+    events: {
+      requested: event({
+        kind: "requested",
+        payload: Schema.Struct({}),
+        claim: none(),
+      }),
+    },
+  });
+
+const testCapability = (
+  ownerId: string,
+  prefix: string,
+  overrides: Partial<{
+    readonly version: string;
+    readonly requires: CapabilityContract["requires"];
+    readonly install: () => CapabilityInstallation | Promise<CapabilityInstallation>;
+  }> = {},
+): CapabilityContract =>
+  defineCapability({
+    capabilityId: ownerId,
+    version: overrides.version,
+    carrier: testCarrier(ownerId, prefix),
+    requires: overrides.requires,
+    install: overrides.install ?? (() => ({})),
+  });
+
+const testProjection = (kind: string): AnyMaterializedProjectionDefinition =>
+  ({ kind }) as AnyMaterializedProjectionDefinition;
+
+const testTrigger = (kind: string): AnyDurableTrigger => ({ kind }) as AnyDurableTrigger;
+
+const testTool = (name: string) =>
+  defineTool({
+    name,
+    description: "test tool",
+    args: Schema.Struct({}),
+    execute: () => Effect.succeed({ ok: true }),
+    authority: "read",
+    admit: () => Effect.succeed({ ok: true }),
+    execution: deterministicToolExecution(),
+  });
+
+const testRoute = (modelId: string): LlmRoute =>
+  ({
+    kind: "openai-chat-compatible",
+    endpointRef: `endpoint:${modelId}`,
+    credentialRef: `credential:${modelId}`,
+    modelId,
+  }) as LlmRoute;
+
+const expectGlobalUniqueFailure = async (
+  capabilities: ReadonlyArray<CapabilityContract>,
+  expectedReason: string,
+) => {
+  const result = await resolveRuntime(nodeHost, capabilities, { identity: expectedReason });
+  expect(result.ok).toBe(false);
+  expect(result.ok ? [] : result.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        pass: "global_unique",
+        reason: expect.stringContaining(expectedReason),
+      }),
+    ]),
+  );
+};
 
 describe("resolveRuntime", () => {
   it("fails preflight when host fact is missing", async () => {
@@ -56,6 +143,234 @@ describe("resolveRuntime", () => {
           reason: expect.stringContaining("Duplicate capabilityId"),
         }),
       ]),
+    );
+  });
+
+  it("fails preflight when a required peer version does not match", async () => {
+    const peer = testCapability("@agent-os/test.peer", "resolve.peer.");
+    const consumer = testCapability("@agent-os/test.consumer", "resolve.consumer.", {
+      requires: {
+        peers: [{ capabilityId: peer.capabilityId, version: "2" }],
+      },
+    });
+
+    const result = await resolveRuntime(nodeHost, [peer, consumer], { identity: "peer-version" });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pass: "peer_dag",
+          capabilityId: consumer.capabilityId,
+          reason: expect.stringContaining("version mismatch"),
+          detail: expect.stringContaining('"installedVersion":"1"'),
+        }),
+      ]),
+    );
+  });
+
+  it("fails preflight when a capability contract does not match its carrier owner", async () => {
+    const valid = testCapability("@agent-os/test.malformed", "resolve.malformed.");
+    const malformed = {
+      ...valid,
+      carrier: testCarrier("@agent-os/test.other-owner", "resolve.other-owner."),
+    } as CapabilityContract;
+
+    const result = await resolveRuntime(nodeHost, [malformed], { identity: "peer-owner" });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pass: "name_unique",
+          capabilityId: valid.capabilityId,
+          reason: expect.stringContaining("is not owned by carrier"),
+        }),
+      ]),
+    );
+  });
+
+  it("returns structured diagnostics when capability install throws", async () => {
+    const failing = testCapability("@agent-os/test.install-fails", "resolve.install-fails.", {
+      install: () => {
+        throw new Error("install boom");
+      },
+    });
+
+    const result = await resolveRuntime(nodeHost, [failing], { identity: "install-fails" });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pass: "install",
+          capabilityId: failing.capabilityId,
+          reason: expect.stringContaining("install failed"),
+          detail: "install boom",
+        }),
+      ]),
+    );
+  });
+
+  it("fails closed when diagnostic sink commit fails", async () => {
+    const missingHostFact = testCapability("@agent-os/test.sink", "resolve.sink.", {
+      requires: { hostFacts: ["durability.do"] },
+    });
+
+    const result = await resolveRuntime(nodeHost, [missingHostFact], {
+      identity: "sink-fails",
+      diagnosticSink: {
+        commit: async () => {
+          throw new Error("sink down");
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ pass: "host_fact" }),
+        expect.objectContaining({
+          pass: "diagnostic_sink",
+          reason: expect.stringContaining("fails closed"),
+          detail: expect.stringContaining("sink down"),
+        }),
+      ]),
+    );
+  });
+
+  it("fails preflight on duplicate event kinds", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.event-a", "resolve.duplicate-event."),
+        testCapability("@agent-os/test.event-b", "resolve.duplicate-event."),
+      ],
+      "Duplicate event kind",
+    );
+  });
+
+  it("fails preflight on duplicate projection kinds", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.projection-a", "resolve.projection-a.", {
+          install: () => ({ projections: [testProjection("resolve.duplicate.projection")] }),
+        }),
+        testCapability("@agent-os/test.projection-b", "resolve.projection-b.", {
+          install: () => ({ projections: [testProjection("resolve.duplicate.projection")] }),
+        }),
+      ],
+      "Duplicate projection kind",
+    );
+  });
+
+  it("fails preflight on duplicate trigger kinds", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.trigger-a", "resolve.trigger-a.", {
+          install: () => ({ triggers: [testTrigger("resolve.duplicate.trigger")] }),
+        }),
+        testCapability("@agent-os/test.trigger-b", "resolve.trigger-b.", {
+          install: () => ({ triggers: [testTrigger("resolve.duplicate.trigger")] }),
+        }),
+      ],
+      "Duplicate trigger kind",
+    );
+  });
+
+  it("fails preflight on duplicate tool names", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.tool-a", "resolve.tool-a.", {
+          install: () => ({ bindings: { tools: { duplicate_tool: testTool("duplicate_tool") } } }),
+        }),
+        testCapability("@agent-os/test.tool-b", "resolve.tool-b.", {
+          install: () => ({ bindings: { tools: { duplicate_tool: testTool("duplicate_tool") } } }),
+        }),
+      ],
+      "Duplicate tool name",
+    );
+  });
+
+  it("fails preflight on duplicate llm routes", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.route-a", "resolve.route-a.", {
+          install: () => ({ bindings: { llmRoutes: { default: testRoute("a") } } }),
+        }),
+        testCapability("@agent-os/test.route-b", "resolve.route-b.", {
+          install: () => ({ bindings: { llmRoutes: { default: testRoute("b") } } }),
+        }),
+      ],
+      "Duplicate llm route",
+    );
+  });
+
+  it("fails preflight on duplicate material bindings", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.material-a", "resolve.material-a.", {
+          install: () => ({
+            bindings: { materials: { token: credentialMaterialRef("token-a") } },
+          }),
+        }),
+        testCapability("@agent-os/test.material-b", "resolve.material-b.", {
+          install: () => ({
+            bindings: { materials: { token: credentialMaterialRef("token-b") } },
+          }),
+        }),
+      ],
+      "Duplicate material",
+    );
+  });
+
+  it("fails preflight on duplicate declared intents", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.intent-a", "resolve.intent-a.", {
+          install: () => ({
+            declaredIntents: [
+              { kind: "resolve.duplicate.intent", boundaryOwnerId: "@agent-os/test.intent-a" },
+            ],
+          }),
+        }),
+        testCapability("@agent-os/test.intent-b", "resolve.intent-b.", {
+          install: () => ({
+            declaredIntents: [
+              { kind: "resolve.duplicate.intent", boundaryOwnerId: "@agent-os/test.intent-b" },
+            ],
+          }),
+        }),
+      ],
+      "Duplicate declared intent",
+    );
+  });
+
+  it("fails preflight on overlapping extension prefixes", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.extension-a", "resolve.extension-a.", {
+          install: () => ({
+            extensions: [
+              eventNamespace({
+                ownerId: "@agent-os/test.extension-a",
+                sourcePackageName: "@agent-os/test.extension-a",
+                kindPrefixes: ["resolve.extension."],
+                version: "1",
+              }),
+            ],
+          }),
+        }),
+        testCapability("@agent-os/test.extension-b", "resolve.extension-b.", {
+          install: () => ({
+            extensions: [
+              eventNamespace({
+                ownerId: "@agent-os/test.extension-b",
+                sourcePackageName: "@agent-os/test.extension-b",
+                kindPrefixes: ["resolve.extension.child."],
+                version: "1",
+              }),
+            ],
+          }),
+        }),
+      ],
+      "Invalid extension namespace",
     );
   });
 

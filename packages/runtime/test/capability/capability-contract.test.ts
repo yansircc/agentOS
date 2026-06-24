@@ -20,8 +20,19 @@ describe("defineCapability", () => {
       install: async () => ({}),
     });
     expect(cap.capabilityId).toBe(workspaceOpCarrier.ownerId);
+    expect(cap.version).toBe("1");
     expect(cap.sourcePackageName).toBe("@agent-os/runtime");
     expect(cap.carrier).toBe(workspaceOpCarrier);
+  });
+
+  it("keeps explicit capability versions for peer preflight", () => {
+    const cap = defineCapability({
+      capabilityId: workspaceOpCarrier.ownerId,
+      version: "2",
+      carrier: workspaceOpCarrier,
+      install: async () => ({}),
+    });
+    expect(cap.version).toBe("2");
   });
 });
 

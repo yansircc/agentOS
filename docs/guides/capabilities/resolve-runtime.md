@@ -25,9 +25,12 @@ const { layer, bindings } = runtime.resolved;
 
 1.  **name_unique**: Ensures no duplicate capability IDs
 2.  **host_fact**: Validates all required host facts are provided
-3.  **peer_dag**: Validates peer dependencies exist with no circular references
+3.  **peer_dag**: Validates peer dependencies exist, requested peer versions match, and the peer graph has no circular references
 4.  **config**: Validates required configuration values are present
 5.  **secret**: Validates required secrets are present
 6.  **self_diagnostic**: Runs capability self-checks
 7.  **global_unique**: Ensures no naming collisions across all global namespaces (events/projections/tools/triggers)
-    Failed preflight returns `{ ok: false, diagnostics }` before the backend layer is constructed or ledger facts are accepted.
+8.  **install**: Converts capability install or handler-registration exceptions into structured diagnostics
+9.  **diagnostic_sink**: Fails closed when a configured diagnostic sink cannot commit a preflight diagnostic
+
+Failed preflight returns `{ ok: false, diagnostics }` before the backend layer is constructed or ledger facts are accepted. Install runs only after requirement checks pass; install output is then globally validated before backend construction.

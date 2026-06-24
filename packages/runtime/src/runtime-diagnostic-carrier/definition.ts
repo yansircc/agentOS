@@ -57,6 +57,8 @@ export const runtimeDiagnosticCarrier = defineCarrier({
           "secret",
           "self_diagnostic",
           "global_unique",
+          "install",
+          "diagnostic_sink",
         ]),
         reason: NonEmptyString,
         detail: Schema.optional(Schema.String),
@@ -87,7 +89,9 @@ export interface PreflightDiagnosticSink {
       | "config"
       | "secret"
       | "self_diagnostic"
-      | "global_unique";
+      | "global_unique"
+      | "install"
+      | "diagnostic_sink";
     readonly reason: string;
     readonly detail?: string;
   }) => Promise<void> | void;

@@ -12,10 +12,7 @@ import {
   type AnyMaterializedProjectionDefinition,
 } from "@agent-os/runtime";
 import { projectionScopeKey, runtimeEventIdentity, truthIdentity } from "./identity";
-import {
-  createTestInMemoryRuntimeBackend,
-  installTestProjectionRegistry,
-} from "./runtime-helper";
+import { createTestInMemoryRuntimeBackend, installTestProjectionRegistry } from "./runtime-helper";
 
 const payload = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};

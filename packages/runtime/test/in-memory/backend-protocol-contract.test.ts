@@ -13,10 +13,7 @@ import {
 } from "@agent-os/core/backend-protocol";
 import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
-import {
-  createTestInMemoryBackendState,
-  createTestInMemoryRuntimeBackend,
-} from "./runtime-helper";
+import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,

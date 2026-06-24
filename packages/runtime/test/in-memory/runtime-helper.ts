@@ -1,4 +1,7 @@
-import { makeProjectionRegistryResult, type AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
+import {
+  makeProjectionRegistryResult,
+  type AnyMaterializedProjectionDefinition,
+} from "@agent-os/runtime";
 import {
   createInMemoryRuntimeBackend,
   defineResolvedRuntimeInstallGraph,

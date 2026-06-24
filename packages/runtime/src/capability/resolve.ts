@@ -3,7 +3,7 @@
  * @public
  */
 
-import { Effect, Schema } from "effect";
+import { Effect, Result, Schema } from "effect";
 import { runPromise as runEffectPromise } from "effect/Effect";
 import type { HostProfile, ResolvedHostFacts } from "./host";
 import type { CapabilityContract, CapabilityInstallation } from "./contract";
@@ -27,6 +27,10 @@ import {
 import type { InMemoryLlmTransportOptions } from "../in-memory/llm";
 import type { AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
 import { validateToolRegistry } from "@agent-os/core/tools";
+import {
+  validateExtensionDeclarations,
+  type ExtensionDeclaration,
+} from "@agent-os/core/extensions";
 import type { InstalledCapabilityHandle } from "./install-context";
 import { commitBoundaryEvent, type BoundaryCommitIdentity } from "../boundary-commit";
 import { recordLedgerPortEvent, runtimeStorageOrJsonError } from "../ledger";
@@ -49,7 +53,9 @@ export interface PreflightDiagnostic {
     | "config"
     | "secret"
     | "self_diagnostic"
-    | "global_unique";
+    | "global_unique"
+    | "install"
+    | "diagnostic_sink";
   readonly reason: string;
   readonly detail?: string;
 }
@@ -86,17 +92,34 @@ export type ResolveRuntimeResult =
 const describeCause = (cause: unknown): string => {
   if (cause instanceof Error && cause.message.length > 0) return cause.message;
   if (typeof cause === "string" && cause.length > 0) return cause;
-  return "unknown handler failure";
+  return "unknown failure";
 };
 
 const diagnosticDetail = (value: unknown): string => {
   if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
+  const encoded = syncResult(() => JSON.stringify(value));
+  return Result.isSuccess(encoded) && typeof encoded.success === "string"
+    ? encoded.success
+    : String(value);
 };
+
+const syncResult = <Value>(evaluate: () => Value): Result.Result<Value, unknown> =>
+  Result.try({
+    try: evaluate,
+    catch: (cause) => cause,
+  });
+
+const promiseResult = <Value>(
+  evaluate: () => Value | Promise<Value>,
+): Promise<Result.Result<Value, unknown>> =>
+  runEffectPromise(
+    Effect.result(
+      Effect.tryPromise({
+        try: () => Promise.resolve(evaluate()),
+        catch: (cause) => cause,
+      }),
+    ),
+  );
 
 /**
  * Normalize host fact requirement
@@ -137,13 +160,28 @@ const topologicalSort = (
     const peers = (cap.requires.peers ?? []).map(normalizePeerRequirement);
     for (const peer of peers) {
       if (peer.optional) continue;
-      if (!capMap.has(peer.capabilityId)) {
+      const peerCapability = capMap.get(peer.capabilityId);
+      if (peerCapability === undefined) {
         return {
           ok: false,
           diagnostic: {
             pass: "peer_dag",
             capabilityId: cap.capabilityId,
             reason: `Missing required peer capability: ${peer.capabilityId}`,
+          },
+        };
+      }
+      if (peer.version !== undefined && peerCapability.version !== peer.version) {
+        return {
+          ok: false,
+          diagnostic: {
+            pass: "peer_dag",
+            capabilityId: cap.capabilityId,
+            reason: `Peer capability ${peer.capabilityId} version mismatch`,
+            detail: diagnosticDetail({
+              requiredVersion: peer.version,
+              installedVersion: peerCapability.version,
+            }),
           },
         };
       }
@@ -203,7 +241,17 @@ export const resolveRuntime = async (
   const addDiagnostic = async (diag: PreflightDiagnostic) => {
     diagnostics.push(diag);
     if (sink) {
-      await sink.commit(diag);
+      const commitResult = await promiseResult(() => sink.commit(diag));
+      if (Result.isFailure(commitResult)) {
+        diagnostics.push({
+          pass: "diagnostic_sink",
+          reason: "Diagnostic sink commit failed; resolveRuntime fails closed",
+          detail: diagnosticDetail({
+            failedDiagnostic: diag,
+            cause: describeCause(commitResult.failure),
+          }),
+        });
+      }
     }
   };
   const failed = (): ResolveRuntimeResult => ({ ok: false, diagnostics });
@@ -216,6 +264,24 @@ export const resolveRuntime = async (
         pass: "name_unique",
         capabilityId: cap.capabilityId,
         reason: `Duplicate capabilityId: ${cap.capabilityId}`,
+      });
+    }
+    if (cap.capabilityId !== cap.carrier.ownerId) {
+      await addDiagnostic({
+        pass: "name_unique",
+        capabilityId: cap.capabilityId,
+        reason: `Capability ${cap.capabilityId} is not owned by carrier ${cap.carrier.ownerId}`,
+      });
+    }
+    if (cap.sourcePackageName !== cap.carrier.sourcePackageName) {
+      await addDiagnostic({
+        pass: "name_unique",
+        capabilityId: cap.capabilityId,
+        reason: `Capability ${cap.capabilityId} source package does not match carrier owner package`,
+        detail: diagnosticDetail({
+          capabilitySourcePackageName: cap.sourcePackageName,
+          carrierSourcePackageName: cap.carrier.sourcePackageName,
+        }),
       });
     }
     capabilityIds.add(cap.capabilityId);
@@ -269,14 +335,13 @@ export const resolveRuntime = async (
         }
         continue;
       }
-      try {
-        Schema.decodeUnknownSync(req.schema)(config[req.key]);
-      } catch (cause) {
+      const decoded = syncResult(() => Schema.decodeUnknownSync(req.schema)(config[req.key]));
+      if (Result.isFailure(decoded)) {
         await addDiagnostic({
           pass: "config",
           capabilityId: cap.capabilityId,
           reason: `Invalid config key: ${req.key}`,
-          detail: cause instanceof Error ? cause.message : String(cause),
+          detail: describeCause(decoded.failure),
         });
       }
     }
@@ -306,14 +371,17 @@ export const resolveRuntime = async (
   }
 
   let resolvedHostFacts: ResolvedHostFacts | undefined;
-  try {
-    resolvedHostFacts = await host.materialize({ config, secrets, identity: options.identity });
-  } catch (cause) {
+  const hostFactsResult = await promiseResult(() =>
+    host.materialize({ config, secrets, identity: options.identity }),
+  );
+  if (Result.isFailure(hostFactsResult)) {
     await addDiagnostic({
       pass: "host_fact",
       reason: `Host ${host.target} failed to materialize provided facts`,
-      detail: cause instanceof Error ? cause.message : String(cause),
+      detail: describeCause(hostFactsResult.failure),
     });
+  } else {
+    resolvedHostFacts = hostFactsResult.success;
   }
   if (diagnostics.length > 0) {
     return failed();
@@ -344,6 +412,7 @@ export const resolveRuntime = async (
   const installedCaps = new Map<string, InstalledCapabilityHandle>();
   const allProjections: AnyMaterializedProjectionDefinition[] = [];
   const allTriggers: AnyDurableTrigger[] = [];
+  const allExtensions: ExtensionDeclaration[] = [];
   const allEventHandlers: Array<{ readonly kind: string; readonly handler: EventHandler }> = [];
   let mergedBindings: AgentSubmitBindings = { tools: {}, materials: {}, executionDomains: [] };
   const truthIdentity = inMemoryConversationTruthIdentity(options.identity);
@@ -458,7 +527,18 @@ export const resolveRuntime = async (
       diagnostics,
       identity: options.identity,
     };
-    const installResult: CapabilityInstallation = await cap.install(installCtx);
+    let installResult: CapabilityInstallation;
+    const installAttempt = await promiseResult(() => cap.install(installCtx));
+    if (Result.isFailure(installAttempt)) {
+      await addDiagnostic({
+        pass: "install",
+        capabilityId: cap.capabilityId,
+        reason: `Capability ${cap.capabilityId} install failed`,
+        detail: describeCause(installAttempt.failure),
+      });
+      return failed();
+    }
+    installResult = installAttempt.success;
 
     for (const eventKind of Object.values(cap.carrier.kind) as string[]) {
       await addGlobalKey("event kind", eventKind, cap.capabilityId);
@@ -473,6 +553,7 @@ export const resolveRuntime = async (
       await addGlobalKey("declared intent", intent.kind, cap.capabilityId);
     }
     for (const extension of installResult.extensions ?? []) {
+      allExtensions.push(extension);
       await addGlobalKey("extension owner", extension.ownerId, cap.capabilityId);
       for (const prefix of extension.kindPrefixes) {
         await addGlobalKey("extension prefix", prefix, cap.capabilityId);
@@ -492,18 +573,28 @@ export const resolveRuntime = async (
     allProjections.push(...(installResult.projections ?? []));
     allTriggers.push(...(installResult.triggers ?? []));
 
-    const handlers = installResult.eventHandlers?.(installCtx) ?? [];
+    let handlers: ReadonlyArray<{ readonly kind: string; readonly handler: EventHandler }>;
+    const handlerRegistration = syncResult(() => installResult.eventHandlers?.(installCtx) ?? []);
+    if (Result.isFailure(handlerRegistration)) {
+      await addDiagnostic({
+        pass: "install",
+        capabilityId: cap.capabilityId,
+        reason: `Capability ${cap.capabilityId} event handler registration failed`,
+        detail: describeCause(handlerRegistration.failure),
+      });
+      return failed();
+    }
+    handlers = handlerRegistration.success;
     for (const registration of handlers) {
       allEventHandlers.push({
         kind: registration.kind,
         handler: async (event) => {
-          try {
-            await registration.handler(event);
-          } catch (cause) {
+          const handlerResult = await promiseResult(() => registration.handler(event));
+          if (Result.isFailure(handlerResult)) {
             await commitRuntimeDiagnostic(RUNTIME_DIAGNOSTIC_KIND.HANDLER_FAILED, {
               capabilityId: cap.capabilityId,
               handler: registration.kind,
-              reason: describeCause(cause),
+              reason: describeCause(handlerResult.failure),
               requestedEventId: event.id,
             });
           }
@@ -516,6 +607,17 @@ export const resolveRuntime = async (
     }
   }
   if (diagnostics.length > 0) {
+    return failed();
+  }
+
+  const extensionValidation = validateExtensionDeclarations(allExtensions);
+  if (!extensionValidation.ok) {
+    await addDiagnostic({
+      pass: "global_unique",
+      reason: `Invalid extension namespace: ${extensionValidation.error.kindPrefix}`,
+      capabilityId: extensionValidation.error.ownerId,
+      detail: diagnosticDetail({ claimedBy: extensionValidation.error.claimedBy }),
+    });
     return failed();
   }
 

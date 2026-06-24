@@ -1,9 +1,6 @@
 import { Effect, ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
-import {
-  createTestInMemoryBackendState,
-  createTestInMemoryRuntimeBackend,
-} from "./runtime-helper";
+import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 import {
   runImgGenPressureContract,
   type ImgGenPressureDriver,

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -43,6 +43,18 @@ const digestText = (text) => {
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return `fnv1a32:${hash.toString(16).padStart(8, "0")}:${text.length}`;
+};
+
+const linkSmokeDependency = (root, specifier, target) => {
+  const destination = path.join(root, "node_modules", ...specifier.split("/"));
+  mkdirSync(path.dirname(destination), { recursive: true });
+  symlinkSync(target, destination, process.platform === "win32" ? "junction" : "dir");
+};
+
+const linkGeneratedTargetSmokeDependencies = (root) => {
+  linkSmokeDependency(root, "@agent-os/core", path.join(repoRoot, "packages/core"));
+  linkSmokeDependency(root, "@agent-os/runtime", path.join(repoRoot, "packages/runtime"));
+  linkSmokeDependency(root, "effect", path.join(repoRoot, "node_modules/effect"));
 };
 
 void test("compileAgentTree keeps skills as authoring-only output", () => {
@@ -485,6 +497,7 @@ void test("agentos build emits skill artifact and load_skill executes determinis
   const root = mkdtempSync(path.join(repoRoot, ".agentos-skill-smoke-"));
   try {
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    linkGeneratedTargetSmokeDependencies(root);
     mkdirSync(path.join(root, "agent/skills"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
     writeFileSync(path.join(root, "agent/skills/echo.md"), "---\nname: echo\n---\nECHO_MARKER_560");

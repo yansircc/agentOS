@@ -49,6 +49,7 @@ export interface CapabilityInstallContext {
  */
 export interface DefineCapabilitySpec {
   readonly capabilityId: string;
+  readonly version?: string;
   readonly carrier: Carrier<any, any>;
   readonly requires?: CapabilityRequirements;
   readonly install: (
@@ -66,6 +67,7 @@ export interface DefineCapabilitySpec {
  */
 export interface CapabilityContract {
   readonly capabilityId: string;
+  readonly version: string;
   readonly sourcePackageName: string;
   readonly carrier: Carrier<any, any>;
   readonly requires: CapabilityRequirements;
@@ -97,6 +99,7 @@ export const defineCapability = (spec: DefineCapabilitySpec): CapabilityContract
 
   return {
     capabilityId: spec.capabilityId,
+    version: spec.version ?? "1",
     sourcePackageName: spec.carrier.sourcePackageName,
     carrier: spec.carrier,
     requires: spec.requires ?? {},

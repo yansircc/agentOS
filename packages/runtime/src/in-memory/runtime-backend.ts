@@ -144,10 +144,7 @@ export const createInMemoryRuntimeBackend = (
   const state =
     graph.state ?? createInMemoryBackendState({ handlers: graph.handlers, projections });
   if (graph.state !== undefined) {
-    installInMemoryBackendStateProjectionRegistry(
-      state,
-      makeProjectionRegistryResult(projections),
-    );
+    installInMemoryBackendStateProjectionRegistry(state, makeProjectionRegistryResult(projections));
     for (const registration of graph.handlers) {
       state.addHandler(registration.kind, registration.handler);
     }
