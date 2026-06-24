@@ -14,6 +14,7 @@ import {
 import type { DispatchTargetRegistry } from "./dispatch/dispatch";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import type { CloudflareTriggerSource } from "./trigger-factory";
+import type { ResolvedRuntimeGraphStatus } from "../runtime-graph-status";
 
 export interface CloudflareAgentEnv {}
 
@@ -40,6 +41,10 @@ export type CloudflareAgentProjectionSource<Env extends CloudflareAgentEnv> =
   | ReadonlyArray<AnyMaterializedProjectionDefinition>
   | ((env: Env) => ReadonlyArray<AnyMaterializedProjectionDefinition>);
 
+export type CloudflareAgentGraphStatusSource<Env extends CloudflareAgentEnv> =
+  | ResolvedRuntimeGraphStatus
+  | ((env: Env) => ResolvedRuntimeGraphStatus);
+
 export interface AgentDurableObjectConfig<Env extends CloudflareAgentEnv, Runtime = unknown> {
   readonly manifest: AgentManifest;
   readonly agentBindings: CloudflareAgentBindingSource<Env>;
@@ -51,6 +56,7 @@ export interface AgentDurableObjectConfig<Env extends CloudflareAgentEnv, Runtim
   readonly triggers?: CloudflareTriggerSource<Env>;
   readonly streams?: CloudflareAttachedStreamSource<Env>;
   readonly projections?: CloudflareAgentProjectionSource<Env>;
+  readonly graphStatus?: CloudflareAgentGraphStatusSource<Env>;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
     env: Env,
@@ -78,6 +84,7 @@ export interface MaterializedAgentConfig<Env extends CloudflareAgentEnv, Runtime
   readonly dispatchTargets: DispatchTargetRegistry;
   readonly triggers: CloudflareTriggerSource<Env>;
   readonly streams: CloudflareAttachedStreamSource<Env>;
+  readonly graphStatus?: ResolvedRuntimeGraphStatus;
   readonly eventHandlers?: (
     context: AgentEventHandlerContext<Runtime>,
     env: Env,
@@ -93,6 +100,12 @@ const projectionsFor = <Env extends CloudflareAgentEnv>(
   env: Env,
 ): ReadonlyArray<AnyMaterializedProjectionDefinition> =>
   typeof projections === "function" ? projections(env) : (projections ?? []);
+
+const graphStatusFor = <Env extends CloudflareAgentEnv>(
+  graphStatus: CloudflareAgentGraphStatusSource<Env> | undefined,
+  env: Env,
+): ResolvedRuntimeGraphStatus | undefined =>
+  typeof graphStatus === "function" ? graphStatus(env) : graphStatus;
 
 const agentBindingsFor = <Env extends CloudflareAgentEnv>(
   agentBindings: CloudflareAgentBindingSource<Env>,
@@ -117,6 +130,7 @@ export const materializeCloudflareAgentConfig = <Env extends CloudflareAgentEnv,
     dispatchTargets: config.dispatchTargets?.(env) ?? {},
     triggers: config.triggers ?? [],
     streams: config.streams ?? [],
+    graphStatus: graphStatusFor(config.graphStatus, env),
     eventHandlers: config.eventHandlers,
   };
 };

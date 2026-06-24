@@ -28,6 +28,7 @@ import {
   decodedRuntimeBehaviorKinds,
 } from "./_submit-agent-harness";
 import { RUNTIME_DIAGNOSTIC_KIND } from "../src/runtime-diagnostic-carrier";
+import { defineResolvedRuntimeGraphStatus } from "../src/runtime-graph-status";
 
 export const registerSubmitAgentToolBoundaryCases = () => {
   it.effect("does not execute an external tool without a receipt-backed terminal contract", () =>
@@ -569,6 +570,8 @@ export const registerSubmitAgentToolBoundaryCases = () => {
         authorityId: "projection-writer",
       };
       const projectionFactOwnerRef = "@agent-os/runtime-test.projection-owner" as const;
+      const projectionInstallerCapabilityId = "@agent-os/runtime-test.actual-installer";
+      const projectionKind = "runtime.test.timeout_projection";
       const tool = defineTool({
         name: "await_projection_timeout",
         description: "wait projection timeout",
@@ -582,7 +585,7 @@ export const registerSubmitAgentToolBoundaryCases = () => {
               });
             }
             return yield* ctx.awaitProjection<{ readonly status: "pending" | "complete" }>({
-              kind: "runtime.test.timeout_projection",
+              kind: projectionKind,
               scopeRef: projectionScopeRef,
               effectAuthorityRef: projectionEffectAuthorityRef,
               factOwnerRef: projectionFactOwnerRef,
@@ -626,18 +629,23 @@ export const registerSubmitAgentToolBoundaryCases = () => {
         });
 
       const { result, events } = yield* runSubmitWithServices(
-        baseSpec({
-          tools: { await_projection_timeout: tool },
-          budget: {
-            maxTurns: 1,
-            toolRetryPolicy: {
-              execution: {
-                maxRetries: 0,
-                delay: { kind: "none" },
+        {
+          ...baseSpec({
+            tools: { await_projection_timeout: tool },
+            budget: {
+              maxTurns: 1,
+              toolRetryPolicy: {
+                execution: {
+                  maxRetries: 0,
+                  delay: { kind: "none" },
+                },
               },
             },
-          },
-        }),
+          }),
+          runtimeGraphStatus: defineResolvedRuntimeGraphStatus({
+            projections: [{ kind: projectionKind, capabilityId: projectionInstallerCapabilityId }],
+          }),
+        },
         services,
       );
 
@@ -646,8 +654,8 @@ export const registerSubmitAgentToolBoundaryCases = () => {
         (event) => event.kind === RUNTIME_DIAGNOSTIC_KIND.PROJECTION_TIMEOUT,
       );
       expect(diagnostic?.payload).toMatchObject({
-        capabilityId: projectionFactOwnerRef,
-        projectionKind: "runtime.test.timeout_projection",
+        capabilityId: projectionInstallerCapabilityId,
+        projectionKind,
         waitReason: "not_ready",
         maxAttempts: 1,
         requestedEventId: 123,

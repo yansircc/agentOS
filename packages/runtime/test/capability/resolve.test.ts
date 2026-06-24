@@ -459,6 +459,42 @@ describe("resolveRuntime", () => {
     expect(resolved.resolved.bindings.tools?.read_file).toBeDefined();
   });
 
+  it("records handler and projection ownership in the resolved install graph status", async () => {
+    const capabilityId = "@agent-os/runtime-test.graph-owner";
+    const projectionKind = "runtime.test.graph_projection";
+    const handlerKind = "runtime.test.graph_event";
+    const capability = testCapability(capabilityId, "graph_owner.", {
+      install: () => ({
+        projections: [testProjection(projectionKind)],
+        eventHandlers: () => [
+          {
+            kind: handlerKind,
+            handler: async () => undefined,
+          },
+        ],
+      }),
+    });
+
+    const result = await resolveRuntime(nodeHost, [capability], { identity: "graph-status" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.resolved.installGraph.graphStatus.projection(projectionKind)).toEqual({
+      status: "installed",
+      kind: projectionKind,
+      capabilityId,
+    });
+    expect(result.resolved.installGraph.graphStatus.handler(handlerKind)).toEqual({
+      status: "installed",
+      kind: handlerKind,
+      capabilityId,
+    });
+    expect(result.resolved.installGraph.graphStatus.projection("runtime.test.absent")).toEqual({
+      status: "missing",
+      kind: "runtime.test.absent",
+    });
+  });
+
   it.effect("commits runtime diagnostic facts when resolved handlers fail", () =>
     Effect.gen(function* () {
       const failingCapability = defineCapability({

@@ -20,6 +20,7 @@ import {
   RUNTIME_DIAGNOSTIC_KIND,
   runtimeDiagnosticBoundaryContract,
 } from "../runtime-diagnostic-carrier";
+import type { ResolvedRuntimeGraphStatus } from "../runtime-graph-status";
 
 const toolArgumentSummaryEncoder = new TextEncoder();
 
@@ -120,12 +121,17 @@ const recordProjectionTimeoutDiagnostic = <State>(
   projectionSpec: ToolProjectionWaitSpec<State>,
   claim: PreClaim,
   timeout: ProjectionWaitTimedOut,
+  graphStatus: ResolvedRuntimeGraphStatus | undefined,
 ): Effect.Effect<void> => {
   const requestedEventId = requestedEventIdFromProjectionIdentity(projectionSpec.identity);
   if (requestedEventId === undefined) return Effect.void;
+  const projectionStatus = graphStatus?.projection(timeout.projectionKind);
   return boundaryEvents
     .commit(runtimeDiagnosticBoundaryContract, RUNTIME_DIAGNOSTIC_KIND.PROJECTION_TIMEOUT, {
-      capabilityId: projectionSpec.factOwnerRef ?? RUNTIME_FACT_OWNER,
+      capabilityId:
+        projectionStatus?.status === "installed"
+          ? projectionStatus.capabilityId
+          : RUNTIME_FACT_OWNER,
       projectionKind: timeout.projectionKind,
       waitReason: timeout.reason,
       maxAttempts: timeout.maxAttempts,
@@ -146,6 +152,7 @@ export const runtimeToolContext = (
   claim: PreClaim,
   resume: unknown,
   materialBrokerReceipts: ReadonlyArray<MaterialBrokerReceipt> = [],
+  graphStatus?: ResolvedRuntimeGraphStatus,
 ): ToolExecutionContextInput => {
   const declaredIntents = new Map((spec.toolIntents ?? []).map((intent) => [intent.kind, intent]));
   return {
@@ -207,7 +214,13 @@ export const runtimeToolContext = (
         Effect.provideService(MaterializedProjections, projections),
         Effect.tapError((cause) =>
           cause instanceof ProjectionWaitTimedOut
-            ? recordProjectionTimeoutDiagnostic(boundaryEvents, projectionSpec, claim, cause)
+            ? recordProjectionTimeoutDiagnostic(
+                boundaryEvents,
+                projectionSpec,
+                claim,
+                cause,
+                graphStatus,
+              )
             : Effect.void,
         ),
         Effect.mapError((cause) => new ToolError({ toolName: "awaitProjection", cause })),

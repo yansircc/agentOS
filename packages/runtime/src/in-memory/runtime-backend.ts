@@ -49,6 +49,11 @@ import { InMemoryQuotaLive } from "./quota";
 import { InMemoryResourcesLive } from "./resources";
 import { InMemorySchedulerLive } from "./scheduler";
 import { InMemoryTriggerPumpLive } from "./trigger-pump";
+import {
+  defineResolvedRuntimeGraphStatus,
+  type ResolvedRuntimeGraphStatus,
+  type ResolvedRuntimeGraphStatusInput,
+} from "../runtime-graph-status";
 
 const resolvedRuntimeInstallGraphBrand: unique symbol = Symbol(
   "agentos.in_memory.resolved_runtime_install_graph",
@@ -87,6 +92,7 @@ export interface InMemoryRuntimeInstallGraphInput {
   readonly triggers?: ReadonlyArray<AnyDurableTrigger>;
   readonly streams?: ReadonlyArray<AnyAttachedStreamHandler>;
   readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+  readonly graphStatus?: ResolvedRuntimeGraphStatusInput;
 }
 
 /**
@@ -110,6 +116,7 @@ export interface ResolvedRuntimeInstallGraph {
   readonly triggers: ReadonlyArray<AnyDurableTrigger>;
   readonly streams: ReadonlyArray<AnyAttachedStreamHandler>;
   readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+  readonly graphStatus: ResolvedRuntimeGraphStatus;
 }
 
 /**
@@ -130,6 +137,7 @@ export const defineResolvedRuntimeInstallGraph = (
   triggers: [...(input.triggers ?? [])],
   streams: [...(input.streams ?? [])],
   projections: [...(input.projections ?? [])],
+  graphStatus: defineResolvedRuntimeGraphStatus(input.graphStatus),
 });
 
 export interface InMemoryRuntimeBackend {

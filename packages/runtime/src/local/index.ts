@@ -396,6 +396,7 @@ export const createLocalAgentRuntime = async (
               scope: options.identity,
               scopeRef: identity.scopeRef,
             },
+            { runtimeGraphStatus: runtime.installGraph.graphStatus },
           ),
         ).pipe(Effect.provide(runtime.layer)),
       ),

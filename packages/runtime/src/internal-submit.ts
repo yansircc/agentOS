@@ -1,11 +1,13 @@
 import type { ScopeRef } from "@agent-os/core/effect-claim";
 import type { SubmitSpec } from "@agent-os/core/runtime-protocol";
+import type { ResolvedRuntimeGraphStatus } from "./runtime-graph-status";
 
 declare const internalSubmitSpecBrand: unique symbol;
 
 export interface InternalSubmitSpec extends SubmitSpec {
   readonly scope: string;
   readonly scopeRef: ScopeRef;
+  readonly runtimeGraphStatus?: ResolvedRuntimeGraphStatus;
   readonly [internalSubmitSpecBrand]: true;
 }
 
@@ -26,6 +28,7 @@ const internalSubmitBudget = (
 export const internalSubmitSpec = (
   spec: SubmitSpec,
   scope: { readonly scope: string; readonly scopeRef: ScopeRef },
+  options: { readonly runtimeGraphStatus?: ResolvedRuntimeGraphStatus } = {},
 ): InternalSubmitSpec =>
   ({
     intent: spec.intent,
@@ -48,4 +51,7 @@ export const internalSubmitSpec = (
     executionIdentity: spec.executionIdentity,
     scope: scope.scope,
     scopeRef: scope.scopeRef,
+    ...(options.runtimeGraphStatus === undefined
+      ? {}
+      : { runtimeGraphStatus: options.runtimeGraphStatus }),
   }) as InternalSubmitSpec;

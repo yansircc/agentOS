@@ -46,6 +46,11 @@ import { createRuntimeDiagnosticApi } from "./diagnostics";
 import type { EventHandler } from "@agent-os/core/types";
 import type { AnyMaterializedProjectionDefinition } from "../projection";
 import type { AnyDurableTrigger } from "../trigger";
+import {
+  defineResolvedRuntimeGraphStatus,
+  type ResolvedRuntimeGraphRegistration,
+  type ResolvedRuntimeGraphStatus,
+} from "../runtime-graph-status";
 
 /**
  * Preflight diagnostic returned when resolve fails
@@ -113,6 +118,7 @@ export interface ResolvedCapabilityInstallGraph {
   readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   readonly triggers: ReadonlyArray<AnyDurableTrigger>;
   readonly handlers: ResolvedCapabilityEventHandlerFactory["eventHandlers"];
+  readonly graphStatus: ResolvedRuntimeGraphStatus;
   readonly bindings: AgentSubmitBindings;
   readonly manifest: {
     readonly capabilities: ReadonlyArray<string>;
@@ -502,6 +508,7 @@ export const resolveRuntimeInstallGraph = (
   // Install capabilities in topological order
   const installedCaps = new Map<string, InstalledCapabilityHandle>();
   const allProjections: AnyMaterializedProjectionDefinition[] = [];
+  const allProjectionRegistrations: ResolvedRuntimeGraphRegistration[] = [];
   const allTriggers: AnyDurableTrigger[] = [];
   const runtimeDiagnosticExtension = runtimeDiagnosticBoundaryPackage(
     RUNTIME_DIAGNOSTIC_BOUNDARY_VERSION,
@@ -516,6 +523,7 @@ export const resolveRuntimeInstallGraph = (
     readonly capabilityId: string;
     readonly register: NonNullable<CapabilityInstallation["eventHandlers"]>;
   }> = [];
+  const allHandlerRegistrations: ResolvedRuntimeGraphRegistration[] = [];
   let mergedBindings: AgentSubmitBindings = emptySubmitBindings();
 
   const handleFor = (cap: CapabilityContract): InstalledCapabilityHandle => ({
@@ -583,6 +591,10 @@ export const resolveRuntimeInstallGraph = (
     }
     for (const projection of installResult.projections ?? []) {
       addGlobalKey("projection kind", projection.kind, cap.capabilityId);
+      allProjectionRegistrations.push({
+        kind: projection.kind,
+        capabilityId: cap.capabilityId,
+      });
     }
     for (const trigger of installResult.triggers ?? []) {
       addGlobalKey("trigger kind", trigger.kind, cap.capabilityId);
@@ -627,6 +639,12 @@ export const resolveRuntimeInstallGraph = (
         detail: describeCause(handlerRegistration.failure),
       });
       return failed();
+    }
+    for (const registration of handlerRegistration.success) {
+      allHandlerRegistrations.push({
+        kind: registration.kind,
+        capabilityId: cap.capabilityId,
+      });
     }
     if (installResult.eventHandlers !== undefined) {
       handlerFactories.push({
@@ -700,6 +718,10 @@ export const resolveRuntimeInstallGraph = (
             },
           })),
         ),
+      graphStatus: defineResolvedRuntimeGraphStatus({
+        handlers: allHandlerRegistrations,
+        projections: allProjectionRegistrations,
+      }),
       bindings: mergedBindings,
       manifest: {
         capabilities: sortedCaps.map((c) => c.capabilityId),
@@ -785,6 +807,10 @@ export const resolveRuntime = async (
     triggers: graph.resolved.triggers,
     handlers: graph.resolved.handlers({ capabilities: capabilityHandles }),
     llm: options.llm ?? {},
+    graphStatus: {
+      handlers: graph.resolved.graphStatus.handlers.values(),
+      projections: graph.resolved.graphStatus.projections.values(),
+    },
   });
   backend = createInMemoryRuntimeBackend(installGraph);
 

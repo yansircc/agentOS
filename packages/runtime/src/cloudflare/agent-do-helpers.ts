@@ -34,6 +34,7 @@ import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { AgentDeclaredIntent, CloudflareAgentEnv } from "./deployment";
 import { eventIdentity } from "./ledger/identity";
+import type { ResolvedRuntimeGraphStatus } from "../runtime-graph-status";
 
 export interface AgentSubmitSpecLike {
   readonly intent: string;
@@ -85,6 +86,7 @@ export const scopedInternalSubmitSpec = (
   scope: string,
   truthIdentity: BackendProtocolTruthIdentity,
   spec: SubmitSpec,
+  runtimeGraphStatus?: ResolvedRuntimeGraphStatus,
 ): {
   readonly identity: BackendProtocolEventIdentity;
   readonly internalSpec: InternalSubmitSpec;
@@ -95,10 +97,14 @@ export const scopedInternalSubmitSpec = (
   };
   return {
     identity: eventIdentity(truthIdentity, RUNTIME_FACT_OWNER),
-    internalSpec: internalSubmitSpec(scopedSpec, {
-      scope,
-      scopeRef: truthIdentity.scopeRef,
-    }),
+    internalSpec: internalSubmitSpec(
+      scopedSpec,
+      {
+        scope,
+        scopeRef: truthIdentity.scopeRef,
+      },
+      { runtimeGraphStatus },
+    ),
   };
 };
 

@@ -618,6 +618,7 @@ const Base${normalized.target.durableObject.className} = createAgentDurableObjec
   extensions: (env) => generatedCapabilityInstallGraphFor(env).extensions,
   declaredIntents: (env) => generatedCapabilityInstallGraphFor(env).declaredIntents,
   projections: (env) => generatedCapabilityInstallGraphFor(env).projections,
+  graphStatus: (env) => generatedCapabilityInstallGraphFor(env).graphStatus,
   eventHandlers: (context, env) => generatedCapabilityInstallGraphFor(env).handlers(context),
 });
 

@@ -161,6 +161,7 @@ import {
   type CloudflareAgentEnv,
   type MaterializedAgentConfig,
 } from "./deployment";
+import type { ResolvedRuntimeGraphStatus } from "../runtime-graph-status";
 import { commitLedgerTransaction } from "./ledger/commit";
 import {
   cloudflareDefaultTruthIdentityFromRoutingScope,
@@ -297,6 +298,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private readonly _triggers: CloudflareTriggerSource<Env>;
   private readonly _streams: CloudflareAttachedStreamSource<Env>;
   private readonly _projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+  private readonly _graphStatus?: ResolvedRuntimeGraphStatus;
   private readonly _runtimes = new Map<
     string,
     ManagedRuntime.ManagedRuntime<
@@ -317,6 +319,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     this._triggers = config.triggers;
     this._streams = config.streams;
     this._projections = config.mount.projectionSinks.materialized;
+    this._graphStatus = config.graphStatus;
 
     for (const registration of config.eventHandlers?.(
       { runtime: this as unknown as Runtime, capabilities: this._capabilities },
@@ -856,7 +859,12 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     truthIdentity: BackendProtocolTruthIdentity,
     spec: SubmitSpec,
   ): Promise<SubmitResult> {
-    const { identity, internalSpec } = scopedInternalSubmitSpec(scope, truthIdentity, spec);
+    const { identity, internalSpec } = scopedInternalSubmitSpec(
+      scope,
+      truthIdentity,
+      spec,
+      this._graphStatus,
+    );
     return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
   }
 

@@ -1339,6 +1339,7 @@ export const submitAgentEffect = (
                         claim,
                         call.id === resumedToolCallIdThisTurn ? admittedResume : undefined,
                         materialPlan.plan.brokerReceipts,
+                        spec.runtimeGraphStatus,
                       ),
                     ),
                 );
