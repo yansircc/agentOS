@@ -120,6 +120,13 @@ the internally recorded submit run correlation. The returned projection is
 sanitized: failed state exposes request summary and `failureExplanation`, but
 never exposes the runtime numeric run id or raw `submitRunId` join key.
 
+Runtime diagnostic facts are active only when a production runtime path can
+prove them from a positive contract. `handler_failed` is emitted by resolved
+capability handler wrappers. `projection_timeout` is emitted by tool projection
+waits with operation, authority, and requested-event provenance. `preflight_failed`
+uses schema-owned string detail. `handler_missing` remains reserved vocabulary
+until capability requirements declare required handler contracts.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing runtime execution, admission service, and

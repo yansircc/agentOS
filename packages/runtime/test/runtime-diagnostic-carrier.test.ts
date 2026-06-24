@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   runtimeDiagnosticCarrier,
   RUNTIME_DIAGNOSTIC_KIND,
+  RUNTIME_DIAGNOSTIC_RESERVED_KINDS,
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
 } from "../src/runtime-diagnostic-carrier";
 
@@ -23,5 +24,9 @@ describe("runtime diagnostic carrier", () => {
       "runtime_diagnostic.projection_timeout",
     );
     expect(RUNTIME_DIAGNOSTIC_KIND.PREFLIGHT_FAILED).toBe("runtime_diagnostic.preflight_failed");
+  });
+
+  it("keeps handler_missing reserved until a required-handler contract exists", () => {
+    expect(RUNTIME_DIAGNOSTIC_RESERVED_KINDS).toEqual([RUNTIME_DIAGNOSTIC_KIND.HANDLER_MISSING]);
   });
 });

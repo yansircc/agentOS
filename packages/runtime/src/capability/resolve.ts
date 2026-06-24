@@ -51,7 +51,7 @@ export interface PreflightDiagnostic {
     | "self_diagnostic"
     | "global_unique";
   readonly reason: string;
-  readonly detail?: unknown;
+  readonly detail?: string;
 }
 
 /**
@@ -87,6 +87,15 @@ const describeCause = (cause: unknown): string => {
   if (cause instanceof Error && cause.message.length > 0) return cause.message;
   if (typeof cause === "string" && cause.length > 0) return cause;
   return "unknown handler failure";
+};
+
+const diagnosticDetail = (value: unknown): string => {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 };
 
 /**
@@ -429,7 +438,7 @@ export const resolveRuntime = async (
         pass: "global_unique",
         capabilityId,
         reason: `Duplicate ${axis}: ${value}`,
-        detail: { firstCapabilityId: previous },
+        detail: diagnosticDetail({ firstCapabilityId: previous }),
       });
       return;
     }
@@ -515,7 +524,7 @@ export const resolveRuntime = async (
     await addDiagnostic({
       pass: "global_unique",
       reason: "Invalid merged tool registry",
-      detail: toolValidation.issues,
+      detail: diagnosticDetail(toolValidation.issues),
     });
     return failed();
   }

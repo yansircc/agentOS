@@ -221,6 +221,7 @@ export {
   runtimeDiagnosticCarrier,
   RUNTIME_DIAGNOSTIC_KIND,
   RUNTIME_DIAGNOSTIC_EVENTS,
+  RUNTIME_DIAGNOSTIC_RESERVED_KINDS,
   runtimeDiagnosticBoundaryContract,
   runtimeDiagnosticSettlementContract,
   runtimeDiagnosticBoundaryPackage,

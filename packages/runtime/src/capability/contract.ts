@@ -57,7 +57,7 @@ export interface DefineCapabilitySpec {
   readonly diagnostics?: () => ReadonlyArray<{
     readonly capabilityId?: string;
     readonly reason: string;
-    readonly detail?: unknown;
+    readonly detail?: string;
   }>;
 }
 
@@ -75,7 +75,7 @@ export interface CapabilityContract {
   readonly diagnostics: () => ReadonlyArray<{
     readonly capabilityId?: string;
     readonly reason: string;
-    readonly detail?: unknown;
+    readonly detail?: string;
   }>;
 }
 

@@ -15,7 +15,11 @@ import type {
 } from "@agent-os/core/tools";
 import type { InternalSubmitSpec } from "../internal-submit";
 import { BoundaryEvents } from "../boundary-events";
-import { MaterializedProjections, waitForProjection } from "../projection";
+import { MaterializedProjections, ProjectionWaitTimedOut, waitForProjection } from "../projection";
+import {
+  RUNTIME_DIAGNOSTIC_KIND,
+  runtimeDiagnosticBoundaryContract,
+} from "../runtime-diagnostic-carrier";
 
 const toolArgumentSummaryEncoder = new TextEncoder();
 
@@ -100,6 +104,41 @@ export const payloadWithToolPreClaim = (
   return Predicate.isObject(payload) ? { ...payload, [claimContract.key]: claim } : payload;
 };
 
+const authorityRefLabel = (authority: PreClaim["effectAuthorityRef"]): string =>
+  authority.version === undefined
+    ? `${authority.authorityClass}:${authority.authorityId}`
+    : `${authority.authorityClass}:${authority.authorityId}@${authority.version}`;
+
+const requestedEventIdFromProjectionIdentity = (identity: unknown): number | undefined =>
+  Predicate.isObject(identity) &&
+  typeof (identity as { readonly requestedEventId?: unknown }).requestedEventId === "number"
+    ? (identity as { readonly requestedEventId: number }).requestedEventId
+    : undefined;
+
+const recordProjectionTimeoutDiagnostic = <State>(
+  boundaryEvents: Context.Service.Shape<typeof BoundaryEvents>,
+  projectionSpec: ToolProjectionWaitSpec<State>,
+  claim: PreClaim,
+  timeout: ProjectionWaitTimedOut,
+): Effect.Effect<void> => {
+  const requestedEventId = requestedEventIdFromProjectionIdentity(projectionSpec.identity);
+  if (requestedEventId === undefined) return Effect.void;
+  return boundaryEvents
+    .commit(runtimeDiagnosticBoundaryContract, RUNTIME_DIAGNOSTIC_KIND.PROJECTION_TIMEOUT, {
+      capabilityId: projectionSpec.factOwnerRef ?? RUNTIME_FACT_OWNER,
+      projectionKind: timeout.projectionKind,
+      waitReason: timeout.reason,
+      maxAttempts: timeout.maxAttempts,
+      operationRef: claim.operationRef,
+      authority: authorityRefLabel(projectionSpec.effectAuthorityRef ?? claim.effectAuthorityRef),
+      requestedEventId,
+      ...(timeout.lastObservedEventId === undefined
+        ? {}
+        : { lastObservedEventId: timeout.lastObservedEventId }),
+    })
+    .pipe(Effect.asVoid, Effect.ignore);
+};
+
 export const runtimeToolContext = (
   spec: InternalSubmitSpec,
   boundaryEvents: Context.Service.Shape<typeof BoundaryEvents>,
@@ -166,6 +205,12 @@ export const runtimeToolContext = (
                 }),
       }).pipe(
         Effect.provideService(MaterializedProjections, projections),
+        Effect.tapError((cause) =>
+          cause instanceof ProjectionWaitTimedOut
+            ? recordProjectionTimeoutDiagnostic(boundaryEvents, projectionSpec, claim, cause)
+            : Effect.void,
+        ),
+        Effect.mapError((cause) => new ToolError({ toolName: "awaitProjection", cause })),
         Effect.map((row) => ({
           kind: row.kind,
           projectionKind: row.kind,
@@ -173,7 +218,6 @@ export const runtimeToolContext = (
           state: row.state as State,
           updatedEventId: row.updatedEventId,
         })),
-        Effect.mapError((cause) => new ToolError({ toolName: "awaitProjection", cause })),
       );
     },
   };

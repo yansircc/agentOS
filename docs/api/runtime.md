@@ -170,6 +170,7 @@
 - `.:RUNTIME_DIAGNOSTIC_EVENT_PREFIX`
 - `.:RUNTIME_DIAGNOSTIC_FACT_OWNER`
 - `.:RUNTIME_DIAGNOSTIC_KIND`
+- `.:RUNTIME_DIAGNOSTIC_RESERVED_KINDS`
 - `.:runtimeDiagnosticBoundaryContract`
 - `.:runtimeDiagnosticBoundaryPackage`
 - `.:runtimeDiagnosticCarrier`

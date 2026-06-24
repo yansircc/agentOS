@@ -17,10 +17,6 @@ export interface RuntimeDiagnosticApi {
     readonly reason: string;
     readonly requestedEventId: number;
   }) => void;
-  readonly handlerMissing: (input: {
-    readonly eventKind: string;
-    readonly requestedEventId: number;
-  }) => void;
   readonly projectionTimeout: (input: {
     readonly projectionKind: string;
     readonly waitReason: "missing" | "not_ready";
@@ -57,13 +53,6 @@ export const createRuntimeDiagnosticApi = (
       capabilityId,
       handler,
       reason,
-      requestedEventId,
-    }).catch(() => undefined);
-  },
-  handlerMissing: ({ eventKind, requestedEventId }) => {
-    void commit(runtimeDiagnosticBoundaryContract, RUNTIME_DIAGNOSTIC_KIND.HANDLER_MISSING, {
-      capabilityId,
-      eventKind,
       requestedEventId,
     }).catch(() => undefined);
   },

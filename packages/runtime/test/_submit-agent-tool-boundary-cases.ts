@@ -27,6 +27,7 @@ import {
   runSubmitWithServices,
   decodedRuntimeBehaviorKinds,
 } from "./_submit-agent-harness";
+import { RUNTIME_DIAGNOSTIC_KIND } from "../src/runtime-diagnostic-carrier";
 
 export const registerSubmitAgentToolBoundaryCases = () => {
   it.effect("does not execute an external tool without a receipt-backed terminal contract", () =>
@@ -553,6 +554,106 @@ export const registerSubmitAgentToolBoundaryCases = () => {
             toolName: "missing_tool",
           },
         ],
+      });
+    }),
+  );
+
+  it.effect("records projection timeout diagnostics with tool claim provenance", () =>
+    Effect.gen(function* () {
+      const projectionScopeRef = {
+        kind: "conversation" as const,
+        scopeId: "projection-timeout-scope",
+      };
+      const projectionEffectAuthorityRef = {
+        authorityClass: "tool" as const,
+        authorityId: "projection-writer",
+      };
+      const projectionFactOwnerRef = "@agent-os/runtime-test.projection-owner" as const;
+      const tool = defineTool({
+        name: "await_projection_timeout",
+        description: "wait projection timeout",
+        args: Schema.Struct({ requestedEventId: Schema.Number }),
+        execute: (args, ctx) =>
+          Effect.gen(function* () {
+            if (ctx.awaitProjection === undefined) {
+              return yield* new ToolError({
+                toolName: "await_projection_timeout",
+                cause: { reason: "missing_await_projection" },
+              });
+            }
+            return yield* ctx.awaitProjection<{ readonly status: "pending" | "complete" }>({
+              kind: "runtime.test.timeout_projection",
+              scopeRef: projectionScopeRef,
+              effectAuthorityRef: projectionEffectAuthorityRef,
+              factOwnerRef: projectionFactOwnerRef,
+              identity: { requestedEventId: args.requestedEventId },
+              maxAttempts: 1,
+              pollIntervalMs: 0,
+              ready: (row) => row.state.status === "complete",
+            });
+          }),
+        authority: "read",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const services = makeServices([
+        response({
+          items: [
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: {
+                  name: "await_projection_timeout",
+                  arguments: '{"requestedEventId":123}',
+                },
+              },
+            },
+          ],
+        }),
+      ]);
+      services.projections.get = (spec) =>
+        Effect.succeed({
+          kind: spec.kind,
+          scope: "conversation:projection-timeout-scope",
+          identityKey: "123",
+          identity: spec.identity,
+          state: { status: "pending" },
+          version: 1,
+          updatedEventId: 77,
+          updatedAt: 770,
+        });
+
+      const { result, events } = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { await_projection_timeout: tool },
+          budget: {
+            maxTurns: 1,
+            toolRetryPolicy: {
+              execution: {
+                maxRetries: 0,
+                delay: { kind: "none" },
+              },
+            },
+          },
+        }),
+        services,
+      );
+
+      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      const diagnostic = events.find(
+        (event) => event.kind === RUNTIME_DIAGNOSTIC_KIND.PROJECTION_TIMEOUT,
+      );
+      expect(diagnostic?.payload).toMatchObject({
+        capabilityId: projectionFactOwnerRef,
+        projectionKind: "runtime.test.timeout_projection",
+        waitReason: "not_ready",
+        maxAttempts: 1,
+        requestedEventId: 123,
+        operationRef: expect.stringContaining("call-1"),
+        authority: "tool:projection-writer",
+        lastObservedEventId: 77,
       });
     }),
   );
