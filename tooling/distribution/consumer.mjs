@@ -408,6 +408,179 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   }
 };
 
+export const writeGeneratedLocalTargetConsumerApp = (dir) => {
+  fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
+  writeJson(path.join(dir, "package.json"), {
+    name: "agentos-generated-local-target-consumer-fixture",
+    private: true,
+    type: "module",
+    dependencies: {
+      ...packageDepsFromTarballs(),
+      effect: catalog().effect,
+    },
+    devDependencies: {
+      esbuild: catalog().esbuild,
+      typescript: catalog().typescript,
+    },
+  });
+  fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the local workspace.\n");
+  writeJson(path.join(dir, "agent", "agent.json"), {
+    agentId: "generated-local-target-consumer",
+    scope: {
+      kind: "session",
+      idSource: "manifest",
+      stableScopeId: "generated-local-target-consumer",
+    },
+    effectAuthorityRef: {
+      authorityClass: "effect",
+      authorityId: "generated-local-target-consumer",
+    },
+    tools: {
+      write_file: { interaction: "never" },
+    },
+  });
+  fs.writeFileSync(
+    path.join(dir, "agentos.config.jsonc"),
+    [
+      "{",
+      '  "profile": "workspace@1",',
+      '  "agent": "./agent",',
+      '  "deployment": { "id": "generated-local-target-consumer", "version": "0.1.0" },',
+      '  "target": { "kind": "node@1" },',
+      '  "client": { "kind": "browser-direct@1" },',
+      '  "llm": {',
+      '    "route": "openai-chat-compatible",',
+      '    "endpointRef": "openrouter",',
+      '    "credentialRef": "openrouter-key",',
+      '    "modelRef": "openrouter-default-text-model"',
+      "  },",
+      '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  run(
+    "node",
+    [
+      path.join(repoRoot, "packages", "cli", "src", "main.mjs"),
+      "build",
+      "--cwd",
+      dir,
+      "--package-scope",
+      publishScope(),
+    ],
+    { capture: true },
+  );
+  const generatedFiles = allFiles(path.join(dir, ".agentos", "generated")).filter((file) =>
+    /\.(?:ts|json|jsonc)$/u.test(file),
+  );
+  const generatedText = generatedFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  const requiredGeneratedSpecifiers = [
+    `${publishScope()}/runtime/local`,
+    `${publishScope()}/core/runtime-protocol`,
+  ];
+  for (const specifier of requiredGeneratedSpecifiers) {
+    if (!generatedText.includes(specifier)) {
+      fail(`generated local target consumer missing canonical public import ${specifier}`);
+    }
+  }
+  const forbiddenText = [
+    "cloudflare:workers",
+    "@effect/ai-anthropic",
+    "installLocalWorkspaceOperationProvider",
+    "createInMemoryBackendState",
+    "createInMemoryRuntimeBackend",
+    "createAgentDurableObject",
+    "wrangler",
+  ];
+  for (const token of forbiddenText) {
+    if (generatedText.includes(token)) {
+      fail(`generated local target consumer leaked forbidden token ${token}`);
+    }
+  }
+  if (
+    new RegExp(`from\\s+["']${escapeRegExp(`${publishScope()}/runtime`)}["']`, "u").test(
+      generatedText,
+    )
+  ) {
+    fail("generated local target consumer imported runtime root instead of canonical subpaths");
+  }
+  const sourcePackageImportPattern = new RegExp(
+    `(?:from\\s+|import\\s*\\(\\s*)["']${escapeRegExp(sourcePackageScope)}/`,
+    "u",
+  );
+  if (sourcePackageImportPattern.test(generatedText)) {
+    fail(`generated local target consumer leaked source package scope ${sourcePackageScope}`);
+  }
+  if (/workspace:\*|catalog:/u.test(generatedText)) {
+    fail("generated local target consumer leaked workspace/catalog protocol");
+  }
+  fs.writeFileSync(
+    path.join(dir, "local-generated-smoke.ts"),
+    [
+      "import { mkdtemp, readFile, rm } from 'node:fs/promises';",
+      "import { tmpdir } from 'node:os';",
+      "import path from 'node:path';",
+      "import { createLocalAgentApp } from './.agentos/generated/local';",
+      "const root = await mkdtemp(path.join(tmpdir(), 'agentos-generated-local-'));",
+      "try {",
+      "  const app = await createLocalAgentApp({",
+      "    cwd: root,",
+      "    llm: {",
+      "      responses: [{",
+      "        items: [{",
+      "          type: 'tool_call',",
+      "          call: {",
+      "            id: 'call-1',",
+      "            type: 'function',",
+      "            function: {",
+      "              name: 'write_file',",
+      "              arguments: JSON.stringify({",
+      "                path: 'generated-local.txt',",
+      "                content: 'generated local write',",
+      "              }),",
+      "            },",
+      "          },",
+      "        }],",
+      "        usage: { promptTokens: 3, completionTokens: 4, totalTokens: 7 },",
+      "      }],",
+      "    },",
+      "  });",
+      "  const result = await app.submit({",
+      "    intent: 'write through generated local app',",
+      "    toolPolicy: {",
+      "      completeAfterToolsExecuted: {",
+      "        toolNames: ['write_file'],",
+      "        finalMessage: 'generated local write complete',",
+      "      },",
+      "    },",
+      "  });",
+      "  if (!result.ok || result.final !== 'generated local write complete') {",
+      "    throw new Error(`unexpected generated local result ${JSON.stringify(result)}`);",
+      "  }",
+      "  const text = await readFile(path.join(root, 'generated-local.txt'), 'utf8');",
+      "  if (text !== 'generated local write') throw new Error(`unexpected generated local file ${text}`);",
+      "  const toolEvent = app.events().find((event) => event.kind === 'tool.executed');",
+      "  if (toolEvent?.payload?.result?.kind !== 'write_file') {",
+      "    throw new Error('generated local app did not execute write_file');",
+      "  }",
+      "  const anchor = toolEvent?.payload?.claim?.anchorRef;",
+      "  if (anchor?.anchorKind !== 'external_receipt') {",
+      "    throw new Error('generated local app did not complete a receipt-backed workspace write');",
+      "  }",
+      "  if (anchor?.carrierRef !== 'workspace_op:carrier:workspace-op') {",
+      "    throw new Error(`generated local app did not use workspace_op carrier ${JSON.stringify(anchor)}`);",
+      "  }",
+      "  if (app.diagnostics().length !== 0) {",
+      "    throw new Error(`generated local app emitted diagnostics ${JSON.stringify(app.diagnostics())}`);",
+      "  }",
+      "} finally {",
+      "  await rm(root, { recursive: true, force: true });",
+      "}",
+    ].join("\n") + "\n",
+  );
+};
+
 export const assertNoAgentOsSymlinkPackages = (dir) => {
   for (const packageName of tarballsByPackage().keys()) {
     const target = packageTargetDir(path.join(dir, "node_modules"), packageName);
@@ -572,6 +745,47 @@ export const assertGeneratedTargetConsumer = () => {
     { cwd: dir, capture: true },
   );
   console.log("verified generated target consumer uses public package imports without symlinks");
+};
+
+export const assertGeneratedLocalTargetConsumer = () => {
+  const dir = mkdtempFixture("agentos-generated-local-target-consumer-");
+  writeGeneratedLocalTargetConsumerApp(dir);
+  npmInstall(dir);
+  assertNoAgentOsSymlinkPackages(dir);
+  assertPackageNotInstalled(dir, "@effect/ai-anthropic");
+  assertPackageNotInstalled(dir, "@cloudflare/sandbox");
+  run(
+    "npm",
+    [
+      "exec",
+      "esbuild",
+      "--",
+      "local-generated-smoke.ts",
+      "--bundle",
+      "--platform=node",
+      "--format=esm",
+      "--packages=external",
+      "--outfile=local-generated-smoke.mjs",
+    ],
+    { cwd: dir, capture: true },
+  );
+  const bundleText = fs.readFileSync(path.join(dir, "local-generated-smoke.mjs"), "utf8");
+  const forbiddenBundleText = [
+    "cloudflare:workers",
+    "@effect/ai-anthropic",
+    "installLocalWorkspaceOperationProvider",
+    "createInMemoryBackendState",
+    "createInMemoryRuntimeBackend",
+    "createAgentDurableObject",
+    "wrangler",
+  ];
+  for (const token of forbiddenBundleText) {
+    if (bundleText.includes(token)) {
+      fail(`generated local target bundle leaked forbidden token ${token}`);
+    }
+  }
+  run("node", ["local-generated-smoke.mjs"], { cwd: dir, capture: true });
+  console.log("verified generated local target consumer executes workspace operations");
 };
 
 export const assertPackedRootInternalSymbolsAbsent = (dir) => {
@@ -749,5 +963,6 @@ export const testInternalConsumer = () => {
     { cwd: dir, capture: true },
   );
   assertGeneratedTargetConsumer();
+  assertGeneratedLocalTargetConsumer();
   console.log("verified internal npm consumer fixtures");
 };
