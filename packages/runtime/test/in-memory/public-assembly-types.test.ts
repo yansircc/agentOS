@@ -16,4 +16,10 @@ const looseHalfRegistrationShape = {
 if (false) {
   // @ts-expect-error public in-memory assembly requires resolver-owned graph brand
   createInMemoryRuntimeBackend(looseHalfRegistrationShape);
+
+  // @ts-expect-error public in-memory subpath must not export raw backend state construction
+  type _RawStateConstructor = typeof import("../../src/in-memory").createInMemoryBackendState;
+
+  // @ts-expect-error public local subpath must not expose a second workspace-op provider path
+  type _LocalWorkspaceOpProvider = typeof import("../../src/local/index").installLocalWorkspaceOperationProvider;
 }

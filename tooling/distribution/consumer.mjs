@@ -168,11 +168,13 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { bindWorkspaceToolsForRuntime } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
+      `import { createLocalAgentRuntime } from "${publicSpecifier("@agent-os/runtime/local")}";`,
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import type { SubmitRunInput } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
       "void bindWorkspaceToolsForRuntime;",
+      "void createLocalAgentRuntime;",
       "void deterministicToolExecution;",
       "type _SubmitRunInput = SubmitRunInput;",
       "void mountOpsApi;",
@@ -194,6 +196,61 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "if (!compileAgentTree || !ABORT || !triggerParseOk || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
+    ].join("\n") + "\n",
+  );
+  fs.writeFileSync(
+    path.join(dir, "local-smoke.mjs"),
+    [
+      "import { mkdtemp, readFile, rm } from 'node:fs/promises';",
+      "import { tmpdir } from 'node:os';",
+      "import path from 'node:path';",
+      `import { createLocalAgentRuntime } from "${publicSpecifier("@agent-os/runtime/local")}";`,
+      "const root = await mkdtemp(path.join(tmpdir(), 'agentos-packed-local-'));",
+      "try {",
+      "  const runtime = await createLocalAgentRuntime({",
+      "    identity: 'packed-local-runtime',",
+      "    cwd: root,",
+      "    llm: {",
+      "      responses: [{",
+      "        items: [{",
+      "          type: 'tool_call',",
+      "          call: {",
+      "            id: 'call-1',",
+      "            type: 'function',",
+      "            function: {",
+      "              name: 'write_file',",
+      "              arguments: JSON.stringify({ path: 'packed.txt', content: 'packed local write' }),",
+      "            },",
+      "          },",
+      "        }],",
+      "        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },",
+      "      }],",
+      "    },",
+      "  });",
+      "  const result = await runtime.submit({",
+      "    intent: 'write locally',",
+      "    toolPolicy: {",
+      "      completeAfterToolsExecuted: {",
+      "        toolNames: ['write_file'],",
+      "        finalMessage: 'packed local write complete',",
+      "      },",
+      "    },",
+      "  });",
+      "  if (!result.ok || result.final !== 'packed local write complete') {",
+      "    throw new Error(`unexpected local result ${JSON.stringify(result)}`);",
+      "  }",
+      "  const text = await readFile(path.join(root, 'packed.txt'), 'utf8');",
+      "  if (text !== 'packed local write') throw new Error(`unexpected local file ${text}`);",
+      "  const toolEvent = runtime.events().find((event) => event.kind === 'tool.executed');",
+      "  if (toolEvent?.payload?.result?.kind !== 'write_file') {",
+      "    throw new Error('local submit did not execute write_file');",
+      "  }",
+      "  if (toolEvent?.payload?.claim?.anchorRef?.anchorKind !== 'external_receipt') {",
+      "    throw new Error('local submit did not complete a receipt-backed workspace write');",
+      "  }",
+      "} finally {",
+      "  await rm(root, { recursive: true, force: true });",
+      "}",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
@@ -576,6 +633,74 @@ export const assertPackedRootInternalSymbolsAbsent = (dir) => {
   console.log("verified packed runtime root hides internal submit symbols");
 };
 
+export const assertPackedPublicAssemblyEscapesAbsent = (dir) => {
+  const inMemorySpecifier = publicSpecifier("@agent-os/runtime/in-memory");
+  const localSpecifier = publicSpecifier("@agent-os/runtime/local");
+  const forbiddenExports = ["createInMemoryBackendState", "installLocalWorkspaceOperationProvider"];
+  fs.writeFileSync(
+    path.join(dir, "negative-public-assembly.ts"),
+    [
+      `import { createInMemoryRuntimeBackend, createInMemoryBackendState } from "${inMemorySpecifier}";`,
+      `import { installLocalWorkspaceOperationProvider } from "${localSpecifier}";`,
+      "const looseHalfRegistrationShape = {",
+      "  identity: {} as Parameters<typeof createInMemoryRuntimeBackend>[0]['identity'],",
+      "  handlers: [],",
+      "  projections: [],",
+      "  triggers: [],",
+      "  streams: [],",
+      "};",
+      "createInMemoryRuntimeBackend(looseHalfRegistrationShape);",
+      "void createInMemoryBackendState;",
+      "void installLocalWorkspaceOperationProvider;",
+      "",
+    ].join("\n"),
+  );
+  writeJson(path.join(dir, "tsconfig.negative-public-assembly.json"), {
+    compilerOptions: {
+      target: "ES2022",
+      module: "NodeNext",
+      moduleResolution: "NodeNext",
+      strict: true,
+      skipLibCheck: true,
+    },
+    include: ["negative-public-assembly.ts"],
+  });
+  const typecheck = spawnSync(
+    "npm",
+    ["exec", "tsc", "--", "-p", "tsconfig.negative-public-assembly.json"],
+    {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  if (typecheck.status === 0) {
+    fail("packed public assembly escape fixture unexpectedly typechecked");
+  }
+  const typecheckOutput = `${typecheck.stdout}\n${typecheck.stderr}`;
+  for (const symbol of forbiddenExports) {
+    if (!typecheckOutput.includes(symbol)) {
+      fail(`packed public assembly negative typecheck did not mention ${symbol}`);
+    }
+  }
+  if (!typecheckOutput.includes("createInMemoryRuntimeBackend")) {
+    fail("packed public assembly negative typecheck did not reject raw backend graph input");
+  }
+
+  fs.writeFileSync(
+    path.join(dir, "negative-public-assembly.mjs"),
+    [
+      `const inMemory = await import(${JSON.stringify(inMemorySpecifier)});`,
+      `const local = await import(${JSON.stringify(localSpecifier)});`,
+      `const leaked = ${JSON.stringify(forbiddenExports)}.filter((symbol) => symbol in inMemory || symbol in local);`,
+      "if (leaked.length > 0) throw new Error(`packed public surface leaked ${leaked.join(', ')}`);",
+      "",
+    ].join("\n"),
+  );
+  run("node", ["negative-public-assembly.mjs"], { cwd: dir, capture: true });
+  console.log("verified packed public assembly escape hatches are absent");
+};
+
 export const testInternalConsumer = () => {
   packInternal();
   negativeContractTests();
@@ -586,10 +711,27 @@ export const testInternalConsumer = () => {
     "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
   });
   npmInstall(dir);
+  assertPackageNotInstalled(dir, "@effect/ai-anthropic");
   assertPackedRootInternalSymbolsAbsent(dir);
+  assertPackedPublicAssemblyEscapesAbsent(dir);
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.nodenext.json"], { cwd: dir, capture: true });
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.bundler.json"], { cwd: dir, capture: true });
   run("node", ["smoke.mjs"], { cwd: dir, capture: true });
+  run("node", ["local-smoke.mjs"], { cwd: dir, capture: true });
+  run(
+    "npm",
+    [
+      "exec",
+      "esbuild",
+      "--",
+      "local-smoke.mjs",
+      "--bundle",
+      "--platform=node",
+      "--format=esm",
+      "--outfile=local-smoke.bundle.mjs",
+    ],
+    { cwd: dir, capture: true },
+  );
   run(
     "npm",
     [

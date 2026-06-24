@@ -130,4 +130,76 @@ describe("createLocalWorkspaceEnv", () => {
       );
     });
   });
+
+  it("runs write_file through host-owned local workspace operations", async () => {
+    await withTempWorkspace(async (root) => {
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-runtime-write-file",
+        cwd: root,
+        llm: {
+          responses: [
+            {
+              items: [
+                {
+                  type: "tool_call",
+                  call: {
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "write_file",
+                      arguments: JSON.stringify({
+                        path: "nested/local-result.txt",
+                        content: "written by local workspace op",
+                      }),
+                    },
+                  },
+                },
+              ],
+              usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
+            },
+          ],
+        },
+      });
+
+      const result = await runtime.submit({
+        intent: "write a local file",
+        toolPolicy: {
+          completeAfterToolsExecuted: {
+            toolNames: ["write_file"],
+            finalMessage: "local workspace write complete",
+          },
+        },
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        status: "delivered",
+        final: "local workspace write complete",
+        tokensUsed: 5,
+      });
+      await expect(readFile(path.join(root, "nested/local-result.txt"), "utf8")).resolves.toBe(
+        "written by local workspace op",
+      );
+      const events = runtime.events();
+      expect(events.map((event) => event.kind)).toEqual(
+        expect.arrayContaining([
+          RUNTIME_EVENT_KIND.TOOL_EXECUTED,
+          RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
+        ]),
+      );
+      expect(events.find((event) => event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED)?.payload)
+        .toMatchObject({
+          name: "write_file",
+          result: {
+            kind: "write_file",
+            path: "nested/local-result.txt",
+            bytesWritten: 29,
+          },
+          claim: {
+            phase: "lived",
+            anchorRef: { anchorKind: "external_receipt" },
+          },
+        });
+    });
+  });
 });

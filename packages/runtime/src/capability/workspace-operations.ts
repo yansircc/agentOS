@@ -400,7 +400,7 @@ export const workspaceOperations = (options: WorkspaceOperationsOptions) =>
         declaredIntents: install.declaredIntents,
         projections: install.projections,
         bindings: install.bindings,
-        eventHandlers: () => [...install.eventHandlers({ capabilities: ctx.capabilities })],
+        eventHandlers: (handlerCtx) => [...install.eventHandlers(handlerCtx)],
       };
     },
   });
