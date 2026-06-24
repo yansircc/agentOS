@@ -187,6 +187,12 @@
       "bucket": "adapter"
     },
     {
+      "id": "runtime-local-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/local/",
+      "bucket": "adapter"
+    },
+    {
       "id": "runtime-node-adapter",
       "match": "prefix",
       "value": "packages/runtime/src/node/",
@@ -281,6 +287,12 @@
       "id": "runtime-node",
       "match": "prefix",
       "value": "packages/runtime/src/node/",
+      "ambient": "node"
+    },
+    {
+      "id": "runtime-local",
+      "match": "prefix",
+      "value": "packages/runtime/src/local/",
       "ambient": "node"
     },
     {

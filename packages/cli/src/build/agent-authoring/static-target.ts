@@ -28,6 +28,7 @@ export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
   | ".agentos/generated/target.ts"
+  | ".agentos/generated/local.ts"
   | ".agentos/generated/cloudflare-scope.ts"
   | ".agentos/generated/worker.ts"
   | ".agentos/generated/wrangler.jsonc"
@@ -56,6 +57,7 @@ export type StaticTargetModuleImportKind =
   | "client-framework"
   | "client-transport"
   | "effect-runtime"
+  | "local-runtime"
   | "semantic-json"
   | "authored-tool";
 
@@ -67,7 +69,7 @@ export interface StaticTargetModuleImport {
 
 export interface CanonicalDeploymentIR {
   readonly profile: AgentOsConfigProfile;
-  readonly target: typeof AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1;
+  readonly target: AgentOsConfigTargetKind;
   readonly llmRoute: typeof AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE;
   readonly client: AgentOsConfigClientKind;
   readonly workspaceTopology?: AgentOsConfigWorkspaceTopology;
@@ -75,11 +77,16 @@ export interface CanonicalDeploymentIR {
 }
 
 export interface MountIR {
-  readonly driver: {
-    readonly kind: "cloudflare-do";
-    readonly className: string;
-    readonly binding: string;
-  };
+  readonly driver:
+    | {
+        readonly kind: "cloudflare-do";
+        readonly className: string;
+        readonly binding: string;
+      }
+    | {
+        readonly kind: "local-node";
+        readonly target: typeof AGENTOS_CONFIG_TARGET.NODE_V1;
+      };
   readonly projectionSinks: ReadonlyArray<
     | "agent.info"
     | "workspace.state"
@@ -162,6 +169,7 @@ const cloudflareTargetFor = (target: AgentOsConfigTarget): AgentOsConfigCloudfla
 const staticTargetModules = (scope: string) => ({
   runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
   cloudflareDoRuntime: publicPackageSpecifier(scope, "runtime/cloudflare"),
+  localRuntime: publicPackageSpecifier(scope, "runtime/local"),
   openAiCompatibleTransport: publicPackageSpecifier(
     scope,
     "runtime/llm-effect-ai/openai-compatible",
@@ -281,6 +289,31 @@ const renderSubmitSpecFromRunInput = (
   ...(input.resume === undefined ? {} : { resume: input.resume }),
 });`;
 
+const renderGeneratedWorkspaceOperations = (
+  workspaceToolArray: string,
+  usesMutationTools: boolean,
+  usesShellTools: boolean,
+): string => `const generatedWorkspaceToolNames = ${workspaceToolArray};
+
+const generatedWorkspaceToolInteractionFor = (
+  name: (typeof generatedWorkspaceToolNames)[number],
+): "never" | "approval" => {
+  const interaction = semanticManifest.tools?.[name]?.interaction;
+  if (interaction === "never" || interaction === "approval") return interaction;
+  throw Error(\`invalid workspace tool interaction for \${name}: \${String(interaction)}\`);
+};
+
+const generatedWorkspaceToolInteractions = Object.fromEntries(
+  generatedWorkspaceToolNames.map((name) => [name, generatedWorkspaceToolInteractionFor(name)]),
+) as Readonly<Partial<Record<(typeof generatedWorkspaceToolNames)[number], "never" | "approval">>>;
+
+const generatedWorkspaceOperations = {
+  toolNames: generatedWorkspaceToolNames,
+  mutationPolicy: ${usesMutationTools ? '"receipt-backed"' : '"disabled"'},
+  shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
+  toolInteractions: generatedWorkspaceToolInteractions,
+} as const;`;
+
 const renderWorkspaceStaticTarget = (
   normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
   toolNames: ReadonlyArray<string>,
@@ -399,22 +432,10 @@ const targetFailure = (message: string): GeneratedTargetFailure => ({ ok: false,
 const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
   Promise.reject(Error(failure.message));
 
-const generatedWorkspaceToolNames = ${workspaceToolArray};
+${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
 const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
 ${renderSkillSupport(normalized.skills)}
 const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
-
-const generatedWorkspaceToolInteractionFor = (
-  name: (typeof generatedWorkspaceToolNames)[number],
-): "never" | "approval" => {
-  const interaction = semanticManifest.tools?.[name]?.interaction;
-  if (interaction === "never" || interaction === "approval") return interaction;
-  throw Error(\`invalid workspace tool interaction for \${name}: \${String(interaction)}\`);
-};
-
-const generatedWorkspaceToolInteractions = Object.fromEntries(
-  generatedWorkspaceToolNames.map((name) => [name, generatedWorkspaceToolInteractionFor(name)]),
-) as Readonly<Partial<Record<(typeof generatedWorkspaceToolNames)[number], "never" | "approval">>>;
 
 const workspaceNamespaceFor = (env: AgentOSTargetEnv): DurableObjectNamespace<Sandbox> =>
   env[${jsString(normalized.workspace.binding)}] as DurableObjectNamespace<Sandbox>;
@@ -512,14 +533,7 @@ const generatedHostProfileFor = (env: AgentOSTargetEnv) => defineHost({
 const generatedCapabilityInstallGraphFor = (env: AgentOSTargetEnv) => {
   const graph = resolveRuntimeInstallGraph(
     generatedHostProfileFor(env),
-    [
-      workspaceOperations({
-        toolNames: generatedWorkspaceToolNames,
-        mutationPolicy: ${usesMutationTools ? '"receipt-backed"' : '"disabled"'},
-        shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
-        toolInteractions: generatedWorkspaceToolInteractions,
-      }),
-    ],
+    [workspaceOperations(generatedWorkspaceOperations)],
     { identity: semanticManifest.agentId },
   );
   if (!graph.ok) {
@@ -945,6 +959,64 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
     );
   }
 }
+`;
+};
+
+const renderLocalAgentApp = (
+  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
+  toolNames: ReadonlyArray<string>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => {
+  if (normalized.target.kind !== AGENTOS_CONFIG_TARGET.NODE_V1) {
+    throw new TypeError(`local agent app renderer received ${normalized.target.kind}`);
+  }
+  const authoredToolNames = new Set(normalized.authoredToolNames);
+  const workspaceToolList = toolNames.filter(
+    (toolName): toolName is WorkspaceToolName =>
+      isWorkspaceToolName(toolName) && !authoredToolNames.has(toolName),
+  );
+  const workspaceToolArray = `[${workspaceToolList.map(jsString).join(", ")}] as const`;
+  const usesMutationTools = workspaceToolList.some((toolName) =>
+    workspaceMutationToolNames.has(toolName),
+  );
+  const usesShellTools = workspaceToolList.some((toolName) =>
+    workspaceShellToolNames.has(toolName),
+  );
+  const imports = [
+    `import semanticDeclarations from "./manifest.json";`,
+    renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
+    renderTypeImport(["AgentManifest"], modules.runtimeProtocol),
+    renderTypeImport(["CreateLocalAgentRuntimeOptions", "LocalAgentRuntime"], modules.localRuntime),
+  ].join("\n");
+  return `${imports}
+
+const semanticManifest = semanticDeclarations as AgentManifest;
+
+${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
+
+export type LocalAgentApp = LocalAgentRuntime;
+
+export interface CreateLocalAgentAppOptions {
+  readonly cwd?: string;
+  readonly env?: CreateLocalAgentRuntimeOptions["env"];
+  readonly inheritEnv?: CreateLocalAgentRuntimeOptions["inheritEnv"];
+  readonly llm?: CreateLocalAgentRuntimeOptions["llm"];
+}
+
+export const createLocalAgentApp = async (
+  options: CreateLocalAgentAppOptions = {},
+): Promise<LocalAgentApp> => {
+  const lowered = await lowerLocalAgentRuntime({
+    target: "node@1",
+    identity: semanticManifest.agentId,
+    cwd: options.cwd ?? process.cwd(),
+    ...(options.env === undefined ? {} : { env: options.env }),
+    ...(options.inheritEnv === undefined ? {} : { inheritEnv: options.inheritEnv }),
+    ...(options.llm === undefined ? {} : { llm: options.llm }),
+    workspaceOperations: generatedWorkspaceOperations,
+  });
+  return lowered.runtime;
+};
 `;
 };
 
@@ -2085,20 +2157,99 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     };
   }
   const modules = staticTargetModules(packageScope);
-  if (normalized.target.kind !== AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) {
-    return {
-      ok: false,
-      issues: [{ kind: "unsupported_static_target", target: normalized.target.kind }],
-    };
-  }
   if (normalized.llm.route !== AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE) {
     return {
       ok: false,
       issues: [{ kind: "unsupported_static_llm_route", route: normalized.llm.route }],
     };
   }
-  const target = cloudflareTargetFor(normalized.target);
   const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
+  if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
+    if (normalized.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1) {
+      return {
+        ok: false,
+        issues: [{ kind: "unsupported_static_target", target: normalized.target.kind }],
+      };
+    }
+    const deploymentJson = {
+      deploymentId: normalized.deployment.deploymentId,
+      backend: normalized.deployment.backend,
+      adapter: normalized.deployment.adapter,
+      codec: normalized.deployment.codec,
+      ...(normalized.deployment.providerStrategy === undefined
+        ? {}
+        : { providerStrategy: normalized.deployment.providerStrategy }),
+      workspace: {
+        binding: normalized.workspace.binding,
+        bindingRef: normalized.workspace.bindingRef,
+        root: normalized.workspace.root,
+        topology: normalized.workspace.topology,
+        providerResourceId: normalized.workspace.providerResourceId,
+      },
+    };
+    const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
+      { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
+      { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+      {
+        kind: "local-runtime",
+        source: modules.localRuntime,
+        imports: ["lowerLocalAgentRuntime"],
+      },
+    ];
+    return {
+      ok: true,
+      value: {
+        files: [
+          generatedPath(
+            ".agentos/generated/manifest.json",
+            stableJson(normalized.deployment.manifest),
+          ),
+          generatedPath(".agentos/generated/deployment.json", stableJson(deploymentJson)),
+          generatedPath(".agentos/generated/provenance.json", stableJson(normalized.provenance)),
+          generatedPath(
+            ".agentos/generated/fingerprints.json",
+            stableJson({
+              deployment: digestText(stableJson(deploymentJson)),
+              manifest: digestText(stableJson(normalized.deployment.manifest)),
+              targetModuleGraph: digestText(stableJson(moduleGraph)),
+            }),
+          ),
+          generatedPath(
+            ".agentos/generated/local.ts",
+            renderLocalAgentApp(
+              normalized as NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
+              toolNames,
+              modules,
+            ),
+          ),
+        ],
+        moduleGraph,
+        canonicalDeployment: {
+          profile: normalized.profile,
+          target: normalized.target.kind,
+          llmRoute: normalized.llm.route,
+          client: normalized.client.kind,
+          workspaceTopology: normalized.workspace.topology,
+          toolNames,
+        },
+        mount: {
+          driver: {
+            kind: "local-node",
+            target: AGENTOS_CONFIG_TARGET.NODE_V1,
+          },
+          projectionSinks: [
+            "agent.info",
+            "workspace.state",
+            "workspace.files",
+            "runtime.events",
+            "runtime.input_requests",
+          ],
+          providerResourceId: normalized.workspace.providerResourceId,
+        },
+      },
+    };
+  }
+  const target = cloudflareTargetFor(normalized.target);
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const authoredManifestToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
   const deploymentJson = {

@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -132,16 +140,17 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
       "const normalized = normalizeAgentOsConfig(decoded.value, compiled.value);",
       "if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
       "const linked = linkWorkspaceStaticTarget(normalized.value);",
-      "const nodeWithEntry = decodeAgentOsConfig({ ...config, target: { kind: \"node@1\", entry: \"./src/app.ts\" } });",
-      "const nodeWithDurableObject = decodeAgentOsConfig({ ...config, target: { kind: \"node@1\", durableObject: { className: \"AgentOS\", binding: \"AGENT_OS\" } } });",
-      "const bunTarget = decodeAgentOsConfig({ ...config, target: { kind: \"bun@1\" } });",
+      'const nodeWithEntry = decodeAgentOsConfig({ ...config, target: { kind: "node@1", entry: "./src/app.ts" } });',
+      'const nodeWithDurableObject = decodeAgentOsConfig({ ...config, target: { kind: "node@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } });',
+      'const bunTarget = decodeAgentOsConfig({ ...config, target: { kind: "bun@1" } });',
       "console.log(JSON.stringify({",
       "  targetKinds: Object.values(AGENTOS_CONFIG_TARGET).sort(),",
       "  normalizedTarget: normalized.value.target,",
       "  deploymentBackend: normalized.value.deployment.backend,",
       "  deploymentAdapter: normalized.value.deployment.adapter,",
-      "  targetOrigins: Object.fromEntries(Object.entries(normalized.value.provenance.deployment).filter(([key]) => key.startsWith(\"/target\"))),",
+      '  targetOrigins: Object.fromEntries(Object.entries(normalized.value.provenance.deployment).filter(([key]) => key.startsWith("/target"))),',
       "  linkIssues: linked.ok ? [] : linked.issues,",
+      "  linkFiles: linked.ok ? linked.value.files.map((file) => file.path).sort() : [],",
       "  nodeWithEntryIssues: nodeWithEntry.ok ? [] : nodeWithEntry.issues,",
       "  nodeWithDurableObjectIssues: nodeWithDurableObject.ok ? [] : nodeWithDurableObject.issues,",
       "  bunTargetIssues: bunTarget.ok ? [] : bunTarget.issues,",
@@ -157,7 +166,14 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
   assert.deepEqual(output.targetOrigins, {
     "/target/kind": "author:agentos.config.jsonc#/target/kind",
   });
-  assert.deepEqual(output.linkIssues, [{ kind: "unsupported_static_target", target: "node@1" }]);
+  assert.deepEqual(output.linkIssues, []);
+  assert.deepEqual(output.linkFiles, [
+    ".agentos/generated/deployment.json",
+    ".agentos/generated/fingerprints.json",
+    ".agentos/generated/local.ts",
+    ".agentos/generated/manifest.json",
+    ".agentos/generated/provenance.json",
+  ]);
   assert.deepEqual(output.nodeWithEntryIssues, [
     { kind: "unknown_field", path: "/target", field: "entry" },
   ]);
@@ -396,6 +412,86 @@ void test("agentos build compiles an authored workspace tree into generated file
     );
     assert.doesNotMatch(remote, /durableObjectRpcClient/);
     assert.doesNotMatch(remote, /manifestTruthIdentity/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos build emits node local agent app target", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-node-build-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Operate locally.");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "node-local-agent",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "node-local-scope",
+          },
+          effectAuthorityRef: {
+            authorityClass: "effect",
+            authorityId: "node-local-agent",
+          },
+          tools: {
+            write_file: { interaction: "approval" },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "node-local-deployment", "version": "0.1.0" },',
+        '  "target": { "kind": "node@1" },',
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /generated 5 agentOS files/);
+
+    const deployment = JSON.parse(
+      readFileSync(path.join(root, ".agentos/generated/deployment.json"), "utf8"),
+    );
+    assert.equal(deployment.backend, "node");
+    assert.equal(deployment.adapter, "node@1");
+    assert.equal(Object.hasOwn(deployment.workspace, "cloudflareSandboxId"), false);
+
+    const local = readFileSync(path.join(root, ".agentos/generated/local.ts"), "utf8");
+    assert.match(local, /from "@agent-os\/runtime\/local";/);
+    assert.match(local, /lowerLocalAgentRuntime/);
+    assert.match(local, /export const createLocalAgentApp/);
+    assert.match(local, /target: "node@1"/);
+    assert.match(local, /workspaceOperations: generatedWorkspaceOperations/);
+    assert.match(local, /toolInteractions: generatedWorkspaceToolInteractions/);
+    assert.match(local, /return lowered\.runtime/);
+    assert.doesNotMatch(local, /resolveRuntime|submitAgentEffect|workspaceOperations\(/);
+    assert.doesNotMatch(local, /cloudflare|createAgentDurableObject|wrangler/i);
+    assert.equal(existsSync(path.join(root, ".agentos/generated/target.ts")), false);
+    assert.equal(existsSync(path.join(root, ".agentos/generated/worker.ts")), false);
+    assert.equal(existsSync(path.join(root, ".agentos/generated/wrangler.jsonc")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

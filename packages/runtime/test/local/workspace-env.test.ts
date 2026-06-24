@@ -10,7 +10,9 @@ import {
   lowerLocalAgentRuntime,
 } from "@agent-os/runtime/local";
 
-const withTempWorkspace = async <A>(run: (root: string, base: string) => Promise<A>): Promise<A> => {
+const withTempWorkspace = async <A>(
+  run: (root: string, base: string) => Promise<A>,
+): Promise<A> => {
   const base = await mkdtemp(path.join(tmpdir(), "agentos-local-workspace-"));
   const root = path.join(base, "workspace");
   await mkdir(root);
@@ -238,19 +240,20 @@ describe("createLocalWorkspaceEnv", () => {
           RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
         ]),
       );
-      expect(events.find((event) => event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED)?.payload)
-        .toMatchObject({
-          name: "write_file",
-          result: {
-            kind: "write_file",
-            path: "nested/local-result.txt",
-            bytesWritten: 29,
-          },
-          claim: {
-            phase: "lived",
-            anchorRef: { anchorKind: "external_receipt" },
-          },
-        });
+      expect(
+        events.find((event) => event.kind === RUNTIME_EVENT_KIND.TOOL_EXECUTED)?.payload,
+      ).toMatchObject({
+        name: "write_file",
+        result: {
+          kind: "write_file",
+          path: "nested/local-result.txt",
+          bytesWritten: 29,
+        },
+        claim: {
+          phase: "lived",
+          anchorRef: { anchorKind: "external_receipt" },
+        },
+      });
     });
   });
 });

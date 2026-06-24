@@ -243,9 +243,7 @@ const targetOriginFacts = (
   "/target/kind": configAuthorOrigin("/target/kind"),
   ...(target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1
     ? {
-        "/target/durableObject/className": configAuthorOrigin(
-          "/target/durableObject/className",
-        ),
+        "/target/durableObject/className": configAuthorOrigin("/target/durableObject/className"),
         "/target/durableObject/binding": configAuthorOrigin("/target/durableObject/binding"),
       }
     : {}),

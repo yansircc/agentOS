@@ -28,8 +28,7 @@ export interface CloudflareWorkspaceOperationInstall {
   readonly eventHandlers: CloudflareWorkspaceOperationProviderHandlers["eventHandlers"];
 }
 
-export interface InstallCloudflareWorkspaceOperationProviderOptions
-  extends WorkspaceOperationsOptions {
+export interface InstallCloudflareWorkspaceOperationProviderOptions extends WorkspaceOperationsOptions {
   readonly workspaceResolver: WorkspaceOperationEnvResolver;
 }
 

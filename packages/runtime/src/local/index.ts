@@ -118,9 +118,7 @@ const defaultLocalLlmRoute: LlmRoute = {
 
 const utf8ByteLength = (value: string): number => textEncoder.encode(value).byteLength;
 
-const cleanEnv = (
-  source: Readonly<Record<string, string | undefined>>,
-): Record<string, string> => {
+const cleanEnv = (source: Readonly<Record<string, string | undefined>>): Record<string, string> => {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(source)) {
     if (value !== undefined) env[key] = value;
@@ -244,9 +242,7 @@ const execLocalCommand = (
     });
   });
 
-const localWorkspaceBackend = (
-  options: CreateLocalWorkspaceEnvOptions,
-): WorkspaceEnvBackend => {
+const localWorkspaceBackend = (options: CreateLocalWorkspaceEnvOptions): WorkspaceEnvBackend => {
   const env = processEnvFor(options);
   return {
     readFile: (path, operationOptions) => {
@@ -302,9 +298,7 @@ const localWorkspaceBackend = (
  *
  * @public
  */
-export const createLocalWorkspaceEnv = (
-  options: CreateLocalWorkspaceEnvOptions,
-): WorkspaceEnv => {
+export const createLocalWorkspaceEnv = (options: CreateLocalWorkspaceEnvOptions): WorkspaceEnv => {
   const cwd = normalizeAbsolutePath(options.cwd);
   return createWorkspaceEnv({
     domain: { kind: "workspace", ref: cwd },

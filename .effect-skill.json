@@ -129,6 +129,12 @@
       "rules": ["EFF402"]
     },
     {
+      "path": "packages/runtime/src/cloudflare/workspace-job-profile.ts",
+      "owner": "@agent-os/runtime/cloudflare/workspace-job-profile",
+      "reason": "Cloudflare workspace-job profile owns fail-fast rejection of submit-binding materialization because workspace leases require a concrete workspace-op operation event",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "packages/runtime/src/in-memory/state.ts",
       "owner": "@agent-os/runtime/in-memory-state",
       "reason": "in-memory backend state owns synchronous post-commit sink isolation; sink failures are diagnostics and must not roll back committed facts",
@@ -145,6 +151,12 @@
       "owner": "@agent-os/runtime/in-memory-state",
       "reason": "in-memory telemetry helper owns synchronous post-commit sink isolation; sink failures are diagnostics and must not roll back committed facts",
       "rules": ["EFF001"]
+    },
+    {
+      "path": "packages/runtime/src/local/index.ts",
+      "owner": "@agent-os/runtime/local",
+      "reason": "terminal local Node workspace runtime adapter owns Node filesystem and child_process workspace IO, symbolic material/env rejection, command timeout/error mapping, and the executable submit facade over lowerLocalAgentRuntime",
+      "rules": ["EFF020", "EFF025", "EFF400"]
     },
     {
       "path": "packages/runtime/src/node/index.ts",
