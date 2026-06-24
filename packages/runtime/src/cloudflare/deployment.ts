@@ -32,13 +32,17 @@ export interface AgentEventHandlerContext<Runtime = unknown> {
   readonly capabilities: ReadonlyMap<string, ExtensionCapability>;
 }
 
+export type CloudflareAgentBindingSource<Env extends CloudflareAgentEnv> =
+  | CloudflareAgentBindings
+  | ((env: Env) => CloudflareAgentBindings);
+
 export type CloudflareAgentProjectionSource<Env extends CloudflareAgentEnv> =
   | ReadonlyArray<AnyMaterializedProjectionDefinition>
   | ((env: Env) => ReadonlyArray<AnyMaterializedProjectionDefinition>);
 
 export interface AgentDurableObjectConfig<Env extends CloudflareAgentEnv, Runtime = unknown> {
   readonly manifest: AgentManifest;
-  readonly agentBindings: CloudflareAgentBindings;
+  readonly agentBindings: CloudflareAgentBindingSource<Env>;
   readonly refResolver?: (env: Env) => RefResolver;
   readonly llmTransport?: (env: Env) => Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly extensions?: (env: Env) => ReadonlyArray<ExtensionDeclaration>;
@@ -90,6 +94,12 @@ const projectionsFor = <Env extends CloudflareAgentEnv>(
 ): ReadonlyArray<AnyMaterializedProjectionDefinition> =>
   typeof projections === "function" ? projections(env) : (projections ?? []);
 
+const agentBindingsFor = <Env extends CloudflareAgentEnv>(
+  agentBindings: CloudflareAgentBindingSource<Env>,
+  env: Env,
+): CloudflareAgentBindings =>
+  typeof agentBindings === "function" ? agentBindings(env) : agentBindings;
+
 export const materializeCloudflareAgentConfig = <Env extends CloudflareAgentEnv, Runtime = unknown>(
   manifest: AgentManifest,
   config: AgentRuntimeConfig<Env, Runtime>,
@@ -97,7 +107,9 @@ export const materializeCloudflareAgentConfig = <Env extends CloudflareAgentEnv,
 ): MaterializedAgentConfig<Env, Runtime> => {
   const materialized = projectionsFor(config.projections, env);
   return {
-    mount: mountCloudflareAgent(manifest, config.agentBindings, { materialized }),
+    mount: mountCloudflareAgent(manifest, agentBindingsFor(config.agentBindings, env), {
+      materialized,
+    }),
     refResolver: config.refResolver?.(env) ?? emptyRefResolver,
     llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
     extensions: config.extensions?.(env) ?? [],

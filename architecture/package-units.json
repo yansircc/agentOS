@@ -216,6 +216,12 @@
           "optionalPeers": []
         },
         {
+          "subpath": "./capability",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral", "cloudflare-worker", "node"],
+          "optionalPeers": []
+        },
+        {
           "subpath": "./workspace-binding",
           "moduleBuckets": ["adapter"],
           "targetProfiles": ["cloudflare-worker"],

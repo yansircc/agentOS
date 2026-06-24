@@ -257,14 +257,21 @@ void test("agentos build compiles an authored workspace tree into generated file
     );
     assert.equal(manifest.agentId, "fixture-agent");
     assert.deepEqual(Object.keys(manifest.tools ?? {}).sort(), workspaceDefaultToolNames);
+    assert.deepEqual(manifest.capabilities?.workspaceOperations, {
+      bindingRef: "@agent-os/workspace-op",
+    });
     assert.equal(manifest.tools.bash.interaction, "never");
     assert.equal(manifest.tools.write_file.interaction, "approval");
     const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
     assert.match(target, /import semanticDeclarations from "\.\/manifest\.json";/);
-    assert.match(target, /from "@agent-os\/runtime\/workspace-binding";/);
+    assert.match(target, /from "@agent-os\/runtime\/capability";/);
+    assert.match(target, /resolveRuntimeInstallGraph/);
+    assert.match(target, /workspaceOperations/);
     assert.match(target, /from "@agent-os\/core\/runtime-protocol";/);
     assert.match(target, /from "@agent-os\/core\/tools";/);
-    assert.doesNotMatch(target, /from "@agent-os\/runtime";/);
+    assert.doesNotMatch(target, /from "@agent-os\/runtime\/workspace-binding";/);
+    assert.doesNotMatch(target, /installCloudflareWorkspaceOperationProvider/);
+    assert.doesNotMatch(target, /bindWorkspaceToolsForRuntime/);
     assert.match(target, /generatedWorkspaceToolInteractions/);
     assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
     assert.match(target, /readonly AGENTOS_ENDPOINT_OPENROUTER\?: string;/);

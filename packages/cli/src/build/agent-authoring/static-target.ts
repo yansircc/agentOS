@@ -43,6 +43,7 @@ export type StaticTargetModuleImportKind =
   | "target-scope-helper"
   | "target-worker"
   | "target-config"
+  | "capability-runtime"
   | "provider-runtime"
   | "execution-domain-runtime"
   | "workspace-host"
@@ -152,6 +153,7 @@ const DEFAULT_STATIC_TARGET_PACKAGE_SCOPE = packageScopePattern.test(INJECTED_PU
 const publicPackageSpecifier = (scope: string, name: string): string => `${scope}/${name}`;
 
 const staticTargetModules = (scope: string) => ({
+  runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
   cloudflareDoRuntime: publicPackageSpecifier(scope, "runtime/cloudflare"),
   openAiCompatibleTransport: publicPackageSpecifier(scope, "runtime/llm-effect-ai"),
   workspaceAgentHost: publicPackageSpecifier(scope, "runtime/workspace-agent"),
@@ -309,16 +311,16 @@ const renderWorkspaceStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
+    renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(
-      ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"],
-      modules.cloudflareDoRuntime,
+      ["defineHost", "resolveRuntimeInstallGraph", "workspaceOperations"],
+      modules.runtimeCapability,
     ),
     renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
     renderNamedImport(
       ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
       modules.workspaceAgentHost,
     ),
-    renderNamedImport(["bindWorkspaceToolsForRuntime"], modules.workspaceBinding),
     renderNamedImport(["makeCloudflareWorkspaceEnv"], modules.workspaceEnvCloudflare),
     renderNamedImport(["getSandbox"], modules.cloudflareSandbox),
     renderNamedImport(
@@ -474,15 +476,44 @@ const workspaceEnvFor = (env: AgentOSTargetEnv) =>
     workspaceRef: ${jsString(normalized.workspace.providerResourceId)},
   });
 
-const allowWorkspaceTool = () =>
-  Effect.succeed({ ok: true as const }).pipe(
-    Effect.withSpan("agentos.generated.workspace.allow_tool"),
-  );
+const generatedHostProfile = defineHost({
+  target: "cloudflare-do@1",
+  provides: [
+    "storage.ledger",
+    "durability.do",
+    "fs.workspace",
+    "timer.durable",
+    "network.outbound",
+    "secrets.store",
+    "eventLoop.durable",
+    "llm.openai",
+  ],
+  materialize: () => ({}),
+});
 
-const workspaceOperationInstallFor = (env: AgentOSTargetEnv) =>
-  installCloudflareWorkspaceOperationProvider({
-    env: workspaceEnvFor(env),
-  });
+const generatedCapabilityInstallGraphFor = (env: AgentOSTargetEnv) => {
+  const graph = resolveRuntimeInstallGraph(
+    generatedHostProfile,
+    [
+      workspaceOperations({
+        env: workspaceEnvFor(env),
+        toolNames: generatedWorkspaceToolNames,
+        mutationPolicy: ${usesMutationTools ? '"receipt-backed"' : '"disabled"'},
+        shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
+        toolInteractions: generatedWorkspaceToolInteractions,
+      }),
+    ],
+    { identity: semanticManifest.agentId },
+  );
+  if (!graph.ok) {
+    throw Error(
+      graph.diagnostics
+        .map((diagnostic) => diagnostic.reason)
+        .join("; ") || "capability install graph failed",
+    );
+  }
+  return graph.resolved;
+};
 
 const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
   const value = env[name];
@@ -532,32 +563,19 @@ const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonN
   };
 };
 
-const generatedWorkspaceBindingsFor = (env: AgentOSTargetEnv): AgentSubmitBindings =>
-  generatedWorkspaceToolNames.length === 0
-    ? {}
-    : bindWorkspaceToolsForRuntime({
-        env: workspaceEnvFor(env),
-        authority: "agentos.workspace.static-target",
-        admit: allowWorkspaceTool,
-        toolNames: generatedWorkspaceToolNames,
-        mutationPolicy: ${usesMutationTools ? '"receipt-backed"' : '"disabled"'},
-        shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
-        toolInteractions: generatedWorkspaceToolInteractions,
-      });
-
 const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {
-  const workspaceBindings = generatedWorkspaceBindingsFor(env);
+  const capabilityGraph = generatedCapabilityInstallGraphFor(env);
   const route = generatedLlmRouteFor(env);
   if (!route.ok) return route;
   return {
     ok: true,
     value: {
-      ...workspaceBindings,
+      ...capabilityGraph.bindings,
       llmRoutes: {
         default: route.value,
       },
       tools: {
-        ...(workspaceBindings.tools ?? {}),
+        ...(capabilityGraph.bindings.tools ?? {}),
         ...generatedCustomTools,
         ${hasSkills ? "...generatedFrameworkTools," : ""}
       },
@@ -580,17 +598,18 @@ export const workspaceMount = defineWorkspaceAgentMount({
 
 const Base${normalized.target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
   manifest: semanticManifest,
-  agentBindings: {
+  agentBindings: (env) => ({
     handlers: ${handlerRecord},
-  },
+    ...generatedCapabilityInstallGraphFor(env).agentBindings,
+  }),
   refResolver: (env) => ({
     material: (ref) => materialValue(env, ref),
   }),
   llmTransport: () => OpenAiCompatibleLlmTransportLive,
-  extensions: (env) => workspaceOperationInstallFor(env).extensions,
-  declaredIntents: (env) => workspaceOperationInstallFor(env).declaredIntents,
-  projections: (env) => workspaceOperationInstallFor(env).projections,
-  eventHandlers: (context, env) => workspaceOperationInstallFor(env).eventHandlers(context),
+  extensions: (env) => generatedCapabilityInstallGraphFor(env).extensions,
+  declaredIntents: (env) => generatedCapabilityInstallGraphFor(env).declaredIntents,
+  projections: (env) => generatedCapabilityInstallGraphFor(env).projections,
+  eventHandlers: (context, env) => generatedCapabilityInstallGraphFor(env).handlers(context),
 });
 
 export class ${normalized.target.durableObject.className} extends Base${normalized.target.durableObject.className} {
@@ -2082,11 +2101,17 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     {
       kind: "target-runtime",
       source: modules.cloudflareDoRuntime,
-      imports:
-        normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
-          ? ["createAgentDurableObject", "installCloudflareWorkspaceOperationProvider"]
-          : ["createAgentDurableObject"],
+      imports: ["createAgentDurableObject"],
     },
+    ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? [
+          {
+            kind: "capability-runtime" as const,
+            source: modules.runtimeCapability,
+            imports: ["defineHost", "resolveRuntimeInstallGraph", "workspaceOperations"],
+          },
+        ]
+      : []),
     {
       kind: "provider-runtime",
       source: modules.openAiCompatibleTransport,
@@ -2103,11 +2128,6 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     ...generatedToolImports(authoredManifestToolNames),
     ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? [
-          {
-            kind: "workspace-binding" as const,
-            source: modules.workspaceBinding,
-            imports: ["bindWorkspaceToolsForRuntime"],
-          },
           {
             kind: "execution-domain-runtime" as const,
             source: modules.workspaceEnvCloudflare,

@@ -46,6 +46,7 @@
         "@yansirplus/runtime",
         "@yansirplus/runtime/admission",
         "@yansirplus/runtime/ag-ui",
+        "@yansirplus/runtime/capability",
         "@yansirplus/runtime/in-memory",
         "@yansirplus/runtime/llm-effect-ai",
         "@yansirplus/runtime/run-projector",
@@ -59,6 +60,7 @@
       "ambient": "cloudflare-worker",
       "packageUnits": ["runtime"],
       "selectedSubpaths": [
+        "@yansirplus/runtime/capability",
         "@yansirplus/runtime/cloudflare",
         "@yansirplus/runtime/cloudflare/do-rpc",
         "@yansirplus/runtime/cloudflare/ops-api",
@@ -72,7 +74,11 @@
       "id": "node",
       "ambient": "node",
       "packageUnits": ["runtime", "cli"],
-      "selectedSubpaths": ["@yansirplus/runtime/node", "@yansirplus/cli"],
+      "selectedSubpaths": [
+        "@yansirplus/runtime/capability",
+        "@yansirplus/runtime/node",
+        "@yansirplus/cli"
+      ],
       "forbiddenSpecifiers": ["cloudflare:"]
     },
     {

@@ -14,22 +14,23 @@ algebra, durable trigger authoring, and ledger-derived projections.
 
 ## Audience
 
-| Entrypoint                             | Audience                     | Capability                                |
-| -------------------------------------- | ---------------------------- | ----------------------------------------- |
-| `@agent-os/runtime`                    | `advanced`                   | backend-neutral runtime service algebra   |
-| `@agent-os/runtime/admission`          | `advanced`                   | admission service contract                |
-| `@agent-os/runtime/ag-ui`              | `advanced`                   | AG-UI wire projection                     |
-| `@agent-os/runtime/cloudflare`         | `generated-only`, `advanced` | Cloudflare Durable Object runtime adapter |
-| `@agent-os/runtime/cloudflare/do-rpc`  | `advanced`                   | Cloudflare DO RPC bridge                  |
-| `@agent-os/runtime/cloudflare/ops-api` | `advanced`                   | Cloudflare ops API bridge                 |
-| `@agent-os/runtime/in-memory`          | `advanced`                   | in-memory runtime adapter                 |
-| `@agent-os/runtime/llm-effect-ai`      | `generated-only`, `advanced` | Effect AI LLM transport adapter           |
-| `@agent-os/runtime/node`               | `advanced`                   | Node runtime adapter                      |
-| `@agent-os/runtime/run-projector`      | `advanced`                   | runtime run projection helpers            |
-| `@agent-os/runtime/sse-http`           | `generated-only`, `advanced` | SSE HTTP helpers                          |
-| `@agent-os/runtime/telemetry-otlp`     | `advanced`                   | OTLP telemetry projection                 |
-| `@agent-os/runtime/workspace-agent`    | `generated-only`             | generated workspace agent host types      |
-| `@agent-os/runtime/workspace-binding`  | `generated-only`             | generated workspace tool binding          |
+| Entrypoint                             | Audience                     | Capability                                                  |
+| -------------------------------------- | ---------------------------- | ----------------------------------------------------------- |
+| `@agent-os/runtime`                    | `advanced`                   | backend-neutral runtime service algebra                     |
+| `@agent-os/runtime/admission`          | `advanced`                   | admission service contract                                  |
+| `@agent-os/runtime/ag-ui`              | `advanced`                   | AG-UI wire projection                                       |
+| `@agent-os/runtime/cloudflare`         | `generated-only`, `advanced` | Cloudflare Durable Object runtime adapter                   |
+| `@agent-os/runtime/cloudflare/do-rpc`  | `advanced`                   | Cloudflare DO RPC bridge                                    |
+| `@agent-os/runtime/cloudflare/ops-api` | `advanced`                   | Cloudflare ops API bridge                                   |
+| `@agent-os/runtime/capability`         | `generated-only`, `advanced` | capability contract declarations and install graph resolver |
+| `@agent-os/runtime/in-memory`          | `advanced`                   | in-memory runtime adapter                                   |
+| `@agent-os/runtime/llm-effect-ai`      | `generated-only`, `advanced` | Effect AI LLM transport adapter                             |
+| `@agent-os/runtime/node`               | `advanced`                   | Node runtime adapter                                        |
+| `@agent-os/runtime/run-projector`      | `advanced`                   | runtime run projection helpers                              |
+| `@agent-os/runtime/sse-http`           | `generated-only`, `advanced` | SSE HTTP helpers                                            |
+| `@agent-os/runtime/telemetry-otlp`     | `advanced`                   | OTLP telemetry projection                                   |
+| `@agent-os/runtime/workspace-agent`    | `generated-only`             | generated workspace agent host types                        |
+| `@agent-os/runtime/workspace-binding`  | `generated-only`             | generated workspace tool binding                            |
 
 ## Invariant
 

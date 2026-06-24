@@ -1,6 +1,7 @@
 import { authoredValue } from "@agent-os/core/authored-value";
 import type { MaterialRef } from "@agent-os/core/material-ref";
 import type {
+  AgentCapabilityBindingRef,
   AgentExecutionDomainRef,
   AgentManifest,
   AgentToolBindingRef,
@@ -17,6 +18,7 @@ import {
   type HandlerKind,
 } from "@agent-os/core/runtime-protocol";
 import {
+  WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_TOOL_DEFAULT_DECLARATIONS,
   type WorkspaceToolDefaultDeclaration,
   type WorkspaceToolName,
@@ -651,6 +653,7 @@ const workspaceDefaultToolFactKey = (
 
 const workspaceExecutionDomainFactKey = "/executionDomains/workspace/bindingRef" as const;
 const workspaceMaterialFactKey = "/materials/workspace" as const;
+const workspaceCapabilityFactKey = "/capabilities/workspaceOperations/bindingRef" as const;
 
 const defaultWorkspaceToolEntry = (
   tool: WorkspaceToolDefaultDeclaration,
@@ -701,6 +704,9 @@ const applyWorkspaceDefaultTools = <K extends HandlerKind>(
 } => {
   const issues: AgentOsConfigIssue[] = [];
   const tools: Record<string, AgentToolBindingRef> = { ...compiled.manifest.tools };
+  const capabilities: Record<string, AgentCapabilityBindingRef> = {
+    ...compiled.manifest.capabilities,
+  };
   const executionDomains: Record<string, AgentExecutionDomainRef> = {
     ...compiled.manifest.executionDomains,
   };
@@ -713,6 +719,12 @@ const applyWorkspaceDefaultTools = <K extends HandlerKind>(
     executionDomains.workspace = { bindingRef: "workspace" };
     provenance[workspaceExecutionDomainFactKey] = workspaceManifestMacroOrigin(
       workspaceExecutionDomainFactKey,
+    );
+  }
+  if (capabilities.workspaceOperations === undefined) {
+    capabilities.workspaceOperations = { bindingRef: WORKSPACE_OP_FACT_OWNER };
+    provenance[workspaceCapabilityFactKey] = workspaceManifestMacroOrigin(
+      workspaceCapabilityFactKey,
     );
   }
 
@@ -736,9 +748,13 @@ const applyWorkspaceDefaultTools = <K extends HandlerKind>(
   }
   const manifestWithoutTools = { ...compiled.manifest } as AgentManifest<K>;
   delete (manifestWithoutTools as { tools?: unknown }).tools;
+  delete (manifestWithoutTools as { capabilities?: unknown }).capabilities;
   delete (manifestWithoutTools as { executionDomains?: unknown }).executionDomains;
   const sortedTools = Object.fromEntries(
     Object.entries(tools).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const sortedCapabilities = Object.fromEntries(
+    Object.entries(capabilities).sort(([left], [right]) => left.localeCompare(right)),
   );
   const sortedExecutionDomains = Object.fromEntries(
     Object.entries(executionDomains).sort(([left], [right]) => left.localeCompare(right)),
@@ -747,6 +763,7 @@ const applyWorkspaceDefaultTools = <K extends HandlerKind>(
   return {
     manifest: authoredValue({
       ...manifestWithoutTools,
+      ...(Object.keys(sortedCapabilities).length === 0 ? {} : { capabilities: sortedCapabilities }),
       ...(Object.keys(sortedTools).length === 0 ? {} : { tools: sortedTools }),
       ...(Object.keys(sortedExecutionDomains).length === 0
         ? {}

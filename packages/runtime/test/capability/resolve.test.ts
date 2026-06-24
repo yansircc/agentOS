@@ -217,7 +217,7 @@ describe("resolveRuntime", () => {
     const result = await resolveRuntime(nodeHost, [missingHostFact], {
       identity: "sink-fails",
       diagnosticSink: {
-        commit: async () => {
+        commit: () => {
           throw new Error("sink down");
         },
       },

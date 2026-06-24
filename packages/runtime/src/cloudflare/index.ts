@@ -30,6 +30,7 @@ export type {
   AgentDurableObjectConfig,
   AgentEventHandlerContext,
   AgentEventHandlerRegistration,
+  CloudflareAgentBindingSource,
   CloudflareAgentDeploymentSpec,
   CloudflareAgentEnv,
   CloudflareAgentProjectionSource,

@@ -2,9 +2,17 @@
  * Host-neutral workspace operation install helpers.
  */
 
-import { Option, Predicate, Schema } from "effect";
+import { Effect, Option, Predicate, Schema } from "effect";
 import { CapabilityRejected, type EventHandler, type LedgerEventRpc } from "@agent-os/core";
+import type { ToolAdmitter } from "@agent-os/core/tools";
 import type { ExtensionDeclaration } from "@agent-os/core/extensions";
+import {
+  capabilityIntent,
+  capabilityMaterial,
+  capabilityProjection,
+  type AgentSubmitBindings,
+  type AnyAgentCapabilityDefinition,
+} from "@agent-os/core/runtime-protocol";
 import {
   defineProjection,
   projectionIdentity,
@@ -23,6 +31,11 @@ import {
   type WorkspaceOperationProjection,
   type WorkspaceOperationRequestedPayload,
 } from "../workspace-op-carrier";
+import {
+  bindWorkspaceToolsForRuntime,
+  type BindWorkspaceToolsForRuntimeOptions,
+  type WorkspaceToolExposurePolicy,
+} from "../workspace-binding";
 import {
   createWorkspaceOperationLocalProvider,
   type CreateWorkspaceOperationLocalProviderOptions,
@@ -44,12 +57,18 @@ export type WorkspaceOperationEnvResolver = (
   input: WorkspaceOperationEnvResolverInput,
 ) => WorkspaceEnv | Promise<WorkspaceEnv>;
 
-export interface WorkspaceOperationsOptions extends Omit<
-  CreateWorkspaceOperationLocalProviderOptions,
-  "env"
-> {
+export interface WorkspaceOperationsOptions
+  extends Omit<CreateWorkspaceOperationLocalProviderOptions, "env">, WorkspaceToolExposurePolicy {
   readonly env: WorkspaceEnv | WorkspaceOperationEnvResolver;
   readonly boundaryVersion?: string;
+  readonly authority?: string;
+  readonly authorityId?: string;
+  readonly authorityVersion?: string;
+  readonly admit?: ToolAdmitter<unknown>;
+  readonly workspaceMaterialRef?: BindWorkspaceToolsForRuntimeOptions["workspaceMaterialRef"];
+  readonly toolContext?: BindWorkspaceToolsForRuntimeOptions["toolContext"];
+  readonly toolIntents?: BindWorkspaceToolsForRuntimeOptions["toolIntents"];
+  readonly hooks?: BindWorkspaceToolsForRuntimeOptions["hooks"];
 }
 
 export interface WorkspaceOperationInstallContext {
@@ -66,17 +85,22 @@ export interface WorkspaceOperationInstallContext {
 
 export interface WorkspaceOperationInstall {
   readonly extensions: ReadonlyArray<ExtensionDeclaration>;
+  readonly capabilities: Readonly<Record<string, AnyAgentCapabilityDefinition>>;
   readonly declaredIntents: ReadonlyArray<{
     readonly kind: string;
     readonly boundaryOwnerId: string;
   }>;
   readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+  readonly bindings?: AgentSubmitBindings;
   readonly eventHandlers: (
     context: WorkspaceOperationInstallContext,
   ) => Iterable<{ readonly kind: string; readonly handler: EventHandler }>;
 }
 
 const DEFAULT_WORKSPACE_OP_BOUNDARY_VERSION = "0.2.9";
+const WORKSPACE_OPERATIONS_CAPABILITY_BINDING_REF = WORKSPACE_OP_FACT_OWNER;
+
+const allowWorkspaceTool: ToolAdmitter<unknown> = () => Effect.succeed({ ok: true as const });
 
 const requestedPayload = (event: LedgerEventRpc): WorkspaceOperationRequestedPayload | null =>
   event.kind === WORKSPACE_OP_KIND.REQUESTED &&
@@ -117,6 +141,30 @@ const providerOptions = (
   ...(options.maxCommandChars === undefined ? {} : { maxCommandChars: options.maxCommandChars }),
   ...(options.execTimeoutMs === undefined ? {} : { execTimeoutMs: options.execTimeoutMs }),
   ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
+});
+
+const workspaceOperationsAgentCapability = (
+  boundaryPackage: ExtensionDeclaration,
+): AnyAgentCapabilityDefinition => ({
+  id: WORKSPACE_OP_FACT_OWNER,
+  ...("boundaryContract" in boundaryPackage ? { boundaryPackage } : {}),
+  intents: {
+    requested: capabilityIntent<WorkspaceOperationRequestedPayload>()(
+      WORKSPACE_OP_KIND.REQUESTED,
+      "boundaryContract" in boundaryPackage ? { boundaryPackage } : {},
+    ),
+  },
+  projections: {
+    operation: capabilityProjection<
+      { readonly requestedEventId: number },
+      WorkspaceOperationProjection
+    >()(WORKSPACE_OP_PROJECTION_KIND, {
+      factOwnerRef: WORKSPACE_OP_FACT_OWNER,
+    }),
+  },
+  materials: {
+    workspace: capabilityMaterial<WorkspaceEnv>()("workspace"),
+  },
 });
 
 const workspaceOperationProjectionState = Schema.Union([
@@ -228,9 +276,50 @@ export const createWorkspaceOperationInstall = (
     providers.set(key, provider);
     return provider;
   };
+  const toolBindingsRequested =
+    (options.toolNames !== undefined && options.toolNames.length > 0) ||
+    options.exposure !== undefined;
+  const bindings = (): BindWorkspaceToolsForRuntimeOptions | undefined => {
+    if (!toolBindingsRequested) return undefined;
+    if (isEnvResolver(options.env)) {
+      throw new TypeError("workspaceOperations tool bindings require a concrete workspace env");
+    }
+    return {
+      env: options.env,
+      authority: options.authority ?? "agentos.workspace.capability",
+      admit: options.admit ?? allowWorkspaceTool,
+      ...(options.authorityId === undefined ? {} : { authorityId: options.authorityId }),
+      ...(options.authorityVersion === undefined
+        ? {}
+        : { authorityVersion: options.authorityVersion }),
+      ...(options.workspaceMaterialRef === undefined
+        ? {}
+        : { workspaceMaterialRef: options.workspaceMaterialRef }),
+      ...(options.toolContext === undefined ? {} : { toolContext: options.toolContext }),
+      ...(options.toolIntents === undefined ? {} : { toolIntents: options.toolIntents }),
+      ...(options.toolNames === undefined ? {} : { toolNames: options.toolNames }),
+      ...(options.exposure === undefined ? {} : { exposure: options.exposure }),
+      ...(options.mutationPolicy === undefined ? {} : { mutationPolicy: options.mutationPolicy }),
+      ...(options.shellPolicy === undefined ? {} : { shellPolicy: options.shellPolicy }),
+      ...(options.toolInteractions === undefined
+        ? {}
+        : { toolInteractions: options.toolInteractions }),
+      ...(options.maxFileBytes === undefined ? {} : { maxFileBytes: options.maxFileBytes }),
+      ...(options.maxCommandChars === undefined
+        ? {}
+        : { maxCommandChars: options.maxCommandChars }),
+      ...(options.execTimeoutMs === undefined ? {} : { execTimeoutMs: options.execTimeoutMs }),
+      ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
+      ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
+    };
+  };
 
   return {
     extensions: [boundaryPackage],
+    capabilities: {
+      [WORKSPACE_OPERATIONS_CAPABILITY_BINDING_REF]:
+        workspaceOperationsAgentCapability(boundaryPackage),
+    },
     declaredIntents: [
       {
         kind: WORKSPACE_OP_KIND.REQUESTED,
@@ -238,6 +327,7 @@ export const createWorkspaceOperationInstall = (
       },
     ],
     projections: [workspaceOperationMaterializedProjection()],
+    ...(toolBindingsRequested ? { bindings: bindWorkspaceToolsForRuntime(bindings()!) } : {}),
     eventHandlers: (context) => [
       {
         kind: WORKSPACE_OP_KIND.REQUESTED,
@@ -272,8 +362,10 @@ export const workspaceOperations = (options: WorkspaceOperationsOptions) =>
       const install = createWorkspaceOperationInstall(options);
       return {
         extensions: install.extensions,
+        capabilities: install.capabilities,
         declaredIntents: install.declaredIntents,
         projections: install.projections,
+        bindings: install.bindings,
         eventHandlers: () => [...install.eventHandlers({ capabilities: ctx.capabilities })],
       };
     },

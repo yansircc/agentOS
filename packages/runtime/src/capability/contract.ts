@@ -5,7 +5,10 @@
 
 import type { ExtensionDeclaration } from "@agent-os/core/extensions";
 import type { Carrier } from "@agent-os/core/carrier";
-import type { AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
+import type {
+  AgentSubmitBindings,
+  AnyAgentCapabilityDefinition,
+} from "@agent-os/core/runtime-protocol";
 import type { AnyMaterializedProjectionDefinition } from "../projection";
 import type { AnyDurableTrigger } from "../trigger";
 import type { EventHandler } from "@agent-os/core/types";
@@ -19,17 +22,32 @@ import type { ResolvedHostFacts } from "./host";
  */
 export interface CapabilityInstallation {
   readonly extensions?: ReadonlyArray<ExtensionDeclaration>;
+  readonly capabilities?: Readonly<Record<string, AnyAgentCapabilityDefinition>>;
   readonly declaredIntents?: ReadonlyArray<{
     readonly kind: string;
     readonly boundaryOwnerId: string;
   }>;
   readonly projections?: ReadonlyArray<AnyMaterializedProjectionDefinition>;
   readonly triggers?: ReadonlyArray<AnyDurableTrigger>;
-  readonly eventHandlers?: (ctx: CapabilityInstallContext) => ReadonlyArray<{
+  readonly eventHandlers?: (ctx: CapabilityEventHandlerContext) => ReadonlyArray<{
     readonly kind: string;
     readonly handler: EventHandler;
   }>;
   readonly bindings?: AgentSubmitBindings;
+}
+
+/**
+ * Runtime handle exposed to capability event handler factories.
+ */
+export interface CapabilityRuntimeHandle {
+  readonly commit: (input: { readonly event: string; readonly data: unknown }) => Promise<unknown>;
+}
+
+/**
+ * Context provided when a backend materializes capability event handlers.
+ */
+export interface CapabilityEventHandlerContext {
+  readonly capabilities: ReadonlyMap<string, CapabilityRuntimeHandle>;
 }
 
 /**

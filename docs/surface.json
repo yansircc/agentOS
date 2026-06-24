@@ -219,6 +219,11 @@
           "capability": "Cloudflare ops API bridge"
         },
         {
+          "subpath": "./capability",
+          "audiences": ["generated-only", "advanced"],
+          "capability": "capability contract declarations and install graph resolver"
+        },
+        {
           "subpath": "./in-memory",
           "audiences": ["advanced"],
           "capability": "in-memory runtime adapter"

@@ -192,10 +192,13 @@ export {
   defineCapability,
   defineHost,
   workspaceOperations,
+  resolveRuntimeInstallGraph,
   resolveRuntime,
   nodeHost,
 } from "./capability";
 export type {
+  CapabilityEventHandlerContext,
+  CapabilityRuntimeHandle,
   CapabilityContract,
   CapabilityInstallation,
   CapabilityInstallContext,
@@ -209,6 +212,9 @@ export type {
   WorkspaceOperationEnvResolverInput,
   CapabilityRequirement,
   CapabilityRequirements,
+  ResolvedCapabilityInstallGraph,
+  ResolvedCapabilityEventHandlerFactory,
+  ResolveRuntimeInstallGraphResult,
   PreflightDiagnosticSink,
   ResolvedRuntime,
   ResolveRuntimeResult,
@@ -262,6 +268,11 @@ export type {
   WorkspaceAgentStateProjectionShape,
   WorkspaceAgentSubmitCommandInput,
 } from "./workspace-agent";
+export {
+  WORKSPACE_OP_FACT_OWNER,
+  WORKSPACE_OP_KIND,
+  WORKSPACE_OP_PROJECTION_KIND,
+} from "./workspace-op-carrier";
 export { bindWorkspaceToolsForRuntime, workspaceEnvMaterialRef } from "./workspace-binding";
 export type {
   BindWorkspaceToolsForRuntimeOptions,

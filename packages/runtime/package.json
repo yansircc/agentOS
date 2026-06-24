@@ -30,6 +30,10 @@
       "types": "./src/workspace-agent.ts",
       "default": "./src/workspace-agent.ts"
     },
+    "./capability": {
+      "types": "./src/capability/index.ts",
+      "default": "./src/capability/index.ts"
+    },
     "./workspace-binding": {
       "types": "./src/workspace-binding.ts",
       "default": "./src/workspace-binding.ts"

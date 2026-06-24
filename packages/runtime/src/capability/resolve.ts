@@ -6,7 +6,12 @@
 import { Effect, Result, Schema } from "effect";
 import { runPromise as runEffectPromise } from "effect/Effect";
 import type { HostProfile, ResolvedHostFacts } from "./host";
-import type { CapabilityContract, CapabilityInstallation } from "./contract";
+import type {
+  CapabilityContract,
+  CapabilityEventHandlerContext,
+  CapabilityInstallation,
+  CapabilityRuntimeHandle,
+} from "./contract";
 import type {
   CapabilityPeerRequirement,
   CapabilityHostFactRequirement,
@@ -16,6 +21,7 @@ import {
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
   RUNTIME_DIAGNOSTIC_KIND,
   runtimeDiagnosticBoundaryContract,
+  runtimeDiagnosticBoundaryPackage,
   type PreflightDiagnosticSink,
 } from "../runtime-diagnostic-carrier";
 import {
@@ -25,7 +31,7 @@ import {
   type ResolvedRuntimeInstallGraph,
 } from "../in-memory/runtime-backend";
 import type { InMemoryLlmTransportOptions } from "../in-memory/llm";
-import type { AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
+import type { AgentBindings, AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
 import { validateToolRegistry } from "@agent-os/core/tools";
 import {
   validateExtensionDeclarations,
@@ -89,6 +95,37 @@ export type ResolveRuntimeResult =
   | { readonly ok: true; readonly resolved: ResolvedRuntime }
   | { readonly ok: false; readonly diagnostics: ReadonlyArray<PreflightDiagnostic> };
 
+export interface ResolvedCapabilityEventHandlerFactory {
+  readonly eventHandlers: (
+    context: CapabilityEventHandlerContext,
+  ) => ReadonlyArray<{ readonly kind: string; readonly handler: EventHandler }>;
+}
+
+export interface ResolvedCapabilityInstallGraph {
+  readonly extensions: ReadonlyArray<ExtensionDeclaration>;
+  readonly agentBindings: {
+    readonly capabilities?: NonNullable<AgentBindings["capabilities"]>;
+  };
+  readonly declaredIntents: ReadonlyArray<{
+    readonly kind: string;
+    readonly boundaryOwnerId: string;
+  }>;
+  readonly projections: ReadonlyArray<AnyMaterializedProjectionDefinition>;
+  readonly triggers: ReadonlyArray<AnyDurableTrigger>;
+  readonly handlers: ResolvedCapabilityEventHandlerFactory["eventHandlers"];
+  readonly bindings: AgentSubmitBindings;
+  readonly manifest: {
+    readonly capabilities: ReadonlyArray<string>;
+    readonly host: string;
+  };
+}
+
+export type ResolveRuntimeInstallGraphResult =
+  | { readonly ok: true; readonly resolved: ResolvedCapabilityInstallGraph }
+  | { readonly ok: false; readonly diagnostics: ReadonlyArray<PreflightDiagnostic> };
+
+const RUNTIME_DIAGNOSTIC_BOUNDARY_VERSION = "0.1.0";
+
 const describeCause = (cause: unknown): string => {
   if (cause instanceof Error && cause.message.length > 0) return cause.message;
   if (typeof cause === "string" && cause.length > 0) return cause;
@@ -120,6 +157,44 @@ const promiseResult = <Value>(
       }),
     ),
   );
+
+const emptySubmitBindings = (): AgentSubmitBindings => ({
+  tools: {},
+  materials: {},
+  executionDomains: [],
+});
+
+const mergeBindings = (
+  left: AgentSubmitBindings,
+  right: AgentSubmitBindings,
+): AgentSubmitBindings => ({
+  ...left,
+  ...right,
+  llmRoutes: { ...left.llmRoutes, ...right.llmRoutes },
+  tools: { ...left.tools, ...right.tools },
+  materials: { ...left.materials, ...right.materials },
+  executionDomains: [...(left.executionDomains ?? []), ...(right.executionDomains ?? [])],
+  toolContext:
+    left.toolContext === undefined && right.toolContext === undefined
+      ? undefined
+      : {
+          extensions: {
+            ...left.toolContext?.extensions,
+            ...right.toolContext?.extensions,
+          },
+        },
+  toolIntents: [...(left.toolIntents ?? []), ...(right.toolIntents ?? [])],
+  receiptBackedTools: {
+    ...left.receiptBackedTools,
+    ...right.receiptBackedTools,
+  },
+  decisionInterrupts: [...(left.decisionInterrupts ?? []), ...(right.decisionInterrupts ?? [])],
+  ...(right.executionIdentity === undefined
+    ? left.executionIdentity === undefined
+      ? {}
+      : { executionIdentity: left.executionIdentity }
+    : { executionIdentity: right.executionIdentity }),
+});
 
 /**
  * Normalize host fact requirement
@@ -223,25 +298,37 @@ const topologicalSort = (
 };
 
 /**
- * Execute all preflight passes and resolve runtime
+ * Execute all preflight passes and resolve capability install graph facts.
  *
- * @agentosPrimitive primitive.runtime.resolveRuntime
  * @agentosInvariant invariant.resolve.single-assembly-point
  * @agentosDocs docs/guides/capabilities/resolve-runtime.md
  * @agentosTest packages/runtime/test/capability/resolve.test.ts
  * @public
  */
-export const resolveRuntime = async (
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  "then" in value &&
+  typeof (value as { readonly then?: unknown }).then === "function";
+
+export const resolveRuntimeInstallGraph = (
   host: HostProfile,
   capabilities: ReadonlyArray<CapabilityContract>,
-  options: ResolveRuntimeOptions,
-): Promise<ResolveRuntimeResult> => {
+  options: Omit<ResolveRuntimeOptions, "llm">,
+): ResolveRuntimeInstallGraphResult => {
   const diagnostics: PreflightDiagnostic[] = [];
   const sink = options.diagnosticSink;
-  const addDiagnostic = async (diag: PreflightDiagnostic) => {
+  const addDiagnostic = (diag: PreflightDiagnostic) => {
     diagnostics.push(diag);
     if (sink) {
-      const commitResult = await promiseResult(() => sink.commit(diag));
+      const commitResult = syncResult(() => {
+        const committed = sink.commit(diag);
+        if (isThenable(committed)) {
+          void Promise.resolve(committed).catch(() => undefined);
+          throw new Error("Diagnostic sink commit returned an async result");
+        }
+        return committed;
+      });
       if (Result.isFailure(commitResult)) {
         diagnostics.push({
           pass: "diagnostic_sink",
@@ -254,27 +341,27 @@ export const resolveRuntime = async (
       }
     }
   };
-  const failed = (): ResolveRuntimeResult => ({ ok: false, diagnostics });
+  const failed = (): ResolveRuntimeInstallGraphResult => ({ ok: false, diagnostics });
 
   // Pass 1: name uniqueness (capabilityId)
   const capabilityIds = new Set<string>();
   for (const cap of capabilities) {
     if (capabilityIds.has(cap.capabilityId)) {
-      await addDiagnostic({
+      addDiagnostic({
         pass: "name_unique",
         capabilityId: cap.capabilityId,
         reason: `Duplicate capabilityId: ${cap.capabilityId}`,
       });
     }
     if (cap.capabilityId !== cap.carrier.ownerId) {
-      await addDiagnostic({
+      addDiagnostic({
         pass: "name_unique",
         capabilityId: cap.capabilityId,
         reason: `Capability ${cap.capabilityId} is not owned by carrier ${cap.carrier.ownerId}`,
       });
     }
     if (cap.sourcePackageName !== cap.carrier.sourcePackageName) {
-      await addDiagnostic({
+      addDiagnostic({
         pass: "name_unique",
         capabilityId: cap.capabilityId,
         reason: `Capability ${cap.capabilityId} source package does not match carrier owner package`,
@@ -296,7 +383,7 @@ export const resolveRuntime = async (
     for (const req of hostFacts) {
       if (req.optional) continue;
       if (!host.provides.has(req.fact)) {
-        await addDiagnostic({
+        addDiagnostic({
           pass: "host_fact",
           capabilityId: cap.capabilityId,
           reason: `Host ${host.target} missing required fact: ${req.fact}`,
@@ -311,7 +398,7 @@ export const resolveRuntime = async (
   // Pass 3: peer DAG sort + dependency check
   const sortResult = topologicalSort(capabilities);
   if (!sortResult.ok) {
-    await addDiagnostic(sortResult.diagnostic);
+    addDiagnostic(sortResult.diagnostic);
     return failed();
   }
   const sortedCaps = sortResult.sorted;
@@ -327,7 +414,7 @@ export const resolveRuntime = async (
           continue;
         }
         if (!req.optional) {
-          await addDiagnostic({
+          addDiagnostic({
             pass: "config",
             capabilityId: cap.capabilityId,
             reason: `Missing required config key: ${req.key}`,
@@ -337,7 +424,7 @@ export const resolveRuntime = async (
       }
       const decoded = syncResult(() => Schema.decodeUnknownSync(req.schema)(config[req.key]));
       if (Result.isFailure(decoded)) {
-        await addDiagnostic({
+        addDiagnostic({
           pass: "config",
           capabilityId: cap.capabilityId,
           reason: `Invalid config key: ${req.key}`,
@@ -358,7 +445,7 @@ export const resolveRuntime = async (
       const key = typeof req === "string" ? req : req.key;
       const optional = typeof req === "string" ? false : req.optional;
       if (!(key in secrets) && !optional) {
-        await addDiagnostic({
+        addDiagnostic({
           pass: "secret",
           capabilityId: cap.capabilityId,
           reason: `Missing required secret: ${key}`,
@@ -371,11 +458,15 @@ export const resolveRuntime = async (
   }
 
   let resolvedHostFacts: ResolvedHostFacts | undefined;
-  const hostFactsResult = await promiseResult(() =>
-    host.materialize({ config, secrets, identity: options.identity }),
-  );
+  const hostFactsResult = syncResult(() => {
+    const materialized = host.materialize({ config, secrets, identity: options.identity });
+    if (isThenable(materialized)) {
+      throw new Error(`Host ${host.target} materialize returned an async result`);
+    }
+    return materialized;
+  });
   if (Result.isFailure(hostFactsResult)) {
-    await addDiagnostic({
+    addDiagnostic({
       pass: "host_fact",
       reason: `Host ${host.target} failed to materialize provided facts`,
       detail: describeCause(hostFactsResult.failure),
@@ -387,7 +478,7 @@ export const resolveRuntime = async (
     return failed();
   }
   if (resolvedHostFacts === undefined) {
-    await addDiagnostic({
+    addDiagnostic({
       pass: "host_fact",
       reason: `Host ${host.target} did not materialize provided facts`,
     });
@@ -398,7 +489,7 @@ export const resolveRuntime = async (
   for (const cap of capabilities) {
     const capDiags = cap.diagnostics();
     for (const diag of capDiags) {
-      await addDiagnostic({
+      addDiagnostic({
         ...diag,
         pass: "self_diagnostic",
       });
@@ -412,9 +503,229 @@ export const resolveRuntime = async (
   const installedCaps = new Map<string, InstalledCapabilityHandle>();
   const allProjections: AnyMaterializedProjectionDefinition[] = [];
   const allTriggers: AnyDurableTrigger[] = [];
-  const allExtensions: ExtensionDeclaration[] = [];
-  const allEventHandlers: Array<{ readonly kind: string; readonly handler: EventHandler }> = [];
-  let mergedBindings: AgentSubmitBindings = { tools: {}, materials: {}, executionDomains: [] };
+  const runtimeDiagnosticExtension = runtimeDiagnosticBoundaryPackage(
+    RUNTIME_DIAGNOSTIC_BOUNDARY_VERSION,
+  );
+  const allExtensions: ExtensionDeclaration[] = [runtimeDiagnosticExtension];
+  const allDeclaredIntents: Array<{
+    readonly kind: string;
+    readonly boundaryOwnerId: string;
+  }> = [];
+  const allAgentCapabilities: NonNullable<AgentBindings["capabilities"]> = {};
+  const handlerFactories: Array<{
+    readonly capabilityId: string;
+    readonly register: NonNullable<CapabilityInstallation["eventHandlers"]>;
+  }> = [];
+  let mergedBindings: AgentSubmitBindings = emptySubmitBindings();
+
+  const handleFor = (cap: CapabilityContract): InstalledCapabilityHandle => ({
+    capabilityId: cap.capabilityId,
+    commit: () =>
+      Promise.reject(new Error(`${cap.capabilityId} cannot commit during install graph assembly`)),
+  });
+
+  const globalKeys = new Map<string, string>();
+  const addGlobalKey = (axis: string, value: string, capabilityId: string): void => {
+    const key = `${axis}:${value}`;
+    const previous = globalKeys.get(key);
+    if (previous !== undefined) {
+      addDiagnostic({
+        pass: "global_unique",
+        capabilityId,
+        reason: `Duplicate ${axis}: ${value}`,
+        detail: diagnosticDetail({ firstCapabilityId: previous }),
+      });
+      return;
+    }
+    globalKeys.set(key, capabilityId);
+  };
+  addGlobalKey(
+    "extension owner",
+    runtimeDiagnosticExtension.ownerId,
+    RUNTIME_DIAGNOSTIC_FACT_OWNER,
+  );
+  for (const prefix of runtimeDiagnosticExtension.kindPrefixes) {
+    addGlobalKey("extension prefix", prefix, RUNTIME_DIAGNOSTIC_FACT_OWNER);
+  }
+
+  for (const cap of sortedCaps) {
+    installedCaps.set(cap.capabilityId, handleFor(cap));
+    const diagnostics = createRuntimeDiagnosticApi(cap.capabilityId, async () => undefined);
+    const installCtx = {
+      capabilities: installedCaps,
+      host: resolvedHostFacts,
+      config,
+      secrets,
+      diagnostics,
+      identity: options.identity,
+    };
+    let installResult: CapabilityInstallation;
+    const installAttempt = syncResult(() => {
+      const installed = cap.install(installCtx);
+      if (isThenable(installed)) {
+        throw new Error(`Capability ${cap.capabilityId} install returned an async result`);
+      }
+      return installed;
+    });
+    if (Result.isFailure(installAttempt)) {
+      addDiagnostic({
+        pass: "install",
+        capabilityId: cap.capabilityId,
+        reason: `Capability ${cap.capabilityId} install failed`,
+        detail: describeCause(installAttempt.failure),
+      });
+      return failed();
+    }
+    installResult = installAttempt.success;
+
+    for (const eventKind of Object.values(cap.carrier.kind) as string[]) {
+      addGlobalKey("event kind", eventKind, cap.capabilityId);
+    }
+    for (const projection of installResult.projections ?? []) {
+      addGlobalKey("projection kind", projection.kind, cap.capabilityId);
+    }
+    for (const trigger of installResult.triggers ?? []) {
+      addGlobalKey("trigger kind", trigger.kind, cap.capabilityId);
+    }
+    for (const intent of installResult.declaredIntents ?? []) {
+      addGlobalKey("declared intent", intent.kind, cap.capabilityId);
+    }
+    for (const extension of installResult.extensions ?? []) {
+      allExtensions.push(extension);
+      addGlobalKey("extension owner", extension.ownerId, cap.capabilityId);
+      for (const prefix of extension.kindPrefixes) {
+        addGlobalKey("extension prefix", prefix, cap.capabilityId);
+      }
+    }
+    for (const bindingRef of Object.keys(installResult.capabilities ?? {})) {
+      addGlobalKey("agent capability binding", bindingRef, cap.capabilityId);
+    }
+    for (const toolName of Object.keys(installResult.bindings?.tools ?? {})) {
+      addGlobalKey("tool name", toolName, cap.capabilityId);
+    }
+    for (const routeName of Object.keys(installResult.bindings?.llmRoutes ?? {})) {
+      addGlobalKey("llm route", routeName, cap.capabilityId);
+    }
+    for (const materialName of Object.keys(installResult.bindings?.materials ?? {})) {
+      addGlobalKey("material", materialName, cap.capabilityId);
+    }
+
+    // Merge results
+    allProjections.push(...(installResult.projections ?? []));
+    allTriggers.push(...(installResult.triggers ?? []));
+    allDeclaredIntents.push(...(installResult.declaredIntents ?? []));
+    Object.assign(allAgentCapabilities, installResult.capabilities ?? {});
+
+    const handlerRegistration = syncResult(
+      () => installResult.eventHandlers?.({ capabilities: installedCaps }) ?? [],
+    );
+    if (Result.isFailure(handlerRegistration)) {
+      addDiagnostic({
+        pass: "install",
+        capabilityId: cap.capabilityId,
+        reason: `Capability ${cap.capabilityId} event handler registration failed`,
+        detail: describeCause(handlerRegistration.failure),
+      });
+      return failed();
+    }
+    if (installResult.eventHandlers !== undefined) {
+      handlerFactories.push({
+        capabilityId: cap.capabilityId,
+        register: installResult.eventHandlers,
+      });
+    }
+
+    if (installResult.bindings) {
+      mergedBindings = mergeBindings(mergedBindings, installResult.bindings);
+    }
+  }
+  if (diagnostics.length > 0) {
+    return failed();
+  }
+
+  const extensionValidation = validateExtensionDeclarations(allExtensions);
+  if (!extensionValidation.ok) {
+    addDiagnostic({
+      pass: "global_unique",
+      reason: `Invalid extension namespace: ${extensionValidation.error.kindPrefix}`,
+      capabilityId: extensionValidation.error.ownerId,
+      detail: diagnosticDetail({ claimedBy: extensionValidation.error.claimedBy }),
+    });
+    return failed();
+  }
+
+  const toolValidation = validateToolRegistry({ ...mergedBindings.tools });
+  if (!toolValidation.ok) {
+    addDiagnostic({
+      pass: "global_unique",
+      reason: "Invalid merged tool registry",
+      detail: diagnosticDetail(toolValidation.issues),
+    });
+    return failed();
+  }
+
+  return {
+    ok: true,
+    resolved: {
+      extensions: allExtensions,
+      agentBindings:
+        Object.keys(allAgentCapabilities).length === 0
+          ? {}
+          : { capabilities: allAgentCapabilities },
+      declaredIntents: allDeclaredIntents,
+      projections: allProjections,
+      triggers: allTriggers,
+      handlers: (context) =>
+        handlerFactories.flatMap(({ capabilityId, register }) =>
+          Array.from(register(context)).map((registration) => ({
+            kind: registration.kind,
+            handler: async (event) => {
+              const handlerResult = await promiseResult(() => registration.handler(event));
+              if (Result.isSuccess(handlerResult)) return;
+              const runtimeDiagnostic = context.capabilities.get(RUNTIME_DIAGNOSTIC_FACT_OWNER);
+              if (runtimeDiagnostic === undefined) {
+                throw new Error(
+                  "runtime diagnostic capability missing from resolved install graph",
+                );
+              }
+              await runtimeDiagnostic.commit({
+                event: RUNTIME_DIAGNOSTIC_KIND.HANDLER_FAILED,
+                data: {
+                  capabilityId,
+                  handler: registration.kind,
+                  reason: describeCause(handlerResult.failure),
+                  requestedEventId: event.id,
+                },
+              });
+            },
+          })),
+        ),
+      bindings: mergedBindings,
+      manifest: {
+        capabilities: sortedCaps.map((c) => c.capabilityId),
+        host: host.target,
+      },
+    },
+  };
+};
+
+/**
+ * Execute all preflight passes and resolve an in-memory runtime.
+ *
+ * @agentosPrimitive primitive.runtime.resolveRuntime
+ * @agentosInvariant invariant.resolve.single-assembly-point
+ * @agentosDocs docs/guides/capabilities/resolve-runtime.md
+ * @agentosTest packages/runtime/test/capability/resolve.test.ts
+ * @public
+ */
+export const resolveRuntime = async (
+  host: HostProfile,
+  capabilities: ReadonlyArray<CapabilityContract>,
+  options: ResolveRuntimeOptions,
+): Promise<ResolveRuntimeResult> => {
+  const graph = resolveRuntimeInstallGraph(host, capabilities, options);
+  if (!graph.ok) return graph;
+
   const truthIdentity = inMemoryConversationTruthIdentity(options.identity);
   let backend: InMemoryRuntimeBackend | undefined;
 
@@ -449,193 +760,30 @@ export const resolveRuntime = async (
     return { id: committed.id };
   };
 
-  const commitRuntimeDiagnostic = (
-    event: string,
-    data: unknown,
-  ): Promise<{ readonly id: number }> =>
-    commitBoundaryPayload(
-      RUNTIME_DIAGNOSTIC_FACT_OWNER,
-      runtimeDiagnosticBoundaryContract,
-      event,
-      data,
-    );
-
-  const handleFor = (cap: CapabilityContract): InstalledCapabilityHandle => ({
-    capabilityId: cap.capabilityId,
+  const runtimeDiagnosticHandle: CapabilityRuntimeHandle = {
     commit: ({ event, data }) =>
-      commitBoundaryPayload(cap.capabilityId, cap.carrier.boundaryContract, event, data),
-  });
-
-  const mergeBindings = (
-    left: AgentSubmitBindings,
-    right: AgentSubmitBindings,
-  ): AgentSubmitBindings => ({
-    ...left,
-    ...right,
-    llmRoutes: { ...left.llmRoutes, ...right.llmRoutes },
-    tools: { ...left.tools, ...right.tools },
-    materials: { ...left.materials, ...right.materials },
-    executionDomains: [...(left.executionDomains ?? []), ...(right.executionDomains ?? [])],
-    toolContext:
-      left.toolContext === undefined && right.toolContext === undefined
-        ? undefined
-        : {
-            extensions: {
-              ...left.toolContext?.extensions,
-              ...right.toolContext?.extensions,
-            },
-          },
-    toolIntents: [...(left.toolIntents ?? []), ...(right.toolIntents ?? [])],
-    receiptBackedTools: {
-      ...left.receiptBackedTools,
-      ...right.receiptBackedTools,
-    },
-    decisionInterrupts: [...(left.decisionInterrupts ?? []), ...(right.decisionInterrupts ?? [])],
-    ...(right.executionIdentity === undefined
-      ? left.executionIdentity === undefined
-        ? {}
-        : { executionIdentity: left.executionIdentity }
-      : { executionIdentity: right.executionIdentity }),
-  });
-
-  const globalKeys = new Map<string, string>();
-  const addGlobalKey = async (axis: string, value: string, capabilityId: string): Promise<void> => {
-    const key = `${axis}:${value}`;
-    const previous = globalKeys.get(key);
-    if (previous !== undefined) {
-      await addDiagnostic({
-        pass: "global_unique",
-        capabilityId,
-        reason: `Duplicate ${axis}: ${value}`,
-        detail: diagnosticDetail({ firstCapabilityId: previous }),
-      });
-      return;
-    }
-    globalKeys.set(key, capabilityId);
+      commitBoundaryPayload(
+        RUNTIME_DIAGNOSTIC_FACT_OWNER,
+        runtimeDiagnosticBoundaryContract,
+        event,
+        data,
+      ),
   };
-
-  for (const cap of sortedCaps) {
-    installedCaps.set(cap.capabilityId, handleFor(cap));
-    const diagnostics = createRuntimeDiagnosticApi(cap.capabilityId, (_contract, event, payload) =>
-      commitRuntimeDiagnostic(event, payload),
-    );
-    const installCtx = {
-      capabilities: installedCaps,
-      host: resolvedHostFacts,
-      config,
-      secrets,
-      diagnostics,
-      identity: options.identity,
-    };
-    let installResult: CapabilityInstallation;
-    const installAttempt = await promiseResult(() => cap.install(installCtx));
-    if (Result.isFailure(installAttempt)) {
-      await addDiagnostic({
-        pass: "install",
-        capabilityId: cap.capabilityId,
-        reason: `Capability ${cap.capabilityId} install failed`,
-        detail: describeCause(installAttempt.failure),
-      });
-      return failed();
-    }
-    installResult = installAttempt.success;
-
-    for (const eventKind of Object.values(cap.carrier.kind) as string[]) {
-      await addGlobalKey("event kind", eventKind, cap.capabilityId);
-    }
-    for (const projection of installResult.projections ?? []) {
-      await addGlobalKey("projection kind", projection.kind, cap.capabilityId);
-    }
-    for (const trigger of installResult.triggers ?? []) {
-      await addGlobalKey("trigger kind", trigger.kind, cap.capabilityId);
-    }
-    for (const intent of installResult.declaredIntents ?? []) {
-      await addGlobalKey("declared intent", intent.kind, cap.capabilityId);
-    }
-    for (const extension of installResult.extensions ?? []) {
-      allExtensions.push(extension);
-      await addGlobalKey("extension owner", extension.ownerId, cap.capabilityId);
-      for (const prefix of extension.kindPrefixes) {
-        await addGlobalKey("extension prefix", prefix, cap.capabilityId);
-      }
-    }
-    for (const toolName of Object.keys(installResult.bindings?.tools ?? {})) {
-      await addGlobalKey("tool name", toolName, cap.capabilityId);
-    }
-    for (const routeName of Object.keys(installResult.bindings?.llmRoutes ?? {})) {
-      await addGlobalKey("llm route", routeName, cap.capabilityId);
-    }
-    for (const materialName of Object.keys(installResult.bindings?.materials ?? {})) {
-      await addGlobalKey("material", materialName, cap.capabilityId);
-    }
-
-    // Merge results
-    allProjections.push(...(installResult.projections ?? []));
-    allTriggers.push(...(installResult.triggers ?? []));
-
-    let handlers: ReadonlyArray<{ readonly kind: string; readonly handler: EventHandler }>;
-    const handlerRegistration = syncResult(() => installResult.eventHandlers?.(installCtx) ?? []);
-    if (Result.isFailure(handlerRegistration)) {
-      await addDiagnostic({
-        pass: "install",
-        capabilityId: cap.capabilityId,
-        reason: `Capability ${cap.capabilityId} event handler registration failed`,
-        detail: describeCause(handlerRegistration.failure),
-      });
-      return failed();
-    }
-    handlers = handlerRegistration.success;
-    for (const registration of handlers) {
-      allEventHandlers.push({
-        kind: registration.kind,
-        handler: async (event) => {
-          const handlerResult = await promiseResult(() => registration.handler(event));
-          if (Result.isFailure(handlerResult)) {
-            await commitRuntimeDiagnostic(RUNTIME_DIAGNOSTIC_KIND.HANDLER_FAILED, {
-              capabilityId: cap.capabilityId,
-              handler: registration.kind,
-              reason: describeCause(handlerResult.failure),
-              requestedEventId: event.id,
-            });
-          }
-        },
-      });
-    }
-
-    if (installResult.bindings) {
-      mergedBindings = mergeBindings(mergedBindings, installResult.bindings);
-    }
-  }
-  if (diagnostics.length > 0) {
-    return failed();
-  }
-
-  const extensionValidation = validateExtensionDeclarations(allExtensions);
-  if (!extensionValidation.ok) {
-    await addDiagnostic({
-      pass: "global_unique",
-      reason: `Invalid extension namespace: ${extensionValidation.error.kindPrefix}`,
-      capabilityId: extensionValidation.error.ownerId,
-      detail: diagnosticDetail({ claimedBy: extensionValidation.error.claimedBy }),
+  const capabilityHandles = new Map<string, CapabilityRuntimeHandle>([
+    [RUNTIME_DIAGNOSTIC_FACT_OWNER, runtimeDiagnosticHandle],
+  ]);
+  for (const cap of capabilities) {
+    capabilityHandles.set(cap.capabilityId, {
+      commit: ({ event, data }) =>
+        commitBoundaryPayload(cap.capabilityId, cap.carrier.boundaryContract, event, data),
     });
-    return failed();
-  }
-
-  const toolValidation = validateToolRegistry({ ...mergedBindings.tools });
-  if (!toolValidation.ok) {
-    await addDiagnostic({
-      pass: "global_unique",
-      reason: "Invalid merged tool registry",
-      detail: diagnosticDetail(toolValidation.issues),
-    });
-    return failed();
   }
 
   const installGraph = defineResolvedRuntimeInstallGraph({
     identity: truthIdentity,
-    projections: allProjections,
-    triggers: allTriggers,
-    handlers: allEventHandlers,
+    projections: graph.resolved.projections,
+    triggers: graph.resolved.triggers,
+    handlers: graph.resolved.handlers({ capabilities: capabilityHandles }),
     llm: options.llm ?? {},
   });
   backend = createInMemoryRuntimeBackend(installGraph);
@@ -646,11 +794,8 @@ export const resolveRuntime = async (
       layer: backend.layer,
       state: backend.state,
       installGraph,
-      bindings: mergedBindings,
-      manifest: {
-        capabilities: sortedCaps.map((c) => c.capabilityId),
-        host: host.target,
-      },
+      bindings: graph.resolved.bindings,
+      manifest: graph.resolved.manifest,
     },
   };
 };

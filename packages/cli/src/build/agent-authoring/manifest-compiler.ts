@@ -5,6 +5,7 @@ import { authoredValue } from "@agent-os/core/authored-value";
 import { isAuthorityRef, type AuthorityRef } from "@agent-os/core/effect-claim";
 import { isMaterialRef, type MaterialRef } from "@agent-os/core/material-ref";
 import type {
+  AgentCapabilityBindingRef,
   AgentExecutionDomainRef,
   AgentInstructionsRef,
   AgentInteractionRef,
@@ -101,6 +102,7 @@ export interface AuthoredAgentJson {
   readonly scope?: AgentScopeIdentityPolicy;
   readonly effectAuthorityRef?: AuthorityRef;
   readonly handlers?: ReadonlyArray<HandlerKind>;
+  readonly capabilities?: Readonly<Record<string, AgentCapabilityBindingRef>>;
   readonly llmRoutes?: Readonly<Record<string, AgentLlmRouteBindingRef>>;
   readonly tools?: Readonly<Record<string, AuthoredWorkspaceDefaultToolControl>>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
@@ -564,6 +566,7 @@ const agentAllowedFields = new Set([
   "scope",
   "effectAuthorityRef",
   "handlers",
+  "capabilities",
   "llmRoutes",
   "tools",
   "materials",
@@ -762,6 +765,17 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
   }
   const handlers =
     value.handlers === undefined ? undefined : parseHandlers(state, path, value.handlers);
+  const capabilities =
+    value.capabilities === undefined
+      ? undefined
+      : parseRecordMap<AgentCapabilityBindingRef>(
+          state,
+          path,
+          "/capabilities",
+          value.capabilities,
+          (_capability, child) =>
+            parseBindingRefObject<AgentCapabilityBindingRef>(state, path, "/capabilities", child),
+        );
   const llmRoutes =
     value.llmRoutes === undefined
       ? undefined
@@ -840,6 +854,16 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
   }
   if (handlers !== undefined && handlers !== null)
     putAuthored(state, "/handlers", handlers, authorOrigin(path, "/handlers"));
+  if (capabilities !== undefined && capabilities !== null) {
+    for (const [capabilityId, ref] of Object.entries(capabilities)) {
+      putAuthored(
+        state,
+        `/capabilities/${capabilityId}/bindingRef`,
+        ref.bindingRef,
+        authorOrigin(path, `/capabilities/${capabilityId}/bindingRef`),
+      );
+    }
+  }
   if (llmRoutes !== undefined && llmRoutes !== null) {
     for (const [route, ref] of Object.entries(llmRoutes)) {
       putAuthored(
@@ -1228,6 +1252,10 @@ const buildManifest = <K extends HandlerKind>(state: CompilerState): AgentManife
     const bindingRef = factValue<string>(state, `/llmRoutes/${id}/bindingRef`);
     return bindingRef === undefined ? null : { bindingRef };
   });
+  const capabilities = collectRecord<AgentCapabilityBindingRef>(state, "/capabilities/", (id) => {
+    const bindingRef = factValue<string>(state, `/capabilities/${id}/bindingRef`);
+    return bindingRef === undefined ? null : { bindingRef };
+  });
   const tools = collectRecord<AgentToolBindingRef>(state, "/tools/", (id) =>
     collectTool(state, id),
   );
@@ -1260,6 +1288,7 @@ const buildManifest = <K extends HandlerKind>(state: CompilerState): AgentManife
     handlers: factValue<ReadonlyArray<K>>(state, "/handlers") ?? [],
     ...(version === undefined ? {} : { version }),
     ...(instructions === undefined ? {} : { instructions }),
+    ...(capabilities === undefined ? {} : { capabilities }),
     ...(llmRoutes === undefined ? {} : { llmRoutes }),
     ...(tools === undefined ? {} : { tools }),
     ...(materials === undefined ? {} : { materials }),

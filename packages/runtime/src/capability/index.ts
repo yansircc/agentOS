@@ -1,5 +1,7 @@
 export {
   defineCapability,
+  type CapabilityEventHandlerContext,
+  type CapabilityRuntimeHandle,
   type CapabilityContract,
   type CapabilityInstallation,
   type CapabilityInstallContext,
@@ -19,7 +21,11 @@ export {
   type WorkspaceOperationEnvResolverInput,
 } from "./workspace-operations";
 export {
+  resolveRuntimeInstallGraph,
   resolveRuntime,
+  type ResolvedCapabilityInstallGraph,
+  type ResolvedCapabilityEventHandlerFactory,
+  type ResolveRuntimeInstallGraphResult,
   type ResolvedRuntime,
   type ResolveRuntimeResult,
   type ResolveRuntimeOptions,
