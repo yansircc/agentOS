@@ -1,3 +1,5 @@
+import { workspacePackageRecords as workspaceManifestPackageRecords } from "../../lib/workspace-manifest.mjs";
+
 export const createClientBoundaryChecks = ({
   fs,
   path,
@@ -33,40 +35,7 @@ export const createClientBoundaryChecks = ({
   const clientSourceFilePattern = /\.(?:ts|tsx|mts|cts|jsx|js|mjs|cjs|svelte|css|scss|less)$/u;
   const clientTypeScriptOnlyPattern = /\.ts$/u;
 
-  const readJsonFile = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
-
-  const workspacePackageRecords = () => {
-    const rootPackage = readJson("package.json");
-    const workspaces = Array.isArray(rootPackage.workspaces)
-      ? rootPackage.workspaces
-      : Array.isArray(rootPackage.workspaces?.packages)
-        ? rootPackage.workspaces.packages
-        : [];
-    const records = [];
-
-    for (const workspace of workspaces) {
-      if (typeof workspace !== "string") continue;
-      if (workspace.endsWith("/*")) {
-        const base = workspace.slice(0, -2);
-        const baseDir = path.join(repoRoot, base);
-        if (!fs.existsSync(baseDir)) continue;
-        for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          const packagePath = `${base}/${entry.name}`;
-          const packageJsonPath = path.join(repoRoot, packagePath, "package.json");
-          if (!fs.existsSync(packageJsonPath)) continue;
-          records.push({ name: readJsonFile(packageJsonPath).name, path: packagePath });
-        }
-        continue;
-      }
-
-      const packageJsonPath = path.join(repoRoot, workspace, "package.json");
-      if (!fs.existsSync(packageJsonPath)) continue;
-      records.push({ name: readJsonFile(packageJsonPath).name, path: workspace });
-    }
-
-    return records.sort((left, right) => left.path.localeCompare(right.path));
-  };
+  const workspacePackageRecords = () => workspaceManifestPackageRecords(repoRoot);
 
   const clientImportSpecifiers = (source) => {
     const specifiers = [];

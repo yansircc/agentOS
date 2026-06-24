@@ -16,11 +16,11 @@ must remain `published: false` in `docs/surface.json`.
 Run the generated site locally from the repo root:
 
 ```sh
-bun run docs:site:dev
+pnpm run docs:site:dev
 ```
 
 ## Verification
 
 ```sh
-bun run docs:site:build
+pnpm run docs:site:build
 ```

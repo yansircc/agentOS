@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { bundleModuleForNode } from "./lib/ts-module-loader.mjs";
 import {
   algorithmicCheckerAcceptsArgs,
   hasAlgorithmicChecker,
@@ -64,25 +66,37 @@ const expectNoExtraArgs = (args, command) => {
   }
 };
 
+const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
 const runBuild = async (args) => {
   const runner = fileURLToPath(new URL("./build/build-cli.ts", import.meta.url));
-  await new Promise((resolve, reject) => {
-    const child = spawn("bun", [runner, "build", ...args], { stdio: "inherit" });
-    child.on("error", (error) => {
-      reject(new Error(`agentos build: failed to start bun: ${error.message}`));
-    });
-    child.on("exit", (code, signal) => {
-      if (signal !== null) {
-        reject(new Error(`agentos build: build runner terminated by ${signal}`));
-        return;
-      }
-      if (code !== 0) {
-        reject(new Error(`agentos build: build runner failed with exit code ${code ?? 1}`));
-        return;
-      }
-      resolve();
-    });
+  const bundled = await bundleModuleForNode(runner, {
+    prefix: "agentos-build-runner-",
+    tempRoot: path.join(packageRootFromMain(), "node_modules", ".cache", "agentos-build"),
   });
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [bundled.outfile, "build", ...args], {
+        stdio: "inherit",
+      });
+      child.on("error", (error) => {
+        reject(new Error(`agentos build: failed to start node build runner: ${error.message}`));
+      });
+      child.on("exit", (code, signal) => {
+        if (signal !== null) {
+          reject(new Error(`agentos build: build runner terminated by ${signal}`));
+          return;
+        }
+        if (code !== 0) {
+          reject(new Error(`agentos build: build runner failed with exit code ${code ?? 1}`));
+          return;
+        }
+        resolve();
+      });
+    });
+  } finally {
+    await bundled.cleanup();
+  }
 };
 
 const runCheck = async (args) => {

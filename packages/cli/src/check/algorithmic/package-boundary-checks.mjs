@@ -825,7 +825,8 @@ export const createPackageBoundaryChecks = ({
     );
     fs.rmSync(outDir, { recursive: true, force: true });
     const args = [
-      "build",
+      "exec",
+      "esbuild",
       entryPath,
       "--outdir",
       outDir,
@@ -835,7 +836,7 @@ export const createPackageBoundaryChecks = ({
     if (profile.ambient === "cloudflare-worker") args.push("--external", "cloudflare:*");
     if (profile.ambient !== "node") args.push("--external", "node:*");
     try {
-      execFileSync("bun", args, {
+      execFileSync("pnpm", args, {
         cwd: repoRoot,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],

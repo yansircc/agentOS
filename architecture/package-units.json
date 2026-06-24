@@ -19,7 +19,7 @@
         "requiredPeers": [
           {
             "name": "effect",
-            "range": "^4.0.0-beta.84"
+            "range": "catalog:"
           }
         ]
       },
@@ -172,7 +172,7 @@
         "requiredPeers": [
           {
             "name": "effect",
-            "range": "^4.0.0-beta.84"
+            "range": "catalog:"
           }
         ]
       },
@@ -320,7 +320,7 @@
         "requiredPeers": [
           {
             "name": "effect",
-            "range": "^4.0.0-beta.84"
+            "range": "catalog:"
           }
         ]
       },

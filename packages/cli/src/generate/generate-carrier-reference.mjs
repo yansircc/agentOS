@@ -1,12 +1,12 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   checkProjectionSink,
   defineProjectionSpec,
   runProjectionSink,
 } from "../lib/projection-sink.mjs";
+import { importBundledModule } from "../lib/ts-module-loader.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -204,7 +204,9 @@ const validateNamespace = (namespace, pkg) => {
 
 const carrierModuleEntries = async (file) => {
   const entries = [];
-  const mod = await import(pathToFileURL(path.join(root, file)).href);
+  const mod = await importBundledModule(path.join(root, file), {
+    prefix: "agentos-carrier-reference-",
+  });
   for (const [exportName, value] of Object.entries(mod)) {
     entries.push({ exportName, value, file });
   }

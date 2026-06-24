@@ -39,7 +39,7 @@ void test("algorithmic rules must not execute package commands", () => {
         engine: "algorithmic",
         checker: "event-namespaces",
         reason: "requires AST collection across package source declarations",
-        packageCommands: ["bun run --cwd packages/runtime test"],
+        packageCommands: ["pnpm --filter @agent-os/runtime test"],
       },
     }).join("\n"),
     /must not execute packageCommands/u,

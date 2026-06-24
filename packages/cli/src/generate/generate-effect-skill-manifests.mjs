@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { workspacePackagePaths } from "../lib/workspace-manifest.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -55,39 +56,6 @@ const validateAllowedAdapters = ({ label, allowedAdapters, resolvePath }) => {
   }
 };
 
-const workspacePackagePaths = () => {
-  const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-  const workspaces = Array.isArray(rootPackage.workspaces)
-    ? rootPackage.workspaces
-    : Array.isArray(rootPackage.workspaces?.packages)
-      ? rootPackage.workspaces.packages
-      : [];
-  const paths = new Set();
-
-  for (const workspace of workspaces) {
-    if (typeof workspace !== "string") continue;
-    if (workspace.endsWith("/*")) {
-      const base = workspace.slice(0, -2);
-      const baseDir = path.join(root, base);
-      if (!fs.existsSync(baseDir)) continue;
-      for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const packagePath = `${base}/${entry.name}`;
-        if (fs.existsSync(path.join(root, packagePath, "package.json"))) {
-          paths.add(packagePath);
-        }
-      }
-      continue;
-    }
-
-    if (fs.existsSync(path.join(root, workspace, "package.json"))) {
-      paths.add(workspace);
-    }
-  }
-
-  return [...paths].sort((left, right) => left.localeCompare(right));
-};
-
 const scannerPackagesFromWorkspaces = (rootSource) => {
   if (Object.hasOwn(rootSource, "packages")) {
     failures.push("docs/effect-skill.json root.packages duplicates package ownership");
@@ -95,7 +63,7 @@ const scannerPackagesFromWorkspaces = (rootSource) => {
 
   const packageDefaults = isRecord(rootSource.packageDefaults) ? rootSource.packageDefaults : {};
   const packageOverrides = isRecord(rootSource.packageOverrides) ? rootSource.packageOverrides : {};
-  const paths = workspacePackagePaths();
+  const paths = workspacePackagePaths(root);
   const pathSet = new Set(paths);
 
   for (const packagePath of Object.keys(packageOverrides)) {
@@ -176,7 +144,7 @@ if (packageManifests === null) {
     writeJson(`${packagePath}/.effect-skill.json`, manifest);
   }
 
-  for (const workspacePath of workspacePackagePaths()) {
+  for (const workspacePath of workspacePackagePaths(root)) {
     const packagePath = String(workspacePath);
     const manifestFile = `${packagePath}/.effect-skill.json`;
     if (fs.existsSync(path.join(root, manifestFile)) && !expectedPackageFiles.has(manifestFile)) {

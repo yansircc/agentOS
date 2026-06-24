@@ -10,18 +10,18 @@ Run from the repo root or an assigned parallel worktree.
 ## Standard Gates
 
 ```sh
-bun run check
-bun run docs:check
-bun run effect-manifests:check
-bun run agentos -- check guard public-api
-bun run typecheck
-bun run test
+pnpm run check
+pnpm run docs:check
+pnpm run effect-manifests:check
+pnpm run agentos check guard public-api
+pnpm run typecheck
+pnpm run test
 rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan
 effect-skill-scan /Users/yansir/code/52/agentOS --strict --output gate-json --evidence /tmp/agentos-effect-scan
 git diff --check
 ```
 
-`bun run check` includes formatting, generated docs validation, public API
+`pnpm run check` includes formatting, generated docs validation, public API
 intent validation, typecheck, and package tests. The explicit commands are
 still useful when isolating failures.
 
@@ -32,14 +32,14 @@ or debugging.
 ## Release Gate
 
 ```sh
-bun run check:release
-bun run check:full
+pnpm run check:release
+pnpm run check:full
 ```
 
-`bun run check:release` adds internal package distribution validation, the
+`pnpm run check:release` adds internal package distribution validation, the
 internal consumer smoke, and the Effect scanner to the standard gate. Use it
 before publishing or when changing package exports, release metadata, or
-distribution tooling. `bun run check:full` adds the docs site build and runtime
+distribution tooling. `pnpm run check:full` adds the docs site build and runtime
 harnesses for release-level integration.
 
 ## Documentation Gate
@@ -64,8 +64,8 @@ projections. Root and package-local
 source fact and run:
 
 ```sh
-bun run docs:generate
-bun run effect-manifests:generate
+pnpm run docs:generate
+pnpm run effect-manifests:generate
 ```
 
 ## Public API Gate

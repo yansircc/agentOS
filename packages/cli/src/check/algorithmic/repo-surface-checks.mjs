@@ -99,7 +99,7 @@ export const createRepoSurfaceChecks = ({
         failures.push(...validateSourceTsdocRecords(target, records));
         const expected = `${sourceTsdocApiMarkdown(target, records).replace(/\s+$/u, "")}\n`;
         if (fs.readFileSync(manifest, "utf8") !== expected) {
-          failures.push(`${target.apiSource} is stale; run bun run docs:generate`);
+          failures.push(`${target.apiSource} is stale; run pnpm run docs:generate`);
         }
       } else if (mode !== "manual") {
         failures.push(`${target.name}: unsupported apiSourceMode ${mode}`);

@@ -13,6 +13,7 @@ import {
   sourceTsdocRecordsForPackage,
   validateSourceTsdocRecords,
 } from "../lib/public-api-model.mjs";
+import { workspacePackagePaths } from "../lib/workspace-manifest.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -170,39 +171,6 @@ if (hardCodedReleaseLinePattern.test(rawSurfaceText)) {
   failures.push("docs/surface.json must use {releaseLine}; hard-coded release lines are forbidden");
 }
 
-const workspacePackagePaths = () => {
-  const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-  const workspaces = Array.isArray(rootPackage.workspaces)
-    ? rootPackage.workspaces
-    : Array.isArray(rootPackage.workspaces?.packages)
-      ? rootPackage.workspaces.packages
-      : [];
-  const paths = new Set();
-
-  for (const workspace of workspaces) {
-    if (typeof workspace !== "string") continue;
-    if (workspace.endsWith("/*")) {
-      const base = workspace.slice(0, -2);
-      const baseDir = path.join(root, base);
-      if (!fs.existsSync(baseDir)) continue;
-      for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const packagePath = `${base}/${entry.name}`;
-        if (fs.existsSync(path.join(root, packagePath, "package.json"))) {
-          paths.add(packagePath);
-        }
-      }
-      continue;
-    }
-
-    if (fs.existsSync(path.join(root, workspace, "package.json"))) {
-      paths.add(workspace);
-    }
-  }
-
-  return [...paths].sort((left, right) => left.localeCompare(right));
-};
-
 for (const pkg of packages) {
   const packageJsonPath = path.join(root, pkg.path, "package.json");
   if (!fs.existsSync(packageJsonPath)) {
@@ -267,7 +235,7 @@ const validateEntrypointAudience = (pkg) => {
 
 for (const pkg of packages) validateEntrypointAudience(pkg);
 
-for (const packagePath of workspacePackagePaths()) {
+for (const packagePath of workspacePackagePaths(root)) {
   const pkgPath = String(packagePath);
   if (!packagesByPath.has(pkgPath)) {
     failures.push(`${pkgPath} is missing from docs/surface.json`);

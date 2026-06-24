@@ -5,10 +5,36 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { buildSync } from "esbuild";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const cli = path.join(repoRoot, "packages/cli/src/main.mjs");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
+
+const runTypeScript = (source, { cwd = repoRoot, resolveDir = repoRoot } = {}) => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "agentos-ts-eval-"));
+  try {
+    const outfile = path.join(tempDir, "entry.mjs");
+    buildSync({
+      stdin: {
+        contents: source,
+        loader: "ts",
+        resolveDir,
+        sourcefile: "entry.ts",
+      },
+      outfile,
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      target: "node22",
+      external: ["cloudflare:*"],
+      logLevel: "silent",
+    });
+    return spawnSync(process.execPath, [outfile], { cwd, encoding: "utf8" });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+};
 
 const digestText = (text) => {
   let hash = 0x811c9dc5;
@@ -20,39 +46,34 @@ const digestText = (text) => {
 };
 
 void test("compileAgentTree keeps skills as authoring-only output", () => {
-  const result = spawnSync(
-    "bun",
+  const result = runTypeScript(
     [
-      "--eval",
-      [
-        'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-        "const compiled = compileAgentTree({",
-        "  files: [",
-        '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-        '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
-        '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse echo." },',
-        '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nReview carefully." },',
-        "  ],",
-        "});",
-        "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-        "const normalized = normalizeAgentOsConfig({",
-        '  profile: "chat@1",',
-        '  agent: "./agent",',
-        '  deployment: { id: "skills-fixture" },',
-        '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
-        '  client: { kind: "browser-direct@1" },',
-        '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-        "}, compiled.value);",
-        "if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
-        "console.log(JSON.stringify({",
-        "  skills: compiled.value.skills,",
-        "  normalizedSkills: normalized.value.skills,",
-        '  manifestHasSkills: Object.hasOwn(compiled.value.manifest, "skills"),',
-        "  manifestToolNames: Object.keys(compiled.value.manifest.tools ?? {}).sort(),",
-        "}));",
-      ].join("\n"),
-    ],
-    { cwd: repoRoot, encoding: "utf8" },
+      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const compiled = compileAgentTree({",
+      "  files: [",
+      '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
+      '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse echo." },',
+      '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nReview carefully." },',
+      "  ],",
+      "});",
+      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+      "const normalized = normalizeAgentOsConfig({",
+      '  profile: "chat@1",',
+      '  agent: "./agent",',
+      '  deployment: { id: "skills-fixture" },',
+      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
+      '  client: { kind: "browser-direct@1" },',
+      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      "}, compiled.value);",
+      "if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
+      "console.log(JSON.stringify({",
+      "  skills: compiled.value.skills,",
+      "  normalizedSkills: normalized.value.skills,",
+      '  manifestHasSkills: Object.hasOwn(compiled.value.manifest, "skills"),',
+      "  manifestToolNames: Object.keys(compiled.value.manifest.tools ?? {}).sort(),",
+      "}));",
+    ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
@@ -75,32 +96,27 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
 });
 
 void test("compileAgentTree rejects invalid skill identity and v1 sibling files", () => {
-  const result = spawnSync(
-    "bun",
+  const result = runTypeScript(
     [
-      "--eval",
-      [
-        'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
-        "const compile = (file) => compileAgentTree({ files: [",
-        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-        "  file,",
-        "] });",
-        'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\n---\\nUse echo." });',
-        'const duplicateName = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: wrong\\nname: echo\\n---\\nUse echo." });',
-        'const sibling = compile({ path: "agent/skills/echo/references/ref.md", kind: "markdown", text: "Ref." });',
-        "const duplicate = compileAgentTree({ files: [",
-        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-        '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nOne." },',
-        '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\n---\\nTwo." },',
-        "] });",
-        "const reservedTool = compileAgentTree({ files: [",
-        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-        '  { path: "agent/tools/load_skill.ts", kind: "tool", declaration: {} },',
-        "] });",
-        "console.log(JSON.stringify({ mismatch, duplicateName, sibling, duplicate, reservedTool }));",
-      ].join("\n"),
-    ],
-    { cwd: repoRoot, encoding: "utf8" },
+      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const compile = (file) => compileAgentTree({ files: [",
+      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      "  file,",
+      "] });",
+      'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\n---\\nUse echo." });',
+      'const duplicateName = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: wrong\\nname: echo\\n---\\nUse echo." });',
+      'const sibling = compile({ path: "agent/skills/echo/references/ref.md", kind: "markdown", text: "Ref." });',
+      "const duplicate = compileAgentTree({ files: [",
+      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nOne." },',
+      '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\n---\\nTwo." },',
+      "] });",
+      "const reservedTool = compileAgentTree({ files: [",
+      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '  { path: "agent/tools/load_skill.ts", kind: "tool", declaration: {} },',
+      "] });",
+      "console.log(JSON.stringify({ mismatch, duplicateName, sibling, duplicate, reservedTool }));",
+    ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
@@ -418,48 +434,43 @@ void test("agentos build compiles chat profile without workspace surface", () =>
 });
 
 void test("static target injects skill advert and load_skill for workspace and chat profiles", () => {
-  const result = spawnSync(
-    "bun",
+  const result = runTypeScript(
     [
-      "--eval",
-      [
-        'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-        "const compiled = compileAgentTree({ files: [",
-        '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-        '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
-        '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse workspace echo skill." },',
-        '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nUse chat review skill." },',
-        "] });",
-        "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-        "const baseConfig = {",
-        '  agent: "./agent",',
-        '  deployment: { id: "target-skills" },',
-        '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
-        '  client: { kind: "browser-direct@1" },',
-        '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-        "};",
-        "const targetFor = (config) => {",
-        "  const normalized = normalizeAgentOsConfig(config, compiled.value);",
-        "  if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
-        "  const linked = linkWorkspaceStaticTarget(normalized.value);",
-        "  if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
-        '  return linked.value.files.find((file) => file.path === ".agentos/generated/target.ts").text;',
-        "};",
-        'const workspaceTarget = targetFor({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } });',
-        'const chatTarget = targetFor({ ...baseConfig, profile: "chat@1" });',
-        "const markers = (text) => ({",
-        "  defineProductTool: text.includes('defineProductTool'),",
-        "  advert: text.includes('generatedSkillsSystemAdvert'),",
-        "  loadSkill: text.includes('name: \"load_skill\"'),",
-        "  system: text.includes('system: generatedSystemPrompt(input.system)'),",
-        "  echo: text.includes('Use workspace echo skill.'),",
-        "  review: text.includes('Use chat review skill.'),",
-        "  frameworkTools: text.includes('...generatedFrameworkTools'),",
-        "});",
-        "console.log(JSON.stringify({ workspace: markers(workspaceTarget), chat: markers(chatTarget) }));",
-      ].join("\n"),
-    ],
-    { cwd: repoRoot, encoding: "utf8" },
+      'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const compiled = compileAgentTree({ files: [",
+      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
+      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse workspace echo skill." },',
+      '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nUse chat review skill." },',
+      "] });",
+      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+      "const baseConfig = {",
+      '  agent: "./agent",',
+      '  deployment: { id: "target-skills" },',
+      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
+      '  client: { kind: "browser-direct@1" },',
+      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      "};",
+      "const targetFor = (config) => {",
+      "  const normalized = normalizeAgentOsConfig(config, compiled.value);",
+      "  if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
+      "  const linked = linkWorkspaceStaticTarget(normalized.value);",
+      "  if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
+      '  return linked.value.files.find((file) => file.path === ".agentos/generated/target.ts").text;',
+      "};",
+      'const workspaceTarget = targetFor({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } });',
+      'const chatTarget = targetFor({ ...baseConfig, profile: "chat@1" });',
+      "const markers = (text) => ({",
+      "  defineProductTool: text.includes('defineProductTool'),",
+      "  advert: text.includes('generatedSkillsSystemAdvert'),",
+      "  loadSkill: text.includes('name: \"load_skill\"'),",
+      "  system: text.includes('system: generatedSystemPrompt(input.system)'),",
+      "  echo: text.includes('Use workspace echo skill.'),",
+      "  review: text.includes('Use chat review skill.'),",
+      "  frameworkTools: text.includes('...generatedFrameworkTools'),",
+      "});",
+      "console.log(JSON.stringify({ workspace: markers(workspaceTarget), chat: markers(chatTarget) }));",
+    ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
@@ -531,50 +542,51 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     assert.match(target, /ECHO_MARKER_560/);
     assert.match(target, /name: "load_skill"/);
 
-    const smoke = spawnSync(
-      "bun",
+    let smokeSource = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
+    smokeSource = smokeSource
+      .replace(
+        'import { createAgentDurableObject } from "@agent-os/runtime/cloudflare";',
+        "const createAgentDurableObject = () => class {};",
+      )
+      .replace(
+        'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/runtime/llm-effect-ai";',
+        "const OpenAiCompatibleLlmTransportLive = {};",
+      );
+    smokeSource += `
+export const __agentosSkillSmoke = async () => {
+  const agent = Object.create(AgentOS.prototype);
+  agent.targetEnv = { AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model" };
+  agent.submitWithBindings = async (spec, bindings) => {
+    const tools = bindings.tools ?? {};
+    const loaded = await Effect.runPromise(
+      unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "echo" })),
+    );
+    let unknownRejected = false;
+    try {
+      await Effect.runPromise(
+        unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "missing" })),
+      );
+    } catch {
+      unknownRejected = true;
+    }
+    return {
+      toolNames: Object.keys(tools).sort(),
+      systemIncludesAdvert: spec.system.includes("Available agent skills"),
+      loaded,
+      unknownRejected,
+    };
+  };
+  return await agent.submitRunInput({ intent: "smoke", context: {} });
+};
+`;
+    writeFileSync(path.join(root, ".agentos/generated/target.smoke.ts"), smokeSource);
+    const smoke = runTypeScript(
       [
-        "--eval",
-        [
-          'import { readFileSync, writeFileSync } from "node:fs";',
-          'let source = readFileSync(".agentos/generated/target.ts", "utf8");',
-          "source = source",
-          '  .replace(\'import { createAgentDurableObject } from "@agent-os/runtime/cloudflare";\', "const createAgentDurableObject = () => class {};")',
-          '  .replace(\'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/runtime/llm-effect-ai";\', "const OpenAiCompatibleLlmTransportLive = {};");',
-          "source += `",
-          "export const __agentosSkillSmoke = async () => {",
-          "  const agent = Object.create(AgentOS.prototype);",
-          '  agent.targetEnv = { AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model" };',
-          "  agent.submitWithBindings = async (spec, bindings) => {",
-          "    const tools = bindings.tools ?? {};",
-          "    const loaded = await Effect.runPromise(",
-          '      unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "echo" })),',
-          "    );",
-          "    let unknownRejected = false;",
-          "    try {",
-          "      await Effect.runPromise(",
-          '        unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "missing" })),',
-          "      );",
-          "    } catch {",
-          "      unknownRejected = true;",
-          "    }",
-          "    return {",
-          "      toolNames: Object.keys(tools).sort(),",
-          '      systemIncludesAdvert: spec.system.includes("Available agent skills"),',
-          "      loaded,",
-          "      unknownRejected,",
-          "    };",
-          "  };",
-          '  return await agent.submitRunInput({ intent: "smoke", context: {} });',
-          "};",
-          "`;",
-          'writeFileSync(".agentos/generated/target.smoke.ts", source);',
-          'const { __agentosSkillSmoke } = await import("./.agentos/generated/target.smoke.ts");',
-          "const result = await __agentosSkillSmoke();",
-          "console.log(JSON.stringify(result));",
-        ].join("\n"),
-      ],
-      { cwd: root, encoding: "utf8" },
+        'import { __agentosSkillSmoke } from "./.agentos/generated/target.smoke.ts";',
+        "const result = await __agentosSkillSmoke();",
+        "console.log(JSON.stringify(result));",
+      ].join("\n"),
+      { cwd: root, resolveDir: root },
     );
     assert.equal(smoke.status, 0, smoke.stderr);
     const output = JSON.parse(smoke.stdout);
@@ -726,20 +738,15 @@ void test("agentos build keeps workspace and chat profile boundaries closed", ()
 });
 
 void test("llm material env names fail closed on ref folding collisions", () => {
-  const result = spawnSync(
-    "bun",
+  const result = runTypeScript(
     [
-      "--eval",
-      [
-        'import { llmMaterialEnvBindingsForRefs, llmMaterialEnvNameCollisionIssues } from "./packages/cli/src/build/agent-authoring.ts";',
-        "const bindings = llmMaterialEnvBindingsForRefs([",
-        '  { kind: "endpoint", ref: "a.b" },',
-        '  { kind: "endpoint", ref: "a-b" },',
-        "]);",
-        "console.log(JSON.stringify(llmMaterialEnvNameCollisionIssues(bindings)));",
-      ].join("\n"),
-    ],
-    { cwd: repoRoot, encoding: "utf8" },
+      'import { llmMaterialEnvBindingsForRefs, llmMaterialEnvNameCollisionIssues } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const bindings = llmMaterialEnvBindingsForRefs([",
+      '  { kind: "endpoint", ref: "a.b" },',
+      '  { kind: "endpoint", ref: "a-b" },',
+      "]);",
+      "console.log(JSON.stringify(llmMaterialEnvNameCollisionIssues(bindings)));",
+    ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), [

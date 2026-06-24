@@ -14,7 +14,7 @@ Generated Cloudflare targets must also project imports to the public package
 scope before they leave the monorepo:
 
 ```sh
-bun run agentos -- build --cwd /path/to/consumer --package-scope @yansirplus
+pnpm run agentos build --cwd /path/to/consumer --package-scope @yansirplus
 ```
 
 `--package-scope @yansirplus` is the switch that makes generated target files
@@ -48,7 +48,7 @@ See [0.6.0 release notes](/release-notes/0.6.0/) for the migration table.
 Install agentOS packages plus required peers:
 
 ```sh
-bun add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect
+pnpm add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect
 ```
 
 Cloudflare-targeted runtime subpaths also peer depend on
@@ -61,7 +61,7 @@ the consumer imports that subpath.
 
 ```sh
 export AGENTOS_NPM_REGISTRY=https://registry.npmjs.org/
-bun run publish:internal
+pnpm run publish:internal
 ```
 
 `package.json` `agentOsRelease.npmScope` owns the published npm scope.
@@ -73,7 +73,7 @@ publishing an npm version, install the generated package projection directly
 into the consumer `node_modules`:
 
 ```sh
-bun run install:consumer -- /path/to/consumer
+pnpm run install:consumer /path/to/consumer
 ```
 
 `install:consumer` runs the same package projection and tarball pack path as a
@@ -83,15 +83,15 @@ revision and tarball hashes. It must not edit the consumer `package.json` or
 lockfile. Restore the consumer to registry truth with:
 
 ```sh
-bun run restore:consumer -- /path/to/consumer
+pnpm run restore:consumer /path/to/consumer
 ```
 
 Use the local registry channel only when the consumer must exercise package
 manager registry resolution, dist-tags, or npmrc behavior:
 
 ```sh
-bun run registry:local
-bun run publish:local
+pnpm run registry:local
+pnpm run publish:local
 ```
 
 Then configure the consumer once:
@@ -141,8 +141,8 @@ release with the correction.
 Run distribution gates before publishing:
 
 ```sh
-bun run check:distribution
-bun run test:internal-consumer
+pnpm run check:distribution
+pnpm run test:internal-consumer
 ```
 
 The checks reject generated package manifests or tarballs that expose

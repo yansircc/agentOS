@@ -32,9 +32,9 @@ const runStage = (label, command, args) =>
 export const runDefaultGate = async () => {
   const startedAt = Date.now();
   const stages = await Promise.all([
-    runStage("structural", "bun", ["run", "check:structural"]),
-    runStage("typecheck", "bun", ["run", "typecheck"]),
-    runStage("test", "bun", ["run", "test"]),
+    runStage("structural", "pnpm", ["run", "check:structural"]),
+    runStage("typecheck", "pnpm", ["run", "typecheck"]),
+    runStage("test", "pnpm", ["run", "test"]),
   ]);
   for (const stage of stages) {
     console.log(`${stage.label} duration: ${stage.durationMs}ms`);

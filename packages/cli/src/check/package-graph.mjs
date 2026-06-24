@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { workspacePackageRecords as workspaceManifestPackageRecords } from "../lib/workspace-manifest.mjs";
 
 const compare = (left, right) => left.localeCompare(right);
 const readJsonFile = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -23,38 +24,7 @@ export const walkFiles = (repoRoot, relativePath, options = {}) => {
   return files.sort(compare);
 };
 
-export const workspacePackageRecords = (repoRoot) => {
-  const rootPackage = readJsonFile(path.join(repoRoot, "package.json"));
-  const workspaces = Array.isArray(rootPackage.workspaces)
-    ? rootPackage.workspaces
-    : Array.isArray(rootPackage.workspaces?.packages)
-      ? rootPackage.workspaces.packages
-      : [];
-  const records = [];
-
-  for (const workspace of workspaces) {
-    if (typeof workspace !== "string") continue;
-    if (workspace.endsWith("/*")) {
-      const base = workspace.slice(0, -2);
-      const baseDir = path.join(repoRoot, base);
-      if (!fs.existsSync(baseDir)) continue;
-      for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const packagePath = `${base}/${entry.name}`;
-        const packageJsonPath = path.join(repoRoot, packagePath, "package.json");
-        if (!fs.existsSync(packageJsonPath)) continue;
-        records.push({ name: readJsonFile(packageJsonPath).name, path: packagePath });
-      }
-      continue;
-    }
-
-    const packageJsonPath = path.join(repoRoot, workspace, "package.json");
-    if (!fs.existsSync(packageJsonPath)) continue;
-    records.push({ name: readJsonFile(packageJsonPath).name, path: workspace });
-  }
-
-  return records.sort((left, right) => left.path.localeCompare(right.path));
-};
+export const workspacePackageRecords = (repoRoot) => workspaceManifestPackageRecords(repoRoot);
 
 const scriptKindForFile = (fileName) => {
   if (fileName.endsWith(".tsx")) return ts.ScriptKind.TSX;

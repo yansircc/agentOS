@@ -20,7 +20,7 @@ refs, and keeps provider handles outside the ledger.
 1. Build a Worker bundle outside the ledger:
 
    ```sh
-   bun build src/worker.ts --target=browser --outdir dist --external cloudflare:workers
+   pnpm exec esbuild src/worker.ts --bundle --platform=browser --outdir=dist --external:cloudflare:workers
    ```
 
 2. Produce an artifact ref and digest:

@@ -2,27 +2,27 @@
   "schemaVersion": 1,
   "proofClasses": {
     "structural": {
-      "command": "bun run check:structural",
+      "command": "pnpm run check:structural",
       "always": true
     },
     "typecheck": {
-      "command": "bun run typecheck",
+      "command": "pnpm run typecheck",
       "always": true
     },
     "test": {
-      "command": "bun run test",
+      "command": "pnpm run test",
       "always": true
     },
     "docs": {
-      "command": "bun run docs:check",
+      "command": "pnpm run docs:check",
       "always": true
     },
     "runtime": {
-      "command": "bun run check:runtime",
+      "command": "pnpm run check:runtime",
       "expensive": true
     },
     "distribution": {
-      "command": "bun run check:distribution",
+      "command": "pnpm run check:distribution",
       "expensive": true
     },
     "effect-scan": {
@@ -62,7 +62,8 @@
     {
       "patterns": [
         "package.json",
-        "bun.lock",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
         "tsconfig.json",
         "tsconfig.source-paths.json",
         ".github/**",

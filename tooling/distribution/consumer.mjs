@@ -32,15 +32,9 @@ import {
 } from "./pack-check.mjs";
 
 export const consumerManifestFiles = (consumerRoot) =>
-  [
-    "package.json",
-    "bun.lock",
-    "bun.lockb",
-    "package-lock.json",
-    "npm-shrinkwrap.json",
-    "pnpm-lock.yaml",
-    "yarn.lock",
-  ].map((name) => path.join(consumerRoot, name));
+  ["package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"].map(
+    (name) => path.join(consumerRoot, name),
+  );
 
 export const snapshotFiles = (files) =>
   new Map(files.map((file) => [file, fs.existsSync(file) ? fs.readFileSync(file) : undefined]));
@@ -147,7 +141,7 @@ export const restoreConsumer = (rawArgs) => {
   }
   fs.rmSync(markerPath, { force: true });
   if (!boolArg(args, "no-install")) {
-    run("bun", ["install", "--frozen-lockfile"], { cwd: consumerRoot });
+    run("npm", ["install"], { cwd: consumerRoot });
   }
   assertSnapshotUnchanged(snapshot, "restore-consumer");
   console.log(`restored ${packageNames.length} local agentOS package overlays`);
@@ -164,6 +158,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       ...extraDeps,
     },
     devDependencies: {
+      esbuild: catalog().esbuild,
       typescript: catalog().typescript,
     },
   });
@@ -475,16 +470,14 @@ export const negativeContractTests = () => {
   assertFails("effect import without peer", () => {
     const pkg = structuredClone(core.packageJson);
     delete pkg.peerDependencies?.effect;
-    if (packageImportsEffect(core) && pkg.peerDependencies?.effect !== catalog().effect) {
+    if (packageImportsEffect(core) && pkg.peerDependencies?.effect !== "catalog:") {
       fail("missing effect peer");
     }
   });
   assertFails("cloudflare package without workers peer", () => {
     const pkg = structuredClone(cloudflare.packageJson);
     delete pkg.peerDependencies?.["@cloudflare/workers-types"];
-    if (
-      pkg.peerDependencies?.["@cloudflare/workers-types"] !== catalog()["@cloudflare/workers-types"]
-    ) {
+    if (pkg.peerDependencies?.["@cloudflare/workers-types"] !== "catalog:") {
       fail("missing workers types peer");
     }
   });
@@ -497,14 +490,17 @@ export const assertGeneratedTargetConsumer = () => {
   npmInstall(dir);
   assertNoAgentOsSymlinkPackages(dir);
   run(
-    "bun",
+    "npm",
     [
-      "build",
+      "exec",
+      "esbuild",
+      "--",
       ".agentos/generated/worker.ts",
-      "--target=browser",
+      "--bundle",
+      "--platform=browser",
       "--format=esm",
       "--packages=external",
-      "--external=cloudflare:workers",
+      "--external:cloudflare:workers",
       "--outfile=.agentos/generated/worker.bundle.js",
     ],
     { cwd: dir, capture: true },
@@ -586,14 +582,17 @@ export const testInternalConsumer = () => {
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.bundler.json"], { cwd: dir, capture: true });
   run("node", ["smoke.mjs"], { cwd: dir, capture: true });
   run(
-    "bun",
+    "npm",
     [
-      "build",
+      "exec",
+      "esbuild",
+      "--",
       "cf-entry.ts",
-      "--target=browser",
+      "--bundle",
+      "--platform=browser",
       "--format=esm",
       "--packages=external",
-      "--external=cloudflare:workers",
+      "--external:cloudflare:workers",
       "--outfile=cf-entry.js",
     ],
     { cwd: dir, capture: true },

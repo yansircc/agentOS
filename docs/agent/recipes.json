@@ -14,7 +14,7 @@
         "primitive.agent-authoring.compileAgentTree",
         "primitive.agent-authoring.linkWorkspaceStaticTarget"
       ],
-      "commands": ["bun run --cwd packages/cli test", "bun run check:distribution"],
+      "commands": ["pnpm --filter @agent-os/cli test", "pnpm run check:distribution"],
       "evidence": [
         "packages/cli/test/build-command.test.mjs",
         "packages/cli/src/check/algorithmic-checks.mjs"
@@ -36,7 +36,7 @@
         "primitive.kernel.AuthorityRef",
         "primitive.runtime.Ledger"
       ],
-      "commands": ["bun run --cwd packages/core test", "bun run --cwd packages/core test"],
+      "commands": ["pnpm --filter @agent-os/core test", "pnpm --filter @agent-os/core test"],
       "evidence": [
         "packages/core/test/kernel/effect-claim.test.ts",
         "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
@@ -56,7 +56,7 @@
         "primitive.runtime.defineProjection",
         "primitive.runtime.ProjectionReduceResult"
       ],
-      "commands": ["bun run --cwd packages/runtime test"],
+      "commands": ["pnpm --filter @agent-os/runtime test"],
       "evidence": [
         "packages/runtime/test/projection.test.ts",
         "packages/runtime/test/in-memory/materialized-projections.test.ts"
@@ -76,7 +76,7 @@
         "primitive.runtime.SubmitResult",
         "primitive.ag-ui.projectLedgerEventToAgUiEnvelope"
       ],
-      "commands": ["bun run --cwd packages/runtime test"],
+      "commands": ["pnpm --filter @agent-os/runtime test"],
       "evidence": [
         "packages/runtime/test/submit-agent-runtime-events.test.ts",
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
@@ -97,7 +97,7 @@
         "primitive.kernel.ExecutionDomain",
         "primitive.kernel.BoundaryContract"
       ],
-      "commands": ["bun run --cwd packages/core test", "bun run --cwd packages/runtime test"],
+      "commands": ["pnpm --filter @agent-os/core test", "pnpm --filter @agent-os/runtime test"],
       "evidence": [
         "packages/core/test/kernel/agent-schema.test.ts",
         "packages/core/test/kernel/tools.test.ts",

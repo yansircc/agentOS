@@ -24,5 +24,5 @@ import { defineAgentBindings } from "@agent-os/core/runtime-protocol";
 ## Verification
 
 ```sh
-cd packages/core && bun run test
+pnpm --filter @agent-os/core test
 ```

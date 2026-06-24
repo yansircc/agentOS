@@ -26,15 +26,15 @@ runtime behavior.
 ## Minimal Usage
 
 ```sh
-bun run agentos -- check all
-bun run agentos -- check guard public-api
-bun run agentos -- build --cwd /path/to/app
-bun run agentos -- generate docs
+pnpm run agentos check all
+pnpm run agentos check guard public-api
+pnpm run agentos build --cwd /path/to/app
+pnpm run agentos generate docs
 ```
 
 ## Verification
 
 ```sh
-bun run agentos -- --help
-bun run agentos -- check guard ag-ui-sse-axis
+pnpm run agentos --help
+pnpm run agentos check guard ag-ui-sse-axis
 ```

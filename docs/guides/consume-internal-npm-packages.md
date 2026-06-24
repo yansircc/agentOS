@@ -19,18 +19,18 @@ instead of sharing the agentOS source workspace lockfile.
    also need the generated target imports they use, including
    `@cloudflare/sandbox` and the selected runtime provider peers.
 4. Build generated agent targets with the public package scope:
-   `bun run agentos -- build --cwd /path/to/consumer --package-scope
+   `pnpm run agentos build --cwd /path/to/consumer --package-scope
 @yansirplus`. This makes generated imports use the public `@yansirplus` scope
    instead of source workspace packages.
-5. For prepublish first-party work, run `bun run install:consumer --
+5. For prepublish first-party work, run `pnpm run install:consumer
 /path/to/consumer` in agentOS. This overlays the generated final public package
    projection into the consumer `node_modules` without changing the consumer
    manifest or lockfile.
-6. Restore the consumer to registry truth with `bun run restore:consumer --
+6. Restore the consumer to registry truth with `pnpm run restore:consumer
 /path/to/consumer`.
 7. If the consumer must exercise registry or dist-tag behavior instead, run a
-   local registry channel: `bun run registry:local`, then `bun run
-publish:local` in agentOS.
+   local registry channel: `pnpm run registry:local`, then
+   `pnpm run publish:local` in agentOS.
 8. Read `dist/internal-npm/local-channel.json`.
 9. Copy the required `dependencies` entries into the consumer app. Use the
    logical tag value, for example `agentos-dev`; do not copy worktree tarball
@@ -71,22 +71,22 @@ For normal first-party prepublish work, use the direct consumer overlay instead
 of publishing npm versions or hand-writing tarball paths:
 
 ```sh
-bun run install:consumer -- /path/to/consumer
+pnpm run install:consumer /path/to/consumer
 ```
 
 The overlay writes `node_modules/.agentos-local.json`; the consumer
 `package.json` and lockfile remain the registry contract. Restore with:
 
 ```sh
-bun run restore:consumer -- /path/to/consumer
+pnpm run restore:consumer /path/to/consumer
 ```
 
 Use the local channel only when package-manager registry behavior is the thing
 under test:
 
 ```sh
-bun run registry:local
-bun run publish:local
+pnpm run registry:local
+pnpm run publish:local
 ```
 
 Consumer `.npmrc`:

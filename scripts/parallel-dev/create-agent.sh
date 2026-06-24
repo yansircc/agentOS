@@ -138,7 +138,7 @@ cat > "$agent_dir/task.md" <<EOF
 
 ## Forbidden shared surfaces
 
-- bun.lock unless explicitly assigned
+- pnpm-lock.yaml unless explicitly assigned
 - root package.json unless explicitly assigned
 - public barrel files unless explicitly assigned
 - schema migrations unless explicitly assigned
@@ -201,7 +201,7 @@ cat > "$agent_dir/startup.md" <<EOF
    \`\`\`
 
    Dependency directories may be symlinked from \`$repo_root\`; treat them as
-   shared read-only inputs. Do not run \`bun install\` unless the task assigns
+   shared read-only inputs. Do not run \`pnpm install\` unless the task assigns
    dependency ownership.
 
 9. Record owned background process ids in:

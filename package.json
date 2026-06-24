@@ -1,31 +1,24 @@
 {
   "name": "agent-os-monorepo",
   "private": true,
-  "workspaces": [
-    "packages/core",
-    "packages/runtime",
-    "packages/client",
-    "packages/cli",
-    "tooling/docs-site"
-  ],
   "type": "module",
   "scripts": {
     "agentos": "node packages/cli/src/main.mjs",
     "typecheck": "sh -c 'tsc -b --noEmit --force; code=$?; tsc -b --clean; exit $code'",
     "test": "vp run --cache -r test",
-    "docs:generate": "bun run agentos -- generate docs",
-    "docs:check": "bun run agentos -- check docs",
-    "effect-manifests:generate": "bun run agentos -- generate effect-manifests",
-    "effect-manifests:check": "bun run agentos -- check effect-manifests",
-    "check": "bun run agentos -- check default",
+    "docs:generate": "pnpm run agentos generate docs",
+    "docs:check": "pnpm run agentos check docs",
+    "effect-manifests:generate": "pnpm run agentos generate effect-manifests",
+    "effect-manifests:check": "pnpm run agentos check effect-manifests",
+    "check": "pnpm run agentos check default",
     "check:runtime": "vp run --cache -r test:runtime",
-    "check:release": "bun run check:structural && bun run typecheck && bun run test && bun run check:distribution && bun run test:internal-consumer && rm -rf /tmp/agentos-release-scan && mkdir -p /tmp/agentos-release-scan && effect-skill-scan . --strict --output gate-json --evidence /tmp/agentos-release-scan",
-    "check:full": "bun run check:release && bun run docs:site:check && bun run check:runtime",
-    "docs:project": "bun run agentos -- generate site",
-    "docs:project:watch": "bun run agentos -- generate site --watch",
-    "docs:site:dev": "sh -c 'bun run agentos -- generate site --watch & watcher=$!; trap \"kill $watcher\" INT TERM EXIT; bun run --cwd tooling/docs-site dev'",
-    "docs:site:build": "bun run agentos -- generate site && bun run --cwd tooling/docs-site build && bun run agentos -- check site",
-    "docs:site:check": "bun run docs:check && bun run docs:site:build",
+    "check:release": "pnpm run check:structural && pnpm run typecheck && pnpm run test && pnpm run check:distribution && pnpm run test:internal-consumer && rm -rf /tmp/agentos-release-scan && mkdir -p /tmp/agentos-release-scan && effect-skill-scan . --strict --output gate-json --evidence /tmp/agentos-release-scan",
+    "check:full": "pnpm run check:release && pnpm run docs:site:check && pnpm run check:runtime",
+    "docs:project": "pnpm run agentos generate site",
+    "docs:project:watch": "pnpm run agentos generate site --watch",
+    "docs:site:dev": "sh -c 'pnpm run agentos generate site --watch & watcher=$!; trap \"kill $watcher\" INT TERM EXIT; pnpm --filter @agent-os/docs-site dev'",
+    "docs:site:build": "pnpm run agentos generate site && pnpm --filter @agent-os/docs-site build && pnpm run agentos check site",
+    "docs:site:check": "pnpm run docs:check && pnpm run docs:site:build",
     "build:internal-packages": "node tooling/distribution/distribution.mjs build",
     "pack:internal": "node tooling/distribution/distribution.mjs pack",
     "check:distribution": "node tooling/distribution/distribution.mjs check",
@@ -35,7 +28,7 @@
     "publish:local": "node tooling/distribution/distribution.mjs publish-local",
     "install:consumer": "node tooling/distribution/distribution.mjs install-consumer",
     "restore:consumer": "node tooling/distribution/distribution.mjs restore-consumer",
-    "check:structural": "bun run agentos -- check structural"
+    "check:structural": "pnpm run agentos check structural"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
@@ -44,19 +37,19 @@
     "@effect/language-service": "catalog:",
     "@effect/sql-sqlite-do": "catalog:",
     "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "effect": "catalog:",
+    "esbuild": "catalog:",
     "fast-check": "catalog:",
     "react": "catalog:",
     "svelte": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "yaml": "catalog:"
   },
-  "overrides": {
-    "vitest": "catalog:"
-  },
-  "packageManager": "bun@1.3.14",
+  "packageManager": "pnpm@11.9.0",
   "agentOsRelease": {
     "version": "0.5.17",
     "npmScope": "@yansirplus",
@@ -87,23 +80,5 @@
         "backend-neutral"
       ]
     }
-  },
-  "catalog": {
-    "@cloudflare/vitest-pool-workers": "^0.16.9",
-    "@cloudflare/workers-types": "^4.20251201.0",
-    "@effect/ai-anthropic": "^4.0.0-beta.84",
-    "@effect/language-service": "^0.86.2",
-    "@effect/sql-sqlite-do": "^4.0.0-beta.84",
-    "@effect/vitest": "^4.0.0-beta.84",
-    "@types/node": "^24.12.4",
-    "@types/react": "^19.2.16",
-    "effect": "^4.0.0-beta.84",
-    "fast-check": "^4.8.0",
-    "react": "^19.2.7",
-    "svelte": "^5.56.2",
-    "typescript": "^5.7.2",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.1.22",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.22",
-    "vite-plus": "0.1.22"
   }
 }

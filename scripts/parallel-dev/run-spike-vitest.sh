@@ -46,7 +46,7 @@ fi
 
 if [[ ! -x "$vitest_bin" ]]; then
   echo "missing backend Vitest binary: $vitest_bin" >&2
-  echo "run in the assigned worktree only if dependency ownership is assigned: cd $repo_root/packages/backends/cloudflare-do && bun install" >&2
+  echo "run in the assigned worktree only if dependency ownership is assigned: cd $repo_root/packages/backends/cloudflare-do && pnpm install" >&2
   exit 1
 fi
 

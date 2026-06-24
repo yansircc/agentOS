@@ -12,7 +12,7 @@
       },
       {
         "type": "command",
-        "command": "bun packages/cli/src/generate/generate-carrier-reference.mjs"
+        "command": "node packages/cli/src/generate/generate-carrier-reference.mjs"
       },
       {
         "type": "command",
@@ -46,7 +46,7 @@
       },
       {
         "type": "command",
-        "command": "bun packages/cli/src/generate/generate-carrier-reference.mjs --check"
+        "command": "node packages/cli/src/generate/generate-carrier-reference.mjs --check"
       },
       {
         "type": "rule",
@@ -1028,7 +1028,7 @@
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "generatedProjection",
-        "command": "bun packages/cli/src/generate/generate-carrier-reference.mjs --check"
+        "command": "node packages/cli/src/generate/generate-carrier-reference.mjs --check"
       }
     },
     {

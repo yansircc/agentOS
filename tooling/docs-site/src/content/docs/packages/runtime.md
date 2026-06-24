@@ -146,6 +146,5 @@ separate quota.
 ## Verification
 
 ```sh
-cd packages/runtime
-bun run test
+pnpm --filter @agent-os/runtime test
 ```

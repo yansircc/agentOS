@@ -16,7 +16,7 @@ void test("affected selector routes runtime package changes to runtime proof", (
   });
   assert.equal(result.mode, "affected");
   assert.ok(result.proofClasses.includes("runtime"));
-  assert.ok(result.run.some((entry) => entry.command === "bun run check:runtime"));
+  assert.ok(result.run.some((entry) => entry.command === "pnpm run check:runtime"));
 });
 
 void test("affected selector uses reverse dependency closure", () => {

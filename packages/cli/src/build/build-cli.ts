@@ -1,8 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import {
   compileAgentTree,
@@ -12,6 +11,7 @@ import {
   type AuthoredAgentTree,
   type AuthoredToolDeclaration,
 } from "./agent-authoring";
+import { importBundledModule } from "../lib/ts-module-loader.mjs";
 
 interface BuildArgs {
   readonly cwd: string;
@@ -201,11 +201,11 @@ const inferPackageScope = (
 };
 
 const loadToolDeclaration = async (file: string): Promise<AuthoredToolDeclaration | undefined> => {
-  const mod = await import(`${pathToFileURL(file).href}?agentos-build=${Date.now()}`);
+  const mod = await importBundledModule(file, { prefix: "agentos-tool-declaration-" });
   if (!Object.hasOwn(mod, "declaration")) {
     throw new Error(`${file}: missing exported declaration`);
   }
-  return mod.declaration;
+  return mod.declaration as AuthoredToolDeclaration;
 };
 
 const collectFiles = async (dir: string): Promise<ReadonlyArray<string>> => {
@@ -290,12 +290,6 @@ const main = async (): Promise<void> => {
     return;
   }
   const args = parsed.args;
-  if (process.versions.bun === undefined) {
-    throw new Error(
-      "agentos build must run under Bun because authored tools are TypeScript modules",
-    );
-  }
-
   const cwd = path.resolve(args.cwd);
   const configPath = path.resolve(cwd, args.config);
   const configValue = await readJsonc(configPath);

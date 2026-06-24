@@ -25,7 +25,7 @@ typechecks a smoke import from the authoring surface.
 1. From the agentOS repo, build tarballs:
 
    ```sh
-   bun run pack:internal
+   pnpm run pack:internal
    ```
 
 2. In a separate consumer app, install one packed package and its peers:

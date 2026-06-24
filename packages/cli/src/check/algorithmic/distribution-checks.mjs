@@ -1,3 +1,5 @@
+import { workspaceCatalog } from "../../lib/workspace-manifest.mjs";
+
 export const createDistributionChecks = ({
   fs,
   path,
@@ -29,6 +31,8 @@ export const createDistributionChecks = ({
     /\b(?:node-gyp|prebuild(?:ify|-install)?|cmake-js|node-pre-gyp)\b/u;
   const distributionNativeFilePattern = /(?:^|\/)(?:binding\.gyp|CMakeLists\.txt)$|\.node$/u;
   const distributionSourcePattern = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|d\.ts)$/u;
+  const sourceEffectPeerSpecifier = () =>
+    workspaceCatalog(repoRoot).effect === undefined ? undefined : "catalog:";
 
   const distributionFinding = ({
     kind,
@@ -620,7 +624,7 @@ export const createDistributionChecks = ({
             distributionUnitFinding({
               kind: "package-unit-effect-peer-invariant",
               unit,
-              message: `effect peer range must match root catalog single source ${expectedEffectRange}`,
+              message: `effect peer range must use catalog single source ${expectedEffectRange}`,
               specifier: "effect",
               target: peer.range,
             }),
@@ -667,7 +671,7 @@ export const createDistributionChecks = ({
         ? distributionRoots.targetProfiles.map((profile) => profile.id)
         : [],
     );
-    const expectedEffectRange = readJson("package.json").catalog?.effect;
+    const expectedEffectRange = sourceEffectPeerSpecifier();
     return [
       ...packageUnitsRegistryFindings({
         registry: packageUnits,
@@ -856,10 +860,7 @@ export const createDistributionChecks = ({
           edges: graph.edges,
         });
       }),
-      ...distributionEffectPeerFindings(
-        recordsWithManifests,
-        readJson("package.json").catalog?.effect,
-      ),
+      ...distributionEffectPeerFindings(recordsWithManifests, sourceEffectPeerSpecifier()),
     ].sort(
       (left, right) =>
         compare(left.severity, right.severity) ||
@@ -890,7 +891,7 @@ export const createDistributionChecks = ({
     });
     const effectPeerFindings = distributionEffectPeerFindings(
       recordsWithManifests,
-      readJson("package.json").catalog?.effect,
+      sourceEffectPeerSpecifier(),
     );
     const failures = [
       ...distributionArchitectureFailures(),

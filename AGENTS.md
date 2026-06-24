@@ -103,11 +103,11 @@ runtime package tables, and skill package maps are generated projections. Edit
 the source fact, then run:
 
 ```sh
-bun run docs:generate
-bun run effect-manifests:generate
+pnpm run docs:generate
+pnpm run effect-manifests:generate
 ```
 
-`bun run docs:check` and `bun run effect-manifests:check` must pass before
+`pnpm run docs:check` and `pnpm run effect-manifests:check` must pass before
 commit.
 
 <!-- agent-docs-navigation:start -->
@@ -193,7 +193,8 @@ R2 keys, queue names, and live fixtures with `$SCOPE_PREFIX`.
 
 Single-writer unless explicitly assigned:
 
-- `bun.lock`
+- `pnpm-lock.yaml`
+- `pnpm-workspace.yaml`
 - root `package.json`
 - public barrel files
 - `PUBLIC_API.md`
@@ -220,7 +221,7 @@ but must not start runtime or integration harnesses. Runtime/integration
 harnesses use the package script name `test:runtime`; root `check:runtime` is
 the only monorepo recursive entrypoint for those harnesses.
 
-Root `bun run typecheck` is the repository TypeScript build graph. Package
+Root `pnpm run typecheck` is the repository TypeScript build graph. Package
 `typecheck` scripts remain package-scoped checks, but the root gate must use one
 `tsc -b --noEmit --force` graph over every package instead of recursively
 launching independent package typechecks. TypeScript build info is derived state:
@@ -229,9 +230,9 @@ the root script must clean it after the graph run, and it must not be tracked.
 Default gates:
 
 ```sh
-bun run check
-bun run typecheck
-bun run test
+pnpm run check
+pnpm run typecheck
+pnpm run test
 rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan
 effect-skill-scan /Users/yansir/code/52/agentOS --strict --output gate-json --evidence /tmp/agentos-effect-scan
 git diff --check
@@ -247,13 +248,13 @@ If a change touches runtime harness code, Durable Object behavior, storage,
 Wrangler config, or runtime facades, also run:
 
 ```sh
-bun run check:runtime
+pnpm run check:runtime
 ```
 
 Before publishing or release-level integration, run:
 
 ```sh
-bun run check:full
+pnpm run check:full
 ```
 
 For package-scoped work, run the package test first, then full gates before the

@@ -22,8 +22,8 @@ step that produces a manifest and provenance map.
 1. Install the CLI package and TypeScript peer tooling:
 
    ```sh
-   bun add @yansirplus/cli effect
-   bun add -d typescript
+   pnpm add @yansirplus/cli effect
+   pnpm add -D typescript
    ```
 
 2. Create the authored root:
@@ -80,8 +80,8 @@ step that produces a manifest and provenance map.
 6. Run the generated dev entry:
 
    ```sh
-   bun run build
-   bun run dev
+   pnpm run build
+   pnpm run dev
    ```
 
 ## Checkpoint

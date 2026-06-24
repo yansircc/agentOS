@@ -25,12 +25,12 @@ const fixtureRepo = () => {
       {
         private: true,
         type: "module",
-        workspaces: ["packages/*"],
       },
       null,
       2,
     ),
   );
+  write(root, "pnpm-workspace.yaml", "packages:\n  - packages/*\n");
   write(
     root,
     "tsconfig.source-paths.json",

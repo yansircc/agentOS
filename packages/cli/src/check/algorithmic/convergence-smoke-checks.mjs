@@ -16,6 +16,7 @@ export const createConvergenceSmokeChecks = ({
   checkGeneratedStaticTargetLinking,
   checkSpikeHygiene,
   moduleBucketRegistry,
+  workspacePackagePatterns,
   workspacePackageRecords,
   consumerFacingSpecifierFailures,
   packageUnitPublicSpecifiers,
@@ -159,6 +160,7 @@ export const createConvergenceSmokeChecks = ({
   const checkCliSurface = () => {
     const failures = [];
     const rootPackage = readJson("package.json");
+    const workspacePatterns = workspacePackagePatterns();
     const records = workspacePackageRecords();
     const packageNames = new Set(records.map((record) => record.name));
     const surfacePackages = readJson("docs/surface.json").packages ?? [];
@@ -171,11 +173,8 @@ export const createConvergenceSmokeChecks = ({
       "tooling/ops-htmx/package.json",
     ];
 
-    if (
-      !Array.isArray(rootPackage.workspaces) ||
-      !rootPackage.workspaces.includes("packages/cli")
-    ) {
-      failures.push("package.json: workspaces must include packages/cli");
+    if (!workspacePatterns.includes("packages/cli")) {
+      failures.push("pnpm-workspace.yaml: packages must include packages/cli");
     }
     if (rootPackage.scripts?.agentos !== "node packages/cli/src/main.mjs") {
       failures.push("package.json: scripts.agentos must execute packages/cli/src/main.mjs");
@@ -581,8 +580,28 @@ export const createConvergenceSmokeChecks = ({
         "const bindings = defineAgentBindings({ handlers: {} });",
         "if (!ABORT || !bindings || !LLM_WIRE_DESCRIPTOR_VERSION || !TRACE_CONTEXT_VERSION || !DISPATCH_INBOUND_ACCEPTED) throw new Error('missing core import');",
       ].join("\n");
+      const entryPath = path.join(dir, "entry.ts");
+      const outFile = path.join(dir, "entry.mjs");
+      fs.writeFileSync(entryPath, code);
       try {
-        execFileSync("bun", ["--eval", code], {
+        execFileSync(
+          "pnpm",
+          [
+            "exec",
+            "esbuild",
+            entryPath,
+            "--bundle",
+            "--platform=node",
+            "--format=esm",
+            `--outfile=${outFile}`,
+          ],
+          {
+            cwd: repoRoot,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"],
+          },
+        );
+        execFileSync(process.execPath, [outFile], {
           cwd: dir,
           encoding: "utf8",
           stdio: ["ignore", "pipe", "pipe"],

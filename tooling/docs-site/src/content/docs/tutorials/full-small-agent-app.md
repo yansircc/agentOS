@@ -62,9 +62,9 @@ Cloudflare Worker.
 4. Run local proof gates before any live provider smoke:
 
    ```sh
-   bunx tsc -p tsconfig.json
-   bun test
-   bun build src/worker.ts --target=browser --outdir dist --external cloudflare:workers
+   pnpm exec tsc -p tsconfig.json
+   pnpm exec vitest run
+   pnpm exec esbuild src/worker.ts --bundle --platform=browser --outdir=dist --external:cloudflare:workers
    ```
 
 5. Add one live smoke at a time. First prove provider material is set, then LLM,

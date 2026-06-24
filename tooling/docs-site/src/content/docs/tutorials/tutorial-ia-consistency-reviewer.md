@@ -32,7 +32,7 @@ and honest about which checkpoints are local proofs versus live smokes.
 2. Confirm every tutorial file appears exactly once in that list:
 
    ```sh
-   bun run docs:check
+   pnpm run docs:check
    ```
 
 3. Review each page for the required tutorial headings:

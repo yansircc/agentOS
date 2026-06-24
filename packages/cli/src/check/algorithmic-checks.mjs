@@ -16,6 +16,7 @@ import {
   tsconfigReferenceEdges,
   workspacePackageRecords as graphWorkspacePackageRecords,
 } from "./package-graph.mjs";
+import { workspacePackagePatterns } from "../lib/workspace-manifest.mjs";
 import { collectAgentDocsModel } from "../lib/agent-docs-model.mjs";
 import { createOwnerChecks } from "./algorithmic/owner-checks.mjs";
 import { createArchitectureChecks } from "./algorithmic/architecture-checks.mjs";
@@ -379,6 +380,7 @@ const convergenceSmokeChecks = createConvergenceSmokeChecks({
   checkGeneratedStaticTargetLinking,
   checkSpikeHygiene,
   moduleBucketRegistry,
+  workspacePackagePatterns: () => workspacePackagePatterns(repoRoot),
   workspacePackageRecords,
   consumerFacingSpecifierFailures,
   packageUnitPublicSpecifiers,

@@ -25,7 +25,7 @@ For product apps that consume internal agentOS packages:
 
 1. Pin every consumed `@yansirplus/{core,runtime,client,cli}` package to the current logical local
    channel tag, such as `agentos-dev`, or to a released semver train.
-2. Run the product package update after `bun run publish:local`; the product
+2. Run the product package update after `pnpm run publish:local`; the product
    lockfile should move to the generated prerelease version, while
    `package.json` stays free of worktree paths.
 3. Assert the product has no raw JSON Schema source for agentOS-owned tools.
