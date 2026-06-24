@@ -27,7 +27,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:AgentCapabilityIntentsOf`
 - `.:AgentCapabilityMaterial`
 - `.:AgentCapabilityMaterialMap`
-- `.:AgentCapabilityMaterialRefs`
 - `.:AgentCapabilityMaterialsOf`
 - `.:AgentCapabilityProjection`
 - `.:AgentCapabilityProjectionIdentity`
@@ -112,7 +111,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:backendProtocolTruthIdentityKey`
 - `.:BarrierCursor`
 - `.:BarrierRow`
-- `.:BindAgentCapabilityOptions`
 - `.:bindingMaterialRef`
 - `.:BindingMaterialRef`
 - `.:BindingMaterialRequirement`
@@ -193,8 +191,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:decodeSubmitResult`
 - `.:decodeToolArgs`
 - `.:defineAgentBindings`
-- `.:defineAgentCapability`
-- `.:DefineAgentCapabilitySpec`
 - `.:defineAgentManifest`
 - `.:defineAgentSchema`
 - `.:defineAgentSubmitBindings`
@@ -711,7 +707,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:Strategy`
 - `.:StreamEventsOptions`
 - `.:STRUCTURED_OUTPUT_TOOL_NAME`
-- `.:submitBindingsForAgentCapability`
 - `.:SubmitDecisionInterrupt`
 - `.:SubmitDecisionInterruptReason`
 - `.:SubmitReceiptBackedToolBinding`
@@ -1242,7 +1237,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:AgentCapabilityIntentsOf`
 - `./runtime-protocol:AgentCapabilityMaterial`
 - `./runtime-protocol:AgentCapabilityMaterialMap`
-- `./runtime-protocol:AgentCapabilityMaterialRefs`
 - `./runtime-protocol:AgentCapabilityMaterialsOf`
 - `./runtime-protocol:AgentCapabilityProjection`
 - `./runtime-protocol:AgentCapabilityProjectionIdentity`
@@ -1301,7 +1295,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:AuthorizationInputRequestResumePayload`
 - `./runtime-protocol:BarrierCursor`
 - `./runtime-protocol:BarrierRow`
-- `./runtime-protocol:BindAgentCapabilityOptions`
 - `./runtime-protocol:BUILTIN_HANDLER_KINDS`
 - `./runtime-protocol:BuiltinHandlerKind`
 - `./runtime-protocol:capabilityIntent`
@@ -1325,8 +1318,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:DecodeRuntimeLedgerEventResult`
 - `./runtime-protocol:decodeSubmitResult`
 - `./runtime-protocol:defineAgentBindings`
-- `./runtime-protocol:defineAgentCapability`
-- `./runtime-protocol:DefineAgentCapabilitySpec`
 - `./runtime-protocol:defineAgentManifest`
 - `./runtime-protocol:defineAgentSubmitBindings`
 - `./runtime-protocol:DeploymentSpec`
@@ -1488,7 +1479,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:RuntimeRekeyedPayloadSchema`
 - `./runtime-protocol:Stimulus`
 - `./runtime-protocol:Strategy`
-- `./runtime-protocol:submitBindingsForAgentCapability`
 - `./runtime-protocol:SubmitDecisionInterrupt`
 - `./runtime-protocol:SubmitDecisionInterruptReason`
 - `./runtime-protocol:SubmitReceiptBackedToolBinding`

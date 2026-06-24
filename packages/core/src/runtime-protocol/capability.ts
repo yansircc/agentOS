@@ -1,8 +1,5 @@
 import type { BoundaryPackage } from "@agent-os/core/extensions";
 import type { AuthorityRef, FactOwnerRef, ScopeRef } from "@agent-os/core/effect-claim";
-import type { MaterialRef } from "@agent-os/core/material-ref";
-import { Option } from "effect";
-import { defineAgentSubmitBindings, type AgentSubmitBindings } from "./bindings";
 
 export interface AgentCapabilityIntent<Kind extends string = string, Payload = unknown> {
   readonly kind: Kind;
@@ -37,18 +34,6 @@ export type AgentCapabilityProjectionMap = Readonly<
 export type AgentCapabilityMaterialMap = Readonly<
   Record<string, AgentCapabilityMaterial<string, unknown>>
 >;
-
-export interface DefineAgentCapabilitySpec<
-  Intents extends AgentCapabilityIntentMap = {},
-  Projections extends AgentCapabilityProjectionMap = {},
-  Materials extends AgentCapabilityMaterialMap = {},
-> {
-  readonly id: string;
-  readonly boundaryPackage?: BoundaryPackage;
-  readonly intents?: Intents;
-  readonly projections?: Projections;
-  readonly materials?: Materials;
-}
 
 export interface AgentCapabilityDefinition<
   Intents extends AgentCapabilityIntentMap = {},
@@ -104,15 +89,6 @@ export type AgentCapabilityProjectionIdentity<Projection> =
 export type AgentCapabilityProjectionState<Projection> =
   Projection extends AgentCapabilityProjection<string, unknown, infer State> ? State : never;
 
-export type AgentCapabilityMaterialRefs<Definition> = {
-  readonly [Key in keyof AgentCapabilityMaterialsOf<Definition>]: MaterialRef;
-};
-
-export type BindAgentCapabilityOptions<Definition> =
-  keyof AgentCapabilityMaterialsOf<Definition> extends never
-    ? { readonly materials?: AgentCapabilityMaterialRefs<Definition> }
-    : { readonly materials: AgentCapabilityMaterialRefs<Definition> };
-
 export const capabilityIntent =
   <Payload = unknown>() =>
   <const Kind extends string>(
@@ -142,64 +118,3 @@ export const capabilityMaterial =
   <const Slot extends string>(slot: Slot): AgentCapabilityMaterial<Slot, Value> => ({
     slot,
   });
-
-export const defineAgentCapability = <
-  const Intents extends AgentCapabilityIntentMap = {},
-  const Projections extends AgentCapabilityProjectionMap = {},
-  const Materials extends AgentCapabilityMaterialMap = {},
->(
-  spec: DefineAgentCapabilitySpec<Intents, Projections, Materials>,
-): AgentCapabilityDefinition<Intents, Projections, Materials> => ({
-  id: spec.id,
-  ...(spec.boundaryPackage === undefined ? {} : { boundaryPackage: spec.boundaryPackage }),
-  intents: (spec.intents ?? {}) as Intents,
-  projections: (spec.projections ?? {}) as Projections,
-  materials: (spec.materials ?? {}) as Materials,
-});
-
-const failAgentCapability = (message: string): never =>
-  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
-
-const missingBoundaryPackage = (capabilityId: string, key: string): never =>
-  failAgentCapability(`agent capability ${capabilityId} intent ${key} has no boundary package`);
-
-const intentBoundaryPackage = (
-  definition: AnyAgentCapabilityDefinition,
-  key: string,
-  intent: AgentCapabilityIntent,
-): BoundaryPackage =>
-  intent.boundaryPackage ??
-  definition.boundaryPackage ??
-  missingBoundaryPackage(definition.id, key);
-
-const materialSlotEntries = <Definition>(
-  definition: Definition,
-): ReadonlyArray<readonly [keyof AgentCapabilityMaterialsOf<Definition>, string]> => {
-  const materials =
-    (definition as { readonly materials?: AgentCapabilityMaterialMap }).materials ?? {};
-  return Object.entries(materials).map(([key, material]) => [
-    key as keyof AgentCapabilityMaterialsOf<Definition>,
-    material.slot,
-  ]);
-};
-
-export const submitBindingsForAgentCapability = <Definition extends AnyAgentCapabilityDefinition>(
-  definition: Definition,
-  options: BindAgentCapabilityOptions<Definition>,
-): AgentSubmitBindings => {
-  const materialRefs: Record<string, MaterialRef> = {};
-  for (const [key, slot] of materialSlotEntries(definition)) {
-    const ref = options.materials?.[key];
-    if (ref !== undefined) {
-      materialRefs[slot] = ref;
-    }
-  }
-
-  return defineAgentSubmitBindings({
-    toolIntents: Object.entries(definition.intents).map(([key, intent]) => ({
-      kind: intent.kind,
-      boundaryPackage: intentBoundaryPackage(definition, key, intent),
-    })),
-    ...(Object.keys(materialRefs).length === 0 ? {} : { materials: materialRefs }),
-  });
-};

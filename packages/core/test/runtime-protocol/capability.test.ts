@@ -2,11 +2,10 @@ import { describe, expect, it } from "@effect/vitest";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 import * as runtimeProtocol from "../../src/runtime-protocol";
 import {
+  type AnyAgentCapabilityDefinition,
   capabilityIntent,
   capabilityMaterial,
   capabilityProjection,
-  defineAgentCapability,
-  submitBindingsForAgentCapability,
 } from "../../src/runtime-protocol";
 
 interface SurfaceEditIntent {
@@ -63,7 +62,7 @@ const surfaceEditBoundary = defineBoundaryContract({
 
 const surfaceEditPackage = boundaryPackage(surfaceEditBoundary, "0.1.0");
 
-const surfaceEditCapability = defineAgentCapability({
+const surfaceEditCapability = {
   id: "zeroy.surface-edit",
   boundaryPackage: surfaceEditPackage,
   intents: {
@@ -78,47 +77,21 @@ const surfaceEditCapability = defineAgentCapability({
   materials: {
     wp: capabilityMaterial<WordpressGrant>()("wp_token"),
   },
-});
+} satisfies AnyAgentCapabilityDefinition;
 
 describe("AgentCapability handles", () => {
-  it("derives submit bindings from the capability declaration", () => {
-    const materialRef = { kind: "credential" as const, ref: "wp-token", provider: "wordpress" };
-    const bindings = submitBindingsForAgentCapability(surfaceEditCapability, {
-      materials: { wp: materialRef },
-    });
-
-    expect(bindings.toolIntents).toEqual([
-      {
-        kind: "surface_edit.intent.requested",
-        boundaryPackage: surfaceEditPackage,
-      },
-    ]);
-    expect(bindings.materials).toEqual({ wp_token: materialRef });
-    expect("resolvedMaterials" in bindings).toBe(false);
+  it("keeps legacy capability declarations as inert manifest metadata", () => {
+    expect(surfaceEditCapability.intents.requestEdit.kind).toBe("surface_edit.intent.requested");
+    expect(surfaceEditCapability.projections.candidate.kind).toBe("surface_edit.candidate");
+    expect(surfaceEditCapability.materials.wp.slot).toBe("wp_token");
+    expect("toolIntents" in surfaceEditCapability).toBe(false);
+    expect("resolvedMaterials" in surfaceEditCapability).toBe(false);
   });
 
-  it("keeps material refs closed over declared material aliases", () => {
-    submitBindingsForAgentCapability(surfaceEditCapability, {
-      // @ts-expect-error declared capability material aliases must be bound.
-      materials: {},
-    });
-  });
-
-  it("does not expose runtime handles or resolved material from the protocol surface", () => {
+  it("does not expose legacy capability assembly helpers or runtime handles", () => {
+    expect("defineAgentCapability" in runtimeProtocol).toBe(false);
+    expect("submitBindingsForAgentCapability" in runtimeProtocol).toBe(false);
     expect("createAgentCapabilityHandle" in runtimeProtocol).toBe(false);
     expect("assertAgentCapabilityRuntimeContext" in runtimeProtocol).toBe(false);
-  });
-
-  it("fails fast when an intent has no boundary package source", () => {
-    const unbound = defineAgentCapability({
-      id: "unbound",
-      intents: {
-        request: capabilityIntent<{ readonly ok: true }>()("unbound.requested"),
-      },
-    });
-
-    expect(() => submitBindingsForAgentCapability(unbound, {})).toThrow(
-      "intent request has no boundary package",
-    );
   });
 });

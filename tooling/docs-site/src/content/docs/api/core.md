@@ -28,7 +28,6 @@ slug: "api/core"
 - `.:AgentCapabilityIntentsOf`
 - `.:AgentCapabilityMaterial`
 - `.:AgentCapabilityMaterialMap`
-- `.:AgentCapabilityMaterialRefs`
 - `.:AgentCapabilityMaterialsOf`
 - `.:AgentCapabilityProjection`
 - `.:AgentCapabilityProjectionIdentity`
@@ -113,7 +112,6 @@ slug: "api/core"
 - `.:backendProtocolTruthIdentityKey`
 - `.:BarrierCursor`
 - `.:BarrierRow`
-- `.:BindAgentCapabilityOptions`
 - `.:bindingMaterialRef`
 - `.:BindingMaterialRef`
 - `.:BindingMaterialRequirement`
@@ -194,8 +192,6 @@ slug: "api/core"
 - `.:decodeSubmitResult`
 - `.:decodeToolArgs`
 - `.:defineAgentBindings`
-- `.:defineAgentCapability`
-- `.:DefineAgentCapabilitySpec`
 - `.:defineAgentManifest`
 - `.:defineAgentSchema`
 - `.:defineAgentSubmitBindings`
@@ -712,7 +708,6 @@ slug: "api/core"
 - `.:Strategy`
 - `.:StreamEventsOptions`
 - `.:STRUCTURED_OUTPUT_TOOL_NAME`
-- `.:submitBindingsForAgentCapability`
 - `.:SubmitDecisionInterrupt`
 - `.:SubmitDecisionInterruptReason`
 - `.:SubmitReceiptBackedToolBinding`
@@ -1243,7 +1238,6 @@ slug: "api/core"
 - `./runtime-protocol:AgentCapabilityIntentsOf`
 - `./runtime-protocol:AgentCapabilityMaterial`
 - `./runtime-protocol:AgentCapabilityMaterialMap`
-- `./runtime-protocol:AgentCapabilityMaterialRefs`
 - `./runtime-protocol:AgentCapabilityMaterialsOf`
 - `./runtime-protocol:AgentCapabilityProjection`
 - `./runtime-protocol:AgentCapabilityProjectionIdentity`
@@ -1302,7 +1296,6 @@ slug: "api/core"
 - `./runtime-protocol:AuthorizationInputRequestResumePayload`
 - `./runtime-protocol:BarrierCursor`
 - `./runtime-protocol:BarrierRow`
-- `./runtime-protocol:BindAgentCapabilityOptions`
 - `./runtime-protocol:BUILTIN_HANDLER_KINDS`
 - `./runtime-protocol:BuiltinHandlerKind`
 - `./runtime-protocol:capabilityIntent`
@@ -1326,8 +1319,6 @@ slug: "api/core"
 - `./runtime-protocol:DecodeRuntimeLedgerEventResult`
 - `./runtime-protocol:decodeSubmitResult`
 - `./runtime-protocol:defineAgentBindings`
-- `./runtime-protocol:defineAgentCapability`
-- `./runtime-protocol:DefineAgentCapabilitySpec`
 - `./runtime-protocol:defineAgentManifest`
 - `./runtime-protocol:defineAgentSubmitBindings`
 - `./runtime-protocol:DeploymentSpec`
@@ -1489,7 +1480,6 @@ slug: "api/core"
 - `./runtime-protocol:RuntimeRekeyedPayloadSchema`
 - `./runtime-protocol:Stimulus`
 - `./runtime-protocol:Strategy`
-- `./runtime-protocol:submitBindingsForAgentCapability`
 - `./runtime-protocol:SubmitDecisionInterrupt`
 - `./runtime-protocol:SubmitDecisionInterruptReason`
 - `./runtime-protocol:SubmitReceiptBackedToolBinding`

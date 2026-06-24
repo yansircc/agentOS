@@ -3,8 +3,8 @@ import { Schema } from "effect";
 import { defineAgentSchema, type AgentSchemaSpec } from "@agent-os/core/agent-schema";
 import { boundaryPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 import {
+  type AnyAgentCapabilityDefinition,
   capabilityIntent,
-  defineAgentCapability,
   defineAgentBindings,
   defineAgentManifest,
   manifestScopeRef,
@@ -41,7 +41,7 @@ const baseManifest = defineAgentManifest({
   },
 });
 
-const capability = defineAgentCapability({
+const capability = {
   id: "runtime-protocol.test-capability",
   intents: {
     requested: capabilityIntent<{ readonly id: string }>()("runtime_protocol.requested", {
@@ -71,7 +71,9 @@ const capability = defineAgentCapability({
       ),
     }),
   },
-});
+  projections: {},
+  materials: {},
+} satisfies AnyAgentCapabilityDefinition;
 
 describe("AgentManifest mount algebra", () => {
   it("mounts a function-free manifest when bindings cover every declared handler", () => {
