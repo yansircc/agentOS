@@ -4,7 +4,11 @@ import path from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "@effect/vitest";
 import { RUNTIME_EVENT_KIND } from "@agent-os/core/runtime-protocol";
-import { createLocalAgentRuntime, createLocalWorkspaceEnv } from "@agent-os/runtime/local";
+import {
+  createLocalAgentRuntime,
+  createLocalWorkspaceEnv,
+  lowerLocalAgentRuntime,
+} from "@agent-os/runtime/local";
 
 const withTempWorkspace = async <A>(run: (root: string, base: string) => Promise<A>): Promise<A> => {
   const base = await mkdtemp(path.join(tmpdir(), "agentos-local-workspace-"));
@@ -128,6 +132,53 @@ describe("createLocalWorkspaceEnv", () => {
           RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
         ]),
       );
+    });
+  });
+
+  it("lowers local runtimes with explicit target identity", async () => {
+    await withTempWorkspace(async (root) => {
+      const localLowered = await lowerLocalAgentRuntime({
+        target: "local@1",
+        identity: "local-target-runtime",
+        cwd: root,
+        llm: {
+          responses: [
+            {
+              items: [{ type: "message", text: "local target done" }],
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            },
+          ],
+        },
+      });
+      const lowered = await lowerLocalAgentRuntime({
+        target: "node@1",
+        identity: "node-target-runtime",
+        cwd: root,
+        llm: {
+          responses: [
+            {
+              items: [{ type: "message", text: "node target done" }],
+              usage: { promptTokens: 2, completionTokens: 2, totalTokens: 4 },
+            },
+          ],
+        },
+      });
+
+      expect(localLowered.target).toBe("local@1");
+      expect(localLowered.manifest.host).toBe("local@1");
+      expect(lowered.target).toBe("node@1");
+      expect(lowered.manifest.host).toBe("node@1");
+      expect(Object.keys(lowered.runtime).sort()).toEqual(["diagnostics", "events", "submit"]);
+
+      const result = await lowered.runtime.submit({ intent: "finish with node target" });
+
+      expect(result).toMatchObject({
+        ok: true,
+        status: "delivered",
+        final: "node target done",
+        tokensUsed: 4,
+      });
+      expect(lowered.runtime.diagnostics()).toEqual([]);
     });
   });
 

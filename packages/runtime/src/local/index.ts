@@ -20,6 +20,7 @@ import {
   workspaceOperations,
   type CapabilityContract,
   type PreflightDiagnostic,
+  type ResolvedRuntime,
   type WorkspaceOperationsOptions,
 } from "../capability";
 import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
@@ -58,6 +59,12 @@ export interface CreateLocalAgentRuntimeOptions {
   readonly capabilities?: ReadonlyArray<CapabilityContract>;
 }
 
+export type LocalAgentRuntimeTarget = "local@1" | "node@1";
+
+export interface LowerLocalAgentRuntimeOptions extends CreateLocalAgentRuntimeOptions {
+  readonly target: LocalAgentRuntimeTarget;
+}
+
 export type LocalAgentSubmitInput = Omit<
   SubmitSpec,
   "context" | "effectAuthorityRef" | "route" | "tools"
@@ -71,6 +78,12 @@ export interface LocalAgentRuntime {
   readonly submit: (input: LocalAgentSubmitInput) => Promise<SubmitResult>;
   readonly events: (opts?: EventQueryOptions) => ReadonlyArray<LedgerEvent>;
   readonly diagnostics: () => ReadonlyArray<TelemetryFanoutDiagnostic>;
+}
+
+export interface LoweredLocalAgentRuntime {
+  readonly target: LocalAgentRuntimeTarget;
+  readonly manifest: ResolvedRuntime["manifest"];
+  readonly runtime: LocalAgentRuntime;
 }
 
 export class LocalWorkspaceEnvError extends Error {
@@ -300,9 +313,9 @@ export const createLocalWorkspaceEnv = (
   });
 };
 
-const localAgentHost = (workspaceEnv: WorkspaceEnv) =>
+const localAgentHost = (target: LocalAgentRuntimeTarget, workspaceEnv: WorkspaceEnv) =>
   defineHost({
-    target: "local@1",
+    target,
     provides: [WORKSPACE_OPERATION_HOST_FACT],
     materialize: () => ({
       [WORKSPACE_OPERATION_HOST_FACT]: () => workspaceEnv,
@@ -359,15 +372,47 @@ const submitSpecWithBindings = (
   executionIdentity: input.executionIdentity ?? bindings.executionIdentity,
 });
 
+const localAgentRuntimeTarget = (target: LocalAgentRuntimeTarget): LocalAgentRuntimeTarget => {
+  if (target === "local@1" || target === "node@1") return target;
+  throw new TypeError(`unsupported local agent runtime target: ${String(target)}`);
+};
+
+const localAgentRuntimeFacade = (input: {
+  readonly identity: string;
+  readonly truthIdentity: ReturnType<typeof inMemoryConversationTruthIdentity>;
+  readonly resolved: ResolvedRuntime;
+}): LocalAgentRuntime => ({
+  submit: (submitInput) =>
+    Effect.runPromise(
+      submitAgentEffect(
+        internalSubmitSpec(
+          submitSpecWithBindings(
+            submitInput,
+            input.resolved.bindings,
+            input.truthIdentity.effectAuthorityRef,
+          ),
+          {
+            scope: input.identity,
+            scopeRef: input.truthIdentity.scopeRef,
+          },
+          { runtimeGraphStatus: input.resolved.installGraph.graphStatus },
+        ),
+      ).pipe(Effect.provide(input.resolved.layer)),
+    ),
+  events: (opts = {}) => input.resolved.state.snapshot(input.truthIdentity, opts),
+  diagnostics: () => input.resolved.state.telemetryDiagnostics(),
+});
+
 /**
- * Creates a local dev/test runtime from the same capability resolver used by
- * production hosts.
+ * Lowers local runtime options into the same submit/events/diagnostics facade
+ * used by dev/test and generated product targets.
  *
  * @public
  */
-export const createLocalAgentRuntime = async (
-  options: CreateLocalAgentRuntimeOptions,
-): Promise<LocalAgentRuntime> => {
+export const lowerLocalAgentRuntime = async (
+  options: LowerLocalAgentRuntimeOptions,
+): Promise<LoweredLocalAgentRuntime> => {
+  const target = localAgentRuntimeTarget(options.target);
   const identity = inMemoryConversationTruthIdentity(options.identity);
   const workspaceEnv = createLocalWorkspaceEnv({
     cwd: options.cwd,
@@ -375,7 +420,7 @@ export const createLocalAgentRuntime = async (
     inheritEnv: options.inheritEnv,
   });
   const resolved = await resolveRuntime(
-    localAgentHost(workspaceEnv),
+    localAgentHost(target, workspaceEnv),
     [localWorkspaceOperations(options.workspaceOperations), ...(options.capabilities ?? [])],
     {
       identity: options.identity,
@@ -385,22 +430,27 @@ export const createLocalAgentRuntime = async (
   if (!resolved.ok) {
     throw new LocalAgentRuntimeResolveError(resolved.diagnostics);
   }
-  const runtime = resolved.resolved;
+  const runtime = localAgentRuntimeFacade({
+    identity: options.identity,
+    truthIdentity: identity,
+    resolved: resolved.resolved,
+  });
   return {
-    submit: (input) =>
-      Effect.runPromise(
-        submitAgentEffect(
-          internalSubmitSpec(
-            submitSpecWithBindings(input, runtime.bindings, identity.effectAuthorityRef),
-            {
-              scope: options.identity,
-              scopeRef: identity.scopeRef,
-            },
-            { runtimeGraphStatus: runtime.installGraph.graphStatus },
-          ),
-        ).pipe(Effect.provide(runtime.layer)),
-      ),
-    events: (opts = {}) => runtime.state.snapshot(identity, opts),
-    diagnostics: () => runtime.state.telemetryDiagnostics(),
+    target,
+    manifest: resolved.resolved.manifest,
+    runtime,
   };
+};
+
+/**
+ * Creates a local dev/test runtime from the same capability resolver used by
+ * production hosts.
+ *
+ * @public
+ */
+export const createLocalAgentRuntime = async (
+  options: CreateLocalAgentRuntimeOptions,
+): Promise<LocalAgentRuntime> => {
+  const lowered = await lowerLocalAgentRuntime({ ...options, target: "local@1" });
+  return lowered.runtime;
 };
