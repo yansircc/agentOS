@@ -12,13 +12,9 @@ import { RefResolverLive } from "@agent-os/core/ref-resolver";
 import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
 import { ToolError } from "@agent-os/core/errors";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
-import {
-  MaterializedProjectionRegistry,
-  Ledger,
-  internalSubmitSpec,
-  submitAgentEffect,
-  type InternalSubmitSpec,
-} from "@agent-os/runtime";
+import { MaterializedProjectionRegistry, Ledger } from "@agent-os/runtime";
+import { internalSubmitSpec, type InternalSubmitSpec } from "../../src/internal-submit";
+import { submitAgentEffect } from "../../src/submit-agent";
 import type { SubmitSpec } from "@agent-os/core/runtime-protocol";
 import { defineTool, deterministicToolExecution, type Tool } from "@agent-os/core/tools";
 import {

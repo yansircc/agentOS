@@ -51,6 +51,11 @@ export default defineConfig({
           label: "Operations",
           items: [
             { label: "Internal npm Distribution", slug: "distribution" },
+            {
+              label: "Release Notes",
+              collapsed: true,
+              items: [{ autogenerate: { directory: "release-notes", collapsed: true } }],
+            },
             { label: "Verification", slug: "verification" },
           ],
         },

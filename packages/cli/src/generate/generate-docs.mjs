@@ -160,6 +160,7 @@ const replaceBlock = async (file, id, content) => {
 const packages = surface.packages;
 const packagesByPath = new Map(packages.map((pkg) => [pkg.path, pkg]));
 const failures = [];
+const audienceKinds = new Map(Object.entries(surface.audienceKinds ?? {}));
 
 if (releaseLine === undefined) {
   failures.push("package.json agentOsRelease.version must be a semver release source");
@@ -214,6 +215,58 @@ for (const pkg of packages) {
   }
 }
 
+if (audienceKinds.size === 0) {
+  failures.push("docs/surface.json: audienceKinds must declare at least one audience kind");
+}
+
+const entrypointRowsForPackage = (pkg) => {
+  const entrypoints = Array.isArray(pkg.entrypoints) ? pkg.entrypoints : [];
+  return entrypoints.map((entry) => [
+    `\`${pkg.name}${entry.subpath === "." ? "" : entry.subpath.slice(1)}\``,
+    entry.audiences.map((audience) => `\`${audience}\``).join(", "),
+    entry.capability,
+  ]);
+};
+
+const validateEntrypointAudience = (pkg) => {
+  const entrypoints = pkg.entrypoints;
+  if (pkg.published !== true) return;
+  if (!Array.isArray(entrypoints) || entrypoints.length === 0) {
+    failures.push(`${pkg.name}: published package must declare entrypoint audiences`);
+    return;
+  }
+  const seen = new Set();
+  for (const entry of entrypoints) {
+    const label = `${pkg.name}:${entry?.subpath ?? "entrypoint"}`;
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      failures.push(`${label}: entrypoint must be an object`);
+      continue;
+    }
+    if (entry.subpath !== "." && !/^\.\/[a-z0-9][a-z0-9./-]*$/u.test(entry.subpath)) {
+      failures.push(`${label}: subpath must be "." or a package export subpath`);
+      continue;
+    }
+    if (seen.has(entry.subpath)) {
+      failures.push(`${label}: duplicate entrypoint audience declaration`);
+    }
+    seen.add(entry.subpath);
+    if (!Array.isArray(entry.audiences) || entry.audiences.length === 0) {
+      failures.push(`${label}: audiences must be a non-empty array`);
+      continue;
+    }
+    for (const audience of entry.audiences) {
+      if (!audienceKinds.has(audience)) {
+        failures.push(`${label}: unknown audience kind ${audience}`);
+      }
+    }
+    if (typeof entry.capability !== "string" || entry.capability.length === 0) {
+      failures.push(`${label}: capability must be a non-empty string`);
+    }
+  }
+};
+
+for (const pkg of packages) validateEntrypointAudience(pkg);
+
 for (const packagePath of workspacePackagePaths()) {
   const pkgPath = String(packagePath);
   if (!packagesByPath.has(pkgPath)) {
@@ -238,6 +291,12 @@ for (const pkg of packages) {
     "## Public API Status",
     "",
     pkg.readmeStatus,
+    "",
+    "## Audience",
+    "",
+    entrypointRowsForPackage(pkg).length === 0
+      ? "No published npm entrypoints."
+      : table(["Entrypoint", "Audience", "Capability"], entrypointRowsForPackage(pkg)),
     "",
     "## Invariant",
     "",
@@ -319,6 +378,20 @@ const runtimePackageMap = table(
 );
 
 await replaceBlock("docs/runtime-packages.md", "runtime-package-map", runtimePackageMap);
+
+const audienceKindMap = table(
+  ["Audience", "Meaning"],
+  [...audienceKinds.entries()].map(([audience, meaning]) => [`\`${audience}\``, meaning]),
+);
+
+await replaceBlock("docs/runtime-packages.md", "audience-kinds", audienceKindMap);
+
+const entrypointAudienceMap = table(
+  ["Entrypoint", "Audience", "Capability"],
+  packages.flatMap(entrypointRowsForPackage),
+);
+
+await replaceBlock("docs/runtime-packages.md", "entrypoint-audience-map", entrypointAudienceMap);
 
 await replaceBlock(
   "docs/runtime-packages.md",

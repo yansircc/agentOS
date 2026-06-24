@@ -91,7 +91,6 @@ import {
   recordLedgerPortEvent,
   runWorkspaceJobEffect,
   runtimeStorageOrJsonError,
-  submitAgentEffect,
   validateBoundaryEventPayload,
   type RunWorkspaceJobSpec,
   type RuntimeStorageError,
@@ -100,6 +99,7 @@ import {
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
+import { submitAgentEffect } from "../submit-agent";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   agentRunAbortedEvent,

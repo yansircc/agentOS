@@ -15,6 +15,37 @@ adapter, target ambient implementation, or disputed event-projection fold.
 
 0.5.x active development. Public exports are listed for package ownership; they are not frozen.
 
+## Audience
+
+| Entrypoint                                  | Audience         | Capability                                    |
+| ------------------------------------------- | ---------------- | --------------------------------------------- |
+| `@agent-os/core`                            | `advanced`       | neutral substrate algebra and brands          |
+| `@agent-os/core/abort`                      | `advanced`       | abort vocabulary                              |
+| `@agent-os/core/agent-schema`               | `advanced`       | agent schema authoring algebra                |
+| `@agent-os/core/authored-value`             | `advanced`       | authored value ownership                      |
+| `@agent-os/core/backend-protocol`           | `advanced`       | backend protocol DTOs                         |
+| `@agent-os/core/backend-protocol/reference` | `advanced`       | backend protocol reference helpers            |
+| `@agent-os/core/boundary-contract`          | `advanced`       | boundary contract declarations                |
+| `@agent-os/core/carrier`                    | `advanced`       | carrier algebra                               |
+| `@agent-os/core/context`                    | `advanced`       | context value helpers                         |
+| `@agent-os/core/effect-claim`               | `advanced`       | effect claim vocabulary                       |
+| `@agent-os/core/errors`                     | `advanced`       | shared error classes                          |
+| `@agent-os/core/extensions`                 | `advanced`       | extension declarations                        |
+| `@agent-os/core/live-edge`                  | `advanced`       | live edge protocol                            |
+| `@agent-os/core/llm-protocol`               | `advanced`       | LLM protocol DTOs                             |
+| `@agent-os/core/material-ref`               | `advanced`       | material refs                                 |
+| `@agent-os/core/projection`                 | `advanced`       | projection algebra                            |
+| `@agent-os/core/quota`                      | `advanced`       | quota declarations                            |
+| `@agent-os/core/recorded-value`             | `advanced`       | recorded value algebra                        |
+| `@agent-os/core/ref-resolver`               | `advanced`       | material ref resolution                       |
+| `@agent-os/core/runtime-protocol`           | `generated-only` | runtime DTOs emitted by generated targets     |
+| `@agent-os/core/runtime-scope`              | `advanced`       | runtime scope helpers                         |
+| `@agent-os/core/settlement-contract`        | `advanced`       | settlement contract algebra                   |
+| `@agent-os/core/telemetry-protocol`         | `advanced`       | telemetry protocol DTOs                       |
+| `@agent-os/core/tools`                      | `generated-only` | tool definitions emitted by generated targets |
+| `@agent-os/core/types`                      | `advanced`       | shared type helpers                           |
+| `@agent-os/core/workspace-agent`            | `advanced`       | workspace agent command/projection vocabulary |
+
 ## Invariant
 
 Core is a neutral axioms package. Package names are build metadata only; durable owner

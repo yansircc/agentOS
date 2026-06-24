@@ -11,6 +11,15 @@ optional React/Svelte subpath bridges.
 
 0.5.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; the package owns the transport-neutral root client state machine and optional React/Svelte subpaths.
 
+## Audience
+
+| Entrypoint                         | Audience                           | Capability                       |
+| ---------------------------------- | ---------------------------------- | -------------------------------- |
+| `@agent-os/client`                 | `default-direct`                   | transport-neutral client store   |
+| `@agent-os/client/react`           | `default-direct`                   | React client adapter             |
+| `@agent-os/client/svelte`          | `default-direct`, `generated-only` | Svelte client adapter            |
+| `@agent-os/client/workspace-agent` | `generated-only`                   | generated workspace agent client |
+
 ## Invariant
 
 The package root owns transport-neutral state and command orchestration. It

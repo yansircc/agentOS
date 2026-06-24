@@ -44,7 +44,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:BoundaryCommitIdentity`
 - `.:BoundaryCommitRejected`
 - `.:BoundaryEvents`
-- `.:buildInitialMessages`
 - `.:commitBoundaryEvent`
 - `.:ContinuationProjection`
 - `.:ContinuationResumeDecisionResult`
@@ -58,7 +57,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:CreateWorkspaceToolsOptions`
 - `.:decodeSseHttpEvents`
 - `.:decodeStructuredOutputFromItems`
-- `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
 - `.:defineProjection`
@@ -84,8 +82,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:GrepWorkspaceFilesOptions`
 - `.:InputRequestProjection`
 - `.:InputRequestResumeDecisionResult`
-- `.:internalSubmitSpec`
-- `.:InternalSubmitSpec`
 - `.:isWorkspaceAgentCommandName`
 - `.:isWorkspaceAgentProjectionName`
 - `.:Ledger`
@@ -175,7 +171,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:SseHttpResponseOptions`
 - `.:SseHttpSource`
 - `.:StructuredDecodeResult`
-- `.:submitAgentEffect`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitResumeDecisionFromInputRequestProjection`
 - `.:Tool`
@@ -199,7 +194,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:TriggerStuckResult`
 - `.:TriggerStuckRow`
 - `.:TriggerTx`
-- `.:turnRefOf`
 - `.:UnregisteredProjectionKind`
 - `.:validateBoundaryEventPayload`
 - `.:validateCommittedBoundaryEvent`

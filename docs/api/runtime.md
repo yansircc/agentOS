@@ -40,7 +40,6 @@
 - `.:BoundaryCommitIdentity`
 - `.:BoundaryCommitRejected`
 - `.:BoundaryEvents`
-- `.:buildInitialMessages`
 - `.:commitBoundaryEvent`
 - `.:ContinuationProjection`
 - `.:ContinuationResumeDecisionResult`
@@ -54,7 +53,6 @@
 - `.:CreateWorkspaceToolsOptions`
 - `.:decodeSseHttpEvents`
 - `.:decodeStructuredOutputFromItems`
-- `.:DEFAULT_LLM_CALL_TIMEOUT_MS`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
 - `.:defineProjection`
@@ -80,8 +78,6 @@
 - `.:GrepWorkspaceFilesOptions`
 - `.:InputRequestProjection`
 - `.:InputRequestResumeDecisionResult`
-- `.:internalSubmitSpec`
-- `.:InternalSubmitSpec`
 - `.:isWorkspaceAgentCommandName`
 - `.:isWorkspaceAgentProjectionName`
 - `.:Ledger`
@@ -171,7 +167,6 @@
 - `.:SseHttpResponseOptions`
 - `.:SseHttpSource`
 - `.:StructuredDecodeResult`
-- `.:submitAgentEffect`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitResumeDecisionFromInputRequestProjection`
 - `.:Tool`
@@ -195,7 +190,6 @@
 - `.:TriggerStuckResult`
 - `.:TriggerStuckRow`
 - `.:TriggerTx`
-- `.:turnRefOf`
 - `.:UnregisteredProjectionKind`
 - `.:validateBoundaryEventPayload`
 - `.:validateCommittedBoundaryEvent`

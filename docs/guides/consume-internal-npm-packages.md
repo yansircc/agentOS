@@ -38,6 +38,35 @@ publish:local` in agentOS.
    when consuming the local channel.
 10. Run the app typecheck and tests under its own lockfile.
 
+## Import Surface
+
+Use direct package roots only for consumer-facing packages:
+
+```ts
+import { compileAgentTree } from "@yansirplus/cli";
+import { createAgentClient } from "@yansirplus/client";
+```
+
+Generated agent targets emit their own runtime/core imports. Do not hand-write
+these in ordinary app code; keep them inside generated target files:
+
+```ts
+import { bindWorkspaceToolsForRuntime } from "@yansirplus/runtime/workspace-binding";
+import type { SubmitRunInput } from "@yansirplus/core/runtime-protocol";
+import { deterministicToolExecution } from "@yansirplus/core/tools";
+```
+
+Backend or substrate authors may import explicit runtime adapter subpaths:
+
+```ts
+import { createAgentDurableObject } from "@yansirplus/runtime/cloudflare";
+import { makeInMemoryRuntimeLayer } from "@yansirplus/runtime/in-memory";
+```
+
+Do not import submit-loop internals from `@yansirplus/runtime`. The runtime root
+does not export `internalSubmitSpec`, `InternalSubmitSpec`, `submitAgentEffect`,
+`buildInitialMessages`, `DEFAULT_LLM_CALL_TIMEOUT_MS`, or `turnRefOf`.
+
 For normal first-party prepublish work, use the direct consumer overlay instead
 of publishing npm versions or hand-writing tarball paths:
 

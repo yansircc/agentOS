@@ -14,7 +14,9 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
-import { Ledger, internalSubmitSpec, submitAgentEffect } from "@agent-os/runtime";
+import { Ledger } from "@agent-os/runtime";
+import { internalSubmitSpec } from "../../../src/internal-submit";
+import { submitAgentEffect } from "../../../src/submit-agent";
 import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
 import { stubLlmTransport } from "../_stub-ai";
 import { allowToolAdmitter } from "../_tool-fixture";

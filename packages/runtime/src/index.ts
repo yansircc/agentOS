@@ -1,21 +1,315 @@
-export * from "./admission";
-export * from "./attached-stream";
-export * from "./boundary-events";
-export * from "./boundary-commit";
-export * from "./continuation";
-export * from "./dispatch";
-export * from "./ledger";
-export * from "./internal-submit";
-export * from "./input-request";
-export * from "./projection";
-export * from "./quota-service";
-export * from "./resources";
-export * from "./run-projector";
-export * from "./scheduler";
-export * from "./sse-http";
-export * from "./structured-output";
-export * from "./submit-agent";
-export * from "./telemetry-tree";
+export { Admission } from "./admission";
+export {
+  attachedStreamParseFail,
+  attachedStreamParseOk,
+  AttachedStreamRegistry,
+  AttachedStreams,
+  createAttachedStreamQueue,
+  getAttachedStreamHandler,
+  makeAttachedStreamRegistry,
+  makeAttachedStreamService,
+  runSynchronousAttachedStreamCommit,
+} from "./attached-stream";
+export type {
+  AnyAttachedStreamHandler,
+  AttachedStreamCancellationMode,
+  AttachedStreamCancelResult,
+  AttachedStreamCancelSpec,
+  AttachedStreamCtx,
+  AttachedStreamDetachMode,
+  AttachedStreamHandler,
+  AttachedStreamHandlerOutput,
+  AttachedStreamOutputSource,
+  AttachedStreamParseResult,
+  AttachedStreamQueue,
+  AttachedStreamRegistryMap,
+  AttachedStreamSendResult,
+  AttachedStreamSendSpec,
+  AttachedStreamServiceError,
+  AttachedStreamSession,
+  AttachedStreamsService,
+  AttachedStreamStartSpec,
+  AttachedStreamTerminal,
+  AttachedStreamTerminalCommitAck,
+  AttachedStreamTerminalCommitSpec,
+  AttachedStreamTx,
+  MakeAttachedStreamRegistryOptions,
+  MakeAttachedStreamServiceSpec,
+} from "./attached-stream";
+export { BoundaryEvents } from "./boundary-events";
+export {
+  boundaryCommitIdentity,
+  BoundaryCommitRejected,
+  commitBoundaryEvent,
+  validateBoundaryEventPayload,
+  validateCommittedBoundaryEvent,
+} from "./boundary-commit";
+export type { BoundaryCommitIdentity } from "./boundary-commit";
+export {
+  fingerprintFailureDiagnostic,
+  projectContinuation,
+  projectContinuationRefs,
+  projectRecoveryAttemptBudget,
+  submitResumeDecisionFromContinuationProjection,
+} from "./continuation";
+export type { ContinuationProjection, ContinuationResumeDecisionResult } from "./continuation";
+export { Dispatch } from "./dispatch";
+export {
+  Ledger,
+  recordLedgerPortEvent,
+  recordLedgerPortEvents,
+  runtimeStorageError,
+  RuntimeStorageError,
+  runtimeStorageOrJsonError,
+} from "./ledger";
+export type { RuntimeStorageOperation } from "./ledger";
+export {
+  projectInputRequest,
+  projectInputRequests,
+  submitResumeDecisionFromInputRequestProjection,
+} from "./input-request";
+export type { InputRequestProjection, InputRequestResumeDecisionResult } from "./input-request";
+export {
+  applyProjectionEvent,
+  applyProjectionEventResult,
+  defineProjection,
+  getProjection,
+  makeProjectionRegistry,
+  makeProjectionRegistryResult,
+  MaterializedProjectionRegistry,
+  MaterializedProjections,
+  ProjectionApplicationError,
+  projectionDelete,
+  projectionFail,
+  projectionIdentity,
+  projectionKeep,
+  projectionMalformed,
+  projectionPut,
+  ProjectionReducerReturnedThenable,
+  ProjectionRegistryError,
+  projectionSkip,
+  ProjectionWaitTimedOut,
+  UnregisteredProjectionKind,
+  waitForProjection,
+} from "./projection";
+export type {
+  AnyMaterializedProjectionDefinition,
+  MaterializedProjectionDefinition,
+  MaterializedProjectionEventIdentity,
+  MaterializedProjectionGetSpec,
+  MaterializedProjectionListSpec,
+  MaterializedProjectionRebuildResult,
+  MaterializedProjectionRow,
+  MaterializedProjectionStatus,
+  ProjectionApplyEventResult,
+  ProjectionApplyResult,
+  ProjectionCurrentLookup,
+  ProjectionCurrentRow,
+  ProjectionDelete,
+  ProjectionFail,
+  ProjectionIdentifyMalformed,
+  ProjectionIdentifyOk,
+  ProjectionIdentifyResult,
+  ProjectionIdentifySkip,
+  ProjectionKeep,
+  ProjectionPut,
+  ProjectionReduceContext,
+  ProjectionReduceResult,
+  ProjectionRegistry,
+  ProjectionRegistryBuildResult,
+  ProjectionStatus,
+  ProjectionWaitSpec,
+} from "./projection";
+export { Quota } from "./quota-service";
+export { Resources } from "./resources";
+export {
+  projectRunsPage,
+  projectRunStatus,
+  projectRunTrace,
+  projectSubmitResult,
+  RUN_BEARING_KINDS,
+} from "./run-projector";
+export { Scheduler } from "./scheduler";
+export {
+  createAttachedStreamSseResponse,
+  createSseHttpResponse,
+  createSseHttpTextResponse,
+  decodeSseHttpEvents,
+  encodeSseHttpData,
+  encodeSseHttpEvent,
+  encodeSseHttpJsonEvent,
+  parseSseHttpEventBlock,
+  responseToSseHttpChunks,
+  SSE_HTTP_CONTENT_TYPE,
+} from "./sse-http";
+export type { SseHttpChunk, SseHttpEvent, SseHttpResponseOptions, SseHttpSource } from "./sse-http";
+export {
+  classifyStructuredCallFailure,
+  decodeStructuredOutputFromItems,
+  structuredOutputRequest,
+} from "./structured-output";
+export type {
+  StructuredCallFailureClassification,
+  StructuredDecodeResult,
+} from "./structured-output";
+export { projectTelemetryEventTree } from "./telemetry-tree";
+export {
+  DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
+  DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS,
+  drainTriggerPumpUntilQuiet,
+  DurableTriggerRegistry,
+  getDurableTrigger,
+  makeDurableTriggerRegistry,
+  runSynchronousTriggerCommit,
+  scheduledEventTrigger,
+  triggerParseFail,
+  triggerParseOk,
+  TriggerPump,
+} from "./trigger";
+export type {
+  AcquireCtx,
+  AnyDurableTrigger,
+  DurableTrigger,
+  DurableTriggerCancellationMode,
+  TriggerCancellation,
+  TriggerCancelResult,
+  TriggerCancelSpec,
+  TriggerDrainResult,
+  TriggerDrainUntilQuietOptions,
+  TriggerDrainUntilQuietResult,
+  TriggerEventSpec,
+  TriggerIntentSpec,
+  TriggerParseResult,
+  TriggerRegistry,
+  TriggerStuckResult,
+  TriggerStuckRow,
+  TriggerTx,
+} from "./trigger";
+export { makeWitnessPort, WitnessPort, WitnessPortRejected } from "./witness-port";
+export type { WitnessPortIssue, WitnessPortService, WitnessRequest } from "./witness-port";
+export {
+  WORKSPACE_AGENT_COMMAND,
+  WORKSPACE_AGENT_PROJECTION,
+  WORKSPACE_AGENT_PROJECTION_SCHEMA,
+  defineWorkspaceAgentMount,
+  isWorkspaceAgentCommandName,
+  isWorkspaceAgentProjectionName,
+} from "./workspace-agent";
+export type {
+  WorkspaceAgentCommandInputByName,
+  WorkspaceAgentCommandName,
+  WorkspaceAgentCommandOutputByName,
+  WorkspaceAgentCustomCommandInput,
+  WorkspaceAgentDecideInputRequestCommandInput,
+  WorkspaceAgentDestroyCommandInput,
+  WorkspaceAgentDriverMount,
+  WorkspaceAgentFileEntry,
+  WorkspaceAgentFilesProjection,
+  WorkspaceAgentFilesProjectionShape,
+  WorkspaceAgentGeneratedMount,
+  WorkspaceAgentMutationCommandOutput,
+  WorkspaceAgentProjectionName,
+  WorkspaceAgentProjectionRead,
+  WorkspaceAgentProjectionSchema,
+  WorkspaceAgentProjectionSink,
+  WorkspaceAgentProjectionValueByName,
+  WorkspaceAgentReadFileCommandInput,
+  WorkspaceAgentReadFileCommandOutput,
+  WorkspaceAgentReadStateCommandInput,
+  WorkspaceAgentReadStateCommandOutput,
+  WorkspaceAgentResetCommandInput,
+  WorkspaceAgentResumeInputRequestCommandInput,
+  WorkspaceAgentStateProjection,
+  WorkspaceAgentStateProjectionShape,
+  WorkspaceAgentSubmitCommandInput,
+} from "./workspace-agent";
+export { bindWorkspaceToolsForRuntime, workspaceEnvMaterialRef } from "./workspace-binding";
+export type {
+  BindWorkspaceToolsForRuntimeOptions,
+  WorkspaceMutationPolicy,
+  WorkspaceShellPolicy,
+  WorkspaceToolExposurePolicy,
+  WorkspaceToolExposureProfile,
+} from "./workspace-binding";
+export {
+  createWorkspaceEnv,
+  createWorkspaceTools,
+  diffWorkspaceFiles,
+  editWorkspaceFile,
+  globWorkspaceFiles,
+  grepWorkspaceFiles,
+  normalizeWorkspaceToolPath,
+  walkWorkspaceFiles,
+  WorkspaceEnvInputError,
+  WORKSPACE_TOOL_DEFAULT_DECLARATIONS,
+  WORKSPACE_TOOL_EXPOSURE_PROFILES,
+  WORKSPACE_TOOL_NAMES,
+  WORKSPACE_TOOL_SPECS,
+} from "./workspace-env-core";
+export type {
+  CreateWorkspaceEnvOptions,
+  CreateWorkspaceToolsOptions,
+  EditWorkspaceFileOptions,
+  GlobWorkspaceFilesOptions,
+  GrepWorkspaceFilesOptions,
+  NormalizeWorkspaceToolPathOptions,
+  WalkWorkspaceFilesOptions,
+  WorkspaceBashResult,
+  WorkspaceEditFileResult,
+  WorkspaceEnv,
+  WorkspaceEnvBackend,
+  WorkspaceExecOptions,
+  WorkspaceExecResult,
+  WorkspaceFilesDiff,
+  WorkspaceFileSnapshot,
+  WorkspaceFileStat,
+  WorkspaceGlobFilesResult,
+  WorkspaceGrepFilesResult,
+  WorkspaceGrepMatch,
+  WorkspaceGrepMode,
+  WorkspaceOperationOptions,
+  WorkspaceReadFileLineRange,
+  WorkspaceReadFileResult,
+  WorkspaceToolCategory,
+  WorkspaceToolDefaultDeclaration,
+  WorkspaceToolEffect,
+  WorkspaceToolEnvRef,
+  WorkspaceToolExecHookInput,
+  WorkspaceToolHooks,
+  WorkspaceToolInteractionFloor,
+  WorkspaceToolName,
+  WorkspaceToolReceiptPolicy,
+  WorkspaceTools,
+  WorkspaceToolSpec,
+  WorkspaceToolWriteHookInput,
+  WorkspaceWriteFileResult,
+} from "./workspace-env-core";
+export {
+  runWorkspaceJobEffect,
+  WorkspaceJobCandidateMissing,
+  WorkspaceJobDataPlaneFailed,
+  WorkspaceJobRunIdMismatch,
+  WorkspaceJobVerifierFailed,
+} from "./workspace-job";
+export type {
+  RunWorkspaceJobSpec,
+  WorkspaceJobAttemptContext,
+  WorkspaceJobDataPlane,
+  WorkspaceJobFinalizedArtifact,
+  WorkspaceJobRecovery,
+  WorkspaceJobRepairDecisionInput,
+  WorkspaceJobSeedFile,
+  WorkspaceJobTerminalArtifactBuild,
+  WorkspaceJobTerminalArtifactWriteResult,
+  WorkspaceJobVerifier,
+  WorkspaceJobVerifierResult,
+} from "./workspace-job";
+export { projectWorkspaceJobObservability } from "./workspace-job-observability";
+export type {
+  WorkspaceJobFailureExplanation,
+  WorkspaceJobObservabilityProjection,
+  WorkspaceJobObservabilityRequest,
+} from "./workspace-job-observability";
 export {
   settleToolAdmissionRejected,
   settleToolExecuted,
@@ -26,10 +320,3 @@ export {
   toolSettlementContract,
 } from "./tool-settlement";
 export type { Tool, ToolDefinition } from "@agent-os/core/tools";
-export * from "./trigger";
-export * from "./witness-port";
-export * from "./workspace-agent";
-export * from "./workspace-binding";
-export * from "./workspace-env-core";
-export * from "./workspace-job";
-export * from "./workspace-job-observability";

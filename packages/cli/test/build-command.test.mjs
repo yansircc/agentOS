@@ -233,6 +233,10 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.equal(manifest.tools.write_file.interaction, "approval");
     const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
     assert.match(target, /import semanticDeclarations from "\.\/manifest\.json";/);
+    assert.match(target, /from "@agent-os\/runtime\/workspace-binding";/);
+    assert.match(target, /from "@agent-os\/core\/runtime-protocol";/);
+    assert.match(target, /from "@agent-os\/core\/tools";/);
+    assert.doesNotMatch(target, /from "@agent-os\/runtime";/);
     assert.match(target, /generatedWorkspaceToolInteractions/);
     assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
     assert.match(target, /readonly AGENTOS_ENDPOINT_OPENROUTER\?: string;/);

@@ -167,6 +167,25 @@ const sourceExportRecordsFromAst = (file, entrypoint, seen) => {
         records.push(
           ...sourceExportRecordsFromAst(resolveRelativeModule(abs, specifier), entrypoint, seen),
         );
+      } else if (
+        statement.exportClause !== undefined &&
+        ts.isNamedExports(statement.exportClause) &&
+        specifier !== null &&
+        specifier.startsWith(".")
+      ) {
+        const target = resolveRelativeModule(abs, specifier);
+        const targetRecords = sourceExportRecordsFromAst(target, entrypoint, new Set(seen));
+        for (const element of statement.exportClause.elements) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          const exportedName = element.name.text;
+          const targetRecord = targetRecords.find((record) => record.name === importedName);
+          if (targetRecord === undefined) continue;
+          records.push({
+            ...targetRecord,
+            name: exportedName,
+            key: `${entrypoint}:${exportedName}`,
+          });
+        }
       }
       continue;
     }

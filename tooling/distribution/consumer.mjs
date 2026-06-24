@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   boolArg,
+  escapeRegExp,
   fail,
   gitStatusShort,
   gitValue,
@@ -171,8 +172,14 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { bindWorkspaceToolsForRuntime } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
+      `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
+      `import type { SubmitRunInput } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
+      "void bindWorkspaceToolsForRuntime;",
+      "void deterministicToolExecution;",
+      "type _SubmitRunInput = SubmitRunInput;",
       "void mountOpsApi;",
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
@@ -188,8 +195,10 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { ABORT } from "${publicSpecifier("@agent-os/core")}";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { AG_UI_WIRE_COMPATIBILITY } from "${publicSpecifier("@agent-os/runtime/ag-ui")}";`,
+      `import { workspaceEnvMaterialRef } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
+      `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
-      "if (!compileAgentTree || !ABORT || !triggerParseOk || !AG_UI_WIRE_COMPATIBILITY || !mountOpsApi) throw new Error('missing import');",
+      "if (!compileAgentTree || !ABORT || !triggerParseOk || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
@@ -313,8 +322,28 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     /\.(?:ts|json|jsonc)$/u.test(file),
   );
   const generatedText = generatedFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
-  if (!generatedText.includes(`${publishScope()}/runtime`)) {
-    fail("generated target consumer did not project runtime imports to public package scope");
+  const requiredGeneratedSpecifiers = [
+    `${publishScope()}/runtime/cloudflare`,
+    `${publishScope()}/runtime/llm-effect-ai`,
+    `${publishScope()}/runtime/workspace-agent`,
+    `${publishScope()}/runtime/workspace-binding`,
+    `${publishScope()}/runtime/sse-http`,
+    `${publishScope()}/core/runtime-protocol`,
+    `${publishScope()}/core/tools`,
+    `${publishScope()}/client`,
+    `${publishScope()}/client/svelte`,
+  ];
+  for (const specifier of requiredGeneratedSpecifiers) {
+    if (!generatedText.includes(specifier)) {
+      fail(`generated target consumer missing canonical public import ${specifier}`);
+    }
+  }
+  if (
+    new RegExp(`from\\s+["']${escapeRegExp(`${publishScope()}/runtime`)}["']`, "u").test(
+      generatedText,
+    )
+  ) {
+    fail("generated target consumer imported runtime root instead of canonical subpaths");
   }
   if (generatedText.includes(`${sourcePackageScope}/`)) {
     fail(`generated target consumer leaked source package scope ${sourcePackageScope}`);
@@ -483,6 +512,65 @@ export const assertGeneratedTargetConsumer = () => {
   console.log("verified generated target consumer uses public package imports without symlinks");
 };
 
+export const assertPackedRootInternalSymbolsAbsent = (dir) => {
+  const runtimeSpecifier = publicSpecifier("@agent-os/runtime");
+  const removedRootTypeSymbols = ["InternalSubmitSpec"];
+  const removedRootValueSymbols = [
+    "DEFAULT_LLM_CALL_TIMEOUT_MS",
+    "buildInitialMessages",
+    "internalSubmitSpec",
+    "submitAgentEffect",
+    "turnRefOf",
+  ];
+  fs.writeFileSync(
+    path.join(dir, "negative-internal-root.ts"),
+    [
+      `import { ${removedRootValueSymbols.join(", ")} } from "${runtimeSpecifier}";`,
+      `import type { ${removedRootTypeSymbols.join(", ")} } from "${runtimeSpecifier}";`,
+      `void [${removedRootValueSymbols.join(", ")}];`,
+      `type _RemovedRootType = ${removedRootTypeSymbols.join(" | ")};`,
+      "",
+    ].join("\n"),
+  );
+  writeJson(path.join(dir, "tsconfig.negative.json"), {
+    compilerOptions: {
+      target: "ES2022",
+      module: "NodeNext",
+      moduleResolution: "NodeNext",
+      strict: true,
+      skipLibCheck: true,
+    },
+    include: ["negative-internal-root.ts"],
+  });
+  const typecheck = spawnSync("npm", ["exec", "tsc", "--", "-p", "tsconfig.negative.json"], {
+    cwd: dir,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (typecheck.status === 0) {
+    fail("packed runtime root unexpectedly typechecked removed internal submit symbols");
+  }
+  const typecheckOutput = `${typecheck.stdout}\n${typecheck.stderr}`;
+  for (const symbol of [...removedRootTypeSymbols, ...removedRootValueSymbols]) {
+    if (!typecheckOutput.includes(symbol)) {
+      fail(`packed runtime root negative typecheck did not mention removed symbol ${symbol}`);
+    }
+  }
+
+  fs.writeFileSync(
+    path.join(dir, "negative-internal-root.mjs"),
+    [
+      `const runtime = await import(${JSON.stringify(runtimeSpecifier)});`,
+      `const forbidden = ${JSON.stringify(removedRootValueSymbols)};`,
+      "const leaked = forbidden.filter((symbol) => symbol in runtime);",
+      "if (leaked.length > 0) throw new Error(`packed runtime root leaked ${leaked.join(', ')}`);",
+      "",
+    ].join("\n"),
+  );
+  run("node", ["negative-internal-root.mjs"], { cwd: dir, capture: true });
+  console.log("verified packed runtime root hides internal submit symbols");
+};
+
 export const testInternalConsumer = () => {
   packInternal();
   negativeContractTests();
@@ -493,6 +581,7 @@ export const testInternalConsumer = () => {
     "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
   });
   npmInstall(dir);
+  assertPackedRootInternalSymbolsAbsent(dir);
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.nodenext.json"], { cwd: dir, capture: true });
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.bundler.json"], { cwd: dir, capture: true });
   run("node", ["smoke.mjs"], { cwd: dir, capture: true });

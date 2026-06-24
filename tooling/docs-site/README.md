@@ -11,6 +11,10 @@ content from `docs/**`; it is not a source of documentation facts.
 
 Private tooling package. It renders projected docs and is not published.
 
+## Audience
+
+No published npm entrypoints.
+
 ## Invariant
 
 The docs site is a generated projection. Authors edit `docs/**`, not

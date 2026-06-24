@@ -11,6 +11,12 @@ authored agent builds, structural checks, and distribution gates.
 
 0.5.x active development. CLI commands are the supported developer surface; generated projections remain owned by their source facts.
 
+## Audience
+
+| Entrypoint      | Audience         | Capability                    |
+| --------------- | ---------------- | ----------------------------- |
+| `@agent-os/cli` | `default-direct` | developer CLI command package |
+
 ## Invariant
 
 The CLI consumes source facts and executes gates. It does not own package

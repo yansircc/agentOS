@@ -59,6 +59,27 @@ export const createRepoSurfaceChecks = ({
 
   const checkPublicApi = () => {
     const failures = [];
+    const runtimeRoot = "packages/runtime/src/index.ts";
+    const runtimeRootSource = read(runtimeRoot);
+    const runtimeRootAst = ts.createSourceFile(
+      path.join(repoRoot, runtimeRoot),
+      runtimeRootSource,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    for (const statement of runtimeRootAst.statements) {
+      if (
+        ts.isExportDeclaration(statement) &&
+        (statement.exportClause === undefined || ts.isNamespaceExport(statement.exportClause))
+      ) {
+        const { line, character } = runtimeRootAst.getLineAndCharacterOfPosition(
+          statement.getStart(runtimeRootAst),
+        );
+        failures.push(
+          `${runtimeRoot}:${line + 1}:${character + 1}: runtime root barrel must use explicit named exports; export-star syntax is forbidden`,
+        );
+      }
+    }
     for (const target of targetPackages()) {
       if (target.apiSource === undefined) {
         failures.push(

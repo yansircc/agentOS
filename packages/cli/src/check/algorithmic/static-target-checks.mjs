@@ -1,4 +1,4 @@
-export const createStaticTargetChecks = ({ read, failIfAny }) => {
+export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
   const sliceBetweenMarkers = (source, startMarker, endMarker) => {
     const start = source.indexOf(startMarker);
     if (start === -1) return "";
@@ -12,6 +12,7 @@ export const createStaticTargetChecks = ({ read, failIfAny }) => {
     const workspaceAgentSourcePath = "packages/core/src/workspace-agent.ts";
     const source = read(sourcePath);
     const workspaceAgentSource = read(workspaceAgentSourcePath);
+    const surface = readJson("docs/surface.json");
     const renderWorkspaceStaticTargetSource = sliceBetweenMarkers(
       source,
       "const renderWorkspaceStaticTarget =",
@@ -342,6 +343,40 @@ export const createStaticTargetChecks = ({ read, failIfAny }) => {
       if (!source.includes(`kind: ${marker}`) && !source.includes(`| ${marker}`)) {
         failures.push(
           `${sourcePath}: generated-static-target-linking: module graph missing ${marker}`,
+        );
+      }
+    }
+
+    const packagesBySlug = new Map((surface.packages ?? []).map((pkg) => [pkg.slug, pkg]));
+    const generatedImportAudience = new Set(["default-direct", "generated-only"]);
+    const generatedPackageSpecifiers = [
+      ...source.matchAll(/publicPackageSpecifier\(scope,\s*"([^"]+)"\)/gu),
+    ].map((match) => match[1]);
+    if (generatedPackageSpecifiers.length === 0) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: generated package specifier map is empty`,
+      );
+    }
+    for (const specifier of generatedPackageSpecifiers) {
+      const [slug, ...subpathParts] = specifier.split("/");
+      const pkg = packagesBySlug.get(slug);
+      const subpath = subpathParts.length === 0 ? "." : `./${subpathParts.join("/")}`;
+      if (pkg === undefined) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: ${specifier} has no docs/surface.json package`,
+        );
+        continue;
+      }
+      const entrypoint = (pkg.entrypoints ?? []).find((entry) => entry.subpath === subpath);
+      if (entrypoint === undefined) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: ${pkg.name}${subpath === "." ? "" : subpath.slice(1)} is missing docs/surface.json entrypoint metadata`,
+        );
+        continue;
+      }
+      if (!entrypoint.audiences.some((audience) => generatedImportAudience.has(audience))) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: generated target must not import ${pkg.name}${subpath === "." ? "" : subpath.slice(1)} with audiences ${entrypoint.audiences.join(", ")}`,
         );
       }
     }

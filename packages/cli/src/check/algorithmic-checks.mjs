@@ -340,7 +340,7 @@ const checkModuleGraphOracle = packageBoundaryChecks.checkModuleGraphOracle;
 const checkSubpathNoLeak = packageBoundaryChecks.checkSubpathNoLeak;
 const checkProfileVerification = packageBoundaryChecks.checkProfileVerification;
 
-const staticTargetChecks = createStaticTargetChecks({ read, failIfAny });
+const staticTargetChecks = createStaticTargetChecks({ read, readJson, failIfAny });
 const checkGeneratedStaticTargetLinking = staticTargetChecks.checkGeneratedStaticTargetLinking;
 
 const projectionBoundaryChecks = createProjectionBoundaryChecks({

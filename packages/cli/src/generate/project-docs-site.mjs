@@ -45,6 +45,11 @@ const siteRouteForDocsRel = (docsRel, anchor = "") => {
   return `/${normalized}/${anchor}`;
 };
 
+const siteSlugForDocsRel = (docsRel) => {
+  const normalized = slash(docsRel).replace(/\.md$/u, "");
+  return normalized === "README" ? null : normalized;
+};
+
 const targetRelForDocsRel = (docsRel) => {
   if (docsRel === "README.md") return "index.md";
   return docsRel;
@@ -72,6 +77,7 @@ const projectMarkdown = (sourceFile, options = {}) => {
   const source = fs.readFileSync(sourceFile, "utf8").replace(/\s+$/u, "");
   const h1 = source.match(/^# (.+)$/mu);
   const title = h1?.[1] ?? sourceRel;
+  const slug = siteSlugForDocsRel(docsRel);
   const withoutH1 =
     h1 === null ? source : source.replace(/^# .+\r?\n\r?\n?/u, "").replace(/\s+$/u, "");
   const bodyPrefix = options.bodyPrefix ?? "";
@@ -79,6 +85,7 @@ const projectMarkdown = (sourceFile, options = {}) => {
   return [
     "---",
     `title: "${escapeYaml(title)}"`,
+    ...(slug === null ? [] : [`slug: "${escapeYaml(slug)}"`]),
     "---",
     "",
     generatedNotice(sourceRel),

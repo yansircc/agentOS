@@ -17,6 +17,27 @@ import `@yansirplus/*` packages. Source names such as `@agent-os/*`, package
 manager protocols such as `workspace:*` and `catalog:`, and manual symlinks are
 not consumer surfaces.
 
+## Public Surface Convergence
+
+The npm surface is split by entrypoint audience, not by whole package:
+
+- `default-direct`: hand-written consumer imports, currently `@yansirplus/cli`
+  and `@yansirplus/client` roots plus client framework subpaths.
+- `generated-only`: imports emitted by agentOS generated targets, such as
+  `@yansirplus/runtime/workspace-binding`,
+  `@yansirplus/core/runtime-protocol`, and `@yansirplus/core/tools`.
+- `advanced`: backend or substrate author imports, such as
+  `@yansirplus/runtime/cloudflare`, `@yansirplus/runtime/node`, and
+  `@yansirplus/runtime/in-memory`.
+
+The `@yansirplus/runtime` root is an explicit allowlist. It no longer exports
+module-private submit-loop helpers such as `internalSubmitSpec`,
+`InternalSubmitSpec`, `submitAgentEffect`, `buildInitialMessages`,
+`DEFAULT_LLM_CALL_TIMEOUT_MS`, or `turnRefOf`. Consumers should call the backend
+or generated target surface instead of importing these internals.
+
+See [0.6.0 release notes](release-notes/0.6.0.md) for the migration table.
+
 ## Install
 
 Install agentOS packages plus required peers:
@@ -127,6 +148,9 @@ or deep `/src/` declaration paths.
 `--package-scope @yansirplus`, installs packed public packages into a clean
 consumer `node_modules`, rejects symlinked agentOS packages, and bundles the
 generated Cloudflare worker entry.
+It also proves against packed package content that removed runtime root
+submit-loop internals are absent from both TypeScript declarations and runtime
+module exports.
 
 ## Source Maps
 
