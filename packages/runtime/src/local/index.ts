@@ -2,8 +2,33 @@ import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { constants as fsConstants } from "node:fs";
 import process from "node:process";
+import { Effect } from "effect";
+import type { AuthorityRef } from "@agent-os/core/effect-claim";
+import type { LlmResponse, LlmRoute } from "@agent-os/core/llm-protocol";
+import type {
+  AgentSubmitBindings,
+  SubmitSpec,
+  SubmitResult,
+  SubmitToolContext,
+} from "@agent-os/core/runtime-protocol";
+import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
+import {
+  WORKSPACE_OPERATION_HOST_FACT,
+  defineHost,
+  resolveRuntime,
+  workspaceOperations,
+  type CapabilityContract,
+  type PreflightDiagnostic,
+  type WorkspaceOperationsOptions,
+} from "../capability";
+import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
+import type { InMemoryLlmTransportOptions } from "../in-memory/llm";
+import { internalSubmitSpec } from "../internal-submit";
+import { submitAgentEffect } from "../submit-agent";
 import {
   createWorkspaceEnv,
+  WORKSPACE_TOOL_NAMES,
   type WorkspaceEnv,
   type WorkspaceEnvBackend,
   type WorkspaceExecOptions,
@@ -23,11 +48,60 @@ export interface CreateLocalWorkspaceEnvOptions {
   readonly inheritEnv?: boolean;
 }
 
+export interface CreateLocalAgentRuntimeOptions {
+  readonly identity: string;
+  readonly cwd: string;
+  readonly env?: CreateLocalWorkspaceEnvOptions["env"];
+  readonly inheritEnv?: CreateLocalWorkspaceEnvOptions["inheritEnv"];
+  readonly llm?: InMemoryLlmTransportOptions;
+  readonly workspaceOperations?: WorkspaceOperationsOptions;
+  readonly capabilities?: ReadonlyArray<CapabilityContract>;
+}
+
+export type LocalAgentSubmitInput = Omit<
+  SubmitSpec,
+  "context" | "effectAuthorityRef" | "route" | "tools"
+> & {
+  readonly context?: SubmitSpec["context"];
+  readonly route?: LlmRoute;
+  readonly tools?: SubmitSpec["tools"];
+};
+
+export interface LocalAgentRuntime {
+  readonly submit: (input: LocalAgentSubmitInput) => Promise<SubmitResult>;
+  readonly events: (opts?: EventQueryOptions) => ReadonlyArray<LedgerEvent>;
+  readonly diagnostics: () => ReadonlyArray<TelemetryFanoutDiagnostic>;
+}
+
 export class LocalWorkspaceEnvError extends Error {
   override readonly name = "LocalWorkspaceEnvError";
 }
 
+export class LocalAgentRuntimeResolveError extends Error {
+  override readonly name = "LocalAgentRuntimeResolveError";
+  readonly diagnostics: ReadonlyArray<PreflightDiagnostic>;
+
+  constructor(diagnostics: ReadonlyArray<PreflightDiagnostic>) {
+    super(
+      diagnostics.map((diagnostic) => diagnostic.reason).join("; ") ||
+        "local agent runtime failed to resolve",
+    );
+    this.diagnostics = diagnostics;
+  }
+}
+
 const textEncoder = new TextEncoder();
+
+const defaultLocalLlmResponse: LlmResponse = {
+  items: [{ type: "message", text: "ok" }],
+  usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+};
+
+const defaultLocalLlmRoute: LlmRoute = {
+  kind: "in-memory",
+  endpointRef: "local",
+  credentialRef: "local",
+};
 
 const utf8ByteLength = (value: string): number => textEncoder.encode(value).byteLength;
 
@@ -224,4 +298,108 @@ export const createLocalWorkspaceEnv = (
     cwd,
     backend: localWorkspaceBackend(options),
   });
+};
+
+const localAgentHost = (workspaceEnv: WorkspaceEnv) =>
+  defineHost({
+    target: "local@1",
+    provides: [WORKSPACE_OPERATION_HOST_FACT],
+    materialize: () => ({
+      [WORKSPACE_OPERATION_HOST_FACT]: () => workspaceEnv,
+    }),
+  });
+
+const localWorkspaceOperations = (options: WorkspaceOperationsOptions | undefined) =>
+  workspaceOperations({
+    toolNames: WORKSPACE_TOOL_NAMES,
+    mutationPolicy: "receipt-backed",
+    shellPolicy: "receipt-backed",
+    ...options,
+  });
+
+const defaultLocalLlm = (
+  options: InMemoryLlmTransportOptions | undefined,
+): InMemoryLlmTransportOptions =>
+  options ?? {
+    responses: [defaultLocalLlmResponse],
+  };
+
+const mergeToolContext = (
+  base: SubmitToolContext | undefined,
+  next: SubmitToolContext | undefined,
+): SubmitToolContext | undefined =>
+  base === undefined && next === undefined
+    ? undefined
+    : {
+        extensions: {
+          ...base?.extensions,
+          ...next?.extensions,
+        },
+      };
+
+const submitSpecWithBindings = (
+  input: LocalAgentSubmitInput,
+  bindings: AgentSubmitBindings,
+  effectAuthorityRef: AuthorityRef,
+): SubmitSpec => ({
+  ...input,
+  context: input.context ?? {},
+  route: input.route ?? defaultLocalLlmRoute,
+  effectAuthorityRef,
+  tools: { ...bindings.tools, ...input.tools },
+  executionDomains: [...(bindings.executionDomains ?? []), ...(input.executionDomains ?? [])],
+  materials: { ...bindings.materials, ...input.materials },
+  toolContext: mergeToolContext(bindings.toolContext, input.toolContext),
+  toolIntents: [...(bindings.toolIntents ?? []), ...(input.toolIntents ?? [])],
+  receiptBackedTools: {
+    ...bindings.receiptBackedTools,
+    ...input.receiptBackedTools,
+  },
+  decisionInterrupts: [...(bindings.decisionInterrupts ?? []), ...(input.decisionInterrupts ?? [])],
+  executionIdentity: input.executionIdentity ?? bindings.executionIdentity,
+});
+
+/**
+ * Creates a local dev/test runtime from the same capability resolver used by
+ * production hosts.
+ *
+ * @public
+ */
+export const createLocalAgentRuntime = async (
+  options: CreateLocalAgentRuntimeOptions,
+): Promise<LocalAgentRuntime> => {
+  const identity = inMemoryConversationTruthIdentity(options.identity);
+  const workspaceEnv = createLocalWorkspaceEnv({
+    cwd: options.cwd,
+    env: options.env,
+    inheritEnv: options.inheritEnv,
+  });
+  const resolved = await resolveRuntime(
+    localAgentHost(workspaceEnv),
+    [localWorkspaceOperations(options.workspaceOperations), ...(options.capabilities ?? [])],
+    {
+      identity: options.identity,
+      llm: defaultLocalLlm(options.llm),
+    },
+  );
+  if (!resolved.ok) {
+    throw new LocalAgentRuntimeResolveError(resolved.diagnostics);
+  }
+  const runtime = resolved.resolved;
+  return {
+    submit: (input) =>
+      Effect.runPromise(
+        submitAgentEffect(
+          internalSubmitSpec(
+            submitSpecWithBindings(input, runtime.bindings, identity.effectAuthorityRef),
+            {
+              scope: options.identity,
+              scopeRef: identity.scopeRef,
+            },
+          ),
+        ).pipe(Effect.provide(runtime.layer)),
+      ),
+    events: (opts = {}) => runtime.state.snapshot(identity, opts),
+    diagnostics: () => runtime.state.telemetryDiagnostics(),
+  };
 };

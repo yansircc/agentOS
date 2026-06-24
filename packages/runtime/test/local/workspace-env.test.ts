@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "@effect/vitest";
-import { createLocalWorkspaceEnv } from "@agent-os/runtime/local";
+import { RUNTIME_EVENT_KIND } from "@agent-os/core/runtime-protocol";
+import { createLocalAgentRuntime, createLocalWorkspaceEnv } from "@agent-os/runtime/local";
 
 const withTempWorkspace = async <A>(run: (root: string, base: string) => Promise<A>): Promise<A> => {
   const base = await mkdtemp(path.join(tmpdir(), "agentos-local-workspace-"));
@@ -91,6 +92,42 @@ describe("createLocalWorkspaceEnv", () => {
       expect(result.stdout).toBe("abc");
       expect(result.stdoutBytes).toBe(6);
       expect(result.stdoutTruncated).toBe(true);
+    });
+  });
+
+  it("creates a local agent runtime over resolveRuntime and private submitAgentEffect", async () => {
+    await withTempWorkspace(async (root) => {
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-runtime",
+        cwd: root,
+        llm: {
+          responses: [
+            {
+              items: [{ type: "message", text: "local done" }],
+              usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
+            },
+          ],
+        },
+      });
+
+      expect(Object.keys(runtime).sort()).toEqual(["diagnostics", "events", "submit"]);
+      const result = await runtime.submit({ intent: "finish locally" });
+
+      expect(result).toMatchObject({
+        ok: true,
+        status: "delivered",
+        final: "local done",
+        tokensUsed: 3,
+      });
+      expect(runtime.diagnostics()).toEqual([]);
+      expect(runtime.events().map((event) => event.kind)).toEqual(
+        expect.arrayContaining([
+          RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
+          RUNTIME_EVENT_KIND.LLM_REQUESTED,
+          RUNTIME_EVENT_KIND.LLM_RESPONSE,
+          RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
+        ]),
+      );
     });
   });
 });
