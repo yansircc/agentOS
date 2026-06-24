@@ -489,6 +489,7 @@ void test("agentos build emits node local agent app target", () => {
     assert.match(local, /return lowered\.runtime/);
     assert.doesNotMatch(local, /resolveRuntime|submitAgentEffect|workspaceOperations\(/);
     assert.doesNotMatch(local, /cloudflare|createAgentDurableObject|wrangler/i);
+    assert.doesNotMatch(local, /blueprints|target--node|Provider Material Binding/);
     assert.equal(existsSync(path.join(root, ".agentos/generated/target.ts")), false);
     assert.equal(existsSync(path.join(root, ".agentos/generated/worker.ts")), false);
     assert.equal(existsSync(path.join(root, ".agentos/generated/wrangler.jsonc")), false);

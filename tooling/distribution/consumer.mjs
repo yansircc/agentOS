@@ -484,6 +484,11 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       fail(`generated local target consumer missing canonical public import ${specifier}`);
     }
   }
+  for (const fragment of ["export const createLocalAgentApp", 'target: "node@1"']) {
+    if (!generatedText.includes(fragment)) {
+      fail(`generated local target consumer missing generated LocalAgentApp fragment ${fragment}`);
+    }
+  }
   const forbiddenText = [
     "cloudflare:workers",
     "@effect/ai-anthropic",
@@ -491,6 +496,9 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
     "createInMemoryBackendState",
     "createInMemoryRuntimeBackend",
     "createAgentDurableObject",
+    "target--node",
+    "blueprints/",
+    "Provider Material Binding",
     "wrangler",
   ];
   for (const token of forbiddenText) {
