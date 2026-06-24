@@ -5,15 +5,17 @@ import {
   Ledger,
   MaterializedProjections,
   defineProjection,
-  makeProjectionRegistryResult,
   projectionFail,
   projectionIdentity,
   projectionMalformed,
   projectionPut,
   type AnyMaterializedProjectionDefinition,
 } from "@agent-os/runtime";
-import { createInMemoryRuntimeBackend } from "../../src/in-memory";
 import { projectionScopeKey, runtimeEventIdentity, truthIdentity } from "./identity";
+import {
+  createTestInMemoryRuntimeBackend,
+  installTestProjectionRegistry,
+} from "./runtime-helper";
 
 const payload = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -65,7 +67,7 @@ const failingRebuildProjection = (version = 2): AnyMaterializedProjectionDefinit
   });
 
 const makeRuntime = (scope: string, projections = [runWorkflowProjection()]) => {
-  const backend = createInMemoryRuntimeBackend({ identity: truthIdentity(scope), projections });
+  const backend = createTestInMemoryRuntimeBackend({ identity: truthIdentity(scope), projections });
   const runtime = ManagedRuntime.make(backend.layer);
   return { backend, runtime };
 };
@@ -171,9 +173,7 @@ describe("in-memory materialized projections", () => {
         runtime.runPromise(projections.list({ kind: "run.workflow", ...projectionIdentitySpec })),
       ).resolves.toMatchObject([{ identityKey: "runtime" }]);
 
-      backend.state.setProjectionRegistryResult(
-        makeProjectionRegistryResult([runWorkflowProjection(2)]),
-      );
+      installTestProjectionRegistry(backend.state, [runWorkflowProjection(2)]);
       await expect(
         runtime.runPromise(projections.status({ kind: "run.workflow", ...ownerIdentity })),
       ).resolves.toMatchObject({ version: 2, status: "needs_rebuild" });
@@ -285,9 +285,7 @@ describe("in-memory materialized projections", () => {
         ]),
       );
 
-      backend.state.setProjectionRegistryResult(
-        makeProjectionRegistryResult([runWorkflowProjection(2)]),
-      );
+      installTestProjectionRegistry(backend.state, [runWorkflowProjection(2)]);
 
       await expect(
         runtime.runPromise(projections.status({ kind: "run.workflow", ...projectionIdentitySpec })),
@@ -342,9 +340,7 @@ describe("in-memory materialized projections", () => {
         ]),
       );
 
-      backend.state.setProjectionRegistryResult(
-        makeProjectionRegistryResult([failingRebuildProjection()]),
-      );
+      installTestProjectionRegistry(backend.state, [failingRebuildProjection()]);
 
       const exit = await runtime.runPromiseExit(
         projections.rebuild({ kind: "run.workflow", ...projectionIdentitySpec }),

@@ -7,9 +7,9 @@ import {
   type AttachedStreamHandler,
 } from "@agent-os/runtime";
 import {
-  createInMemoryRuntimeBackend,
-  type InMemoryRuntimeLayerOptions,
-} from "../../src/in-memory";
+  createTestInMemoryRuntimeBackend,
+  type TestInMemoryRuntimeOptions,
+} from "./runtime-helper";
 import { truthIdentity } from "./identity";
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -27,11 +27,8 @@ const waitFor = async (assertion: () => boolean | Promise<boolean>): Promise<voi
   throw new Error("condition not reached");
 };
 
-const makeRuntime = (
-  scope: string,
-  options: Omit<InMemoryRuntimeLayerOptions, "identity" | "scope">,
-) => {
-  const backend = createInMemoryRuntimeBackend({ ...options, identity: truthIdentity(scope) });
+const makeRuntime = (scope: string, options: TestInMemoryRuntimeOptions) => {
+  const backend = createTestInMemoryRuntimeBackend({ ...options, identity: truthIdentity(scope) });
   const runtime = ManagedRuntime.make(backend.layer);
   return { backend, runtime };
 };

@@ -13,7 +13,10 @@ import {
 } from "@agent-os/core/backend-protocol";
 import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
-import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../../src/in-memory";
+import {
+  createTestInMemoryBackendState,
+  createTestInMemoryRuntimeBackend,
+} from "./runtime-helper";
 import {
   runRuntimeBackendContractSuite,
   type ContractDispatchReceiver,
@@ -39,7 +42,7 @@ const emptyTruthIdentity: BackendProtocolTruthIdentity = {
 };
 
 const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
-  const state = createInMemoryBackendState();
+  const state = createTestInMemoryBackendState();
   const receiverTargets = new Map<string, DispatchReceiver>();
   const targetAdapter: DispatchTargetAdapter = {
     deliver: (envelope) => {
@@ -52,7 +55,7 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
   const targets: Record<string, DispatchTargetAdapter> = { [bindingKey]: targetAdapter };
   const makeRuntime = (identity: BackendProtocolTruthIdentity) =>
     ManagedRuntime.make(
-      createInMemoryRuntimeBackend({
+      createTestInMemoryRuntimeBackend({
         state,
         identity: truthIdentity(identity),
         dispatchTargets: targets,

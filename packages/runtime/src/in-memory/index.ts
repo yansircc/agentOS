@@ -1,7 +1,4 @@
 export {
-  InMemoryBackendState,
-  createInMemoryBackendState,
-  type InMemoryBackendStateOptions,
   type InMemoryEventHandlerRegistration,
   type InMemoryEventSpec,
   type InMemoryEventSubscription,
@@ -17,4 +14,9 @@ export * from "./admission";
 export * from "./attached-stream";
 export * from "./boundary-events";
 export * from "./materialized-projections";
-export * from "./runtime-backend";
+export { createInMemoryRuntimeBackend, makeInMemoryRuntimeLayer } from "./runtime-backend";
+export type {
+  InMemoryRuntimeBackend,
+  InMemoryRuntimeServices,
+  ResolvedRuntimeInstallGraph,
+} from "./runtime-backend";

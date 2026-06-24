@@ -20,9 +20,11 @@ import {
 } from "../runtime-diagnostic-carrier";
 import {
   createInMemoryRuntimeBackend,
+  defineResolvedRuntimeInstallGraph,
   type InMemoryRuntimeBackend,
-  type InMemoryRuntimeLayerOptions,
-} from "../in-memory";
+  type ResolvedRuntimeInstallGraph,
+} from "../in-memory/runtime-backend";
+import type { InMemoryLlmTransportOptions } from "../in-memory/llm";
 import type { AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
 import { validateToolRegistry } from "@agent-os/core/tools";
 import type { InstalledCapabilityHandle } from "./install-context";
@@ -60,7 +62,7 @@ export interface ResolveRuntimeOptions {
   readonly secrets?: Readonly<Record<string, string>>;
   readonly identity: string;
   readonly diagnosticSink?: PreflightDiagnosticSink;
-  readonly llm?: InMemoryRuntimeLayerOptions["llm"];
+  readonly llm?: InMemoryLlmTransportOptions;
 }
 
 /**
@@ -69,6 +71,7 @@ export interface ResolveRuntimeOptions {
 export interface ResolvedRuntime {
   readonly layer: InMemoryRuntimeBackend["layer"];
   readonly state: InMemoryRuntimeBackend["state"];
+  readonly installGraph: ResolvedRuntimeInstallGraph;
   readonly bindings: AgentSubmitBindings;
   readonly manifest: {
     readonly capabilities: ReadonlyArray<string>;
@@ -517,20 +520,21 @@ export const resolveRuntime = async (
     return failed();
   }
 
-  // Create in-memory backend from globally validated install outputs.
-  backend = createInMemoryRuntimeBackend({
+  const installGraph = defineResolvedRuntimeInstallGraph({
     identity: truthIdentity,
     projections: allProjections,
     triggers: allTriggers,
     handlers: allEventHandlers,
     llm: options.llm ?? {},
   });
+  backend = createInMemoryRuntimeBackend(installGraph);
 
   return {
     ok: true,
     resolved: {
       layer: backend.layer,
       state: backend.state,
+      installGraph,
       bindings: mergedBindings,
       manifest: {
         capabilities: sortedCaps.map((c) => c.capabilityId),

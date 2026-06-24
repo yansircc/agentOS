@@ -1,6 +1,9 @@
 import { Effect, ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
-import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../../src/in-memory";
+import {
+  createTestInMemoryBackendState,
+  createTestInMemoryRuntimeBackend,
+} from "./runtime-helper";
 import {
   runImgGenPressureContract,
   type ImgGenPressureDriver,
@@ -10,9 +13,9 @@ import { runtimeEventIdentity, truthIdentity } from "./identity";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureDriver => {
   const scope = "img-gen-pressure";
-  const state = createInMemoryBackendState();
+  const state = createTestInMemoryBackendState();
   const runtime = ManagedRuntime.make(
-    createInMemoryRuntimeBackend({
+    createTestInMemoryRuntimeBackend({
       state,
       identity: truthIdentity(scope),
       triggers,

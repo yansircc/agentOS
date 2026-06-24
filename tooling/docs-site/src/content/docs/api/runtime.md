@@ -483,12 +483,9 @@ slug: "api/runtime"
 - `./cloudflare/ops-api:ScopeResolver`
 - `./cloudflare/ops-api:ScopeSummary`
 - `./cloudflare/ops-api:ScopeSurface`
-- `./in-memory:createInMemoryBackendState`
 - `./in-memory:createInMemoryRuntimeBackend`
 - `./in-memory:InMemoryAdmissionLive`
 - `./in-memory:InMemoryAttachedStreamsLive`
-- `./in-memory:InMemoryBackendState`
-- `./in-memory:InMemoryBackendStateOptions`
 - `./in-memory:InMemoryBoundaryEventsLive`
 - `./in-memory:InMemoryDispatchLive`
 - `./in-memory:InMemoryDispatchTargetRegistry`
@@ -502,10 +499,10 @@ slug: "api/runtime"
 - `./in-memory:InMemoryQuotaLive`
 - `./in-memory:InMemoryResourcesLive`
 - `./in-memory:InMemoryRuntimeBackend`
-- `./in-memory:InMemoryRuntimeLayerOptions`
 - `./in-memory:InMemoryRuntimeServices`
 - `./in-memory:InMemorySchedulerLive`
 - `./in-memory:makeInMemoryRuntimeLayer`
+- `./in-memory:ResolvedRuntimeInstallGraph`
 - `./node:FactOwnerRef`
 - `./node:NodePostgresBackend`
 - `./node:NodePostgresBackendOptions`

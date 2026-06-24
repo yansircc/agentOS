@@ -7,8 +7,11 @@ import {
   type DispatchReceiver,
 } from "@agent-os/core/backend-protocol";
 import { Dispatch, defineProjection, projectionFail, projectionIdentity } from "@agent-os/runtime";
-import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../../src/in-memory";
 import { truthIdentity } from "./identity";
+import {
+  createTestInMemoryBackendState,
+  createTestInMemoryRuntimeBackend,
+} from "./runtime-helper";
 
 const failingDispatchDeliveredProjection = defineProjection({
   kind: "dispatch.delivered.failure",
@@ -24,7 +27,7 @@ const failingDispatchDeliveredProjection = defineProjection({
 
 describe("in-memory backend commit/fanout contract", () => {
   it("does not publish dispatch delivery facts when projection commit fails", async () => {
-    const state = createInMemoryBackendState();
+    const state = createTestInMemoryBackendState();
     const bindingRef = bindingMaterialRef({
       provider: "test",
       bindingKind: "do",
@@ -34,7 +37,7 @@ describe("in-memory backend commit/fanout contract", () => {
     const projections = [failingDispatchDeliveredProjection];
 
     const receiverRuntime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver"), projections })
+      createTestInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver"), projections })
         .layer,
     );
     const receiver: DispatchReceiver = {
@@ -44,7 +47,7 @@ describe("in-memory backend commit/fanout contract", () => {
       },
     };
     const senderRuntime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({
+      createTestInMemoryRuntimeBackend({
         state,
         identity: truthIdentity("sender"),
         projections,

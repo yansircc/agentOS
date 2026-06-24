@@ -6,8 +6,8 @@ import {
   triggerParseOk,
   type DurableTrigger,
 } from "@agent-os/runtime";
-import { createInMemoryRuntimeBackend } from "../../src/in-memory";
 import { runtimeEventIdentity, truthIdentity } from "./identity";
+import { createTestInMemoryRuntimeBackend } from "./runtime-helper";
 
 interface Intent {
   readonly label: string;
@@ -40,7 +40,7 @@ const makeTrigger = (calls: string[]): DurableTrigger<Intent, Intent> => ({
 
 describe("in-memory durable trigger cancellation", () => {
   it("commits trigger-owned cancellation facts for pending trigger rows", async () => {
-    const backend = createInMemoryRuntimeBackend({
+    const backend = createTestInMemoryRuntimeBackend({
       identity: truthIdentity("scope"),
       triggers: [makeTrigger([])],
     });
@@ -84,7 +84,7 @@ describe("in-memory durable trigger cancellation", () => {
       cancellation: "ignored",
       commitCancelled: () => undefined,
     } satisfies DurableTrigger<Intent, Intent>;
-    const backend = createInMemoryRuntimeBackend({
+    const backend = createTestInMemoryRuntimeBackend({
       identity: truthIdentity("scope"),
       triggers: [ignoredTrigger],
     });
@@ -123,7 +123,7 @@ describe("in-memory durable trigger cancellation", () => {
 
   it("redrives expired claims and commits one terminal fact", async () => {
     const calls: string[] = [];
-    const backend = createInMemoryRuntimeBackend({
+    const backend = createTestInMemoryRuntimeBackend({
       identity: truthIdentity("scope"),
       triggers: [makeTrigger(calls)],
     });

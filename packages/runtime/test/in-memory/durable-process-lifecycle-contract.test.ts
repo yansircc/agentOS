@@ -1,7 +1,10 @@
 import { Effect, ManagedRuntime } from "effect";
 import { describe } from "@effect/vitest";
 import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
-import { createInMemoryBackendState, createInMemoryRuntimeBackend } from "../../src/in-memory";
+import {
+  createTestInMemoryBackendState,
+  createTestInMemoryRuntimeBackend,
+} from "./runtime-helper";
 import {
   runDurableProcessLifecycleContract,
   type DurableProcessLifecycleDriver,
@@ -10,9 +13,9 @@ import { runtimeEventIdentity, truthIdentity } from "./identity";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessLifecycleDriver => {
   const scope = "durable-process-lifecycle";
-  const state = createInMemoryBackendState();
+  const state = createTestInMemoryBackendState();
   const runtime = ManagedRuntime.make(
-    createInMemoryRuntimeBackend({
+    createTestInMemoryRuntimeBackend({
       state,
       identity: truthIdentity(scope),
       triggers,

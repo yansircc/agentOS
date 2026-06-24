@@ -35,10 +35,10 @@ import {
 } from "@agent-os/core/runtime-protocol";
 import type { LedgerEvent } from "@agent-os/core/types";
 import {
-  createInMemoryBackendState,
-  createInMemoryRuntimeBackend,
-  type InMemoryRuntimeLayerOptions,
-} from "../../src/in-memory";
+  createTestInMemoryBackendState,
+  createTestInMemoryRuntimeBackend,
+  type TestInMemoryRuntimeOptions,
+} from "./runtime-helper";
 import { InMemoryTriggerPumpLive } from "../../src/in-memory/trigger-pump";
 import { truthIdentity, runtimeEventIdentity } from "./identity";
 
@@ -58,11 +58,8 @@ const structuredResponse = (args: Record<string, unknown>) => ({
 
 const DECISION_GATE_FACT_OWNER = "../../src/decision-gate";
 
-const makeRuntime = (
-  scope: string,
-  options: Omit<InMemoryRuntimeLayerOptions, "identity" | "scope"> = {},
-) => {
-  const backend = createInMemoryRuntimeBackend({ ...options, identity: truthIdentity(scope) });
+const makeRuntime = (scope: string, options: TestInMemoryRuntimeOptions = {}) => {
+  const backend = createTestInMemoryRuntimeBackend({ ...options, identity: truthIdentity(scope) });
   const runtime = ManagedRuntime.make(backend.layer);
   return { backend, runtime };
 };
@@ -175,7 +172,7 @@ describe("in-memory runtime backend", () => {
   it.effect("runtime L0 can prove resume against prior carrier-owned consumed facts", () =>
     Effect.gen(function* () {
       const scope = "resume-carrier-l0";
-      const state = createInMemoryBackendState();
+      const state = createTestInMemoryBackendState();
       const [started, interrupted] = yield* state.commitProtocolEvents([
         {
           ts: 10,
@@ -251,7 +248,7 @@ describe("in-memory runtime backend", () => {
       const registry = yield* makeDurableTriggerRegistry([scheduledEventTrigger]);
 
       const intentScope = "trigger-intent-l0";
-      const intentState = createInMemoryBackendState();
+      const intentState = createTestInMemoryBackendState();
       const triggerIntentExit = yield* Effect.exit(
         intentState.commitTriggerIntent(
           runtimeEventIdentity(intentScope),
@@ -266,7 +263,7 @@ describe("in-memory runtime backend", () => {
       expect(intentState.duePending(runtimeEventIdentity(intentScope), 10)).toEqual([]);
 
       const attachedScope = "attached-stream-l0";
-      const attachedState = createInMemoryBackendState();
+      const attachedState = createTestInMemoryBackendState();
       const attachedExit = yield* Effect.exit(
         attachedState.commitAttachedStreamTerminal(
           runtimeEventIdentity(attachedScope),
@@ -286,7 +283,7 @@ describe("in-memory runtime backend", () => {
       expect(attachedState.snapshot(truthIdentity(attachedScope))).toEqual([]);
 
       const triggerScope = "trigger-commit-l0";
-      const triggerState = createInMemoryBackendState();
+      const triggerState = createTestInMemoryBackendState();
       triggerState.addDueWork(runtimeEventIdentity(triggerScope), "test.trigger", 1, 10);
       const due = triggerState.duePending(runtimeEventIdentity(triggerScope), 10)[0];
       expect(due).toBeDefined();
@@ -590,7 +587,7 @@ describe("in-memory runtime backend", () => {
 
   it.effect("empty trigger registry fails closed and leaves due-work pending", () =>
     Effect.gen(function* () {
-      const state = createInMemoryBackendState();
+      const state = createTestInMemoryBackendState();
       const runtime = ManagedRuntime.make(
         InMemoryTriggerPumpLive(state, truthIdentity("empty-registry"), "empty-registry").pipe(
           Layer.provide(Layer.succeed(DurableTriggerRegistry, new Map())),
@@ -617,7 +614,7 @@ describe("in-memory runtime backend", () => {
 
   it.effect("unregistered trigger submit writes no event or due work", () =>
     Effect.gen(function* () {
-      const state = createInMemoryBackendState();
+      const state = createTestInMemoryBackendState();
       const registry = yield* makeDurableTriggerRegistry([scheduledEventTrigger]);
 
       const exit = yield* Effect.exit(
@@ -647,7 +644,7 @@ describe("in-memory runtime backend", () => {
   );
 
   it("DispatchLive dedupes receiver inbound delivery by source scope and idempotency key", async () => {
-    const state = createInMemoryBackendState();
+    const state = createTestInMemoryBackendState();
     const bindingRef = bindingMaterialRef({
       provider: "test",
       bindingKind: "do",
@@ -655,7 +652,7 @@ describe("in-memory runtime backend", () => {
     });
     const bindingKey = materialRefKey(bindingRef);
     const receiverRuntime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver") }).layer,
+      createTestInMemoryRuntimeBackend({ state, identity: truthIdentity("receiver") }).layer,
     );
     const receiver: DispatchReceiver = {
       __agentosReceiveDispatch: (envelope) =>
@@ -667,7 +664,7 @@ describe("in-memory runtime backend", () => {
         ),
     };
     const senderRuntime = ManagedRuntime.make(
-      createInMemoryRuntimeBackend({
+      createTestInMemoryRuntimeBackend({
         state,
         identity: truthIdentity("sender"),
         dispatchTargets: {

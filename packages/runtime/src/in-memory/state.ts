@@ -122,6 +122,10 @@ export interface InMemoryBackendStateOptions {
   readonly projections?: Iterable<AnyMaterializedProjectionDefinition>;
 }
 
+const inMemoryBackendStateProjectionRegistryInstaller: unique symbol = Symbol(
+  "agentos.in_memory.backend_state.projection_registry_installer",
+);
+
 export class InMemoryBackendState {
   private nextEventId = 1;
   private nextDueWorkId = 1;
@@ -181,18 +185,22 @@ export class InMemoryBackendState {
     return queryInMemoryLedgerRows(this.rowsForTruthIdentity(identity), identity, opts);
   }
 
-  setProjectionRegistry(registry: ProjectionRegistry): void {
+  private setProjectionRegistry(registry: ProjectionRegistry): void {
     this.projectionRegistry = registry;
     this.projectionRegistryError = null;
   }
 
-  setProjectionRegistryResult(result: ProjectionRegistryBuildResult): void {
+  private setProjectionRegistryResult(result: ProjectionRegistryBuildResult): void {
     if (result._tag === "success") {
       this.setProjectionRegistry(result.registry);
     } else {
       this.projectionRegistry = new Map();
       this.projectionRegistryError = result.error;
     }
+  }
+
+  [inMemoryBackendStateProjectionRegistryInstaller](result: ProjectionRegistryBuildResult): void {
+    this.setProjectionRegistryResult(result);
   }
 
   private projectionRegistryEffect(): Effect.Effect<ProjectionRegistry, ProjectionRegistryError> {
@@ -910,3 +918,16 @@ export class InMemoryBackendState {
 export const createInMemoryBackendState = (
   options: InMemoryBackendStateOptions = {},
 ): InMemoryBackendState => new InMemoryBackendState(options);
+
+/**
+ * Internal backend graph installation hook. Keep projection registry mutation
+ * off the public InMemoryBackendState surface.
+ *
+ * @internal
+ */
+export const installInMemoryBackendStateProjectionRegistry = (
+  state: InMemoryBackendState,
+  result: ProjectionRegistryBuildResult,
+): void => {
+  state[inMemoryBackendStateProjectionRegistryInstaller](result);
+};
