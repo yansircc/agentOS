@@ -252,6 +252,12 @@
           "optionalPeers": []
         },
         {
+          "subpath": "./local",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["node"],
+          "optionalPeers": []
+        },
+        {
           "subpath": "./node",
           "moduleBuckets": ["ledger", "adapter"],
           "targetProfiles": ["node"],

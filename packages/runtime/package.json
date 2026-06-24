@@ -54,6 +54,10 @@
       "types": "./src/in-memory/index.ts",
       "default": "./src/in-memory/index.ts"
     },
+    "./local": {
+      "types": "./src/local/index.ts",
+      "default": "./src/local/index.ts"
+    },
     "./node": {
       "types": "./src/node/index.ts",
       "default": "./src/node/index.ts"
