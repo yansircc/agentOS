@@ -316,7 +316,12 @@ const renderWorkspaceStaticTarget = (
     `import deploymentProvenance from "./deployment.json";`,
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(
-      ["defineHost", "resolveRuntimeInstallGraph", "workspaceOperations"],
+      [
+        "WORKSPACE_OPERATION_HOST_FACT",
+        "defineHost",
+        "resolveRuntimeInstallGraph",
+        "workspaceOperations",
+      ],
       modules.runtimeCapability,
     ),
     renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
@@ -479,27 +484,28 @@ const workspaceEnvFor = (env: AgentOSTargetEnv) =>
     workspaceRef: ${jsString(normalized.workspace.providerResourceId)},
   });
 
-const generatedHostProfile = defineHost({
+const generatedHostProfileFor = (env: AgentOSTargetEnv) => defineHost({
   target: "cloudflare-do@1",
   provides: [
     "storage.ledger",
     "durability.do",
-    "fs.workspace",
+    WORKSPACE_OPERATION_HOST_FACT,
     "timer.durable",
     "network.outbound",
     "secrets.store",
     "eventLoop.durable",
     "llm.openai",
   ],
-  materialize: () => ({}),
+  materialize: () => ({
+    [WORKSPACE_OPERATION_HOST_FACT]: () => workspaceEnvFor(env),
+  }),
 });
 
 const generatedCapabilityInstallGraphFor = (env: AgentOSTargetEnv) => {
   const graph = resolveRuntimeInstallGraph(
-    generatedHostProfile,
+    generatedHostProfileFor(env),
     [
       workspaceOperations({
-        env: workspaceEnvFor(env),
         toolNames: generatedWorkspaceToolNames,
         mutationPolicy: ${usesMutationTools ? '"receipt-backed"' : '"disabled"'},
         shellPolicy: ${usesShellTools ? '"receipt-backed"' : '"disabled"'},
@@ -2111,7 +2117,12 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           {
             kind: "capability-runtime" as const,
             source: modules.runtimeCapability,
-            imports: ["defineHost", "resolveRuntimeInstallGraph", "workspaceOperations"],
+            imports: [
+              "WORKSPACE_OPERATION_HOST_FACT",
+              "defineHost",
+              "resolveRuntimeInstallGraph",
+              "workspaceOperations",
+            ],
           },
         ]
       : []),

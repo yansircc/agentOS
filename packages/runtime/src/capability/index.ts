@@ -16,9 +16,13 @@ export {
 } from "./host";
 export {
   workspaceOperations,
+  WORKSPACE_OPERATION_HOST_FACT,
   type WorkspaceOperationsOptions,
   type WorkspaceOperationEnvResolver,
   type WorkspaceOperationEnvResolverInput,
+  type WorkspaceOperationHostFacts,
+  type WorkspaceOperationBindingEnvResolverInput,
+  type WorkspaceOperationRequestedEnvResolverInput,
 } from "./workspace-operations";
 export {
   resolveRuntimeInstallGraph,

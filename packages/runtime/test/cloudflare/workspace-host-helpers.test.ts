@@ -624,7 +624,7 @@ describe("Cloudflare DO workspace host helpers", () => {
   it("installs workspace-op provider handlers that commit only through boundary capability", async () => {
     let written: { path: string; content: string | Uint8Array } | null = null;
     const install = installCloudflareWorkspaceOperationProvider({
-      env: {
+      workspaceResolver: () => ({
         domain: { kind: "sandbox", ref: "workspace:test" },
         cwd: "/workspace",
         resolvePath: (targetPath) => targetPath,
@@ -648,7 +648,7 @@ describe("Cloudflare DO workspace host helpers", () => {
           stderrTruncated: false,
           durationMs: 0,
         }),
-      },
+      }),
     });
     expect(install.extensions[0]).toMatchObject({
       sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
@@ -795,7 +795,9 @@ describe("Cloudflare DO workspace host helpers", () => {
     const resolved: string[] = [];
     const writes: string[] = [];
     const install = installCloudflareWorkspaceOperationProvider({
-      env: ({ workspaceRef, runId }) => {
+      workspaceResolver: (input) => {
+        const workspaceRef = input.mode === "operation" ? input.workspaceRef : "workspace:binding";
+        const runId = input.mode === "operation" ? input.runId : undefined;
         resolved.push(`${workspaceRef}:${runId ?? "none"}`);
         return {
           domain: { kind: "sandbox", ref: workspaceRef },

@@ -12,7 +12,7 @@ import {
 import type { CloudflareWorkspaceEnvResolver } from "./workspace-env";
 import {
   installCloudflareWorkspaceOperationProvider,
-  type CloudflareWorkspaceOperationEnvResolverInput,
+  type CloudflareWorkspaceOperationRequestedEnvResolverInput,
   type CloudflareWorkspaceOperationInstall,
   type InstallCloudflareWorkspaceOperationProviderOptions,
 } from "./workspace-op";
@@ -28,9 +28,12 @@ export type CloudflareWorkspaceJobProfileResponseOptions = Omit<
 
 export interface InstallCloudflareWorkspaceJobProfileOptions extends CloudflareWorkspaceJobObservabilityProjectionReader {
   readonly workspaceResolver: CloudflareWorkspaceEnvResolver;
-  readonly workspaceOperation?: Omit<InstallCloudflareWorkspaceOperationProviderOptions, "env">;
+  readonly workspaceOperation?: Omit<
+    InstallCloudflareWorkspaceOperationProviderOptions,
+    "workspaceResolver"
+  >;
   readonly scopeForWorkspaceOperation?: (
-    input: CloudflareWorkspaceOperationEnvResolverInput,
+    input: CloudflareWorkspaceOperationRequestedEnvResolverInput,
   ) => string;
 }
 
@@ -72,7 +75,12 @@ export const installCloudflareWorkspaceJobProfile = (
 ): CloudflareWorkspaceJobProfile => {
   const workspaceOperations = installCloudflareWorkspaceOperationProvider({
     ...options.workspaceOperation,
-    env: (input) => {
+    workspaceResolver: (input) => {
+      if (input.mode === "binding") {
+        throw new CloudflareWorkspaceJobProfileError(
+          "Cloudflare workspace-job profile cannot materialize workspace-op submit bindings without an operation event",
+        );
+      }
       if (input.runId === undefined) {
         return Promise.reject(
           new CloudflareWorkspaceJobProfileError(

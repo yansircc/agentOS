@@ -4,6 +4,7 @@ import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
 import {
   createWorkspaceOperationInstall,
   type WorkspaceOperationInstallContext,
+  type WorkspaceOperationEnvResolver,
   type WorkspaceOperationsOptions,
 } from "../capability/workspace-operations";
 
@@ -27,12 +28,17 @@ export interface CloudflareWorkspaceOperationInstall {
   readonly eventHandlers: CloudflareWorkspaceOperationProviderHandlers["eventHandlers"];
 }
 
-export type InstallCloudflareWorkspaceOperationProviderOptions = WorkspaceOperationsOptions;
+export interface InstallCloudflareWorkspaceOperationProviderOptions
+  extends WorkspaceOperationsOptions {
+  readonly workspaceResolver: WorkspaceOperationEnvResolver;
+}
 
 // Cloudflare adapter names keep the subpath API anchored to the host boundary.
 export type {
+  WorkspaceOperationBindingEnvResolverInput as CloudflareWorkspaceOperationBindingEnvResolverInput,
   WorkspaceOperationEnvResolverInput as CloudflareWorkspaceOperationEnvResolverInput,
   WorkspaceOperationEnvResolver as CloudflareWorkspaceOperationEnvResolver,
+  WorkspaceOperationRequestedEnvResolverInput as CloudflareWorkspaceOperationRequestedEnvResolverInput,
 } from "../capability/workspace-operations";
 
 /**
@@ -49,7 +55,7 @@ export type {
 export const installCloudflareWorkspaceOperationProvider = (
   options: InstallCloudflareWorkspaceOperationProviderOptions,
 ): CloudflareWorkspaceOperationInstall => {
-  const install = createWorkspaceOperationInstall(options);
+  const install = createWorkspaceOperationInstall(options, options.workspaceResolver);
   return {
     extensions: install.extensions,
     declaredIntents: install.declaredIntents,

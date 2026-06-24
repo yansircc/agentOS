@@ -105,7 +105,7 @@ export const fixtureSandboxWorkspaceResolver = createCloudflareSandboxWorkspaceE
 });
 
 export const fixtureWorkspaceOpInstall = installCloudflareWorkspaceOperationProvider({
-  env: makeCloudflareWorkspaceEnv({
+  workspaceResolver: () => makeCloudflareWorkspaceEnv({
     client: {
       exec: () =>
         Promise.resolve({
@@ -128,7 +128,7 @@ export const fixtureWorkspaceOpInstall = installCloudflareWorkspaceOperationProv
 });
 
 export const fixtureWorkspaceOpInstallFromStructuralEnv = installCloudflareWorkspaceOperationProvider({
-  env: {
+  workspaceResolver: () => ({
     domain: { kind: "sandbox", ref: "fixture" },
     cwd: "/workspace",
     resolvePath: (path: string): string => path,
@@ -151,7 +151,7 @@ export const fixtureWorkspaceOpInstallFromStructuralEnv = installCloudflareWorks
         stderrTruncated: false,
         durationMs: 0,
       }),
-  },
+  }),
 });
 
 export const fixtureWorkspaceJobProfile = installCloudflareWorkspaceJobProfile({

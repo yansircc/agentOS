@@ -46,20 +46,34 @@ import type { CapabilityInstallContext } from "./contract";
 
 type WorkspaceEnv = CreateWorkspaceOperationLocalProviderOptions["env"];
 
-export interface WorkspaceOperationEnvResolverInput {
+export const WORKSPACE_OPERATION_HOST_FACT = "fs.workspace" as const;
+
+export interface WorkspaceOperationBindingEnvResolverInput {
+  readonly mode: "binding";
+}
+
+export interface WorkspaceOperationRequestedEnvResolverInput {
+  readonly mode: "operation";
   readonly event: LedgerEventRpc;
   readonly payload: WorkspaceOperationRequestedPayload;
   readonly workspaceRef: string;
   readonly runId?: string;
 }
 
+export type WorkspaceOperationEnvResolverInput =
+  | WorkspaceOperationBindingEnvResolverInput
+  | WorkspaceOperationRequestedEnvResolverInput;
+
 export type WorkspaceOperationEnvResolver = (
   input: WorkspaceOperationEnvResolverInput,
 ) => WorkspaceEnv | Promise<WorkspaceEnv>;
 
+export type WorkspaceOperationHostFacts = {
+  readonly [WORKSPACE_OPERATION_HOST_FACT]: WorkspaceOperationEnvResolver;
+};
+
 export interface WorkspaceOperationsOptions
   extends Omit<CreateWorkspaceOperationLocalProviderOptions, "env">, WorkspaceToolExposurePolicy {
-  readonly env: WorkspaceEnv | WorkspaceOperationEnvResolver;
   readonly boundaryVersion?: string;
   readonly authority?: string;
   readonly authorityId?: string;
@@ -128,9 +142,23 @@ const runIdFromRequest = (request: WorkspaceOperationRequestedPayload): string |
   return origin.originId.startsWith("run:") ? origin.originId.slice(4) : origin.originId;
 };
 
-const isEnvResolver = (
-  env: WorkspaceOperationsOptions["env"],
-): env is WorkspaceOperationEnvResolver => typeof env === "function";
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  "then" in value &&
+  typeof (value as { readonly then?: unknown }).then === "function";
+
+const workspaceOperationEnvResolverFromHost = (
+  host: CapabilityInstallContext["host"],
+): WorkspaceOperationEnvResolver => {
+  const resolver = host[WORKSPACE_OPERATION_HOST_FACT];
+  if (typeof resolver !== "function") {
+    throw new TypeError(
+      `host fact ${WORKSPACE_OPERATION_HOST_FACT} must materialize a WorkspaceOperationEnvResolver`,
+    );
+  }
+  return resolver as WorkspaceOperationEnvResolver;
+};
 
 const providerOptions = (
   options: WorkspaceOperationsOptions,
@@ -251,6 +279,7 @@ export const workspaceOperationMaterializedProjection = (): AnyMaterializedProje
 /** @internal */
 export const createWorkspaceOperationInstall = (
   options: WorkspaceOperationsOptions,
+  envResolver: WorkspaceOperationEnvResolver,
 ): WorkspaceOperationInstall => {
   const boundaryPackage = workspaceOpBoundaryPackage(
     options.boundaryVersion ?? DEFAULT_WORKSPACE_OP_BOUNDARY_VERSION,
@@ -264,14 +293,13 @@ export const createWorkspaceOperationInstall = (
     const key = `${payload.workspaceRef}\0${runId ?? ""}`;
     const existing = providers.get(key);
     if (existing !== undefined) return existing;
-    const env = isEnvResolver(options.env)
-      ? await options.env({
-          event,
-          payload,
-          workspaceRef: payload.workspaceRef,
-          ...(runId === undefined ? {} : { runId }),
-        })
-      : options.env;
+    const env = await envResolver({
+      mode: "operation",
+      event,
+      payload,
+      workspaceRef: payload.workspaceRef,
+      ...(runId === undefined ? {} : { runId }),
+    });
     const provider = createWorkspaceOperationLocalProvider(providerOptions(options, env));
     providers.set(key, provider);
     return provider;
@@ -281,11 +309,14 @@ export const createWorkspaceOperationInstall = (
     options.exposure !== undefined;
   const bindings = (): BindWorkspaceToolsForRuntimeOptions | undefined => {
     if (!toolBindingsRequested) return undefined;
-    if (isEnvResolver(options.env)) {
-      throw new TypeError("workspaceOperations tool bindings require a concrete workspace env");
+    const env = envResolver({ mode: "binding" });
+    if (isThenable(env)) {
+      throw new TypeError(
+        "workspaceOperations tool bindings require a synchronous fs.workspace resolver",
+      );
     }
     return {
-      env: options.env,
+      env,
       authority: options.authority ?? "agentos.workspace.capability",
       admit: options.admit ?? allowWorkspaceTool,
       ...(options.authorityId === undefined ? {} : { authorityId: options.authorityId }),
@@ -356,10 +387,13 @@ export const workspaceOperations = (options: WorkspaceOperationsOptions) =>
     capabilityId: WORKSPACE_OP_FACT_OWNER,
     carrier: workspaceOpCarrier,
     requires: {
-      hostFacts: ["fs.workspace"],
+      hostFacts: [WORKSPACE_OPERATION_HOST_FACT],
     },
     install: (ctx: CapabilityInstallContext) => {
-      const install = createWorkspaceOperationInstall(options);
+      const install = createWorkspaceOperationInstall(
+        options,
+        workspaceOperationEnvResolverFromHost(ctx.host),
+      );
       return {
         extensions: install.extensions,
         capabilities: install.capabilities,

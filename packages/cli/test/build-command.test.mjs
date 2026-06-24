@@ -267,6 +267,9 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(target, /from "@agent-os\/runtime\/capability";/);
     assert.match(target, /resolveRuntimeInstallGraph/);
     assert.match(target, /workspaceOperations/);
+    assert.match(target, /WORKSPACE_OPERATION_HOST_FACT/);
+    assert.match(target, /\[WORKSPACE_OPERATION_HOST_FACT\]: \(\) => workspaceEnvFor\(env\)/);
+    assert.doesNotMatch(target, /workspaceOperations\(\{\s*env:/);
     assert.match(target, /from "@agent-os\/core\/runtime-protocol";/);
     assert.match(target, /from "@agent-os\/core\/tools";/);
     assert.doesNotMatch(target, /from "@agent-os\/runtime\/workspace-binding";/);

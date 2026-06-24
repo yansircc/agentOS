@@ -7,12 +7,15 @@ import { credentialMaterialRef } from "@agent-os/core/material-ref";
 import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
 import type { LlmRoute } from "@agent-os/core/llm-protocol";
 import {
+  WORKSPACE_OPERATION_HOST_FACT,
   resolveRuntime,
   nodeHost,
   defineCapability,
   defineHost,
+  workspaceOperations,
   type CapabilityContract,
   type CapabilityInstallation,
+  type WorkspaceOperationEnvResolverInput,
 } from "../../src/capability";
 import {
   WORKSPACE_OP_FACT_OWNER,
@@ -406,6 +409,54 @@ describe("resolveRuntime", () => {
 
     expect(resolved.ok).toBe(true);
     expect(observedHostFact).toBe("/tmp/agentos-test");
+  });
+
+  it("installs workspace operations from host-owned fs.workspace resolver", async () => {
+    const resolverModes: string[] = [];
+    const workspaceEnv = {
+      domain: { kind: "sandbox" as const, ref: "workspace:host-owned" },
+      cwd: "/workspace",
+      resolvePath: (targetPath: string): string => targetPath,
+      readFile: async () => "",
+      readFileBuffer: async () => new Uint8Array(),
+      writeFile: async () => undefined,
+      stat: async () => ({ type: "file" as const }),
+      readdir: async () => [],
+      exists: async () => true,
+      mkdir: async () => undefined,
+      rm: async () => undefined,
+      exec: async () => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        stdoutBytes: 0,
+        stderrBytes: 0,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        durationMs: 0,
+      }),
+    };
+    const host = defineHost({
+      target: "workspace-host@1",
+      provides: [WORKSPACE_OPERATION_HOST_FACT],
+      materialize: () => ({
+        [WORKSPACE_OPERATION_HOST_FACT]: (input: WorkspaceOperationEnvResolverInput) => {
+          resolverModes.push(input.mode);
+          return workspaceEnv;
+        },
+      }),
+    });
+
+    const resolved = await resolveRuntime(
+      host,
+      [workspaceOperations({ toolNames: ["read_file"] })],
+      { identity: "workspace-host-owned", llm: {} },
+    );
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) throw new Error("expected workspaceOperations to resolve");
+    expect(resolverModes).toEqual(["binding"]);
+    expect(resolved.resolved.bindings.tools?.read_file).toBeDefined();
   });
 
   it.effect("commits runtime diagnostic facts when resolved handlers fail", () =>
