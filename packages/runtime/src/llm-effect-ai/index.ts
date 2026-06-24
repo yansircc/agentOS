@@ -18,8 +18,6 @@ import type {
 } from "effect/unstable/ai/Response";
 import { dynamic as makeDynamicTool, type Any as AnyTool } from "effect/unstable/ai/Tool";
 import type { WithHandler as ToolkitWithHandler } from "effect/unstable/ai/Toolkit";
-import { AnthropicClient, make as makeAnthropicClient } from "@effect/ai-anthropic/AnthropicClient";
-import { make as makeAnthropicLanguageModel } from "@effect/ai-anthropic/AnthropicLanguageModel";
 import { FetchHttpClient } from "effect/unstable/http";
 import {
   HttpClient as HttpClientTag,
@@ -33,8 +31,6 @@ import {
   type HttpClientRequest,
 } from "effect/unstable/http/HttpClientRequest";
 import { Data, Effect, Layer, Schema } from "effect";
-import * as Redacted from "effect/Redacted";
-import type * as Scope from "effect/Scope";
 import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/core/llm-protocol";
 import type {
   LlmMessage,
@@ -800,24 +796,8 @@ const withEffectAiLiveRoute = <Route extends EffectAiSupportedRoute, A, E, R>(
     ),
   );
 
-export const defaultEffectAiLanguageModelFactory: EffectAiLanguageModelFactory<
-  HttpClientService | Scope.Scope
-> = (input) =>
-  Effect.withSpan("agentos.llm_transport.effect_ai.default_model_factory")(
-    Effect.gen(function* () {
-      const client = yield* makeAnthropicClient({
-        apiUrl: input.endpoint,
-        apiKey: Redacted.make(input.credential),
-        apiVersion: input.route.anthropicVersion ?? ANTHROPIC_DEFAULT_VERSION,
-      });
-      return yield* makeAnthropicLanguageModel({ model: input.route.modelId }).pipe(
-        Effect.provideService(AnthropicClient, client),
-      );
-    }),
-  );
-
 export const makeEffectAiLlmTransportLayer = <R>(
-  modelFactory: EffectAiLanguageModelFactory<R> = defaultEffectAiLanguageModelFactory as never,
+  modelFactory: EffectAiLanguageModelFactory<R>,
 ): Layer.Layer<LlmTransport, never, RefResolverService | HttpClientService | R> =>
   Layer.effect(
     LlmTransport,

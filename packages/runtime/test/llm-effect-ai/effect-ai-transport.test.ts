@@ -32,15 +32,17 @@ import {
   callEffectAiLanguageModel,
   effectAiPromptFromMessages,
   effectAiToolkitFromToolDefinitions,
-  OpenAiCompatibleLlmTransportLive,
   EffectAiMissingUsage,
   EffectAiPromptError,
   EffectAiUnsupportedRoute,
   type EffectAiLanguageModelFactory,
   makeEffectAiLlmTransportLayer,
-  makeOpenAiCompatibleLlmTransportLayer,
   normalizeEffectAiResponse,
 } from "../../src/llm-effect-ai";
+import {
+  makeOpenAiCompatibleLlmTransportLayer,
+  OpenAiCompatibleLlmTransportLive,
+} from "../../src/llm-effect-ai/openai-compatible";
 
 const usage = (spec: {
   readonly inputTokens: number | undefined;

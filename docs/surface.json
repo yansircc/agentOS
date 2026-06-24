@@ -230,8 +230,18 @@
         },
         {
           "subpath": "./llm-effect-ai",
+          "audiences": ["advanced"],
+          "capability": "provider-neutral Effect AI LLM transport adapter"
+        },
+        {
+          "subpath": "./llm-effect-ai/openai-compatible",
           "audiences": ["generated-only", "advanced"],
-          "capability": "Effect AI LLM transport adapter"
+          "capability": "OpenAI-compatible chat-completions transport adapter"
+        },
+        {
+          "subpath": "./llm-effect-ai/anthropic",
+          "audiences": ["advanced"],
+          "capability": "Anthropic Effect AI provider adapter"
         },
         {
           "subpath": "./node",

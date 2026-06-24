@@ -231,11 +231,7 @@
           "subpath": "./cloudflare",
           "moduleBuckets": ["ledger", "adapter"],
           "targetProfiles": ["cloudflare-worker"],
-          "optionalPeers": [
-            "@cloudflare/workers-types",
-            "@effect/ai-anthropic",
-            "@effect/sql-sqlite-do"
-          ]
+          "optionalPeers": ["@cloudflare/workers-types", "@effect/sql-sqlite-do"]
         },
         {
           "subpath": "./cloudflare/do-rpc",
@@ -263,6 +259,18 @@
         },
         {
           "subpath": "./llm-effect-ai",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./llm-effect-ai/openai-compatible",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./llm-effect-ai/anthropic",
           "moduleBuckets": ["adapter"],
           "targetProfiles": ["neutral"],
           "optionalPeers": ["@effect/ai-anthropic"]

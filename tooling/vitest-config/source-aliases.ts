@@ -39,6 +39,11 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/runtime/cloudflare/ops-api", "packages/runtime/src/cloudflare/ops-api/index.ts"],
   ["@agent-os/runtime/in-memory", "packages/runtime/src/in-memory/index.ts"],
   ["@agent-os/runtime/llm-effect-ai", "packages/runtime/src/llm-effect-ai/index.ts"],
+  ["@agent-os/runtime/llm-effect-ai/anthropic", "packages/runtime/src/llm-effect-ai/anthropic.ts"],
+  [
+    "@agent-os/runtime/llm-effect-ai/openai-compatible",
+    "packages/runtime/src/llm-effect-ai/openai-compatible.ts",
+  ],
   ["@agent-os/runtime/node", "packages/runtime/src/node/index.ts"],
   ["@agent-os/runtime/run-projector", "packages/runtime/src/run-projector.ts"],
   ["@agent-os/runtime/sse-http", "packages/runtime/src/sse-http.ts"],

@@ -155,7 +155,10 @@ const publicPackageSpecifier = (scope: string, name: string): string => `${scope
 const staticTargetModules = (scope: string) => ({
   runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
   cloudflareDoRuntime: publicPackageSpecifier(scope, "runtime/cloudflare"),
-  openAiCompatibleTransport: publicPackageSpecifier(scope, "runtime/llm-effect-ai"),
+  openAiCompatibleTransport: publicPackageSpecifier(
+    scope,
+    "runtime/llm-effect-ai/openai-compatible",
+  ),
   workspaceAgentHost: publicPackageSpecifier(scope, "runtime/workspace-agent"),
   workspaceAgentClient: publicPackageSpecifier(scope, "client/workspace-agent"),
   workspaceBinding: publicPackageSpecifier(scope, "runtime/workspace-binding"),

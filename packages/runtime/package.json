@@ -62,6 +62,14 @@
       "types": "./src/llm-effect-ai/index.ts",
       "default": "./src/llm-effect-ai/index.ts"
     },
+    "./llm-effect-ai/openai-compatible": {
+      "types": "./src/llm-effect-ai/openai-compatible.ts",
+      "default": "./src/llm-effect-ai/openai-compatible.ts"
+    },
+    "./llm-effect-ai/anthropic": {
+      "types": "./src/llm-effect-ai/anthropic.ts",
+      "default": "./src/llm-effect-ai/anthropic.ts"
+    },
     "./telemetry-otlp": {
       "types": "./src/telemetry-otlp/index.ts",
       "default": "./src/telemetry-otlp/index.ts"

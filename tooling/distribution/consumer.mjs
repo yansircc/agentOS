@@ -201,7 +201,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
-      `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai")}";`,
+      `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai/openai-compatible")}";`,
       `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core")}";`,
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
@@ -248,7 +248,6 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     dependencies: {
       ...packageDepsFromTarballs(),
       "@cloudflare/sandbox": "^0.12.1",
-      "@effect/ai-anthropic": catalog()["@effect/ai-anthropic"],
       effect: catalog().effect,
       "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
     },
@@ -318,10 +317,10 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   );
   const generatedText = generatedFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
   const requiredGeneratedSpecifiers = [
+    `${publishScope()}/runtime/capability`,
     `${publishScope()}/runtime/cloudflare`,
-    `${publishScope()}/runtime/llm-effect-ai`,
+    `${publishScope()}/runtime/llm-effect-ai/openai-compatible`,
     `${publishScope()}/runtime/workspace-agent`,
-    `${publishScope()}/runtime/workspace-binding`,
     `${publishScope()}/runtime/sse-http`,
     `${publishScope()}/core/runtime-protocol`,
     `${publishScope()}/core/tools`,
@@ -340,7 +339,11 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   ) {
     fail("generated target consumer imported runtime root instead of canonical subpaths");
   }
-  if (generatedText.includes(`${sourcePackageScope}/`)) {
+  const sourcePackageImportPattern = new RegExp(
+    `(?:from\\s+|import\\s*\\(\\s*)["']${escapeRegExp(sourcePackageScope)}/`,
+    "u",
+  );
+  if (sourcePackageImportPattern.test(generatedText)) {
     fail(`generated target consumer leaked source package scope ${sourcePackageScope}`);
   }
   if (/workspace:\*|catalog:/u.test(generatedText)) {
@@ -356,6 +359,11 @@ export const assertNoAgentOsSymlinkPackages = (dir) => {
       fail(`${packageName}: consumer package must be installed package content, not a symlink`);
     }
   }
+};
+
+export const assertPackageNotInstalled = (dir, packageName) => {
+  const target = packageTargetDir(path.join(dir, "node_modules"), packageName);
+  if (fs.existsSync(target)) fail(`${packageName}: unexpected installed package`);
 };
 
 export const npmInstall = (dir, omitPeer = false) => {
@@ -489,6 +497,7 @@ export const assertGeneratedTargetConsumer = () => {
   writeGeneratedTargetConsumerApp(dir);
   npmInstall(dir);
   assertNoAgentOsSymlinkPackages(dir);
+  assertPackageNotInstalled(dir, "@effect/ai-anthropic");
   run(
     "npm",
     [

@@ -49,6 +49,8 @@
         "@yansirplus/runtime/capability",
         "@yansirplus/runtime/in-memory",
         "@yansirplus/runtime/llm-effect-ai",
+        "@yansirplus/runtime/llm-effect-ai/anthropic",
+        "@yansirplus/runtime/llm-effect-ai/openai-compatible",
         "@yansirplus/runtime/run-projector",
         "@yansirplus/runtime/sse-http",
         "@yansirplus/runtime/telemetry-otlp"

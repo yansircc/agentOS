@@ -569,7 +569,7 @@ void test("agentos build emits skill artifact and load_skill executes determinis
         "const createAgentDurableObject = () => class {};",
       )
       .replace(
-        'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/runtime/llm-effect-ai";',
+        'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/runtime/llm-effect-ai/openai-compatible";',
         "const OpenAiCompatibleLlmTransportLive = {};",
       );
     smokeSource += `
