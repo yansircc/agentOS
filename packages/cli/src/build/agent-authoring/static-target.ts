@@ -9,9 +9,11 @@ import {
   AGENTOS_CONFIG_PROFILE,
   AGENTOS_CONFIG_TARGET,
   llmMaterialEnvBindings,
+  type AgentOsConfigCloudflareDoTarget,
   type AgentOsConfigClientKind,
   type AgentOsConfigLlmRoute,
   type AgentOsConfigProfile,
+  type AgentOsConfigTarget,
   type AgentOsConfigTargetKind,
   type AgentOsConfigWorkspaceTopology,
   type LlmMaterialEnvKind,
@@ -152,6 +154,11 @@ const DEFAULT_STATIC_TARGET_PACKAGE_SCOPE = packageScopePattern.test(INJECTED_PU
 
 const publicPackageSpecifier = (scope: string, name: string): string => `${scope}/${name}`;
 
+const cloudflareTargetFor = (target: AgentOsConfigTarget): AgentOsConfigCloudflareDoTarget => {
+  if (target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) return target;
+  throw new TypeError(`cloudflare target renderer received ${target.kind}`);
+};
+
 const staticTargetModules = (scope: string) => ({
   runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
   cloudflareDoRuntime: publicPackageSpecifier(scope, "runtime/cloudflare"),
@@ -279,6 +286,7 @@ const renderWorkspaceStaticTarget = (
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
+  const target = cloudflareTargetFor(normalized.target);
   const hasSkills = normalized.skills.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
@@ -605,7 +613,7 @@ export const workspaceMount = defineWorkspaceAgentMount({
   ],
 });
 
-const Base${normalized.target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
+const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
   manifest: semanticManifest,
   agentBindings: (env) => ({
     handlers: ${handlerRecord},
@@ -622,7 +630,7 @@ const Base${normalized.target.durableObject.className} = createAgentDurableObjec
   eventHandlers: (context, env) => generatedCapabilityInstallGraphFor(env).handlers(context),
 });
 
-export class ${normalized.target.durableObject.className} extends Base${normalized.target.durableObject.className} {
+export class ${target.durableObject.className} extends Base${target.durableObject.className} {
   private readonly targetEnv: AgentOSTargetEnv;
 
   constructor(ctx: DurableObjectState, env: AgentOSTargetEnv) {
@@ -728,6 +736,7 @@ const renderChatStaticTarget = (
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
+  const target = cloudflareTargetFor(normalized.target);
   const hasSkills = normalized.skills.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
@@ -880,7 +889,7 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
 
 ${renderSubmitSpecFromRunInput(hasSkills)}
 
-const Base${normalized.target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
+const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
   manifest: semanticManifest,
   agentBindings: {
     handlers: ${handlerRecord},
@@ -891,7 +900,7 @@ const Base${normalized.target.durableObject.className} = createAgentDurableObjec
   llmTransport: () => OpenAiCompatibleLlmTransportLive,
 });
 
-export class ${normalized.target.durableObject.className} extends Base${normalized.target.durableObject.className} {
+export class ${target.durableObject.className} extends Base${target.durableObject.className} {
   private readonly targetEnv: AgentOSTargetEnv;
 
   constructor(ctx: DurableObjectState, env: AgentOSTargetEnv) {
@@ -951,7 +960,9 @@ const renderStaticTarget = (
 const renderCloudflareScopeHelper = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
-): string => `${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
+): string => {
+  const target = cloudflareTargetFor(normalized.target);
+  return `${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
 ${renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol)}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
 ${renderTypeImport(["DurableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
@@ -964,7 +975,7 @@ export type AgentOSTargetEnv = {
 
 export const agentOSTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
 export const agentOSScopeId = agentOSTruthIdentity.scopeRef.scopeId;
-export const agentOSDurableObjectBinding = ${jsString(normalized.target.durableObject.binding)};
+export const agentOSDurableObjectBinding = ${jsString(target.durableObject.binding)};
 
 export const agentOSDurableObjectNamespace = (
   env: AgentOSTargetEnv,
@@ -978,14 +989,17 @@ export const agentOSRpcClient = <
   scopeId: string = agentOSScopeId,
 ): DurableObjectRpcClient<Rpc> => durableObjectRpcClient<Rpc>(agentOSDurableObjectNamespace(env), scopeId);
 `;
+};
 
 const renderCloudflareWorkerEntry = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
-): string => `${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n` : ""}${renderNamedImport([normalized.target.durableObject.className], "./target")}
+): string => {
+  const target = cloudflareTargetFor(normalized.target);
+  return `${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n` : ""}${renderNamedImport([target.durableObject.className], "./target")}
 ${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
-export { ${normalized.target.durableObject.className}${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""} };
+export { ${target.durableObject.className}${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""} };
 
 export default {
   fetch(): Response {
@@ -993,10 +1007,12 @@ export default {
   },
 } satisfies ExportedHandler<AgentOSTargetEnv>;
 `;
+};
 
 const renderCloudflareWranglerConfig = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
 ): string => {
+  const target = cloudflareTargetFor(normalized.target);
   const workspaceConfig =
     normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? {
@@ -1018,15 +1034,15 @@ const renderCloudflareWranglerConfig = (
                 name: normalized.workspace.binding,
               },
               {
-                class_name: normalized.target.durableObject.className,
-                name: normalized.target.durableObject.binding,
+                class_name: target.durableObject.className,
+                name: target.durableObject.binding,
               },
             ],
           },
           migrations: [
             {
               tag: "v1",
-              new_sqlite_classes: ["Sandbox", normalized.target.durableObject.className],
+              new_sqlite_classes: ["Sandbox", target.durableObject.className],
             },
           ],
         }
@@ -1034,15 +1050,15 @@ const renderCloudflareWranglerConfig = (
           durable_objects: {
             bindings: [
               {
-                class_name: normalized.target.durableObject.className,
-                name: normalized.target.durableObject.binding,
+                class_name: target.durableObject.className,
+                name: target.durableObject.binding,
               },
             ],
           },
           migrations: [
             {
               tag: "v1",
-              new_sqlite_classes: [normalized.target.durableObject.className],
+              new_sqlite_classes: [target.durableObject.className],
             },
           ],
         };
@@ -2081,6 +2097,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       issues: [{ kind: "unsupported_static_llm_route", route: normalized.llm.route }],
     };
   }
+  const target = cloudflareTargetFor(normalized.target);
   const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const authoredManifestToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
@@ -2170,8 +2187,8 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       source: "./worker",
       imports:
         normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
-          ? [normalized.target.durableObject.className, "Sandbox"]
-          : [normalized.target.durableObject.className],
+          ? [target.durableObject.className, "Sandbox"]
+          : [target.durableObject.className],
     },
     {
       kind: "target-config",
@@ -2260,8 +2277,8 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       mount: {
         driver: {
           kind: "cloudflare-do",
-          className: normalized.target.durableObject.className,
-          binding: normalized.target.durableObject.binding,
+          className: target.durableObject.className,
+          binding: target.durableObject.binding,
         },
         projectionSinks:
           normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1

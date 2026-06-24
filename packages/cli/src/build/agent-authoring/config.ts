@@ -44,6 +44,7 @@ export type AgentOsConfigProfile =
 
 export const AGENTOS_CONFIG_TARGET = {
   CLOUDFLARE_DO_V1: "cloudflare-do@1",
+  NODE_V1: "node@1",
 } as const;
 
 export type AgentOsConfigTargetKind =
@@ -77,7 +78,11 @@ export interface AgentOsConfigCloudflareDoTarget {
   };
 }
 
-export type AgentOsConfigTarget = AgentOsConfigCloudflareDoTarget;
+export interface AgentOsConfigNodeTarget {
+  readonly kind: typeof AGENTOS_CONFIG_TARGET.NODE_V1;
+}
+
+export type AgentOsConfigTarget = AgentOsConfigCloudflareDoTarget | AgentOsConfigNodeTarget;
 
 export interface AgentOsConfigClient {
   readonly kind: AgentOsConfigClientKind;
@@ -232,6 +237,26 @@ const workspaceMacroOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigi
 const chatMacroOrigin = (factKey: AgentOsConfigFactKey): AgentOsConfigOrigin =>
   `macro(${AGENTOS_CONFIG_PROFILE.CHAT_V1})#${factKey}`;
 
+const targetOriginFacts = (
+  target: AgentOsConfigTarget,
+): Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>> => ({
+  "/target/kind": configAuthorOrigin("/target/kind"),
+  ...(target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1
+    ? {
+        "/target/durableObject/className": configAuthorOrigin(
+          "/target/durableObject/className",
+        ),
+        "/target/durableObject/binding": configAuthorOrigin("/target/durableObject/binding"),
+      }
+    : {}),
+});
+
+const targetDeploymentBackend = (target: AgentOsConfigTarget): string =>
+  target.kind === AGENTOS_CONFIG_TARGET.NODE_V1 ? "node" : "cloudflare-do";
+
+const targetDeploymentAdapter = (target: AgentOsConfigTarget): AgentOsConfigTargetKind =>
+  target.kind;
+
 export type LlmMaterialEnvKind = "endpoint" | "credential" | "model";
 
 export interface LlmMaterialEnvBinding {
@@ -309,7 +334,8 @@ const configAllowedFields = new Set([
 ]);
 
 const deploymentAllowedFields = new Set(["id", "version"]);
-const targetAllowedFields = new Set(["kind", "durableObject"]);
+const nodeTargetAllowedFields = new Set(["kind"]);
+const cloudflareTargetAllowedFields = new Set(["kind", "durableObject"]);
 const durableObjectAllowedFields = new Set(["className", "binding"]);
 const clientAllowedFields = new Set(["kind"]);
 const llmAllowedFields = new Set(["route", "endpointRef", "credentialRef", "modelRef"]);
@@ -433,11 +459,16 @@ const decodeTargetConfig = (
 ): AgentOsConfigTarget | null => {
   const record = configRequiredRecord(issues, "agentos.config.jsonc", "/target", value);
   if (record === null) return null;
-  assertConfigAllowedFields(issues, "/target", record, targetAllowedFields);
+  if (record.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
+    assertConfigAllowedFields(issues, "/target", record, nodeTargetAllowedFields);
+    return { kind: AGENTOS_CONFIG_TARGET.NODE_V1 };
+  }
   if (record.kind !== AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) {
+    assertConfigAllowedFields(issues, "/target", record, nodeTargetAllowedFields);
     issueInvalidConfigValue(issues, "/target", "/target/kind", "target_kind_invalid");
     return null;
   }
+  assertConfigAllowedFields(issues, "/target", record, cloudflareTargetAllowedFields);
   const durableObject = configRequiredRecord(
     issues,
     "/target",
@@ -916,9 +947,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       ...(value.deployment.version === undefined
         ? {}
         : { "/deployment/version": configAuthorOrigin("/deployment/version") }),
-      "/target/kind": configAuthorOrigin("/target/kind"),
-      "/target/durableObject/className": configAuthorOrigin("/target/durableObject/className"),
-      "/target/durableObject/binding": configAuthorOrigin("/target/durableObject/binding"),
+      ...targetOriginFacts(value.target),
       "/client/kind": configAuthorOrigin("/client/kind"),
       "/llm/route": configAuthorOrigin("/llm/route"),
       "/llm/endpointRef": configAuthorOrigin("/llm/endpointRef"),
@@ -937,8 +966,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         deployment: {
           deploymentId: value.deployment.id,
           manifest: profileManifest.manifest,
-          backend: "cloudflare-do",
-          adapter: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+          backend: targetDeploymentBackend(value.target),
+          adapter: targetDeploymentAdapter(value.target),
           codec: "agentos-json@1",
           providerStrategy: value.llm.route,
         },
@@ -989,9 +1018,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     ...(value.deployment.version === undefined
       ? {}
       : { "/deployment/version": configAuthorOrigin("/deployment/version") }),
-    "/target/kind": configAuthorOrigin("/target/kind"),
-    "/target/durableObject/className": configAuthorOrigin("/target/durableObject/className"),
-    "/target/durableObject/binding": configAuthorOrigin("/target/durableObject/binding"),
+    ...targetOriginFacts(value.target),
     "/client/kind": configAuthorOrigin("/client/kind"),
     "/llm/route": configAuthorOrigin("/llm/route"),
     "/llm/endpointRef": configAuthorOrigin("/llm/endpointRef"),
@@ -1023,8 +1050,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       deployment: {
         deploymentId: value.deployment.id,
         manifest: manifestWithWorkspaceMaterial.manifest,
-        backend: "cloudflare-do",
-        adapter: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+        backend: targetDeploymentBackend(value.target),
+        adapter: targetDeploymentAdapter(value.target),
         codec: "agentos-json@1",
         providerStrategy: value.llm.route,
       },

@@ -107,6 +107,73 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
   assert.deepEqual(output.manifestToolNames, []);
 });
 
+void test("agentos.config normalizes node@1 as the local convention target", () => {
+  const result = runTypeScript(
+    [
+      'import { AGENTOS_CONFIG_TARGET, compileAgentTree, decodeAgentOsConfig, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const compiled = compileAgentTree({",
+      "  files: [",
+      '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '    { path: "agent/agent.json", kind: "json", value: { agentId: "node-target-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "node-target-fixture" } } },',
+      "  ],",
+      "});",
+      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+      "const config = {",
+      '  profile: "workspace@1",',
+      '  agent: "./agent",',
+      '  deployment: { id: "node-target-fixture" },',
+      '  target: { kind: "node@1" },',
+      '  client: { kind: "browser-direct@1" },',
+      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      '  workspace: { binding: "Sandbox", root: "/workspace" },',
+      "};",
+      "const decoded = decodeAgentOsConfig(config);",
+      "if (!decoded.ok) { console.error(JSON.stringify(decoded.issues)); process.exit(1); }",
+      "const normalized = normalizeAgentOsConfig(decoded.value, compiled.value);",
+      "if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
+      "const linked = linkWorkspaceStaticTarget(normalized.value);",
+      "const nodeWithEntry = decodeAgentOsConfig({ ...config, target: { kind: \"node@1\", entry: \"./src/app.ts\" } });",
+      "const nodeWithDurableObject = decodeAgentOsConfig({ ...config, target: { kind: \"node@1\", durableObject: { className: \"AgentOS\", binding: \"AGENT_OS\" } } });",
+      "const bunTarget = decodeAgentOsConfig({ ...config, target: { kind: \"bun@1\" } });",
+      "console.log(JSON.stringify({",
+      "  targetKinds: Object.values(AGENTOS_CONFIG_TARGET).sort(),",
+      "  normalizedTarget: normalized.value.target,",
+      "  deploymentBackend: normalized.value.deployment.backend,",
+      "  deploymentAdapter: normalized.value.deployment.adapter,",
+      "  targetOrigins: Object.fromEntries(Object.entries(normalized.value.provenance.deployment).filter(([key]) => key.startsWith(\"/target\"))),",
+      "  linkIssues: linked.ok ? [] : linked.issues,",
+      "  nodeWithEntryIssues: nodeWithEntry.ok ? [] : nodeWithEntry.issues,",
+      "  nodeWithDurableObjectIssues: nodeWithDurableObject.ok ? [] : nodeWithDurableObject.issues,",
+      "  bunTargetIssues: bunTarget.ok ? [] : bunTarget.issues,",
+      "}));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.targetKinds, ["cloudflare-do@1", "node@1"]);
+  assert.deepEqual(output.normalizedTarget, { kind: "node@1" });
+  assert.equal(output.deploymentBackend, "node");
+  assert.equal(output.deploymentAdapter, "node@1");
+  assert.deepEqual(output.targetOrigins, {
+    "/target/kind": "author:agentos.config.jsonc#/target/kind",
+  });
+  assert.deepEqual(output.linkIssues, [{ kind: "unsupported_static_target", target: "node@1" }]);
+  assert.deepEqual(output.nodeWithEntryIssues, [
+    { kind: "unknown_field", path: "/target", field: "entry" },
+  ]);
+  assert.deepEqual(output.nodeWithDurableObjectIssues, [
+    { kind: "unknown_field", path: "/target", field: "durableObject" },
+  ]);
+  assert.deepEqual(output.bunTargetIssues, [
+    {
+      kind: "invalid_config_value",
+      path: "/target",
+      field: "/target/kind",
+      reason: "target_kind_invalid",
+    },
+  ]);
+});
+
 void test("compileAgentTree rejects invalid skill identity and v1 sibling files", () => {
   const result = runTypeScript(
     [

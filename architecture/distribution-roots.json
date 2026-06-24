@@ -78,6 +78,7 @@
       "packageUnits": ["runtime", "cli"],
       "selectedSubpaths": [
         "@yansirplus/runtime/capability",
+        "@yansirplus/runtime/local",
         "@yansirplus/runtime/node",
         "@yansirplus/cli"
       ],
