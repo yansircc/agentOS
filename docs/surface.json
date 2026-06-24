@@ -191,92 +191,110 @@
         {
           "subpath": ".",
           "audiences": ["advanced"],
-          "capability": "backend-neutral runtime service algebra"
+          "capability": "backend-neutral runtime service algebra",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./admission",
           "audiences": ["advanced"],
-          "capability": "admission service contract"
+          "capability": "admission service contract",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./ag-ui",
           "audiences": ["advanced"],
-          "capability": "AG-UI wire projection"
+          "capability": "AG-UI wire projection",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./cloudflare",
           "audiences": ["generated-only", "advanced"],
-          "capability": "Cloudflare Durable Object runtime adapter"
+          "capability": "Cloudflare Durable Object runtime adapter",
+          "surfaceClass": "first-party-host-substrate"
         },
         {
           "subpath": "./cloudflare/do-rpc",
           "audiences": ["advanced"],
-          "capability": "Cloudflare DO RPC bridge"
+          "capability": "Cloudflare DO RPC bridge",
+          "surfaceClass": "first-party-host-substrate"
         },
         {
           "subpath": "./cloudflare/ops-api",
           "audiences": ["advanced"],
-          "capability": "Cloudflare ops API bridge"
+          "capability": "Cloudflare ops API bridge",
+          "surfaceClass": "first-party-host-substrate"
         },
         {
           "subpath": "./capability",
           "audiences": ["generated-only", "advanced"],
-          "capability": "capability contract declarations and install graph resolver"
+          "capability": "capability contract declarations and install graph resolver",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./in-memory",
           "audiences": ["advanced"],
-          "capability": "in-memory runtime adapter"
+          "capability": "in-memory runtime adapter",
+          "surfaceClass": "first-party-host-substrate"
         },
         {
           "subpath": "./local",
           "audiences": ["generated-only", "advanced"],
-          "capability": "local node workspace runtime lowerer and dev/test facade"
+          "capability": "local node workspace runtime lowerer and dev/test facade",
+          "surfaceClass": "first-party-host-substrate"
         },
         {
           "subpath": "./llm-effect-ai",
           "audiences": ["advanced"],
-          "capability": "provider-neutral Effect AI LLM transport adapter"
+          "capability": "provider-neutral Effect AI LLM transport adapter",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./llm-effect-ai/openai-compatible",
           "audiences": ["generated-only", "advanced"],
-          "capability": "OpenAI-compatible chat-completions transport adapter"
+          "capability": "OpenAI-compatible chat-completions transport adapter",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./llm-effect-ai/anthropic",
           "audiences": ["advanced"],
-          "capability": "Anthropic Effect AI provider adapter"
+          "capability": "Anthropic Effect AI provider adapter",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./node",
           "audiences": ["advanced"],
-          "capability": "Node runtime adapter"
+          "capability": "Node runtime adapter",
+          "surfaceClass": "first-party-host-substrate"
         },
         {
           "subpath": "./run-projector",
           "audiences": ["advanced"],
-          "capability": "runtime run projection helpers"
+          "capability": "runtime run projection helpers",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./sse-http",
           "audiences": ["generated-only", "advanced"],
-          "capability": "SSE HTTP helpers"
+          "capability": "SSE HTTP helpers",
+          "surfaceClass": "generated-target-wiring"
         },
         {
           "subpath": "./telemetry-otlp",
           "audiences": ["advanced"],
-          "capability": "OTLP telemetry projection"
+          "capability": "OTLP telemetry projection",
+          "surfaceClass": "stable-contract"
         },
         {
           "subpath": "./workspace-agent",
           "audiences": ["generated-only"],
-          "capability": "generated workspace agent host types"
+          "capability": "generated workspace agent host types",
+          "surfaceClass": "generated-target-wiring"
         },
         {
           "subpath": "./workspace-binding",
           "audiences": ["generated-only"],
-          "capability": "generated workspace tool binding"
+          "capability": "generated workspace tool binding",
+          "surfaceClass": "generated-target-wiring"
         }
       ]
     },

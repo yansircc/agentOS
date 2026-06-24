@@ -1,3 +1,150 @@
+const runtimeSurfaceClassValues = [
+  "stable-contract",
+  "first-party-host-substrate",
+  "generated-target-wiring",
+  "app-owned-integration-recipe",
+];
+const runtimeSurfaceClasses = new Set(runtimeSurfaceClassValues);
+const runtimeSubstrateClasses = new Set(["stable-contract", "first-party-host-substrate"]);
+const runtimeFirstPartyHostPrefixes = ["./cloudflare", "./in-memory", "./local", "./node"];
+const runtimeExtensionCategoryTokens = {
+  channel: ["channel", "slack", "discord", "teams", "telegram", "email", "webhook", "sms"],
+  sandbox: ["sandbox", "e2b", "container", "browser", "vm"],
+  database: [
+    "database",
+    "db",
+    "postgres",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "d1",
+    "sql",
+    "neon",
+    "prisma",
+    "drizzle",
+  ],
+  provider: ["provider", "llm", "ai", "openai", "anthropic", "gemini", "mistral", "cohere"],
+  observability: [
+    "observability",
+    "telemetry",
+    "otlp",
+    "trace",
+    "tracing",
+    "metrics",
+    "sentry",
+    "langfuse",
+    "log",
+    "logging",
+  ],
+};
+
+const isPlainRecord = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const runtimeSurfaceLabel = (subpath) =>
+  `@agent-os/runtime${subpath === "." ? "" : subpath.slice(1)}`;
+
+const runtimeExportSubpaths = (runtimePackageJson) =>
+  isPlainRecord(runtimePackageJson?.exports)
+    ? Object.keys(runtimePackageJson.exports)
+        .filter((subpath) => subpath !== "./package.json")
+        .sort((left, right) => left.localeCompare(right))
+    : [];
+
+const isFirstPartyRuntimeHostSubpath = (subpath) =>
+  runtimeFirstPartyHostPrefixes.some(
+    (prefix) => subpath === prefix || subpath.startsWith(`${prefix}/`),
+  );
+
+const runtimeExtensionCategoriesForSubpath = (subpath) => {
+  if (subpath === ".") return [];
+  const tokens = new Set(
+    subpath
+      .toLowerCase()
+      .split(/[^a-z0-9]+/u)
+      .filter(Boolean),
+  );
+  return Object.entries(runtimeExtensionCategoryTokens)
+    .filter(([, categoryTokens]) => categoryTokens.some((token) => tokens.has(token)))
+    .map(([category]) => category);
+};
+
+export const runtimePublicSurfaceFindings = ({ surfacePackage, runtimePackageJson }) => {
+  const findings = [];
+  if (!isPlainRecord(surfacePackage)) {
+    return ["docs/surface.json: @agent-os/runtime package is missing"];
+  }
+  if (!isPlainRecord(runtimePackageJson?.exports)) {
+    return ["packages/runtime/package.json: exports must be an object"];
+  }
+
+  const exportSubpaths = runtimeExportSubpaths(runtimePackageJson);
+  const exportSubpathSet = new Set(exportSubpaths);
+  const entrypoints = Array.isArray(surfacePackage.entrypoints) ? surfacePackage.entrypoints : [];
+  const entrypointsBySubpath = new Map();
+  for (const entrypoint of entrypoints) {
+    if (!isPlainRecord(entrypoint) || typeof entrypoint.subpath !== "string") continue;
+    entrypointsBySubpath.set(entrypoint.subpath, entrypoint);
+  }
+
+  for (const subpath of exportSubpaths) {
+    if (!entrypointsBySubpath.has(subpath)) {
+      findings.push(
+        `${runtimeSurfaceLabel(subpath)}: runtime package export is missing docs/surface.json entrypoint`,
+      );
+    }
+  }
+
+  for (const entrypoint of entrypoints) {
+    if (!isPlainRecord(entrypoint)) {
+      findings.push("@agent-os/runtime: docs/surface.json runtime entrypoint must be an object");
+      continue;
+    }
+    const subpath = entrypoint.subpath;
+    if (typeof subpath !== "string") {
+      findings.push("@agent-os/runtime: docs/surface.json runtime entrypoint missing subpath");
+      continue;
+    }
+    const label = runtimeSurfaceLabel(subpath);
+    if (!exportSubpathSet.has(subpath)) {
+      findings.push(`${label}: docs/surface.json entrypoint has no package.json export`);
+    }
+
+    const surfaceClass = entrypoint.surfaceClass;
+    if (typeof surfaceClass !== "string" || !runtimeSurfaceClasses.has(surfaceClass)) {
+      findings.push(
+        `${label}: runtime surfaceClass must be one of ${runtimeSurfaceClassValues.join(", ")}`,
+      );
+      continue;
+    }
+    if (surfaceClass === "app-owned-integration-recipe") {
+      findings.push(
+        `${label}: runtime public export cannot be classified app-owned-integration-recipe; keep app-owned integrations in blueprint recipes`,
+      );
+    }
+    if (surfaceClass === "first-party-host-substrate" && !isFirstPartyRuntimeHostSubpath(subpath)) {
+      findings.push(
+        `${label}: first-party-host-substrate is only valid for ${runtimeFirstPartyHostPrefixes.join(", ")} runtime subpaths`,
+      );
+    }
+    if (
+      surfaceClass === "generated-target-wiring" &&
+      !entrypoint.audiences?.includes("generated-only")
+    ) {
+      findings.push(`${label}: generated-target-wiring requires generated-only audience`);
+    }
+
+    const extensionCategories = runtimeExtensionCategoriesForSubpath(subpath);
+    if (extensionCategories.length > 0 && !runtimeSubstrateClasses.has(surfaceClass)) {
+      findings.push(
+        `${label}: ${extensionCategories.join("/")} integration-shaped runtime export must be classified as stable substrate, not ${surfaceClass}`,
+      );
+    }
+  }
+
+  return findings.sort((left, right) => left.localeCompare(right));
+};
+
 export const createConvergenceSmokeChecks = ({
   fs,
   os,
@@ -72,6 +219,12 @@ export const createConvergenceSmokeChecks = ({
 
     const surfacePackages = readJson("docs/surface.json").packages ?? [];
     const surfaceByName = new Map(surfacePackages.map((pkg) => [pkg.name, pkg]));
+    failures.push(
+      ...runtimePublicSurfaceFindings({
+        surfacePackage: surfaceByName.get("@agent-os/runtime"),
+        runtimePackageJson: readJson("packages/runtime/package.json"),
+      }),
+    );
     const retiredPackages = new Set(manifest.retiredPackages ?? []);
     for (const record of workspacePackageRecords()) {
       if (retiredPackages.has(record.name)) {

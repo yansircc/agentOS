@@ -16,12 +16,146 @@ import {
   packageUnitOptionalPeerAllowsEdge,
   packageUnitsRegistryFindings,
 } from "../src/check/algorithmic-checks.mjs";
+import { runtimePublicSurfaceFindings } from "../src/check/algorithmic/convergence-smoke-checks.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const record = {
   name: "@agent-os/runtime",
   path: "packages/runtime",
 };
+
+const runtimeSurface = (entrypoints) => ({
+  name: "@agent-os/runtime",
+  path: "packages/runtime",
+  entrypoints,
+});
+
+const runtimePackage = (subpaths) => ({
+  exports: Object.fromEntries(subpaths.map((subpath) => [subpath, { default: "./src/index.ts" }])),
+});
+
+void test("runtime public surface guard accepts classified stable and host substrate", () => {
+  assert.deepEqual(
+    runtimePublicSurfaceFindings({
+      surfacePackage: runtimeSurface([
+        {
+          subpath: ".",
+          audiences: ["advanced"],
+          capability: "runtime algebra",
+          surfaceClass: "stable-contract",
+        },
+        {
+          subpath: "./local",
+          audiences: ["generated-only", "advanced"],
+          capability: "local host substrate",
+          surfaceClass: "first-party-host-substrate",
+        },
+        {
+          subpath: "./workspace-binding",
+          audiences: ["generated-only"],
+          capability: "generated workspace binding",
+          surfaceClass: "generated-target-wiring",
+        },
+        {
+          subpath: "./llm-effect-ai/openai-compatible",
+          audiences: ["generated-only", "advanced"],
+          capability: "OpenAI-compatible transport",
+          surfaceClass: "stable-contract",
+        },
+      ]),
+      runtimePackageJson: runtimePackage([
+        ".",
+        "./local",
+        "./workspace-binding",
+        "./llm-effect-ai/openai-compatible",
+      ]),
+    }),
+    [],
+  );
+});
+
+void test("runtime public surface guard rejects unclassified extension-shaped exports", () => {
+  const findings = runtimePublicSurfaceFindings({
+    surfacePackage: runtimeSurface([
+      {
+        subpath: ".",
+        audiences: ["advanced"],
+        capability: "runtime algebra",
+        surfaceClass: "stable-contract",
+      },
+      {
+        subpath: "./slack",
+        audiences: ["advanced"],
+        capability: "Slack channel helper",
+      },
+    ]),
+    runtimePackageJson: runtimePackage([".", "./slack"]),
+  });
+
+  assert.equal(
+    findings.includes(
+      "@agent-os/runtime/slack: runtime surfaceClass must be one of stable-contract, first-party-host-substrate, generated-target-wiring, app-owned-integration-recipe",
+    ),
+    true,
+  );
+});
+
+void test("runtime public surface guard rejects blueprint-owned integration as runtime export", () => {
+  const findings = runtimePublicSurfaceFindings({
+    surfacePackage: runtimeSurface([
+      {
+        subpath: ".",
+        audiences: ["advanced"],
+        capability: "runtime algebra",
+        surfaceClass: "stable-contract",
+      },
+      {
+        subpath: "./sentry",
+        audiences: ["advanced"],
+        capability: "Sentry observability helper",
+        surfaceClass: "app-owned-integration-recipe",
+      },
+    ]),
+    runtimePackageJson: runtimePackage([".", "./sentry"]),
+  });
+
+  assert.equal(
+    findings.includes(
+      "@agent-os/runtime/sentry: runtime public export cannot be classified app-owned-integration-recipe; keep app-owned integrations in blueprint recipes",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "@agent-os/runtime/sentry: observability integration-shaped runtime export must be classified as stable substrate, not app-owned-integration-recipe",
+    ),
+    true,
+  );
+});
+
+void test("runtime public surface guard requires package exports and surface facts to agree", () => {
+  const findings = runtimePublicSurfaceFindings({
+    surfacePackage: runtimeSurface([
+      {
+        subpath: ".",
+        audiences: ["advanced"],
+        capability: "runtime algebra",
+        surfaceClass: "stable-contract",
+      },
+      {
+        subpath: "./local",
+        audiences: ["generated-only", "advanced"],
+        capability: "local host substrate",
+        surfaceClass: "first-party-host-substrate",
+      },
+    ]),
+    runtimePackageJson: runtimePackage([".", "./local", "./discord"]),
+  });
+
+  assert.deepEqual(findings, [
+    "@agent-os/runtime/discord: runtime package export is missing docs/surface.json entrypoint",
+  ]);
+});
 
 void test("distribution architecture sources are valid", () => {
   const moduleBuckets = JSON.parse(
