@@ -16,7 +16,10 @@ import {
   packageUnitOptionalPeerAllowsEdge,
   packageUnitsRegistryFindings,
 } from "../src/check/algorithmic-checks.mjs";
-import { runtimePublicSurfaceFindings } from "../src/check/algorithmic/convergence-smoke-checks.mjs";
+import {
+  blueprintRecipeFindingsForSources,
+  runtimePublicSurfaceFindings,
+} from "../src/check/algorithmic/convergence-smoke-checks.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const record = {
@@ -33,6 +36,47 @@ const runtimeSurface = (entrypoints) => ({
 const runtimePackage = (subpaths) => ({
   exports: Object.fromEntries(subpaths.map((subpath) => [subpath, { default: "./src/index.ts" }])),
 });
+
+const blueprintRecipeMarkdown = ({
+  id = "provider.material-binding",
+  kind = "provider",
+  title = "Provider Material Binding",
+  primaryFile = "agentos.config.jsonc",
+  markerPath = primaryFile,
+  bodySuffix = "",
+} = {}) => {
+  const frontmatter = {
+    schemaVersion: 1,
+    id,
+    kind,
+    title,
+    summary: "Bind product-owned provider material without adding runtime provider code.",
+    primaryFile,
+    appliesTo: ["agentos add", "agentos update"],
+    upgradeGuide: "blueprints/UPGRADE.md",
+  };
+  return [
+    "---json",
+    JSON.stringify(frontmatter, null, 2),
+    "---",
+    `# ${title}`,
+    "",
+    `<!-- agentos:primary-file path="${markerPath}" -->`,
+    "",
+    "## Boundary",
+    "",
+    "The recipe records app-owned integration steps without runtime subpath code.",
+    "",
+    "## Steps",
+    "",
+    "1. Update the app-owned primary file.",
+    "",
+    "## Upgrade Guide",
+    "",
+    "The cumulative upgrade entry owns migration notes.",
+    bodySuffix,
+  ].join("\n");
+};
 
 void test("runtime public surface guard accepts classified stable and host substrate", () => {
   assert.deepEqual(
@@ -155,6 +199,69 @@ void test("runtime public surface guard requires package exports and surface fac
   assert.deepEqual(findings, [
     "@agent-os/runtime/discord: runtime package export is missing docs/surface.json entrypoint",
   ]);
+});
+
+void test("blueprint recipe contract accepts versioned markdown source", () => {
+  assert.deepEqual(
+    blueprintRecipeFindingsForSources({
+      recipeSources: [
+        {
+          file: "blueprints/recipes/provider/material-binding.md",
+          content: blueprintRecipeMarkdown(),
+        },
+      ],
+      upgradeGuideContent:
+        '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="provider.material-binding" -->\n',
+    }),
+    [],
+  );
+});
+
+void test("blueprint recipe contract rejects target replacement and marker drift", () => {
+  const findings = blueprintRecipeFindingsForSources({
+    recipeSources: [
+      {
+        file: "blueprints/recipes/provider/material-binding.md",
+        content: blueprintRecipeMarkdown({
+          markerPath: "package.json",
+          bodySuffix: "\nDo not create target--node replacement code.",
+        }),
+      },
+      {
+        file: "blueprints/recipes/target/node.md",
+        content: blueprintRecipeMarkdown({
+          id: "target.node",
+          kind: "target",
+          title: "Node Target Replacement",
+        }),
+      },
+    ],
+    upgradeGuideContent:
+      '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="provider.material-binding" -->\n<!-- agentos:blueprint-upgrade id="unknown.recipe" -->\n',
+  });
+
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/provider/material-binding.md: primary-file marker must match frontmatter.primaryFile",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/provider/material-binding.md: blueprint recipe must not reference target--node",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/target/node.md: kind must be one of channel, sandbox, database, provider, observability",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes("blueprints/UPGRADE.md: unknown upgrade marker unknown.recipe"),
+    true,
+  );
 });
 
 void test("distribution architecture sources are valid", () => {

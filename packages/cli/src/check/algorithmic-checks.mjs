@@ -402,12 +402,14 @@ const checkDocsSiteBuild = convergenceSmokeChecks.checkDocsSiteBuild;
 const checkCliSurface = convergenceSmokeChecks.checkCliSurface;
 const checkConsumerImports = convergenceSmokeChecks.checkConsumerImports;
 const checkDogfoodSmoke = convergenceSmokeChecks.checkDogfoodSmoke;
+const checkBlueprintRecipes = convergenceSmokeChecks.checkBlueprintRecipes;
 
 const checkBoundaryProjection = () => runCommand("vp check", { cwd: repoRoot });
 
 const checkerById = new Map([
   ["architecture-sources", checkArchitectureSources],
   ["backend-neutrality", checkBackendNeutrality],
+  ["blueprint-recipes", checkBlueprintRecipes],
   ["boundaries", checkBoundaryProjection],
   ["cli-surface", checkCliSurface],
   ["client-boundaries", checkClientBoundaries],

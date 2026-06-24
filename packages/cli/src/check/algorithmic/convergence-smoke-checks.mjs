@@ -145,6 +145,186 @@ export const runtimePublicSurfaceFindings = ({ surfacePackage, runtimePackageJso
   return findings.sort((left, right) => left.localeCompare(right));
 };
 
+const blueprintRecipeSchemaVersion = 1;
+const blueprintRecipeKinds = ["channel", "sandbox", "database", "provider", "observability"];
+const blueprintRecipeKindSet = new Set(blueprintRecipeKinds);
+const blueprintRecipeActions = ["agentos add", "agentos update"];
+const blueprintRecipePrimaryFiles = new Set([
+  "agentos.config.jsonc",
+  "agent/agent.json",
+  "package.json",
+]);
+const blueprintRecipeGuidePath = "blueprints/UPGRADE.md";
+const blueprintRecipeIdPattern =
+  /^(channel|sandbox|database|provider|observability)\.[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const blueprintPrimaryFileMarkerPattern = /<!--\s*agentos:primary-file\s+path="([^"]+)"\s*-->/gu;
+const blueprintUpgradeMarkerPattern = /<!--\s*agentos:blueprint-upgrade\s+id="([^"]+)"\s*-->/gu;
+const blueprintForbiddenTokens = [
+  "target--node",
+  "createLocalWorkspaceEnv",
+  "createLocalAgentRuntime",
+  "packages/runtime",
+  "@agent-os/runtime/",
+  "@yansirplus/runtime/",
+  ".dev.vars",
+];
+
+const blueprintRecipeLabel = (source) => source.file ?? "blueprint recipe";
+
+const parseBlueprintRecipe = (source, findings) => {
+  const label = blueprintRecipeLabel(source);
+  const match = /^---json\n([\s\S]*?)\n---\n?([\s\S]*)$/u.exec(source.content);
+  if (match === null) {
+    findings.push(
+      `${label}: blueprint recipe must start with JSON frontmatter delimited by ---json and ---`,
+    );
+    return undefined;
+  }
+  let frontmatter;
+  try {
+    frontmatter = JSON.parse(match[1]);
+  } catch (error) {
+    findings.push(`${label}: JSON frontmatter is invalid: ${error.message}`);
+    return undefined;
+  }
+  if (!isPlainRecord(frontmatter)) {
+    findings.push(`${label}: JSON frontmatter must be an object`);
+    return undefined;
+  }
+  return { file: source.file, frontmatter, body: match[2] };
+};
+
+const collectMarkerValues = (content, pattern) => {
+  const values = [];
+  for (const match of content.matchAll(pattern)) values.push(match[1]);
+  return values;
+};
+
+const requiredBlueprintActionSet = new Set(blueprintRecipeActions);
+
+const validateBlueprintRecipe = (recipe, findings) => {
+  const { file, frontmatter, body } = recipe;
+  const id = frontmatter.id;
+  const kind = frontmatter.kind;
+  const title = frontmatter.title;
+  const summary = frontmatter.summary;
+  const primaryFile = frontmatter.primaryFile;
+  const appliesTo = frontmatter.appliesTo;
+  const upgradeGuide = frontmatter.upgradeGuide;
+  const label = file;
+
+  if (frontmatter.schemaVersion !== blueprintRecipeSchemaVersion) {
+    findings.push(`${label}: schemaVersion must be ${blueprintRecipeSchemaVersion}`);
+  }
+  if (typeof id !== "string" || !blueprintRecipeIdPattern.test(id)) {
+    findings.push(`${label}: id must be <kind>.<slug> for ${blueprintRecipeKinds.join(", ")}`);
+  }
+  if (typeof kind !== "string" || !blueprintRecipeKindSet.has(kind)) {
+    findings.push(`${label}: kind must be one of ${blueprintRecipeKinds.join(", ")}`);
+  }
+  if (typeof id === "string" && typeof kind === "string" && id.split(".")[0] !== kind) {
+    findings.push(`${label}: id prefix must match kind`);
+  }
+  if (typeof title !== "string" || title.trim().length === 0) {
+    findings.push(`${label}: title must be a non-empty string`);
+  }
+  if (typeof summary !== "string" || summary.trim().length === 0) {
+    findings.push(`${label}: summary must be a non-empty string`);
+  }
+  if (typeof primaryFile !== "string" || !blueprintRecipePrimaryFiles.has(primaryFile)) {
+    findings.push(
+      `${label}: primaryFile must be one of ${[...blueprintRecipePrimaryFiles].join(", ")}`,
+    );
+  }
+  if (
+    !Array.isArray(appliesTo) ||
+    appliesTo.length !== requiredBlueprintActionSet.size ||
+    new Set(appliesTo).size !== requiredBlueprintActionSet.size ||
+    appliesTo.some((action) => !requiredBlueprintActionSet.has(action))
+  ) {
+    findings.push(`${label}: appliesTo must be exactly ${blueprintRecipeActions.join(", ")}`);
+  }
+  if (upgradeGuide !== blueprintRecipeGuidePath) {
+    findings.push(`${label}: upgradeGuide must be ${blueprintRecipeGuidePath}`);
+  }
+  if (typeof id === "string" && blueprintRecipeIdPattern.test(id)) {
+    const [idKind, slug] = id.split(".");
+    const expectedPath = `blueprints/recipes/${idKind}/${slug}.md`;
+    if (file !== expectedPath) findings.push(`${label}: recipe path must be ${expectedPath}`);
+  }
+
+  if (typeof title === "string" && !body.includes(`# ${title}`)) {
+    findings.push(`${label}: body must contain # ${title}`);
+  }
+  for (const heading of ["## Boundary", "## Steps", "## Upgrade Guide"]) {
+    if (!body.includes(heading)) findings.push(`${label}: body must contain ${heading}`);
+  }
+
+  const primaryMarkers = collectMarkerValues(body, blueprintPrimaryFileMarkerPattern);
+  if (primaryMarkers.length !== 1) {
+    findings.push(`${label}: body must contain exactly one agentos:primary-file marker`);
+  } else if (primaryMarkers[0] !== primaryFile) {
+    findings.push(`${label}: primary-file marker must match frontmatter.primaryFile`);
+  }
+
+  for (const token of blueprintForbiddenTokens) {
+    if (body.includes(token))
+      findings.push(`${label}: blueprint recipe must not reference ${token}`);
+  }
+};
+
+export const blueprintRecipeFindingsForSources = ({ recipeSources, upgradeGuideContent }) => {
+  const findings = [];
+  if (!Array.isArray(recipeSources) || recipeSources.length === 0) {
+    findings.push("blueprints/recipes: at least one blueprint recipe is required");
+    return findings;
+  }
+  if (typeof upgradeGuideContent !== "string") {
+    findings.push(`${blueprintRecipeGuidePath}: upgrade guide is missing`);
+    return findings;
+  }
+
+  const recipes = [];
+  for (const source of recipeSources) {
+    if (
+      !isPlainRecord(source) ||
+      typeof source.file !== "string" ||
+      typeof source.content !== "string"
+    ) {
+      findings.push("blueprint recipe source must include file and content");
+      continue;
+    }
+    const recipe = parseBlueprintRecipe(source, findings);
+    if (recipe !== undefined) recipes.push(recipe);
+  }
+
+  /** @type {Set<string>} */
+  const recipeIds = new Set();
+  for (const recipe of recipes) {
+    validateBlueprintRecipe(recipe, findings);
+    const id = recipe.frontmatter.id;
+    if (typeof id !== "string") continue;
+    if (recipeIds.has(id)) findings.push(`${recipe.file}: duplicate blueprint recipe id ${id}`);
+    recipeIds.add(id);
+  }
+
+  const guideIds = collectMarkerValues(upgradeGuideContent, blueprintUpgradeMarkerPattern);
+  const guideIdCounts = new Map();
+  for (const id of guideIds) guideIdCounts.set(id, (guideIdCounts.get(id) ?? 0) + 1);
+  for (const [id, count] of guideIdCounts) {
+    if (count !== 1) findings.push(`${blueprintRecipeGuidePath}: duplicate upgrade marker ${id}`);
+    if (!recipeIds.has(id))
+      findings.push(`${blueprintRecipeGuidePath}: unknown upgrade marker ${id}`);
+  }
+  for (const id of recipeIds) {
+    if (!guideIdCounts.has(id)) {
+      findings.push(`${blueprintRecipeGuidePath}: missing upgrade marker ${id}`);
+    }
+  }
+
+  return findings.sort((left, right) => left.localeCompare(right));
+};
+
 export const createConvergenceSmokeChecks = ({
   fs,
   os,
@@ -182,8 +362,23 @@ export const createConvergenceSmokeChecks = ({
   const checkConvergenceBoundary = () => {
     checkClientBoundaries();
     checkGeneratedStaticTargetLinking();
+    checkBlueprintRecipes();
     checkSpikeHygiene();
     console.log("convergence boundary passed");
+  };
+
+  const checkBlueprintRecipes = () => {
+    const recipeRoot = "blueprints/recipes";
+    const recipeFiles = walk(recipeRoot).filter((file) => file.endsWith(".md"));
+    const upgradeGuidePath = path.join(repoRoot, blueprintRecipeGuidePath);
+    const failures = blueprintRecipeFindingsForSources({
+      recipeSources: recipeFiles.map((file) => ({ file, content: read(file) })),
+      upgradeGuideContent: fs.existsSync(upgradeGuidePath)
+        ? read(blueprintRecipeGuidePath)
+        : undefined,
+    });
+    failIfAny("blueprint recipes", failures);
+    console.log(`blueprint recipes covered ${recipeFiles.length} recipe(s)`);
   };
 
   const publicExportNames = (apiSource) =>
@@ -776,5 +971,6 @@ export const createConvergenceSmokeChecks = ({
     checkCliSurface,
     checkConsumerImports,
     checkDogfoodSmoke,
+    checkBlueprintRecipes,
   };
 };
