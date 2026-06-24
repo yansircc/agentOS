@@ -149,6 +149,30 @@
       ]
     },
     {
+      "invariant": "invariant.capability.single-generator",
+      "statement": "CapabilityContract installation facts are validated by defineCapability(): capabilityId must equal carrier.ownerId, sourcePackageName is derived from the carrier, and install output is a description rather than backend state mutation.",
+      "primitives": ["primitive.runtime.defineCapability"],
+      "errors": [],
+      "docs": ["docs/advanced/capability-authoring/define-capability.md"],
+      "tests": ["packages/runtime/test/capability/capability-contract.test.ts"]
+    },
+    {
+      "invariant": "invariant.host.fact-owner",
+      "statement": "Host profiles are the single source of truth for environment-provided facts; capabilities may only require facts declared by host profiles, and materialized host facts enter capability code only through CapabilityInstallContext.host.",
+      "primitives": ["primitive.runtime.defineHost"],
+      "errors": [],
+      "docs": ["docs/advanced/capability-authoring/define-host.md"],
+      "tests": ["packages/runtime/test/capability/resolve.test.ts"]
+    },
+    {
+      "invariant": "invariant.resolve.single-assembly-point",
+      "statement": "For CapabilityContract inputs, resolveRuntime is the assembly point: requirement checks run before install, install outputs are globally validated before backend construction, and capability install functions do not receive backend state.",
+      "primitives": ["primitive.runtime.resolveRuntime"],
+      "errors": [],
+      "docs": ["docs/guides/capabilities/resolve-runtime.md"],
+      "tests": ["packages/runtime/test/capability/resolve.test.ts"]
+    },
+    {
       "invariant": "invariant.d10.truth-identity",
       "statement": "For each scopeRef and effectAuthorityRef, ledger facts are the only durable truth and observable state is recomputed from those facts.",
       "primitives": [

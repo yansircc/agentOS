@@ -187,6 +187,44 @@ export type {
 } from "./trigger";
 export { makeWitnessPort, WitnessPort, WitnessPortRejected } from "./witness-port";
 export type { WitnessPortIssue, WitnessPortService, WitnessRequest } from "./witness-port";
+// Capability contract system
+export {
+  defineCapability,
+  defineHost,
+  workspaceOperations,
+  resolveRuntime,
+  nodeHost,
+} from "./capability";
+export type {
+  CapabilityContract,
+  CapabilityInstallation,
+  CapabilityInstallContext,
+  DefineCapabilitySpec,
+  HostProfile,
+  HostProvidedFact,
+  ResolvedHostFacts,
+  DefineHostSpec,
+  WorkspaceOperationsOptions,
+  WorkspaceOperationEnvResolver,
+  WorkspaceOperationEnvResolverInput,
+  CapabilityRequirement,
+  CapabilityRequirements,
+  PreflightDiagnosticSink,
+  ResolvedRuntime,
+  ResolveRuntimeResult,
+  ResolveRuntimeOptions,
+  PreflightDiagnostic,
+} from "./capability";
+export {
+  RUNTIME_DIAGNOSTIC_EVENT_PREFIX,
+  RUNTIME_DIAGNOSTIC_FACT_OWNER,
+  runtimeDiagnosticCarrier,
+  RUNTIME_DIAGNOSTIC_KIND,
+  RUNTIME_DIAGNOSTIC_EVENTS,
+  runtimeDiagnosticBoundaryContract,
+  runtimeDiagnosticSettlementContract,
+  runtimeDiagnosticBoundaryPackage,
+} from "./runtime-diagnostic-carrier";
 export {
   WORKSPACE_AGENT_COMMAND,
   WORKSPACE_AGENT_PROJECTION,

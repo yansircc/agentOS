@@ -11,11 +11,12 @@ Generated from live `defineCarrier` declarations. Package docs explain intent; t
 
 ## Carriers
 
-| Owner                     | Source package      | Prefix           | Events | Roles                             |
-| ------------------------- | ------------------- | ---------------- | ------ | --------------------------------- |
-| `@agent-os/decision-gate` | `@agent-os/runtime` | `decision_gate.` | 5      | `admitter`, `reader`              |
-| `@agent-os/workspace-job` | `@agent-os/runtime` | `workspace_job.` | 10     | `generator`, `reader`             |
-| `@agent-os/workspace-op`  | `@agent-os/runtime` | `workspace_op.`  | 3      | `generator`, `resolver`, `reader` |
+| Owner                          | Source package      | Prefix                | Events | Roles                             |
+| ------------------------------ | ------------------- | --------------------- | ------ | --------------------------------- |
+| `@agent-os/decision-gate`      | `@agent-os/runtime` | `decision_gate.`      | 5      | `admitter`, `reader`              |
+| `@agent-os/runtime-diagnostic` | `@agent-os/runtime` | `runtime_diagnostic.` | 4      | `generator`, `reader`             |
+| `@agent-os/workspace-job`      | `@agent-os/runtime` | `workspace_job.`      | 10     | `generator`, `reader`             |
+| `@agent-os/workspace-op`       | `@agent-os/runtime` | `workspace_op.`       | 3      | `generator`, `resolver`, `reader` |
 
 ## @agent-os/decision-gate
 
@@ -44,6 +45,43 @@ Roles: `admitter`, `reader`
 Settlement id: `@agent-os/decision-gate`
 
 Anchor kinds: `ledger_event`
+
+Rejection kinds: None.
+
+### Authority Requirements
+
+None.
+
+### Material Requirements
+
+None.
+
+## @agent-os/runtime-diagnostic
+
+Source package: `@agent-os/runtime`
+
+Source file: `packages/runtime/src/runtime-diagnostic-carrier/definition.ts`
+
+Export: `runtimeDiagnosticCarrier`
+
+Prefix: `runtime_diagnostic.`
+
+Roles: `generator`, `reader`
+
+### Event Kinds
+
+| Event kind                              | Claim | Payload fields                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runtime_diagnostic.handler_failed`     | none  | `capabilityId`: string (required)<br>`handler`: string (required)<br>`reason`: string (required)<br>`requestedEventId`: number (required)                                                                                                                                                                                     |
+| `runtime_diagnostic.handler_missing`    | none  | `capabilityId`: string (required)<br>`eventKind`: string (required)<br>`requestedEventId`: number (required)                                                                                                                                                                                                                  |
+| `runtime_diagnostic.preflight_failed`   | none  | `capabilityId`: string (optional)<br>`pass`: enum(name_unique, host_fact, peer_dag, config, secret, self_diagnostic, global_unique) (required)<br>`reason`: string (required)<br>`detail`: string (optional)                                                                                                                  |
+| `runtime_diagnostic.projection_timeout` | none  | `capabilityId`: string (required)<br>`projectionKind`: string (required)<br>`waitReason`: enum(missing, not_ready) (required)<br>`maxAttempts`: number (required)<br>`lastObservedEventId`: number (optional)<br>`operationRef`: string (optional)<br>`authority`: string (optional)<br>`requestedEventId`: number (required) |
+
+### Settlement Vocabulary
+
+Settlement id: `@agent-os/runtime-diagnostic`
+
+Anchor kinds: None.
 
 Rejection kinds: None.
 

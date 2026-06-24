@@ -151,6 +151,12 @@
       "bucket": "adapter"
     },
     {
+      "id": "runtime-capability-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/capability/",
+      "bucket": "adapter"
+    },
+    {
       "id": "runtime-live-loop-adapter",
       "match": "regex",
       "value": "^packages/runtime/src/(attached-stream|driver|submit-agent|workspace-job)\\.ts$",

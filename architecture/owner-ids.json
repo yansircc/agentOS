@@ -52,6 +52,11 @@
       "sourcePackageNames": ["@agent-os/runtime"]
     },
     {
+      "ownerId": "@agent-os/runtime-diagnostic",
+      "status": "active",
+      "sourcePackageNames": ["@agent-os/runtime"]
+    },
+    {
       "ownerId": "@agent-os/runtime-protocol",
       "status": "active",
       "sourcePackageNames": ["@agent-os/core"]

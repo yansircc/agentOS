@@ -143,6 +143,14 @@
       "tests": ["packages/runtime/test/projection.test.ts"]
     },
     {
+      "primitive": "primitive.runtime.defineCapability",
+      "tests": ["packages/runtime/test/capability/capability-contract.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.defineHost",
+      "tests": ["packages/runtime/test/capability/capability-contract.test.ts"]
+    },
+    {
       "primitive": "primitive.runtime.Ledger",
       "tests": ["packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"]
     },
@@ -206,6 +214,10 @@
     {
       "primitive": "primitive.runtime.runWorkspaceJobEffect",
       "tests": ["packages/runtime/test/workspace-job.test.ts"]
+    },
+    {
+      "primitive": "primitive.runtime.resolveRuntime",
+      "tests": ["packages/runtime/test/capability/resolve.test.ts"]
     },
     {
       "primitive": "primitive.runtime.SubmitResult",
