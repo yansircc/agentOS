@@ -20,6 +20,7 @@ import {
   EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   llmRequestedEvent,
   llmResponseEvent,
+  RUNTIME_EVENT_KIND,
   RUNTIME_ABORT_EVENT_KINDS,
   runtimeCompletedAfterToolsEvent,
   runtimeHistoryCompactedEvent,
@@ -770,24 +771,31 @@ describe("runtime event vocabulary", () => {
         runtimeRunId: started.id,
       }),
     );
-    const workflowRun = ledgerEvent(
+    const workflowStarted = ledgerEvent(
       3,
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "summarize" }),
+    );
+    const workflowRun = ledgerEvent(
+      4,
       workflowRunSubmittedEvent({
         ...runtimeIdentity,
         workflowId: "summarize",
         workflowRunId: "workflow-run:1",
-        runtimeRunId: started.id,
+        runtimeRunId: workflowStarted.id,
         idempotencyKey: "idem:1",
         inputDigest: "sha256:input",
       }),
     );
 
     expect(
-      validateRuntimeLedgerTransitions({ history: [started], events: [sessionTurn, workflowRun] }),
+      validateRuntimeLedgerTransitions({
+        history: [started, workflowStarted],
+        events: [sessionTurn, workflowRun],
+      }),
     ).toEqual({ ok: true });
 
     const duplicateSessionTurn = ledgerEvent(
-      4,
+      5,
       agentSessionTurnSubmittedEvent({
         ...runtimeIdentity,
         sessionRef: "session:s1",
@@ -796,7 +804,41 @@ describe("runtime event vocabulary", () => {
       }),
     );
     const duplicateWorkflowRun = ledgerEvent(
-      5,
+      6,
+      workflowRunSubmittedEvent({
+        ...runtimeIdentity,
+        workflowId: "summarize",
+        workflowRunId: "workflow-run:1",
+        runtimeRunId: workflowStarted.id,
+      }),
+    );
+
+    const duplicateValidation = validateRuntimeLedgerTransitions({
+      history: [started, sessionTurn, workflowStarted, workflowRun],
+      events: [duplicateSessionTurn, duplicateWorkflowRun],
+    });
+    expect(duplicateValidation.ok).toBe(false);
+    if (!duplicateValidation.ok) {
+      expect(duplicateValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_product_link_duplicate",
+        "runtime_product_link_duplicate",
+      ]);
+    }
+  });
+
+  it("rejects cross-product links for the same runtime run", () => {
+    const started = ledgerEvent(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }));
+    const sessionTurn = ledgerEvent(
+      2,
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+        runtimeRunId: started.id,
+      }),
+    );
+    const workflowRun = ledgerEvent(
+      3,
       workflowRunSubmittedEvent({
         ...runtimeIdentity,
         workflowId: "summarize",
@@ -805,15 +847,35 @@ describe("runtime event vocabulary", () => {
       }),
     );
 
-    const duplicateValidation = validateRuntimeLedgerTransitions({
-      history: [started, sessionTurn, workflowRun],
-      events: [duplicateSessionTurn, duplicateWorkflowRun],
+    const workflowAfterSession = validateRuntimeLedgerTransitions({
+      history: [started, sessionTurn],
+      events: [workflowRun],
     });
-    expect(duplicateValidation.ok).toBe(false);
-    if (!duplicateValidation.ok) {
-      expect(duplicateValidation.issues.map((issue) => issue.code)).toEqual([
-        "runtime_product_link_duplicate",
-        "runtime_product_link_duplicate",
+    expect(workflowAfterSession.ok).toBe(false);
+    if (!workflowAfterSession.ok) {
+      expect(workflowAfterSession.issues).toMatchObject([
+        {
+          code: "runtime_product_link_run_conflict",
+          eventId: workflowRun.id,
+          sourceEventId: sessionTurn.id,
+          sourceKind: RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED,
+        },
+      ]);
+    }
+
+    const sessionAfterWorkflow = validateRuntimeLedgerTransitions({
+      history: [started, workflowRun],
+      events: [sessionTurn],
+    });
+    expect(sessionAfterWorkflow.ok).toBe(false);
+    if (!sessionAfterWorkflow.ok) {
+      expect(sessionAfterWorkflow.issues).toMatchObject([
+        {
+          code: "runtime_product_link_run_conflict",
+          eventId: sessionTurn.id,
+          sourceEventId: workflowRun.id,
+          sourceKind: RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED,
+        },
       ]);
     }
   });

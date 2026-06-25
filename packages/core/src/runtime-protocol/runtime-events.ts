@@ -841,6 +841,7 @@ export type RuntimeLedgerTransitionIssueCode =
   | "runtime_run_duplicate_terminal"
   | "runtime_run_missing_start"
   | "runtime_product_link_duplicate"
+  | "runtime_product_link_run_conflict"
   | "runtime_session_active_run_conflict"
   | "runtime_source_event_not_before"
   | "runtime_source_event_missing"
@@ -999,6 +1000,13 @@ type RuntimeProductLinkState = {
   readonly sessionTurns: Set<string>;
   readonly sessionRuns: Map<string, Set<number>>;
   readonly workflowRuns: Set<string>;
+  readonly runtimeRunLinks: Map<
+    number,
+    {
+      readonly eventId: number;
+      readonly eventKind: RuntimeEventKind;
+    }
+  >;
 };
 
 const makeRuntimeRunState = (): RuntimeRunState => ({
@@ -1009,6 +1017,7 @@ const makeRuntimeProductLinkState = (): RuntimeProductLinkState => ({
   sessionTurns: new Set(),
   sessionRuns: new Map(),
   workflowRuns: new Set(),
+  runtimeRunLinks: new Map(),
 });
 
 const sessionTurnLinkKey = (payload: AgentSessionTurnSubmittedPayload): string =>
@@ -1042,6 +1051,37 @@ const activeSessionRunId = (
     }
   }
   return undefined;
+};
+
+type RuntimeProductLinkEvent =
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>;
+
+const addRuntimeProductLink = (
+  productLinks: RuntimeProductLinkState,
+  event: RuntimeProductLinkEvent,
+): void => {
+  if (!productLinks.runtimeRunLinks.has(event.payload.runtimeRunId)) {
+    productLinks.runtimeRunLinks.set(event.payload.runtimeRunId, {
+      eventId: event.id,
+      eventKind: event.kind,
+    });
+  }
+};
+
+const runtimeProductLinkConflict = (
+  productLinks: RuntimeProductLinkState,
+  event: RuntimeProductLinkEvent,
+): RuntimeLedgerTransitionIssue | null => {
+  const existing = productLinks.runtimeRunLinks.get(event.payload.runtimeRunId);
+  if (existing === undefined) return null;
+  return runTransitionIssue(
+    "runtime_product_link_run_conflict",
+    event,
+    "runtime run cannot be linked to more than one product identity",
+    existing.eventId,
+    existing.eventKind,
+  );
 };
 
 const runtimeRunId = (event: RuntimeLedgerEvent): number => {
@@ -1138,9 +1178,11 @@ const applyHistoricalRuntimeRunEvent = (
       break;
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
       addSessionTurnLink(productLinks, event.payload);
+      addRuntimeProductLink(productLinks, event);
       break;
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       productLinks.workflowRuns.add(workflowRunLinkKey(event.payload));
+      addRuntimeProductLink(productLinks, event);
       break;
     case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED: {
       const interruption = state.interruptions.get(event.payload.interruptId);
@@ -1413,6 +1455,7 @@ export const validateRuntimeLedgerTransitions = (input: {
           runStates,
           event.payload.sessionRef,
         );
+        const productLinkConflict = runtimeProductLinkConflict(productLinks, event);
         if (productLinks.sessionTurns.has(key)) {
           issues.push(
             runTransitionIssue(
@@ -1421,6 +1464,8 @@ export const validateRuntimeLedgerTransitions = (input: {
               "agent_session.turn_submitted must be the only runtime link for a session turn",
             ),
           );
+        } else if (productLinkConflict !== null) {
+          issues.push(productLinkConflict);
         } else if (activeRunId !== undefined) {
           issues.push(
             runTransitionIssue(
@@ -1434,11 +1479,13 @@ export const validateRuntimeLedgerTransitions = (input: {
           );
         } else if (hasStarted && !hasTerminal) {
           addSessionTurnLink(productLinks, event.payload);
+          addRuntimeProductLink(productLinks, event);
         }
         break;
       }
       case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED: {
         const key = workflowRunLinkKey(event.payload);
+        const productLinkConflict = runtimeProductLinkConflict(productLinks, event);
         if (productLinks.workflowRuns.has(key)) {
           issues.push(
             runTransitionIssue(
@@ -1447,8 +1494,11 @@ export const validateRuntimeLedgerTransitions = (input: {
               "workflow.run_submitted must be the only runtime link for a workflow run",
             ),
           );
+        } else if (productLinkConflict !== null) {
+          issues.push(productLinkConflict);
         } else if (hasStarted && !hasTerminal) {
           productLinks.workflowRuns.add(key);
+          addRuntimeProductLink(productLinks, event);
         }
         break;
       }
