@@ -41,6 +41,14 @@ Runtime code expresses programs against Effect Tags. It does not import Worker
 modules, Durable Object state, SQL storage implementations, or platform alarm
 APIs.
 
+Effect AI provider peers are subpath-local by contract. The
+`llm-effect-ai/openai-compatible` subpath imports no Anthropic provider package
+and is covered by packed consumer proof without `@effect/ai-anthropic`
+installed. `@effect/ai-anthropic` remains package-level optional peer metadata
+only because npm cannot scope peers to individual exports; split providers into
+separate packages if package-level optional peers start forcing installs or the
+OpenAI-compatible import graph reaches Anthropic code.
+
 Materialized projections are the backend-neutral current-state counterpart to
 the ledger. Apps declare `defineProjection({ kind, version, eventKinds,
 identity, state, identityKey, identify, initial, reduce })`; backends own table

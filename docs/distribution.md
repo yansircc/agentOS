@@ -52,6 +52,16 @@ Cloudflare-targeted runtime subpaths also peer depend on
 `@yansirplus/client/svelte` require their matching optional peers only when
 the consumer imports that subpath.
 
+`@yansirplus/runtime/llm-effect-ai/openai-compatible` is the OpenAI-compatible
+provider boundary and does not require `@effect/ai-anthropic`. The package unit
+manifest keeps `@effect/ai-anthropic` localized to
+`@yansirplus/runtime/llm-effect-ai/anthropic`; packed consumer proof imports and
+runs the OpenAI-compatible subpath with no Anthropic package installed. The npm
+`peerDependencies` field is package-level metadata, so the Anthropic peer can be
+optional but cannot be scoped to one export in `package.json`. A provider package
+split becomes required if package-level optional peers start forcing installs, or
+if the OpenAI-compatible subpath import graph reaches Anthropic code.
+
 ## Publish
 
 ```sh

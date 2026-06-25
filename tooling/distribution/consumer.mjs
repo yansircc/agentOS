@@ -256,7 +256,8 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
       localOverlay: { status: "missing" },
       source: { current: currentSource },
       packageVersion: { release: releaseVersion() },
-      npmLatest: options.checkNpm === true ? npmLatestFor([], options.registry) : npmLatestNotChecked(),
+      npmLatest:
+        options.checkNpm === true ? npmLatestFor([], options.registry) : npmLatestNotChecked(),
     };
   }
   const marker = readJson(markerPath);
@@ -285,7 +286,10 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
     },
     npmLatest:
       options.checkNpm === true
-        ? npmLatestFor(packages.map((pkg) => pkg.packageName), options.registry)
+        ? npmLatestFor(
+            packages.map((pkg) => pkg.packageName),
+            options.registry,
+          )
         : npmLatestNotChecked(),
   };
 };
@@ -528,6 +532,28 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "  }",
       "} finally {",
       "  await rm(root, { recursive: true, force: true });",
+      "}",
+    ].join("\n") + "\n",
+  );
+  fs.writeFileSync(
+    path.join(dir, "openai-compatible-smoke.mjs"),
+    [
+      `import { OpenAiCompatibleLlmTransportLive, preflightOpenAiCompatibleProviderMaterial } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai/openai-compatible")}";`,
+      "if (!OpenAiCompatibleLlmTransportLive) throw new Error('missing OpenAI-compatible transport');",
+      "const diagnostics = preflightOpenAiCompatibleProviderMaterial({",
+      "  route: {",
+      "    kind: 'openai-chat-compatible',",
+      "    endpointRef: 'openai',",
+      "    credentialRef: 'openai-key',",
+      "    modelId: 'gpt-test',",
+      "  },",
+      "  refResolver: {",
+      "    material: (ref) => ref.kind === 'endpoint' ? 'https://openai.example/v1' : 'sk-test',",
+      "  },",
+      "  routeBindingRef: 'default',",
+      "});",
+      "if (diagnostics.length !== 0) {",
+      "  throw new Error(`unexpected OpenAI-compatible preflight diagnostics ${JSON.stringify(diagnostics)}`);",
       "}",
     ].join("\n") + "\n",
   );
@@ -1333,7 +1359,9 @@ export const assertConsumerOverlayStatus = () => {
   });
   const staleStatus = consumerStatusData(dir);
   if (staleStatus.localOverlay.sourceStatus !== "stale_source") {
-    fail(`consumer status did not expose stale source overlay: ${staleStatus.localOverlay.sourceStatus}`);
+    fail(
+      `consumer status did not expose stale source overlay: ${staleStatus.localOverlay.sourceStatus}`,
+    );
   }
   fs.rmSync(path.join(dir, "node_modules"), { recursive: true, force: true });
   let missingNodeModulesFailed = false;
@@ -1384,6 +1412,7 @@ export const testInternalConsumer = () => {
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.bundler.json"], { cwd: dir, capture: true });
   run("node", ["smoke.mjs"], { cwd: dir, capture: true });
   run("node", ["local-smoke.mjs"], { cwd: dir, capture: true });
+  run("node", ["openai-compatible-smoke.mjs"], { cwd: dir, capture: true });
   run(
     "npm",
     [
