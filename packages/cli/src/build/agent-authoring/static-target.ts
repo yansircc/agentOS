@@ -7,7 +7,11 @@ import {
   GENERATED_READ_SKILL_FILE_TOOL_NAME,
   isWorkspaceToolName,
 } from "./shared";
-import type { AuthoredAgentManifest, CompiledAgentSkill } from "./manifest-compiler";
+import type {
+  AuthoredAgentManifest,
+  CompiledAgentChannel,
+  CompiledAgentSkill,
+} from "./manifest-compiler";
 import {
   AGENTOS_CONFIG_CLIENT,
   AGENTOS_CONFIG_LLM_ROUTE,
@@ -32,6 +36,7 @@ export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/deployment.json"
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
+  | ".agentos/generated/channels.ts"
   | ".agentos/generated/target.ts"
   | ".agentos/generated/local.ts"
   | ".agentos/generated/cloudflare-scope.ts"
@@ -56,6 +61,9 @@ export type StaticTargetModuleImportKind =
   | "execution-domain-runtime"
   | "workspace-host"
   | "workspace-binding"
+  | "channel-runtime"
+  | "authored-channel"
+  | "channel-registry"
   | "platform-runtime"
   | "workspace-client"
   | "client-core"
@@ -152,6 +160,8 @@ const jsString = (value: string): string => JSON.stringify(value);
 
 const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
 
+const importChannelPath = (path: string): string => `../../${path.replace(/\.ts$/u, "")}`;
+
 const workspaceMutationToolNames = new Set<WorkspaceToolName>(
   WORKSPACE_TOOL_EXPOSURE_PROFILES.mutation,
 );
@@ -183,6 +193,7 @@ const staticTargetModules = (scope: string) => ({
   workspaceAgentClient: publicPackageSpecifier(scope, "client/workspace-agent"),
   workspaceBinding: publicPackageSpecifier(scope, "runtime/workspace-binding"),
   workspaceEnvCloudflare: publicPackageSpecifier(scope, "runtime/cloudflare"),
+  runtimeChannel: publicPackageSpecifier(scope, "runtime/channel"),
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
@@ -214,6 +225,153 @@ const sortedSkills = (
   skills: ReadonlyArray<CompiledAgentSkill>,
 ): ReadonlyArray<CompiledAgentSkill> =>
   [...skills].sort((left, right) => left.name.localeCompare(right.name));
+
+const sortedChannels = (
+  channels: ReadonlyArray<CompiledAgentChannel>,
+): ReadonlyArray<CompiledAgentChannel> =>
+  [...channels].sort((left, right) => left.name.localeCompare(right.name));
+
+const generatedChannelImports = (
+  channels: ReadonlyArray<CompiledAgentChannel>,
+): ReadonlyArray<StaticTargetModuleImport> =>
+  sortedChannels(channels).map((channel, index) => ({
+    kind: "authored-channel",
+    source: importChannelPath(channel.path),
+    imports: [`default as channel_${index}`],
+  }));
+
+const renderChannelRegistry = (
+  channels: ReadonlyArray<CompiledAgentChannel>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => {
+  const ordered = sortedChannels(channels);
+  const channelImports = ordered
+    .map((channel, index) => `import channel_${index} from ${jsString(importChannelPath(channel.path))};`)
+    .join("\n");
+  const entries =
+    ordered.length === 0
+      ? "[]"
+      : `[\n${ordered
+          .map(
+            (channel, index) =>
+              `  { name: ${jsString(channel.name)}, path: ${jsString(
+                channel.path,
+              )}, channel: channel_${index} as DefinedChannel },`,
+          )
+          .join("\n")}\n]`;
+  return `${channelImports}
+${renderTypeImport(
+  ["ChannelContext", "ChannelMethod", "ChannelRequest", "ChannelRoute", "DefinedChannel"],
+  modules.runtimeChannel,
+)}
+
+type GeneratedChannelDefinition = {
+  readonly name: string;
+  readonly path: string;
+  readonly channel: DefinedChannel;
+};
+
+type GeneratedChannelRoute = ChannelRoute & {
+  readonly channelName: string;
+  readonly mountPath: string;
+};
+
+export const generatedChannels = ${entries} as const satisfies ReadonlyArray<GeneratedChannelDefinition>;
+
+const mountedChannelPath = (channelName: string, routePath: string): string =>
+  routePath === "/" ? \`/channels/\${channelName}\` : \`/channels/\${channelName}\${routePath}\`;
+
+const generatedRoutes = generatedChannels.flatMap((entry): ReadonlyArray<GeneratedChannelRoute> =>
+  entry.channel.routes.map((route) => ({
+    ...route,
+    channelName: entry.name,
+    mountPath: mountedChannelPath(entry.name, route.path),
+  })),
+);
+
+const routeSegments = (path: string): ReadonlyArray<string> =>
+  path
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+const isRouteParamSegment = (segment: string): boolean => segment.startsWith(":");
+
+const routePatternsConflict = (left: string, right: string): boolean => {
+  const leftSegments = routeSegments(left);
+  const rightSegments = routeSegments(right);
+  if (leftSegments.length !== rightSegments.length) return false;
+  return leftSegments.every((leftSegment, index) => {
+    const rightSegment = rightSegments[index] ?? "";
+    return leftSegment === rightSegment || isRouteParamSegment(leftSegment) || isRouteParamSegment(rightSegment);
+  });
+};
+
+const assertNoGeneratedChannelRouteConflicts = (routes: ReadonlyArray<GeneratedChannelRoute>): void => {
+  for (let leftIndex = 0; leftIndex < routes.length; leftIndex += 1) {
+    const left = routes[leftIndex];
+    if (left === undefined) continue;
+    for (let rightIndex = leftIndex + 1; rightIndex < routes.length; rightIndex += 1) {
+      const right = routes[rightIndex];
+      if (right === undefined || left.method !== right.method) continue;
+      if (!routePatternsConflict(left.mountPath, right.mountPath)) continue;
+      throw new Error(
+        \`generated channel route conflict: \${left.method} \${left.mountPath} conflicts with \${right.mountPath}\`,
+      );
+    }
+  }
+};
+
+assertNoGeneratedChannelRouteConflicts(generatedRoutes);
+
+export const generatedChannelNames = generatedChannels.map((entry) => entry.name);
+export const generatedChannelRoutes = generatedRoutes;
+
+const matchGeneratedChannelPath = (
+  pattern: string,
+  pathname: string,
+): Readonly<Record<string, string>> | null => {
+  const patternSegments = routeSegments(pattern);
+  const pathSegments = routeSegments(pathname);
+  if (patternSegments.length !== pathSegments.length) return null;
+  const params: Record<string, string> = {};
+  for (let index = 0; index < patternSegments.length; index += 1) {
+    const patternSegment = patternSegments[index] ?? "";
+    const pathSegment = pathSegments[index] ?? "";
+    if (patternSegment.startsWith(":")) {
+      const paramName = patternSegment.slice(1);
+      if (paramName.length === 0) return null;
+      params[paramName] = decodeURIComponent(pathSegment);
+      continue;
+    }
+    if (patternSegment !== pathSegment) return null;
+  }
+  return params;
+};
+
+export const dispatchGeneratedChannelRequest = async (
+  request: Request,
+  context: ChannelContext,
+): Promise<Response | null> => {
+  const url = new URL(request.url);
+  const method = request.method.toUpperCase() as ChannelMethod;
+  for (const route of generatedChannelRoutes) {
+    if (route.method !== method) continue;
+    const params = matchGeneratedChannelPath(route.mountPath, url.pathname);
+    if (params === null) continue;
+    const channelRequest: ChannelRequest = {
+      method: route.method,
+      path: url.pathname,
+      params,
+      request,
+      url,
+    };
+    return route.handler(channelRequest, context);
+  }
+  return null;
+};
+`;
+};
 
 const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string => {
   const entries = sortedSkills(skills).map(
@@ -1123,6 +1281,7 @@ const renderLocalAgentApp = (
   if (normalized.target.kind !== AGENTOS_CONFIG_TARGET.NODE_V1) {
     throw new TypeError(`local agent app renderer received ${normalized.target.kind}`);
   }
+  const hasChannels = normalized.channels.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
     (toolName): toolName is WorkspaceToolName =>
@@ -1140,6 +1299,7 @@ const renderLocalAgentApp = (
   ) as Record<LlmMaterialEnvKind, string>;
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
+    ...(hasChannels ? [renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
@@ -1214,6 +1374,15 @@ const generatedLocalLlmFor = (
 
 export type LocalAgentApp = LocalAgentRuntime;
 
+${
+  hasChannels
+    ? `export const handleLocalAgentChannelRequest = (
+  request: Request,
+  context: unknown = {},
+): Promise<Response | null> => dispatchGeneratedChannelRequest(request, context);`
+    : ""
+}
+
 export interface CreateLocalAgentAppOptions {
   readonly cwd?: string;
   readonly env?: CreateLocalAgentRuntimeOptions["env"];
@@ -1287,13 +1456,20 @@ const renderCloudflareWorkerEntry = (
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
+  const hasChannels = normalized.channels.length > 0;
   return `${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n` : ""}${renderNamedImport([target.durableObject.className], "./target")}
-${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
+${hasChannels ? `${renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")}\n` : ""}${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
 export { ${target.durableObject.className}${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""} };
 
 export default {
-  fetch(): Response {
+  async fetch(request: Request, env: AgentOSTargetEnv): Promise<Response> {
+    ${
+      hasChannels
+        ? `const channelResponse = await dispatchGeneratedChannelRequest(request, env);
+    if (channelResponse !== null) return channelResponse;`
+        : ""
+    }
     return new Response("agentOS Cloudflare target", { status: 404 });
   },
 } satisfies ExportedHandler<AgentOSTargetEnv>;
@@ -2383,6 +2559,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     };
   }
   const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
+  const hasChannels = normalized.channels.length > 0;
   if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
     if (normalized.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1) {
       return {
@@ -2414,6 +2591,21 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         source: modules.localRuntime,
         imports: ["lowerLocalAgentRuntime"],
       },
+      ...(hasChannels
+        ? [
+            {
+              kind: "channel-runtime" as const,
+              source: modules.runtimeChannel,
+              imports: ["DefinedChannel"],
+            },
+            ...generatedChannelImports(normalized.channels),
+            {
+              kind: "channel-registry" as const,
+              source: "./channels",
+              imports: ["dispatchGeneratedChannelRequest", "generatedChannels"],
+            },
+          ]
+        : []),
     ];
     return {
       ok: true,
@@ -2433,6 +2625,14 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
               targetModuleGraph: digestText(stableJson(moduleGraph)),
             }),
           ),
+          ...(hasChannels
+            ? [
+                generatedPath(
+                  ".agentos/generated/channels.ts",
+                  renderChannelRegistry(normalized.channels, modules),
+                ),
+              ]
+            : []),
           generatedPath(
             ".agentos/generated/local.ts",
             renderLocalAgentApp(
@@ -2500,6 +2700,21 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       source: modules.cloudflareDoRuntime,
       imports: ["createAgentDurableObject"],
     },
+    ...(hasChannels
+      ? [
+          {
+            kind: "channel-runtime" as const,
+            source: modules.runtimeChannel,
+            imports: ["DefinedChannel"],
+          },
+          ...generatedChannelImports(normalized.channels),
+          {
+            kind: "channel-registry" as const,
+            source: "./channels",
+            imports: ["dispatchGeneratedChannelRequest", "generatedChannels"],
+          },
+        ]
+      : []),
     ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? [
           {
@@ -2588,6 +2803,14 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             targetModuleGraph: digestText(stableJson(moduleGraph)),
           }),
         ),
+        ...(hasChannels
+          ? [
+              generatedPath(
+                ".agentos/generated/channels.ts",
+                renderChannelRegistry(normalized.channels, modules),
+              ),
+            ]
+          : []),
         generatedPath(
           ".agentos/generated/target.ts",
           renderStaticTarget(

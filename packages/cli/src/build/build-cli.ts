@@ -321,6 +321,17 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
     }
   }
 
+  const channelsDir = path.join(agentDir, "channels");
+  if (await pathExists(channelsDir)) {
+    for (const file of await collectFiles(channelsDir)) {
+      files.push({
+        path: toAuthoredPath(cwd, file.path),
+        kind: "channel",
+        sourceKind: file.sourceKind,
+      });
+    }
+  }
+
   const skillsDir = path.join(agentDir, "skills");
   if (await pathExists(skillsDir)) {
     for (const file of await collectFiles(skillsDir)) {

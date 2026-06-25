@@ -809,6 +809,234 @@ void test("agentos build emits node local agent app target", () => {
   }
 });
 
+void test("agentos build emits one channel registry for cloudflare and node targets", () => {
+  const writeChannelFixture = (root) => {
+    mkdirSync(path.join(root, "agent/channels"), { recursive: true });
+    writeFileSync(
+      path.join(root, "agent/channels/github.ts"),
+      [
+        'import { defineChannel, post } from "@agent-os/runtime/channel";',
+        "export default defineChannel({",
+        "  routes: [",
+        '    post("/events/:eventId", async (request) => new Response(request.params.eventId)),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+  };
+
+  const writeBaseAgent = (root, targetLines) => {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Handle inbound channels.");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "channel-fixture",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "channel-fixture-scope",
+          },
+          effectAuthorityRef: {
+            authorityClass: "effect",
+            authorityId: "channel-fixture",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeChannelFixture(root);
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "channel-fixture", "version": "0.1.0" },',
+        ...targetLines,
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+  };
+
+  const cloudflareRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-cloudflare-"));
+  const nodeRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-node-"));
+  try {
+    writeBaseAgent(cloudflareRoot, [
+      '  "target": {',
+      '    "kind": "cloudflare-do@1",',
+      '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+      "  },",
+    ]);
+    const cloudflareResult = spawnSync(process.execPath, [cli, "build", "--cwd", cloudflareRoot], {
+      encoding: "utf8",
+    });
+    assert.equal(cloudflareResult.status, 0, cloudflareResult.stderr);
+    assert.match(cloudflareResult.stdout, /generated 11 agentOS files/);
+    const cloudflareManifest = JSON.parse(
+      readFileSync(path.join(cloudflareRoot, ".agentos/generated/manifest.json"), "utf8"),
+    );
+    assert.equal(Object.hasOwn(cloudflareManifest, "channels"), false);
+    const cloudflareChannels = readFileSync(
+      path.join(cloudflareRoot, ".agentos/generated/channels.ts"),
+      "utf8",
+    );
+    assert.match(cloudflareChannels, /from "\.\.\/\.\.\/agent\/channels\/github"/);
+    assert.match(cloudflareChannels, /from "@agent-os\/runtime\/channel"/);
+    assert.match(cloudflareChannels, /name: "github"/);
+    assert.match(cloudflareChannels, /mountedChannelPath/);
+    assert.match(cloudflareChannels, /routePatternsConflict/);
+    assert.match(cloudflareChannels, /dispatchGeneratedChannelRequest/);
+    const cloudflareWorker = readFileSync(
+      path.join(cloudflareRoot, ".agentos/generated/worker.ts"),
+      "utf8",
+    );
+    assert.match(cloudflareWorker, /from "\.\/channels"/);
+    assert.match(cloudflareWorker, /dispatchGeneratedChannelRequest\(request, env\)/);
+
+    writeBaseAgent(nodeRoot, ['  "target": { "kind": "node@1" },']);
+    const nodeResult = spawnSync(process.execPath, [cli, "build", "--cwd", nodeRoot], {
+      encoding: "utf8",
+    });
+    assert.equal(nodeResult.status, 0, nodeResult.stderr);
+    assert.match(nodeResult.stdout, /generated 6 agentOS files/);
+    const nodeLocal = readFileSync(path.join(nodeRoot, ".agentos/generated/local.ts"), "utf8");
+    assert.match(nodeLocal, /from "\.\/channels"/);
+    assert.match(nodeLocal, /handleLocalAgentChannelRequest/);
+    assert.match(nodeLocal, /dispatchGeneratedChannelRequest\(request, context\)/);
+    assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/channels.ts")), true);
+  } finally {
+    rmSync(cloudflareRoot, { recursive: true, force: true });
+    rmSync(nodeRoot, { recursive: true, force: true });
+  }
+});
+
+void test("generated channel registry rejects ambiguous channel route conflicts", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-conflict-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent/channels"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Reject ambiguous channel routes.");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "channel-conflict",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "channel-conflict-scope",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(root, "agent/channels/github.ts"),
+      [
+        'import { defineChannel, post } from "@agent-os/runtime/channel";',
+        "export default defineChannel({",
+        "  routes: [",
+        '    post("/events/:eventId", async () => new Response("param")),',
+        '    post("/events/static", async () => new Response("literal")),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "channel-conflict" },',
+        '  "target": { "kind": "node@1" },',
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const buildResult = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.equal(buildResult.status, 0, buildResult.stderr);
+    linkGeneratedTargetSmokeDependencies(root);
+    const importResult = runTypeScript('import "./.agentos/generated/channels.ts";', {
+      cwd: root,
+      resolveDir: root,
+    });
+    assert.notEqual(importResult.status, 0);
+    assert.match(
+      importResult.stderr,
+      /generated channel route conflict: POST \/channels\/github\/events\/:eventId conflicts with \/channels\/github\/events\/static/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos build rejects nested channel files from the filesystem", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-invalid-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent/channels/github"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Reject nested channels.");
+    writeFileSync(path.join(root, "agent/channels/github/events.ts"), "export default {};");
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "channel-invalid" },',
+        '  "target": { "kind": "node@1" },',
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /channel_path_not_in_grammar/);
+    assert.match(result.stderr, /channels\/github\/events\.ts/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test("agentos info emits compile-only inspection without generated writes", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-info-"));
   try {
