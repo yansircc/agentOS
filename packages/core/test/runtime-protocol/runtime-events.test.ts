@@ -769,6 +769,7 @@ describe("runtime event vocabulary", () => {
         sessionRef: "session:s1",
         turnRef: "turn:s1:1",
         runtimeRunId: started.id,
+        idempotencyKey: "fire:session:s1:1",
       }),
     );
     const workflowStarted = ledgerEvent(
@@ -793,6 +794,29 @@ describe("runtime event vocabulary", () => {
         events: [sessionTurn, workflowRun],
       }),
     ).toEqual({ ok: true });
+    const decodedSessionTurn = decodeRuntimeLedgerEvent(sessionTurn);
+    expect(decodedSessionTurn).toMatchObject({
+      _tag: "runtime",
+      event: {
+        payload: {
+          idempotencyKey: "fire:session:s1:1",
+        },
+      },
+    });
+    expect(projectRuntimeSafeLedgerEvent(sessionTurn)?.safePayload).toMatchObject({
+      idempotencyKey: "fire:session:s1:1",
+    });
+    expect(() =>
+      decodeRuntimeLedgerEvent({
+        ...sessionTurn,
+        payload: {
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: started.id,
+          idempotencyKey: "",
+        },
+      }),
+    ).toThrow();
 
     const duplicateSessionTurn = ledgerEvent(
       5,

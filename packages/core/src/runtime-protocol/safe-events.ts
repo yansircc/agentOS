@@ -76,6 +76,9 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
         sessionRef: event.payload.sessionRef,
         turnRef: event.payload.turnRef,
         runtimeRunId: event.payload.runtimeRunId,
+        ...(event.payload.idempotencyKey === undefined
+          ? {}
+          : { idempotencyKey: event.payload.idempotencyKey }),
       });
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       return safeLedgerEvent(event, {

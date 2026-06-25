@@ -172,6 +172,7 @@ export type SubmitAgentProductLink =
       readonly kind: "session_turn";
       readonly sessionRef: string;
       readonly turnRef: string;
+      readonly idempotencyKey?: string;
     }
   | {
       readonly kind: "workflow_run";
@@ -198,6 +199,7 @@ const productLinkEventFor = (
         sessionRef: productLink.sessionRef,
         turnRef: productLink.turnRef,
         runtimeRunId,
+        idempotencyKey: productLink.idempotencyKey,
         traceContext,
       });
     case "workflow_run":

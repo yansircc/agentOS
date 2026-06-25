@@ -38,6 +38,10 @@
       "types": "./src/channel/index.ts",
       "default": "./src/channel/index.ts"
     },
+    "./schedule": {
+      "types": "./src/schedule/index.ts",
+      "default": "./src/schedule/index.ts"
+    },
     "./workspace-binding": {
       "types": "./src/workspace-binding.ts",
       "default": "./src/workspace-binding.ts"

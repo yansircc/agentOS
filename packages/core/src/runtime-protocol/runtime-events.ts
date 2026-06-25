@@ -138,6 +138,7 @@ export type AgentSessionTurnSubmittedPayload = {
   readonly sessionRef: string;
   readonly turnRef: string;
   readonly runtimeRunId: number;
+  readonly idempotencyKey?: string;
   readonly traceContext?: TraceContext;
 };
 
@@ -423,6 +424,7 @@ export const AgentSessionTurnSubmittedPayloadSchema: Schema.Decoder<AgentSession
     sessionRef: nonEmptyString,
     turnRef: nonEmptyString,
     runtimeRunId: positiveInt,
+    idempotencyKey: Schema.optional(nonEmptyString),
     traceContext: Schema.optional(TraceContextSchema),
   });
 
@@ -1590,6 +1592,7 @@ export const agentSessionTurnSubmittedEvent = (
     readonly sessionRef: string;
     readonly turnRef: string;
     readonly runtimeRunId: number;
+    readonly idempotencyKey?: string;
     readonly traceContext?: TraceContext;
   },
 ): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED> =>
@@ -1597,6 +1600,7 @@ export const agentSessionTurnSubmittedEvent = (
     sessionRef: spec.sessionRef,
     turnRef: spec.turnRef,
     runtimeRunId: spec.runtimeRunId,
+    ...(spec.idempotencyKey === undefined ? {} : { idempotencyKey: spec.idempotencyKey }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

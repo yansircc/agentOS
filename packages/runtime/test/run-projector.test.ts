@@ -440,6 +440,7 @@ describe("runtime run projectors", () => {
           sessionRef: "session:s1",
           turnRef: "turn:s1:1",
           runtimeRunId: 1,
+          idempotencyKey: "fire:session:s1:1",
         }),
       ),
       event(3, agentRunStartedEvent({ ...runtimeIdentity, intent: "summarize" })),
@@ -465,6 +466,7 @@ describe("runtime run projectors", () => {
           runtimeRunId: 1,
           eventId: 2,
           submittedAt: 20,
+          idempotencyKey: "fire:session:s1:1",
         },
       ],
     });

@@ -490,6 +490,7 @@ export interface AgentSessionTurnRuntimeLink {
   readonly runtimeRunId: number;
   readonly eventId: number;
   readonly submittedAt: number;
+  readonly idempotencyKey?: string;
 }
 
 export interface AgentSessionTurnLinksProjection {
@@ -587,6 +588,7 @@ const sessionTurnRuntimeLinks = (
         runtimeRunId: payload.runtimeRunId,
         eventId: event.id,
         submittedAt: event.ts,
+        ...(payload.idempotencyKey === undefined ? {} : { idempotencyKey: payload.idempotencyKey }),
       };
     });
 
