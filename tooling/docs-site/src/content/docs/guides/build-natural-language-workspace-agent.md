@@ -19,8 +19,10 @@ agent/
   instructions.md
   agent.json
   skills/
-    plan.md              # optional authored skill
-    review/SKILL.md      # equivalent nested skill shape
+    plan.md              # optional single-file authored skill
+    review/SKILL.md      # packaged skill main file
+    review/references/checklist.md
+    review/scripts/audit.sh
   tools/                # optional custom execute code only
   workspace/reconcile.ts
 agentos.config.jsonc
@@ -40,7 +42,7 @@ declarations. `agent/tools/*.ts` exists only for custom execute code; path
 segments are identities for custom tools.
 
 `agent/skills/` is optional authoring-only instruction data. The v1 grammar has
-exactly two file shapes:
+two main file shapes:
 
 ```text
 agent/skills/<name>.md
@@ -48,22 +50,38 @@ agent/skills/<name>/SKILL.md
 ```
 
 Each skill file must start with the agentOS v1 frontmatter grammar: an opening
-`---` line, one `name: <name>` line, and a closing `---` line. The name value may
-be unquoted or wrapped in matching single or double quotes, and no other
-frontmatter fields are accepted. The frontmatter name must match the path
-identity. The skill body is the markdown text after the closing `---`. Sibling
-files under a skill directory, such as `references/` or `scripts/`, are rejected
-in v1 rather than copied into the build.
+`---` line, one `name: <name>` line, one `description: <description>` line, and
+a closing `---` line. Both values may be unquoted or wrapped in matching single
+or double quotes, and no other frontmatter fields are accepted. The frontmatter
+name must match the path identity. The description is the generated advert
+routing text. The skill body is the markdown text after the closing `---`.
+
+Single-file skills at `agent/skills/<name>.md` cannot have sibling files.
+Packaged skills at `agent/skills/<name>/SKILL.md` may include supporting UTF-8
+text files under exactly these roots:
+
+```text
+agent/skills/<name>/references/**
+agent/skills/<name>/scripts/**
+```
+
+Supporting files are exposed by package-relative POSIX paths such as
+`references/checklist.md` and `scripts/audit.sh`. They are readable skill
+content only. `scripts/**` files are not executed, imported, registered as tools,
+or treated as capabilities.
 
 Skills do not enter `AgentManifest`, materials, execution domains,
 interactions, runtime submit schema, ledger facts, or authored tool identity.
 They are compiled into the generated target only. When skills exist,
-`submitSpecFromRunInput` appends a system advert listing skill names, and the
-generated `AgentSubmitBindings.tools` includes one framework-owned deterministic
-tool named `load_skill`. The model must call `load_skill` with `{ "name":
-"<name>" }` before using the full skill text. `load_skill` is reserved by this
-framework projection and cannot be used as an authored `agent/tools/*.ts` tool
-name.
+`submitSpecFromRunInput` appends a system advert listing only skill names and
+descriptions. The generated `AgentSubmitBindings.tools` includes two
+framework-owned deterministic tools: `load_skill` and `read_skill_file`. The
+model must call `load_skill` with `{ "name": "<name>" }` before using the full
+skill text. `load_skill` returns the main body plus supporting-file metadata,
+not supporting-file contents. The model must call `read_skill_file` with
+`{ "name": "<name>", "path": "<package-relative-path>" }` to read one declared
+supporting file. Both tool names are reserved by this framework projection and
+cannot be used as authored `agent/tools/*.ts` tool names.
 
 Default workspace tool policy is controlled as data in `agent/agent.json`.
 Unknown slugs fail closed. A default can be disabled with `false`; disabling a
@@ -169,7 +187,7 @@ The generated target is a static residual program:
 - `target.ts` exports the Durable Object implementation;
 - if authored skills exist, `target.ts` embeds the generated skill catalog,
   appends the submit-time skill advert, and injects the framework-owned
-  `load_skill` tool into submit bindings;
+  `load_skill` and `read_skill_file` tools into submit bindings;
 - `cloudflare-scope.ts` owns Durable Object scope addressing for generated
   clients and remotes;
 - `worker.ts` exports the target Durable Object plus the Cloudflare Sandbox
