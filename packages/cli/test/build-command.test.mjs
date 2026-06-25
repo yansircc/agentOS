@@ -666,10 +666,17 @@ void test("agentos build emits node local agent app target", () => {
 
     const local = readFileSync(path.join(root, ".agentos/generated/local.ts"), "utf8");
     assert.match(local, /from "@agent-os\/runtime\/local";/);
+    assert.match(local, /from "@agent-os\/runtime\/llm-effect-ai\/openai-compatible";/);
     assert.match(local, /lowerLocalAgentRuntime/);
+    assert.match(local, /OpenAiCompatibleLlmTransportLive/);
+    assert.match(local, /preflightOpenAiCompatibleProviderMaterial/);
+    assert.match(local, /AGENTOS_ENDPOINT_OPENROUTER/);
+    assert.match(local, /AGENTOS_CREDENTIAL_OPENROUTER_KEY/);
+    assert.match(local, /AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL/);
     assert.match(local, /export type LocalAgentApp = LocalAgentRuntime/);
     assert.match(local, /export const createLocalAgentApp/);
     assert.match(local, /target: "node@1"/);
+    assert.match(local, /llm: options\.llm \?\? generatedLocalLlmFor\(targetEnv\)/);
     assert.match(local, /workspaceOperations: generatedWorkspaceOperations/);
     assert.match(local, /toolInteractions: generatedWorkspaceToolInteractions/);
     assert.match(local, /return lowered\.runtime/);

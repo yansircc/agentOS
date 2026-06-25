@@ -845,6 +845,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   const generatedText = generatedFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
   const requiredGeneratedSpecifiers = [
     `${publishScope()}/runtime/local`,
+    `${publishScope()}/runtime/llm-effect-ai/openai-compatible`,
     `${publishScope()}/core/runtime-protocol`,
   ];
   for (const specifier of requiredGeneratedSpecifiers) {
@@ -901,6 +902,21 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       `import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND, WORKSPACE_OP_PROJECTION_KIND } from "${publicSpecifier("@agent-os/runtime")}";`,
       "const root = await mkdtemp(path.join(tmpdir(), 'agentos-generated-local-'));",
       "try {",
+      "  const providerApp = await createLocalAgentApp({",
+      "    cwd: root,",
+      "    env: {",
+      "      AGENTOS_ENDPOINT_OPENROUTER: 'https://openrouter.example/v1',",
+      "      AGENTOS_CREDENTIAL_OPENROUTER_KEY: 'smoke-secret',",
+      "      AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL: 'openai/gpt-test',",
+      "    },",
+      "  });",
+      "  const providerInspection = providerApp.inspect();",
+      "  if (providerInspection.compile.status !== 'available' || providerInspection.compile.target !== 'node@1') {",
+      "    throw new Error(`generated local provider inspect lost node target ${JSON.stringify(providerInspection.compile)}`);",
+      "  }",
+      "  if (providerApp.diagnostics().length !== 0) {",
+      "    throw new Error(`generated local provider app emitted diagnostics ${JSON.stringify(providerApp.diagnostics())}`);",
+      "  }",
       "  const app = await createLocalAgentApp({",
       "    cwd: root,",
       "    llm: {",

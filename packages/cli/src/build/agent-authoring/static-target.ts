@@ -1135,9 +1135,16 @@ const renderLocalAgentApp = (
   const usesShellTools = workspaceToolList.some((toolName) =>
     workspaceShellToolNames.has(toolName),
   );
+  const llmEnvByKind = Object.fromEntries(
+    llmMaterialEnvBindings(normalized.llm).map((binding) => [binding.kind, binding.envName]),
+  ) as Record<LlmMaterialEnvKind, string>;
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
+    renderNamedImport(
+      ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
+      modules.openAiCompatibleTransport,
+    ),
     renderTypeImport(["AgentManifest"], modules.runtimeProtocol),
     renderTypeImport(["CreateLocalAgentRuntimeOptions", "LocalAgentRuntime"], modules.localRuntime),
   ].join("\n");
@@ -1145,7 +1152,65 @@ const renderLocalAgentApp = (
 
 const semanticManifest = semanticDeclarations as AgentManifest;
 
+type AgentOSTargetEnv = Readonly<Record<string, string | undefined>>;
+
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
+
+const cleanEnv = (source: AgentOSTargetEnv): Record<string, string> => {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined) env[key] = value;
+  }
+  return env;
+};
+
+const generatedTargetEnvFor = (
+  options: Pick<CreateLocalAgentAppOptions, "env" | "inheritEnv">,
+): AgentOSTargetEnv => ({
+  ...(options.inheritEnv === true ? cleanEnv(process.env) : {}),
+  ...(options.env === undefined ? {} : cleanEnv(options.env)),
+});
+
+const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
+  const value = env[name];
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const materialValue = (
+  env: AgentOSTargetEnv,
+  ref: { readonly kind: string; readonly ref: string },
+): NonNullable<unknown> | null => {
+  if (ref.kind === "endpoint" && ref.ref === ${jsString(normalized.llm.endpointRef)}) {
+    return materialEnvValue(env, ${jsString(llmEnvByKind.endpoint)});
+  }
+  if (ref.kind === "credential" && ref.ref === ${jsString(normalized.llm.credentialRef)}) {
+    return materialEnvValue(env, ${jsString(llmEnvByKind.credential)});
+  }
+  if (ref.kind === "model" && ref.ref === ${jsString(normalized.llm.modelRef)}) {
+    return materialEnvValue(env, ${jsString(llmEnvByKind.model)});
+  }
+  return null;
+};
+
+const generatedLocalLlmFor = (
+  env: AgentOSTargetEnv,
+): NonNullable<CreateLocalAgentRuntimeOptions["llm"]> => {
+  const modelValue = materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} });
+  return {
+    kind: "transport",
+    transport: OpenAiCompatibleLlmTransportLive,
+    route: {
+      kind: "openai-chat-compatible",
+      endpointRef: ${jsString(normalized.llm.endpointRef)},
+      credentialRef: ${jsString(normalized.llm.credentialRef)},
+      modelId: typeof modelValue === "string" ? modelValue : "",
+    },
+    refResolver: {
+      material: (ref) => materialValue(env, ref),
+    },
+    preflight: preflightOpenAiCompatibleProviderMaterial,
+  };
+};
 
 export type LocalAgentApp = LocalAgentRuntime;
 
@@ -1159,13 +1224,14 @@ export interface CreateLocalAgentAppOptions {
 export const createLocalAgentApp = async (
   options: CreateLocalAgentAppOptions = {},
 ): Promise<LocalAgentApp> => {
+  const targetEnv = generatedTargetEnvFor(options);
   const lowered = await lowerLocalAgentRuntime({
     target: "node@1",
     identity: semanticManifest.agentId,
     cwd: options.cwd ?? process.cwd(),
     ...(options.env === undefined ? {} : { env: options.env }),
     ...(options.inheritEnv === undefined ? {} : { inheritEnv: options.inheritEnv }),
-    ...(options.llm === undefined ? {} : { llm: options.llm }),
+    llm: options.llm ?? generatedLocalLlmFor(targetEnv),
     workspaceOperations: generatedWorkspaceOperations,
   });
   return lowered.runtime;
