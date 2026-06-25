@@ -22,16 +22,15 @@ import {
 import {
   assertSourceManifests,
   assertSurface,
-  binSourceFiles,
   catalog,
   isBinMjsTarget,
   isBinTsTarget,
+  isPackageBinSourceTarget,
   isSourceMjsTarget,
   isSourceTsExportTarget,
+  packageBinTargets,
   packageImportsEffect,
   publishedRecords,
-  sourceFiles,
-  sourceMjsFiles,
 } from "./package-records.mjs";
 
 export const resolveExportTarget = (value) => {
@@ -243,10 +242,78 @@ export const rewriteModuleSpecifiers = (record, text, sourceFile, outFile, decla
         )}${suffix}`,
     );
 
-export const runtimeSourceFiles = (record) =>
-  [...new Set([...sourceFiles(record), ...sourceMjsFiles(record), ...binSourceFiles(record)])].sort(
-    (left, right) => left.localeCompare(right),
+export const exportedSourceRootFiles = (record) => {
+  const files = [];
+  for (const [, target] of exportEntries(record)) {
+    if (isSourceTsExportTarget(target) || isSourceMjsTarget(target)) {
+      files.push(path.join(record.packageDir, target.slice("./".length)));
+    }
+  }
+  for (const target of packageBinTargets(record).filter(isPackageBinSourceTarget)) {
+    files.push(path.join(record.packageDir, target.slice("./".length)));
+  }
+  return [...new Set(files)].sort((left, right) => left.localeCompare(right));
+};
+
+export const relativeSourceSpecifiers = (file) => {
+  const text = fs.readFileSync(file, "utf8");
+  const sourceFile = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".mjs") ? ts.ScriptKind.JS : ts.ScriptKind.TS,
   );
+  const specifiers = [];
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specifiers.push(node.arguments[0].text);
+    }
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "URL" &&
+      node.arguments?.length === 2 &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
+      node.arguments[1].getText(sourceFile) === "import.meta.url"
+    ) {
+      specifiers.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return specifiers.filter((specifier) => specifier.startsWith("."));
+};
+
+export const runtimeSourceFiles = (record) => {
+  const roots = exportedSourceRootFiles(record);
+  const visited = new Set();
+  const pending = [...roots];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (visited.has(file)) continue;
+    visited.add(file);
+    for (const specifier of relativeSourceSpecifiers(file)) {
+      const target = resolveRelativeTargetFile(file, specifier, false);
+      if (target !== undefined && (target.endsWith(".ts") || target.endsWith(".mjs"))) {
+        pending.push(target);
+      }
+    }
+  }
+  return [...visited].sort((left, right) => left.localeCompare(right));
+};
 
 export const emitJsFile = (record, file, out) => {
   const source = fs.readFileSync(file, "utf8");
@@ -421,7 +488,7 @@ export const emitSemanticDeclaration = (record, file) => {
 };
 
 export const emitDeclarations = (record) => {
-  for (const file of sourceFiles(record)) {
+  for (const file of runtimeSourceFiles(record).filter((candidate) => candidate.endsWith(".ts"))) {
     const source = fs.readFileSync(file, "utf8");
     if (sourceDeclaresContextService(file, source)) {
       emitSemanticDeclaration(record, file);

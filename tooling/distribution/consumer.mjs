@@ -416,6 +416,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { LlmTransport, type LlmTransportRouteDescriptor } from "${publicSpecifier("@agent-os/core/llm-protocol")}";`,
       `import type { SubmitRunInput } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
+      `import { createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
       "void bindWorkspaceToolsForRuntime;",
@@ -423,6 +424,8 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "void createInMemoryWorkspaceEnv;",
       "void deterministicToolExecution;",
       "type _SubmitRunInput = SubmitRunInput;",
+      "void createCloudflareWorkspaceJobResponse;",
+      "void makeCloudflareWorkspaceEnv;",
       "void mountOpsApi;",
       "const llmTransportConsumerProgram = Effect.gen(function* () {",
       "  const transport = yield* LlmTransport;",
@@ -571,9 +574,11 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     path.join(dir, "cf-entry.ts"),
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
-      `import { createAgentDurableObject } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
+      `import { createAgentDurableObject, createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai/openai-compatible")}";`,
       `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core")}";`,
+      "void createCloudflareWorkspaceJobResponse;",
+      "void makeCloudflareWorkspaceEnv;",
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
       "});",
@@ -752,6 +757,16 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   }
   if (/workspace:\*|catalog:/u.test(generatedText)) {
     fail("generated target consumer leaked workspace/catalog protocol");
+  }
+  for (const token of removedCloudflareLifecycleValueExports) {
+    if (generatedText.includes(token)) {
+      fail(`generated target consumer leaked cloudflare lifecycle helper ${token}`);
+    }
+  }
+  for (const specifier of removedCloudflareLifecycleImportSpecifiers) {
+    if (generatedText.includes(specifier)) {
+      fail(`generated target consumer leaked cloudflare lifecycle import ${specifier}`);
+    }
   }
   const requiredSkillFragments = [
     'name: "load_skill"',
@@ -1033,6 +1048,28 @@ export const assertPackageNotInstalled = (dir, packageName) => {
   if (fs.existsSync(target)) fail(`${packageName}: unexpected installed package`);
 };
 
+const removedCloudflareLifecycleValueExports = [
+  "createCloudflareWorkspaceEnvResolver",
+  "createCloudflareSandboxWorkspaceEnvResolver",
+  "installCloudflareWorkspaceOperationProvider",
+  "installCloudflareWorkspaceJobProfile",
+];
+
+const removedCloudflareLifecyclePackedFiles = [
+  "dist/cloudflare/workspace-env.d.ts",
+  "dist/cloudflare/workspace-env.js",
+  "dist/cloudflare/workspace-op.d.ts",
+  "dist/cloudflare/workspace-op.js",
+  "dist/cloudflare/workspace-job-profile.d.ts",
+  "dist/cloudflare/workspace-job-profile.js",
+];
+
+const removedCloudflareLifecycleImportSpecifiers = [
+  `${publishScope()}/runtime/cloudflare/workspace-env`,
+  `${publishScope()}/runtime/cloudflare/workspace-op`,
+  `${publishScope()}/runtime/cloudflare/workspace-job-profile`,
+];
+
 export const npmInstall = (dir, omitPeer = false) => {
   run(
     "npm",
@@ -1289,6 +1326,81 @@ export const assertPackedRootInternalSymbolsAbsent = (dir) => {
   console.log("verified packed runtime root hides internal submit symbols");
 };
 
+export const assertPackedCloudflareLifecycleHelpersAbsent = (dir) => {
+  const cloudflareSpecifier = publicSpecifier("@agent-os/runtime/cloudflare");
+  fs.writeFileSync(
+    path.join(dir, "negative-cloudflare-lifecycle.ts"),
+    [
+      `import { ${removedCloudflareLifecycleValueExports.join(", ")} } from "${cloudflareSpecifier}";`,
+      `void [${removedCloudflareLifecycleValueExports.join(", ")}];`,
+      "",
+    ].join("\n"),
+  );
+  writeJson(path.join(dir, "tsconfig.negative-cloudflare-lifecycle.json"), {
+    compilerOptions: {
+      target: "ES2022",
+      module: "NodeNext",
+      moduleResolution: "NodeNext",
+      strict: true,
+      skipLibCheck: true,
+      types: ["@cloudflare/workers-types"],
+    },
+    include: ["negative-cloudflare-lifecycle.ts"],
+  });
+  const typecheck = spawnSync(
+    "npm",
+    ["exec", "tsc", "--", "-p", "tsconfig.negative-cloudflare-lifecycle.json"],
+    {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  if (typecheck.status === 0) {
+    fail("packed cloudflare lifecycle helper fixture unexpectedly typechecked");
+  }
+  const typecheckOutput = `${typecheck.stdout}\n${typecheck.stderr}`;
+  for (const symbol of removedCloudflareLifecycleValueExports) {
+    if (!typecheckOutput.includes(symbol)) {
+      fail(`packed cloudflare lifecycle negative typecheck did not mention ${symbol}`);
+    }
+  }
+
+  const runtimeDir = packageTargetDir(
+    path.join(dir, "node_modules"),
+    publicSpecifier("@agent-os/runtime"),
+  );
+  const packageFiles = allFiles(runtimeDir);
+  const packedFileSet = new Set(
+    packageFiles.map((file) => path.relative(runtimeDir, file).split(path.sep).join("/")),
+  );
+  for (const file of removedCloudflareLifecyclePackedFiles) {
+    if (packedFileSet.has(file)) {
+      fail(`packed runtime includes removed cloudflare lifecycle file ${file}`);
+    }
+  }
+  for (const file of packageFiles.filter(
+    (candidate) => candidate.endsWith(".d.ts") || candidate.endsWith(".js"),
+  )) {
+    const text = fs.readFileSync(file, "utf8");
+    for (const symbol of removedCloudflareLifecycleValueExports) {
+      if (text.includes(symbol)) {
+        fail(
+          `${path.relative(runtimeDir, file)} leaks removed cloudflare lifecycle symbol ${symbol}`,
+        );
+      }
+    }
+    for (const specifier of removedCloudflareLifecycleImportSpecifiers) {
+      if (text.includes(specifier)) {
+        fail(
+          `${path.relative(runtimeDir, file)} leaks removed cloudflare lifecycle import ${specifier}`,
+        );
+      }
+    }
+  }
+  console.log("verified packed cloudflare lifecycle helpers are absent");
+};
+
 export const assertPackedPublicAssemblyEscapesAbsent = (dir) => {
   const inMemorySpecifier = publicSpecifier("@agent-os/runtime/in-memory");
   const localSpecifier = publicSpecifier("@agent-os/runtime/local");
@@ -1444,6 +1556,7 @@ export const testInternalConsumer = () => {
   assertPackageNotInstalled(dir, "@effect/ai-anthropic");
   assertPackedRootInternalSymbolsAbsent(dir);
   assertPackedPublicAssemblyEscapesAbsent(dir);
+  assertPackedCloudflareLifecycleHelpersAbsent(dir);
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.nodenext.json"], { cwd: dir, capture: true });
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.bundler.json"], { cwd: dir, capture: true });
   run("node", ["smoke.mjs"], { cwd: dir, capture: true });

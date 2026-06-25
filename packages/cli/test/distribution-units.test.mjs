@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -20,6 +21,7 @@ import {
   blueprintRecipeFindingsForSources,
   runtimePublicSurfaceFindings,
 } from "../src/check/algorithmic/convergence-smoke-checks.mjs";
+import { runtimeSourceFiles } from "../../../tooling/distribution/staging-build.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const record = {
@@ -499,6 +501,62 @@ void test("distribution architecture sources are valid", () => {
     }),
     [],
   );
+});
+
+void test("distribution staging emits public export closure only", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-distribution-closure-"));
+  try {
+    fs.mkdirSync(path.join(root, "src", "nested"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "src", "index.ts"),
+      'export { publicValue } from "./public";\n',
+    );
+    fs.writeFileSync(
+      path.join(root, "src", "public.ts"),
+      'import type { PrivateShape } from "./private";\nexport const publicValue: PrivateShape = { ok: true };\n',
+    );
+    fs.writeFileSync(
+      path.join(root, "src", "private.ts"),
+      'import { leaf } from "./nested/leaf";\nexport interface PrivateShape { readonly ok: boolean }\nvoid leaf;\n',
+    );
+    fs.writeFileSync(path.join(root, "src", "nested", "leaf.ts"), "export const leaf = true;\n");
+    fs.writeFileSync(path.join(root, "src", "cli.mjs"), 'import "./cli-helper.mjs";\n');
+    fs.writeFileSync(path.join(root, "src", "cli-helper.mjs"), "export const cli = true;\n");
+    fs.writeFileSync(
+      path.join(root, "src", "internal-lifecycle.ts"),
+      "export const createCloudflareWorkspaceEnvResolver = () => undefined;\n",
+    );
+
+    const files = runtimeSourceFiles({
+      packageDir: root,
+      packagePath: "packages/fixture",
+      packageJson: {
+        exports: {
+          ".": {
+            default: "./src/index.ts",
+            types: "./src/index.ts",
+          },
+        },
+        bin: {
+          fixture: "./src/cli.mjs",
+        },
+      },
+    }).map((file) => path.relative(root, file).split(path.sep).join("/"));
+
+    assert.deepEqual(
+      files,
+      [
+        "src/cli-helper.mjs",
+        "src/cli.mjs",
+        "src/index.ts",
+        "src/nested/leaf.ts",
+        "src/private.ts",
+        "src/public.ts",
+      ].sort((left, right) => left.localeCompare(right)),
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 void test("package-unit registry exactness rejects public/export drift", () => {
