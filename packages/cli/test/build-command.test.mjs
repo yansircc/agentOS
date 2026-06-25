@@ -73,8 +73,8 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
       "  files: [",
       '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
-      '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse echo." },',
-      '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nReview carefully." },',
+      '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace facts\\n---\\nUse echo." },',
+      '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review output carefully\\n---\\nReview carefully." },',
       "  ],",
       "});",
       "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
@@ -100,12 +100,23 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
   assert.deepEqual(
     output.skills.map((skill) => ({
       name: skill.name,
+      description: skill.description,
       path: skill.path,
       text: skill.text,
     })),
     [
-      { name: "echo", path: "agent/skills/echo.md", text: "Use echo." },
-      { name: "review", path: "agent/skills/review/SKILL.md", text: "Review carefully." },
+      {
+        name: "echo",
+        description: "Echo workspace facts",
+        path: "agent/skills/echo.md",
+        text: "Use echo.",
+      },
+      {
+        name: "review",
+        description: "Review output carefully",
+        path: "agent/skills/review/SKILL.md",
+        text: "Review carefully.",
+      },
     ],
   );
   assert.deepEqual(output.normalizedSkills, output.skills);
@@ -198,19 +209,23 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       "  file,",
       "] });",
-      'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\n---\\nUse echo." });',
-      'const duplicateName = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: wrong\\nname: echo\\n---\\nUse echo." });',
+      'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\ndescription: Echo facts\\n---\\nUse echo." });',
+      'const duplicateName = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: wrong\\nname: echo\\ndescription: Echo facts\\n---\\nUse echo." });',
+      'const missingDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse echo." });',
+      'const emptyDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription:   \\n---\\nUse echo." });',
+      'const oversizedDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: `---\\nname: echo\\ndescription: ${"x".repeat(241)}\\n---\\nUse echo.` });',
+      'const unknownFrontmatter = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo facts\\nallowed-tools: bash\\n---\\nUse echo." });',
       'const sibling = compile({ path: "agent/skills/echo/references/ref.md", kind: "markdown", text: "Ref." });',
       "const duplicate = compileAgentTree({ files: [",
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nOne." },',
-      '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\n---\\nTwo." },',
+      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo one\\n---\\nOne." },',
+      '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo two\\n---\\nTwo." },',
       "] });",
       "const reservedTool = compileAgentTree({ files: [",
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '  { path: "agent/tools/load_skill.ts", kind: "tool", declaration: {} },',
       "] });",
-      "console.log(JSON.stringify({ mismatch, duplicateName, sibling, duplicate, reservedTool }));",
+      "console.log(JSON.stringify({ mismatch, duplicateName, missingDescription, emptyDescription, oversizedDescription, unknownFrontmatter, sibling, duplicate, reservedTool }));",
     ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
@@ -231,6 +246,41 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
       path: "skills/echo.md",
       field: "/frontmatter/name",
       reason: "frontmatter_field_duplicate",
+    },
+  ]);
+  assert.equal(output.missingDescription.ok, false);
+  assert.deepEqual(output.missingDescription.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/echo.md",
+      field: "/frontmatter/description",
+      reason: "non_empty_string_required",
+    },
+  ]);
+  assert.equal(output.emptyDescription.ok, false);
+  assert.deepEqual(output.emptyDescription.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/echo.md",
+      field: "/frontmatter/description",
+      reason: "non_empty_string_required",
+    },
+  ]);
+  assert.equal(output.oversizedDescription.ok, false);
+  assert.deepEqual(output.oversizedDescription.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/echo.md",
+      field: "/frontmatter/description",
+      reason: "skill_description_too_large",
+    },
+  ]);
+  assert.equal(output.unknownFrontmatter.ok, false);
+  assert.deepEqual(output.unknownFrontmatter.issues, [
+    {
+      kind: "unknown_field",
+      path: "skills/echo.md",
+      field: "allowed-tools",
     },
   ]);
   assert.equal(output.sibling.ok, false);
@@ -729,8 +779,8 @@ void test("static target injects skill advert and load_skill for workspace and c
       "const compiled = compileAgentTree({ files: [",
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
-      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse workspace echo skill." },',
-      '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\n---\\nUse chat review skill." },',
+      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace routing\\n---\\nUse workspace echo skill." },',
+      '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review chat routing\\n---\\nUse chat review skill." },',
       "] });",
       "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
       "const baseConfig = {",
@@ -754,8 +804,12 @@ void test("static target injects skill advert and load_skill for workspace and c
       "  advert: text.includes('generatedSkillsSystemAdvert'),",
       "  loadSkill: text.includes('name: \"load_skill\"'),",
       "  system: text.includes('system: generatedSystemPrompt(input.system)'),",
-      "  echo: text.includes('Use workspace echo skill.'),",
-      "  review: text.includes('Use chat review skill.'),",
+      "  echoDescription: text.includes('Echo workspace routing'),",
+      "  reviewDescription: text.includes('Review chat routing'),",
+      "  advertUsesDescription: text.includes('${skill.name}: ${skill.description}'),",
+      "  legacyPathDigestAdvert: text.includes('to load ${skill.path}'),",
+      "  echoBody: text.includes('Use workspace echo skill.'),",
+      "  reviewBody: text.includes('Use chat review skill.'),",
       "  frameworkTools: text.includes('...generatedFrameworkTools'),",
       "});",
       "console.log(JSON.stringify({ workspace: markers(workspaceTarget), chat: markers(chatTarget) }));",
@@ -765,7 +819,11 @@ void test("static target injects skill advert and load_skill for workspace and c
   const output = JSON.parse(result.stdout);
   for (const profile of ["workspace", "chat"]) {
     for (const [marker, present] of Object.entries(output[profile])) {
-      assert.equal(present, true, `${profile} target missing ${marker}`);
+      if (marker === "legacyPathDigestAdvert") {
+        assert.equal(present, false, `${profile} target kept legacy path/digest advert`);
+      } else {
+        assert.equal(present, true, `${profile} target missing ${marker}`);
+      }
     }
   }
 });
@@ -777,7 +835,10 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     linkGeneratedTargetSmokeDependencies(root);
     mkdirSync(path.join(root, "agent/skills"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
-    writeFileSync(path.join(root, "agent/skills/echo.md"), "---\nname: echo\n---\nECHO_MARKER_560");
+    writeFileSync(
+      path.join(root, "agent/skills/echo.md"),
+      "---\nname: echo\ndescription: Echo marker loader\n---\nECHO_MARKER_560",
+    );
     writeFileSync(
       path.join(root, "agent/agent.json"),
       JSON.stringify(
@@ -862,6 +923,8 @@ export const __agentosSkillSmoke = async () => {
     return {
       toolNames: Object.keys(tools).sort(),
       systemIncludesAdvert: spec.system.includes("Available agent skills"),
+      systemIncludesDescription: spec.system.includes("Echo marker loader"),
+      systemIncludesBody: spec.system.includes("ECHO_MARKER_560"),
       loaded,
       unknownRejected,
     };
@@ -882,7 +945,10 @@ export const __agentosSkillSmoke = async () => {
     const output = JSON.parse(smoke.stdout);
     assert.deepEqual(output.toolNames, ["load_skill"]);
     assert.equal(output.systemIncludesAdvert, true);
+    assert.equal(output.systemIncludesDescription, true);
+    assert.equal(output.systemIncludesBody, false);
     assert.equal(output.loaded.name, "echo");
+    assert.equal(output.loaded.description, "Echo marker loader");
     assert.equal(output.loaded.text, "ECHO_MARKER_560");
     assert.equal(output.unknownRejected, true);
   } finally {

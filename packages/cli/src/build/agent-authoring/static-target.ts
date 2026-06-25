@@ -215,6 +215,7 @@ const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string =
     (skill) =>
       `  ${JSON.stringify(
         stableJsonValue({
+          description: skill.description,
           digest: skill.digest,
           name: skill.name,
           path: skill.path,
@@ -233,6 +234,7 @@ const renderSkillSupport = (skills: ReadonlyArray<CompiledAgentSkill>): string =
   return `
 type GeneratedSkill = {
   readonly name: string;
+  readonly description: string;
   readonly path: string;
   readonly digest: string;
   readonly text: string;
@@ -245,10 +247,7 @@ const generatedSkillByName = Object.fromEntries(
 ) as Readonly<Record<(typeof generatedSkillNames)[number], GeneratedSkill>>;
 const generatedSkillsSystemAdvert = [
   "Available agent skills are not loaded by default.",
-  ...generatedSkillCatalog.map(
-    (skill) =>
-      \`- \${skill.name}: call ${GENERATED_LOAD_SKILL_TOOL_NAME} with {"name":\${JSON.stringify(skill.name)}} to load \${skill.path} (\${skill.digest}).\`,
-  ),
+  ...generatedSkillCatalog.map((skill) => \`- \${skill.name}: \${skill.description}\`),
   "Do not assume a skill's full instructions until ${GENERATED_LOAD_SKILL_TOOL_NAME} returns it.",
 ].join("\\n");
 

@@ -85,6 +85,7 @@ export interface AuthoredToolFile {
 
 export interface CompiledAgentSkill {
   readonly name: string;
+  readonly description: string;
   readonly path: string;
   readonly digest: string;
   readonly text: string;
@@ -218,6 +219,9 @@ interface CompilerState {
   readonly workspaceToolControls: Map<WorkspaceToolName, WorkspaceDefaultToolControl>;
 }
 
+const SKILL_DESCRIPTION_MAX_BYTES = 240;
+const textEncoder = new TextEncoder();
+
 export type WorkspaceDefaultToolControl =
   | { readonly kind: "disabled"; readonly origin: AgentManifestOrigin }
   | {
@@ -274,6 +278,43 @@ const parseStringField = (
     return null;
   }
   return value;
+};
+
+const utf8ByteLength = (value: string): number => textEncoder.encode(value).length;
+
+const parseSkillFrontmatterStringField = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  value: unknown,
+): string | null => {
+  const parsed = parseStringField(state, path, field, value);
+  if (parsed === null) return null;
+  const trimmed = parsed.trim();
+  if (trimmed.length === 0) {
+    invalidAuthoredValue(state, path, field, "non_empty_string_required");
+    return null;
+  }
+  return trimmed;
+};
+
+const parseSkillDescriptionField = (
+  state: CompilerState,
+  path: string,
+  value: unknown,
+): string | null => {
+  const description = parseSkillFrontmatterStringField(
+    state,
+    path,
+    "/frontmatter/description",
+    value,
+  );
+  if (description === null) return null;
+  if (utf8ByteLength(description) > SKILL_DESCRIPTION_MAX_BYTES) {
+    invalidAuthoredValue(state, path, "/frontmatter/description", "skill_description_too_large");
+    return null;
+  }
+  return description;
 };
 
 const parseOptionalStringField = (
@@ -1006,7 +1047,7 @@ const parseSkillFrontmatter = (
   state: CompilerState,
   path: string,
   text: string,
-): { readonly name: string; readonly body: string } | null => {
+): { readonly name: string; readonly description: string; readonly body: string } | null => {
   const normalized = text.replace(/\r\n?/gu, "\n");
   const lines = normalized.split("\n");
   if (lines[0]?.trim() !== "---") {
@@ -1035,11 +1076,13 @@ const parseSkillFrontmatter = (
     }
     fields[key] = stripYamlQuotes(rawValue.trim());
   }
-  assertAllowedFields(state, path, fields, new Set(["name"]));
-  const name = parseStringField(state, path, "/frontmatter/name", fields.name);
-  if (name === null || state.issues.length > issueCount) return null;
+  assertAllowedFields(state, path, fields, new Set(["name", "description"]));
+  const name = parseSkillFrontmatterStringField(state, path, "/frontmatter/name", fields.name);
+  const description = parseSkillDescriptionField(state, path, fields.description);
+  if (name === null || description === null || state.issues.length > issueCount) return null;
   return {
     name,
+    description,
     body: lines
       .slice(end + 1)
       .join("\n")
@@ -1085,6 +1128,7 @@ const recordSkillFile = (
   }
   state.skills.set(expectedName, {
     name: expectedName,
+    description: parsed.description,
     path: authoredPath(path),
     digest: digestText(parsed.body),
     text: parsed.body,
