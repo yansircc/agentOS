@@ -615,6 +615,97 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
   });
 };
 
+const writeChannelConsumerFixture = (dir, scopeId) => {
+  fs.mkdirSync(path.join(dir, "agent", "channels"), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "agent", "channels", "intake.ts"),
+    [
+      `import { defineChannel, post } from "${publicSpecifier("@agent-os/runtime/channel")}";`,
+      "",
+      "export default defineChannel({",
+      '  verify: async (request) => ({ authority: "consumer.signature", subject: request.request.headers.get("x-principal") ?? "missing-principal" }),',
+      "  routes: [",
+      '    post("/events/:eventId", async (request, context) => {',
+      "      const raw = await request.request.text();",
+      '      const submitResult = await context.submit({ intent: "channel", context: { eventId: request.params.eventId } });',
+      "      const dispatchResult = await context.dispatch({",
+      `        target: { bindingRef: { kind: "binding", provider: "test", bindingKind: "queue", ref: "outbound" }, scopeRef: { kind: "session", scopeId: ${JSON.stringify(scopeId)} }, effectAuthorityRef: { authorityClass: "channel", authorityId: context.principal.authority } },`,
+      '        event: "channel.received",',
+      "        data: { eventId: request.params.eventId },",
+      "        idempotencyKey: request.params.eventId,",
+      "      });",
+      "      return Response.json({",
+      "        raw,",
+      "        eventId: request.params.eventId,",
+      "        path: request.path,",
+      "        principal: context.principal,",
+      "        contextKeys: Object.keys(context).sort(),",
+      "        submitStatus: submitResult.status,",
+      "        outboundEventId: dispatchResult.outboundEventId,",
+      "      });",
+      "    }),",
+      "  ],",
+      "});",
+      "",
+    ].join("\n"),
+  );
+};
+
+const channelDispatchSmokeSource = ({ importLine, dispatchExpression, scopeId }) =>
+  [
+    importLine,
+    "",
+    "const calls = [];",
+    "const runtime = Object.freeze({",
+    "  submit: async (input) => {",
+    '    calls.push(["submit", input]);',
+    '    return { ok: true, status: "delivered", runId: 1, final: "ok", eventCount: 1, tokensUsed: 0 };',
+    "  },",
+    "  dispatch: async (spec) => {",
+    '    calls.push(["dispatch", spec]);',
+    "    return { outboundEventId: 17 };",
+    "  },",
+    "});",
+    'const request = new Request("http://agent.test/channels/intake/events/evt_123", {',
+    '  method: "POST",',
+    '  headers: { "x-principal": "installation:42", "authorization": "secret-token" },',
+    '  body: "raw-provider-body",',
+    "});",
+    `const response = await ${dispatchExpression};`,
+    "if (response === null) throw new Error('generated channel dispatch returned null');",
+    "const body = await response.json();",
+    "const expectedBody = {",
+    '  raw: "raw-provider-body",',
+    '  eventId: "evt_123",',
+    '  path: "/channels/intake/events/evt_123",',
+    '  principal: { authority: "consumer.signature", subject: "installation:42" },',
+    '  contextKeys: ["dispatch", "principal", "submit"],',
+    '  submitStatus: "delivered",',
+    "  outboundEventId: 17,",
+    "};",
+    "const expectedCalls = [",
+    '  ["submit", { intent: "channel", context: { eventId: "evt_123" } }],',
+    "  [",
+    '    "dispatch",',
+    "    {",
+    "      target: {",
+    '        bindingRef: { kind: "binding", provider: "test", bindingKind: "queue", ref: "outbound" },',
+    `        scopeRef: { kind: "session", scopeId: ${JSON.stringify(scopeId)} },`,
+    '        effectAuthorityRef: { authorityClass: "channel", authorityId: "consumer.signature" },',
+    "      },",
+    '      event: "channel.received",',
+    '      data: { eventId: "evt_123" },',
+    '      idempotencyKey: "evt_123",',
+    "    },",
+    "  ],",
+    "];",
+    "const actual = JSON.stringify({ body, calls });",
+    "const expected = JSON.stringify({ body: expectedBody, calls: expectedCalls });",
+    "if (actual !== expected) throw new Error(`unexpected generated channel dispatch ${actual}`);",
+    "if (actual.includes('secret-token')) throw new Error('generated channel dispatch leaked raw provider token');",
+    "",
+  ].join("\n") + "\n";
+
 export const writeGeneratedTargetConsumerApp = (dir) => {
   fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
   fs.mkdirSync(path.join(dir, "agent", "skills", "review", "references"), { recursive: true });
@@ -632,6 +723,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   });
   fs.writeFileSync(path.join(dir, "Dockerfile"), 'FROM alpine:3.20\nCMD ["sleep", "infinity"]\n');
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the workspace.\n");
+  writeChannelConsumerFixture(dir, "generated-target-consumer");
   fs.writeFileSync(
     path.join(dir, "agent", "skills", "review", "SKILL.md"),
     [
@@ -731,6 +823,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     `${publishScope()}/runtime/llm-effect-ai/openai-compatible`,
     `${publishScope()}/runtime/workspace-agent`,
     `${publishScope()}/runtime/sse-http`,
+    `${publishScope()}/runtime/channel`,
     `${publishScope()}/core/runtime-protocol`,
     `${publishScope()}/core/tools`,
     `${publishScope()}/client`,
@@ -768,6 +861,15 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
       fail(`generated target consumer leaked cloudflare lifecycle import ${specifier}`);
     }
   }
+  for (const fragment of [
+    "../../agent/channels/intake",
+    "dispatchGeneratedChannelRequest",
+    "generatedChannelRuntimeFor(env)",
+  ]) {
+    if (!generatedText.includes(fragment)) {
+      fail(`generated target consumer missing channel fragment ${fragment}`);
+    }
+  }
   const requiredSkillFragments = [
     'name: "load_skill"',
     'name: "read_skill_file"',
@@ -799,6 +901,15 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
       );
     }
   }
+  fs.writeFileSync(
+    path.join(dir, "channel-dispatch-smoke.ts"),
+    channelDispatchSmokeSource({
+      importLine:
+        'import { dispatchGeneratedChannelRequest } from "./.agentos/generated/channels";',
+      dispatchExpression: "dispatchGeneratedChannelRequest(request, runtime)",
+      scopeId: "generated-target-consumer",
+    }),
+  );
 };
 
 export const writeGeneratedLocalTargetConsumerApp = (dir) => {
@@ -817,6 +928,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
     },
   });
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the local workspace.\n");
+  writeChannelConsumerFixture(dir, "generated-local-target-consumer");
   writeJson(path.join(dir, "agent", "agent.json"), {
     agentId: "generated-local-target-consumer",
     scope: {
@@ -870,6 +982,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   const generatedText = generatedFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
   const requiredGeneratedSpecifiers = [
     `${publishScope()}/runtime/local`,
+    `${publishScope()}/runtime/channel`,
     `${publishScope()}/runtime/llm-effect-ai/openai-compatible`,
     `${publishScope()}/core/runtime-protocol`,
   ];
@@ -881,6 +994,15 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   for (const fragment of ["export const createLocalAgentApp", 'target: "node@1"']) {
     if (!generatedText.includes(fragment)) {
       fail(`generated local target consumer missing generated LocalAgentApp fragment ${fragment}`);
+    }
+  }
+  for (const fragment of [
+    "../../agent/channels/intake",
+    "dispatchGeneratedChannelRequest",
+    "handleLocalAgentChannelRequest",
+  ]) {
+    if (!generatedText.includes(fragment)) {
+      fail(`generated local target consumer missing channel fragment ${fragment}`);
     }
   }
   const forbiddenText = [
@@ -1030,6 +1152,15 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "  await rm(root, { recursive: true, force: true });",
       "}",
     ].join("\n") + "\n",
+  );
+  fs.writeFileSync(
+    path.join(dir, "local-channel-smoke.ts"),
+    channelDispatchSmokeSource({
+      importLine:
+        'import { handleLocalAgentChannelRequest } from "./.agentos/generated/local";',
+      dispatchExpression: "handleLocalAgentChannelRequest(request, runtime)",
+      scopeId: "generated-local-target-consumer",
+    }),
   );
 };
 
@@ -1218,7 +1349,25 @@ export const assertGeneratedTargetConsumer = () => {
     ],
     { cwd: dir, capture: true },
   );
-  console.log("verified generated target consumer uses public package imports without symlinks");
+  run(
+    "npm",
+    [
+      "exec",
+      "esbuild",
+      "--",
+      "channel-dispatch-smoke.ts",
+      "--bundle",
+      "--platform=node",
+      "--format=esm",
+      "--packages=external",
+      "--outfile=channel-dispatch-smoke.mjs",
+    ],
+    { cwd: dir, capture: true },
+  );
+  run("node", ["channel-dispatch-smoke.mjs"], { cwd: dir, capture: true });
+  console.log(
+    "verified generated target consumer uses public package imports and channel dispatch without symlinks",
+  );
 };
 
 export const assertGeneratedLocalTargetConsumer = () => {
@@ -1243,6 +1392,21 @@ export const assertGeneratedLocalTargetConsumer = () => {
     ],
     { cwd: dir, capture: true },
   );
+  run(
+    "npm",
+    [
+      "exec",
+      "esbuild",
+      "--",
+      "local-channel-smoke.ts",
+      "--bundle",
+      "--platform=node",
+      "--format=esm",
+      "--packages=external",
+      "--outfile=local-channel-smoke.mjs",
+    ],
+    { cwd: dir, capture: true },
+  );
   const bundleText = fs.readFileSync(path.join(dir, "local-generated-smoke.mjs"), "utf8");
   const forbiddenBundleText = [
     "cloudflare:workers",
@@ -1264,7 +1428,8 @@ export const assertGeneratedLocalTargetConsumer = () => {
     }
   }
   run("node", ["local-generated-smoke.mjs"], { cwd: dir, capture: true });
-  console.log("verified generated local target consumer executes workspace operations");
+  run("node", ["local-channel-smoke.mjs"], { cwd: dir, capture: true });
+  console.log("verified generated local target consumer executes workspace operations and channel dispatch");
 };
 
 export const assertPackedRootInternalSymbolsAbsent = (dir) => {
