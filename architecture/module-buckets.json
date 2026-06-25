@@ -235,6 +235,12 @@
       "bucket": "adapter"
     },
     {
+      "id": "runtime-inspection-adapter",
+      "match": "prefix",
+      "value": "packages/runtime/src/inspection.ts",
+      "bucket": "adapter"
+    },
+    {
       "id": "runtime-telemetry-otlp-projection",
       "match": "prefix",
       "value": "packages/runtime/src/telemetry-otlp/",

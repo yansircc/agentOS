@@ -431,7 +431,9 @@ const projectInfo = (facts: CompileFacts) => ({
     },
     manifest: {
       host: facts.normalized.target.kind,
-      capabilities: manifestCapabilityBindingRefs(facts.normalized.deployment.manifest.capabilities),
+      capabilities: manifestCapabilityBindingRefs(
+        facts.normalized.deployment.manifest.capabilities,
+      ),
       tools: Object.keys(facts.normalized.deployment.manifest.tools ?? {}).sort((left, right) =>
         left.localeCompare(right),
       ),
@@ -488,8 +490,6 @@ try {
   const command = process.argv[2];
   const prefix =
     command === "build" ? "agentos build" : command === "info" ? "agentos info" : "agentos";
-  process.stderr.write(
-    `${prefix}: ${error instanceof Error ? error.message : String(error)}\n`,
-  );
+  process.stderr.write(`${prefix}: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 }

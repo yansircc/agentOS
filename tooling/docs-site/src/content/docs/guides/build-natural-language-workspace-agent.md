@@ -22,7 +22,7 @@ agent/
     plan.md              # optional single-file authored skill
     review/SKILL.md      # packaged skill main file
     review/references/checklist.md
-    review/scripts/audit.sh
+    review/scripts/review.sh
   tools/                # optional custom execute code only
   workspace/reconcile.ts
 agentos.config.jsonc
@@ -66,7 +66,7 @@ agent/skills/<name>/scripts/**
 ```
 
 Supporting files are exposed by package-relative POSIX paths such as
-`references/checklist.md` and `scripts/audit.sh`. They are readable skill
+`references/checklist.md` and `scripts/review.sh`. They are readable skill
 content only. `scripts/**` files are not executed, imported, registered as tools,
 or treated as capabilities.
 

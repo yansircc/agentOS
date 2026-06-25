@@ -161,8 +161,10 @@ export interface ProjectInspectionSnapshotInput {
   readonly runtime?: InspectionRuntimeSection;
 }
 
-const byString = <Value>(select: (value: Value) => string) =>
-  (left: Value, right: Value): number => select(left).localeCompare(select(right));
+const byString =
+  <Value>(select: (value: Value) => string) =>
+  (left: Value, right: Value): number =>
+    select(left).localeCompare(select(right));
 
 const sortedStrings = (values: Iterable<string>): ReadonlyArray<string> =>
   Array.from(values).sort((left, right) => left.localeCompare(right));
@@ -290,7 +292,9 @@ const executionDomainBindings = (
           }),
     }))
     .sort(
-      byString((binding) => `${binding.domain.kind}:${binding.domain.ref}:${binding.replay.access}`),
+      byString(
+        (binding) => `${binding.domain.kind}:${binding.domain.ref}:${binding.replay.access}`,
+      ),
     );
 
 const toolIntentBindings = (

@@ -30,7 +30,7 @@ import {
   post as httpPost,
   type HttpClientRequest,
 } from "effect/unstable/http/HttpClientRequest";
-import { Data, Effect, Layer, Schema } from "effect";
+import { Data, Effect, Layer, Result, Schema } from "effect";
 import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/core/llm-protocol";
 import type {
   LlmMessage,
@@ -124,22 +124,20 @@ const isEffectAiSupportedRoute = (route: LlmRoute): route is EffectAiSupportedRo
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
-const isHttpEndpoint = (value: string): boolean => {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-};
+const isHttpEndpoint = (value: string): boolean =>
+  URL.canParse(value) &&
+  ((protocol) => protocol === "http:" || protocol === "https:")(new URL(value).protocol);
 
 const routeKind = (route: LlmRoute): string | undefined =>
   typeof route.kind === "string" && route.kind.length > 0 ? route.kind : undefined;
 
+type ProviderMaterialPreflightStatus =
+  ProviderMaterialPreflightDetail["materials"][number]["status"];
+
 const materialStatusForValue = (
   value: unknown,
   validate: (value: string) => boolean,
-): ProviderMaterialPreflightDetail["materials"][number]["status"] => {
+): ProviderMaterialPreflightStatus => {
   if (value === null || value === undefined) return "missing";
   if (!isNonEmptyString(value)) return "invalid";
   return validate(value) ? "present" : "invalid";
@@ -149,13 +147,12 @@ const resolverMaterialStatus = (
   refResolver: RefResolver | undefined,
   ref: ReturnType<typeof endpointMaterialRef> | ReturnType<typeof credentialMaterialRef>,
   validate: (value: string) => boolean,
-): ProviderMaterialPreflightDetail["materials"][number]["status"] => {
+): ProviderMaterialPreflightStatus => {
   if (refResolver === undefined) return "missing";
-  try {
-    return materialStatusForValue(refResolver.material(ref), validate);
-  } catch {
-    return "resolver_threw";
-  }
+  const resolved = Result.try({ try: () => refResolver.material(ref), catch: (cause) => cause });
+  return Result.isFailure(resolved)
+    ? "resolver_threw"
+    : materialStatusForValue(resolved.success, validate);
 };
 
 export const preflightOpenAiCompatibleProviderMaterial = (

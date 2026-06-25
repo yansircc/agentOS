@@ -2,7 +2,12 @@
 import { fail } from "./support.mjs";
 import { buildInternalPackages } from "./staging-build.mjs";
 import { checkDistribution, packInternal } from "./pack-check.mjs";
-import { consumerStatus, installConsumer, restoreConsumer, testInternalConsumer } from "./consumer.mjs";
+import {
+  consumerStatus,
+  installConsumer,
+  restoreConsumer,
+  testInternalConsumer,
+} from "./consumer.mjs";
 import { localRegistry, publishInternal, publishLocal } from "./publish-registry.mjs";
 
 const command = process.argv[2] ?? "check";

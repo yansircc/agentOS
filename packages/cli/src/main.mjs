@@ -82,7 +82,9 @@ const runBuildRunner = async (command, args) => {
         stdio: "inherit",
       });
       child.on("error", (error) => {
-        reject(new Error(`agentos ${command}: failed to start node build runner: ${error.message}`));
+        reject(
+          new Error(`agentos ${command}: failed to start node build runner: ${error.message}`),
+        );
       });
       child.on("exit", (code, signal) => {
         if (signal !== null) {

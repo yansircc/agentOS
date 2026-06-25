@@ -37,9 +37,9 @@ instead of sharing the agentOS source workspace lockfile.
    `pnpm run publish:local` in agentOS.
 9. Read `dist/internal-npm/local-channel.json`.
 10. Copy the required `dependencies` entries into the consumer app. Use the
-   logical tag value, for example `agentos-dev`; do not copy worktree tarball
-   paths. Configure `@yansirplus:registry` once in the consumer `.npmrc` only
-   when consuming the local channel.
+    logical tag value, for example `agentos-dev`; do not copy worktree tarball
+    paths. Configure `@yansirplus:registry` once in the consumer `.npmrc` only
+    when consuming the local channel.
 11. Run the app typecheck and tests under its own lockfile.
 
 ## Import Surface

@@ -382,6 +382,7 @@
           "publish:local",
           "registry:local",
           "restore:consumer",
+          "status:consumer",
           "test",
           "test:internal-consumer",
           "typecheck"

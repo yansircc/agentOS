@@ -339,7 +339,7 @@ export const emitIsolatedDeclaration = (record, file, source) => {
 export const emitSemanticDeclaration = (record, file) => {
   const sourceRoot = path.join(record.packageDir, "src");
   const configPath = path.join(record.packageDir, "tsconfig.json");
-  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  const config = ts.readConfigFile(configPath, (fileName) => ts.sys.readFile(fileName));
   if (config.error !== undefined) {
     fail(`${record.packagePath}: failed to read tsconfig\n${formatTsDiagnostics([config.error])}`);
   }
@@ -363,9 +363,7 @@ export const emitSemanticDeclaration = (record, file) => {
     configPath,
   );
   if (parsed.errors.length > 0) {
-    fail(
-      `${record.packagePath}: failed to parse tsconfig\n${formatTsDiagnostics(parsed.errors)}`,
-    );
+    fail(`${record.packagePath}: failed to parse tsconfig\n${formatTsDiagnostics(parsed.errors)}`);
   }
   const options = {
     ...parsed.options,
