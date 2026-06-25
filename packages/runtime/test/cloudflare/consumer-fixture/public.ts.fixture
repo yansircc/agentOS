@@ -2,12 +2,8 @@
 
 import {
   createCloudflareLedgerAgUiHistorySseResponse,
-  createCloudflareSandboxWorkspaceEnvResolver,
   createCloudflareWorkspaceJobResponse,
-  createCloudflareWorkspaceEnvResolver,
   createAgentDurableObject,
-  installCloudflareWorkspaceJobProfile,
-  installCloudflareWorkspaceOperationProvider,
   makeCloudflareWorkspaceEnv,
   type CloudflareAgentEnv,
 } from "@agent-os/runtime/cloudflare";
@@ -83,55 +79,14 @@ export const fixtureWorkspaceJobResponse = createCloudflareWorkspaceJobResponse(
     }),
 });
 
-export const fixtureWorkspaceResolver = createCloudflareWorkspaceEnvResolver({
-  binding: {
-    getSandbox: () => ({
-      exec: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "" }),
-    }),
-  },
-});
-
-const fixtureSandboxNamespace = {
-  idFromName: (name: string) => ({ name }) as unknown as DurableObjectId,
-  get: () => ({
-    setSandboxName: () => Promise.resolve(),
-    setTransport: () => Promise.resolve(),
-    execWithSessionToken: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "" }),
-  }),
-} as unknown as Parameters<typeof createCloudflareSandboxWorkspaceEnvResolver>[0]["binding"];
-
-export const fixtureSandboxWorkspaceResolver = createCloudflareSandboxWorkspaceEnvResolver({
-  binding: fixtureSandboxNamespace,
-});
-
-export const fixtureWorkspaceOpInstall = installCloudflareWorkspaceOperationProvider({
-  workspaceResolver: () => makeCloudflareWorkspaceEnv({
-    client: {
-      exec: () =>
-        Promise.resolve({
-          exitCode: 0,
-          stdout: "",
-          stderr: "",
-        }),
-      readFile: () => Promise.resolve(""),
-      readFileBuffer: () => Promise.resolve(new Uint8Array()),
-      writeFile: () => Promise.resolve(),
-      stat: () => Promise.resolve({ type: "file" }),
-      readdir: () => Promise.resolve([]),
-      exists: () => Promise.resolve(true),
-      mkdir: () => Promise.resolve(),
-      rm: () => Promise.resolve(),
-    },
-    cwd: "/workspace",
-    workspaceRef: "fixture",
-  }),
-});
-
-export const fixtureWorkspaceOpInstallFromStructuralEnv = installCloudflareWorkspaceOperationProvider({
-  workspaceResolver: () => ({
-    domain: { kind: "sandbox", ref: "fixture" },
-    cwd: "/workspace",
-    resolvePath: (path: string): string => path,
+export const fixtureWorkspaceEnv = makeCloudflareWorkspaceEnv({
+  client: {
+    exec: () =>
+      Promise.resolve({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+      }),
     readFile: () => Promise.resolve(""),
     readFileBuffer: () => Promise.resolve(new Uint8Array()),
     writeFile: () => Promise.resolve(),
@@ -140,25 +95,7 @@ export const fixtureWorkspaceOpInstallFromStructuralEnv = installCloudflareWorks
     exists: () => Promise.resolve(true),
     mkdir: () => Promise.resolve(),
     rm: () => Promise.resolve(),
-    exec: () =>
-      Promise.resolve({
-        exitCode: 0,
-        stdout: "",
-        stderr: "",
-        stdoutBytes: 0,
-        stderrBytes: 0,
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        durationMs: 0,
-      }),
-  }),
-});
-
-export const fixtureWorkspaceJobProfile = installCloudflareWorkspaceJobProfile({
-  workspaceResolver: fixtureSandboxWorkspaceResolver,
-  readProjection: ({ runId }) =>
-    Promise.resolve({
-      status: "missing",
-      runId,
-    }),
+  },
+  cwd: "/workspace",
+  workspaceRef: "fixture",
 });

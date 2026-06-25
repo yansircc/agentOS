@@ -9,11 +9,11 @@
 export { createAgentDurableObject } from "./agent-do";
 export { materializeCloudflareAgentDeployment } from "./deployment";
 export { cloudflareAgentMountPort, mountCloudflareAgent } from "./mount";
-export * from "./ag-ui-sse";
-export * from "./workspace-job-facade";
-export * from "./workspace-job-profile";
-export * from "./workspace-env";
-export * from "./workspace-op";
+export {
+  createCloudflareLedgerAgUiHistorySseResponse,
+  createCloudflareLedgerAgUiSseResponse,
+} from "./ag-ui-sse";
+export { createCloudflareWorkspaceJobResponse } from "./workspace-job-facade";
 export { makeCloudflareWorkspaceEnv } from "./workspace-env-adapter";
 export type {
   AgentAttachedStreamCancelSpec,
@@ -42,6 +42,12 @@ export type {
   CloudflareAgentMountPort,
   CloudflareAgentProjectionSinks,
 } from "./mount";
+export type { CloudflareLedgerSseSource } from "./ag-ui-sse";
+export type {
+  CloudflareWorkspaceJobProjectionReader,
+  CloudflareWorkspaceJobResponseOptions,
+  CloudflareWorkspaceJobResponseProjection,
+} from "./workspace-job-facade";
 export type {
   CloudflareAttachedStreamFactory,
   CloudflareAttachedStreamFactoryContext,
