@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { createLocalAgentRuntime } from "../../src/local/index";
 import { createInMemoryRuntimeBackend } from "../../src/in-memory";
 import { truthIdentity } from "./identity";
 
@@ -22,6 +23,41 @@ const looseHalfRegistrationShape = {
 const assertPublicAssemblyTypes = (): void => {
   // @ts-expect-error public in-memory assembly requires resolver-owned graph brand
   createInMemoryRuntimeBackend(looseHalfRegistrationShape);
+
+  void createLocalAgentRuntime({
+    identity: "typed-test-llm",
+    cwd: "/tmp/agentos-local-type-test",
+    llm: {
+      kind: "test",
+      responses: [],
+    },
+  });
+
+  void createLocalAgentRuntime({
+    identity: "typed-real-llm",
+    cwd: "/tmp/agentos-local-type-test",
+    llm: { responses: [] },
+  });
+
+  void createLocalAgentRuntime({
+    identity: "typed-handler-glue",
+    cwd: "/tmp/agentos-local-type-test",
+    llm: {
+      handler: async () => ({
+        items: [],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      }),
+    },
+  });
+
+  void createLocalAgentRuntime({
+    identity: "typed-bad-transport",
+    cwd: "/tmp/agentos-local-type-test",
+    // @ts-expect-error provider transport assembly requires a transport layer and default route
+    llm: {
+      kind: "transport",
+    },
+  });
 
   type _RawStateConstructor = typeof createInMemoryBackendState;
   type _LocalWorkspaceOpProvider = typeof installLocalWorkspaceOperationProvider;

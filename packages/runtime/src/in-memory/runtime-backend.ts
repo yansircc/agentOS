@@ -43,7 +43,7 @@ import { InMemoryBoundaryEventsLive } from "./boundary-events";
 import { InMemoryDispatchLive, deliveryRetryTrigger } from "./dispatch";
 import type { InMemoryDispatchTargetRegistry } from "./dispatch-types";
 import { InMemoryLedgerLive } from "./ledger";
-import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "./llm";
+import { InMemoryLlmTransportLive } from "./llm";
 import { InMemoryMaterializedProjectionsLive } from "./materialized-projections";
 import { InMemoryQuotaLive } from "./quota";
 import { InMemoryResourcesLive } from "./resources";
@@ -75,6 +75,8 @@ export type InMemoryRuntimeServices =
   | MaterializedProjections
   | RefResolverService;
 
+export type InMemoryRuntimeLlmTransportLayer = Layer.Layer<LlmTransport, never, RefResolverService>;
+
 /**
  * Internal substrate input consumed by resolveRuntime after capability
  * contracts have been globally validated. This is not a public assembly API.
@@ -87,7 +89,7 @@ export interface InMemoryRuntimeInstallGraphInput {
   readonly scope?: never;
   readonly handlers?: Iterable<InMemoryEventHandlerRegistration>;
   readonly dispatchTargets?: InMemoryDispatchTargetRegistry;
-  readonly llm?: InMemoryLlmTransportOptions;
+  readonly llmTransport?: InMemoryRuntimeLlmTransportLayer;
   readonly refResolver?: RefResolver;
   readonly triggers?: ReadonlyArray<AnyDurableTrigger>;
   readonly streams?: ReadonlyArray<AnyAttachedStreamHandler>;
@@ -111,7 +113,7 @@ export interface ResolvedRuntimeInstallGraph {
   readonly scope?: never;
   readonly handlers: ReadonlyArray<InMemoryEventHandlerRegistration>;
   readonly dispatchTargets?: InMemoryDispatchTargetRegistry;
-  readonly llm?: InMemoryLlmTransportOptions;
+  readonly llmTransport: InMemoryRuntimeLlmTransportLayer;
   readonly refResolver?: RefResolver;
   readonly triggers: ReadonlyArray<AnyDurableTrigger>;
   readonly streams: ReadonlyArray<AnyAttachedStreamHandler>;
@@ -132,7 +134,7 @@ export const defineResolvedRuntimeInstallGraph = (
   identity: input.identity,
   handlers: Array.from(input.handlers ?? []),
   dispatchTargets: input.dispatchTargets,
-  llm: input.llm,
+  llmTransport: input.llmTransport ?? InMemoryLlmTransportLive(),
   refResolver: input.refResolver,
   triggers: [...(input.triggers ?? [])],
   streams: [...(input.streams ?? [])],
@@ -157,9 +159,9 @@ export const createInMemoryRuntimeBackend = (
       state.addHandler(registration.kind, registration.handler);
     }
   }
-  const llmLayer = InMemoryLlmTransportLive(graph.llm);
   const refResolverLayer = RefResolverLive(graph.refResolver ?? { material: () => null });
-  const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmLayer));
+  const llmTransportLayer = graph.llmTransport.pipe(Layer.provide(refResolverLayer));
+  const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmTransportLayer));
   const dispatchRetryTrigger = deliveryRetryTrigger(state, graph.dispatchTargets ?? {});
   const triggerRegistryLayer = Layer.effect(
     DurableTriggerRegistry,
@@ -212,7 +214,7 @@ export const createInMemoryRuntimeBackend = (
       ),
       InMemoryResourcesLive(state),
       InMemoryQuotaLive(state),
-      llmLayer,
+      llmTransportLayer,
       refResolverLayer,
       admissionLayer,
       triggerRegistryLayer,

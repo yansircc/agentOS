@@ -4,6 +4,7 @@
  */
 
 import { Effect, Result, Schema } from "effect";
+import type { Layer } from "effect";
 import { runPromise as runEffectPromise } from "effect/Effect";
 import type { HostProfile, ResolvedHostFacts } from "./host";
 import type {
@@ -27,10 +28,13 @@ import {
 import {
   createInMemoryRuntimeBackend,
   defineResolvedRuntimeInstallGraph,
+  type InMemoryRuntimeLlmTransportLayer,
   type InMemoryRuntimeBackend,
   type ResolvedRuntimeInstallGraph,
 } from "../in-memory/runtime-backend";
-import type { InMemoryLlmTransportOptions } from "../in-memory/llm";
+import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "../in-memory/llm";
+import type { LlmTransport } from "@agent-os/core/llm-protocol";
+import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
 import type { AgentBindings, AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
 import { validateToolRegistry } from "@agent-os/core/tools";
 import {
@@ -79,7 +83,13 @@ export interface ResolveRuntimeOptions {
   readonly secrets?: Readonly<Record<string, string>>;
   readonly identity: string;
   readonly diagnosticSink?: PreflightDiagnosticSink;
+  /**
+   * Test fixture transport. Real providers should be installed with
+   * `llmTransport` plus `refResolver`.
+   */
   readonly llm?: InMemoryLlmTransportOptions;
+  readonly llmTransport?: Layer.Layer<LlmTransport, never, RefResolverService>;
+  readonly refResolver?: RefResolver;
 }
 
 /**
@@ -745,6 +755,18 @@ export const resolveRuntime = async (
   capabilities: ReadonlyArray<CapabilityContract>,
   options: ResolveRuntimeOptions,
 ): Promise<ResolveRuntimeResult> => {
+  if (options.llm !== undefined && options.llmTransport !== undefined) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          pass: "config",
+          reason:
+            "resolveRuntime accepts either test llm fixture options or llmTransport, not both",
+        },
+      ],
+    };
+  }
   const graph = resolveRuntimeInstallGraph(host, capabilities, options);
   if (!graph.ok) return graph;
 
@@ -801,12 +823,16 @@ export const resolveRuntime = async (
     });
   }
 
+  const llmTransport: InMemoryRuntimeLlmTransportLayer =
+    options.llmTransport ?? InMemoryLlmTransportLive(options.llm ?? {});
+
   const installGraph = defineResolvedRuntimeInstallGraph({
     identity: truthIdentity,
     projections: graph.resolved.projections,
     triggers: graph.resolved.triggers,
     handlers: graph.resolved.handlers({ capabilities: capabilityHandles }),
-    llm: options.llm ?? {},
+    llmTransport,
+    refResolver: options.refResolver,
     graphStatus: {
       handlers: graph.resolved.graphStatus.handlers.values(),
       projections: graph.resolved.graphStatus.projections.values(),

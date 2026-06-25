@@ -3,8 +3,10 @@ import { promises as fs } from "node:fs";
 import { constants as fsConstants } from "node:fs";
 import process from "node:process";
 import { Effect } from "effect";
+import type { Layer } from "effect";
 import type { AuthorityRef } from "@agent-os/core/effect-claim";
-import type { LlmResponse, LlmRoute } from "@agent-os/core/llm-protocol";
+import type { LlmResponse, LlmRoute, LlmTransport } from "@agent-os/core/llm-protocol";
+import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
 import type {
   AgentSubmitBindings,
   SubmitSpec,
@@ -26,7 +28,7 @@ import {
 } from "../capability";
 import { projectInspectionSnapshot, type InspectionSnapshot } from "../inspection";
 import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
-import type { InMemoryLlmTransportOptions } from "../in-memory/llm";
+import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "../in-memory/llm";
 import { internalSubmitSpec } from "../internal-submit";
 import { submitAgentEffect } from "../submit-agent";
 import {
@@ -51,12 +53,26 @@ export interface CreateLocalWorkspaceEnvOptions {
   readonly inheritEnv?: boolean;
 }
 
+export interface LocalAgentRuntimeTestLlm extends InMemoryLlmTransportOptions {
+  readonly kind?: "test";
+  readonly route?: LlmRoute;
+}
+
+export interface LocalAgentRuntimeTransportLlm {
+  readonly kind: "transport";
+  readonly transport: Layer.Layer<LlmTransport, never, RefResolverService>;
+  readonly refResolver?: RefResolver;
+  readonly route: LlmRoute;
+}
+
+export type LocalAgentRuntimeLlm = LocalAgentRuntimeTestLlm | LocalAgentRuntimeTransportLlm;
+
 export interface CreateLocalAgentRuntimeOptions {
   readonly identity: string;
   readonly cwd: string;
   readonly env?: CreateLocalWorkspaceEnvOptions["env"];
   readonly inheritEnv?: CreateLocalWorkspaceEnvOptions["inheritEnv"];
-  readonly llm?: InMemoryLlmTransportOptions;
+  readonly llm?: LocalAgentRuntimeLlm;
   readonly workspaceOperations?: WorkspaceOperationsOptions;
   readonly capabilities?: ReadonlyArray<CapabilityContract>;
 }
@@ -327,12 +343,40 @@ const localWorkspaceOperations = (options: WorkspaceOperationsOptions | undefine
     ...options,
   });
 
-const defaultLocalLlm = (
-  options: InMemoryLlmTransportOptions | undefined,
-): InMemoryLlmTransportOptions =>
-  options ?? {
-    responses: [defaultLocalLlmResponse],
+interface ResolvedLocalAgentRuntimeLlm {
+  readonly transport: Layer.Layer<LlmTransport, never, RefResolverService>;
+  readonly refResolver?: RefResolver;
+  readonly defaultRoute: LlmRoute;
+}
+
+const localLlmTestFixture = (
+  options: LocalAgentRuntimeTestLlm | undefined,
+): ResolvedLocalAgentRuntimeLlm => {
+  const fixtureOptions: InMemoryLlmTransportOptions =
+    options === undefined
+      ? { responses: [defaultLocalLlmResponse] }
+      : {
+          ...(options.handler === undefined ? {} : { handler: options.handler }),
+          ...(options.responses === undefined ? {} : { responses: options.responses }),
+        };
+  return {
+    transport: InMemoryLlmTransportLive(fixtureOptions),
+    defaultRoute: options?.route ?? defaultLocalLlmRoute,
   };
+};
+
+const localLlmAssembly = (
+  options: LocalAgentRuntimeLlm | undefined,
+): ResolvedLocalAgentRuntimeLlm => {
+  if (options?.kind === "transport") {
+    return {
+      transport: options.transport,
+      refResolver: options.refResolver,
+      defaultRoute: options.route,
+    };
+  }
+  return localLlmTestFixture(options);
+};
 
 const mergeToolContext = (
   base: SubmitToolContext | undefined,
@@ -351,10 +395,11 @@ const submitSpecWithBindings = (
   input: LocalAgentSubmitInput,
   bindings: AgentSubmitBindings,
   effectAuthorityRef: AuthorityRef,
+  defaultRoute: LlmRoute,
 ): SubmitSpec => ({
   ...input,
   context: input.context ?? {},
-  route: input.route ?? defaultLocalLlmRoute,
+  route: input.route ?? defaultRoute,
   effectAuthorityRef,
   tools: { ...bindings.tools, ...input.tools },
   executionDomains: [...(bindings.executionDomains ?? []), ...(input.executionDomains ?? [])],
@@ -379,10 +424,7 @@ const inspectionBoundaryEventIdentities = (
   bindings: AgentSubmitBindings,
 ) => {
   const intentOwners = new Map(
-    (bindings.toolIntents ?? []).map((intent) => [
-      intent.kind,
-      intent.boundaryPackage.ownerId,
-    ]),
+    (bindings.toolIntents ?? []).map((intent) => [intent.kind, intent.boundaryPackage.ownerId]),
   );
   const identities = new Map<
     string,
@@ -434,6 +476,7 @@ const localAgentRuntimeFacade = (input: {
   readonly host: HostProfile;
   readonly capabilities: ReadonlyArray<CapabilityContract>;
   readonly resolved: ResolvedRuntime;
+  readonly defaultRoute: LlmRoute;
 }): LocalAgentRuntime => ({
   submit: (submitInput) =>
     Effect.runPromise(
@@ -443,6 +486,7 @@ const localAgentRuntimeFacade = (input: {
             submitInput,
             input.resolved.bindings,
             input.truthIdentity.effectAuthorityRef,
+            input.defaultRoute,
           ),
           {
             scope: input.identity,
@@ -481,6 +525,7 @@ export const lowerLocalAgentRuntime = async (
 ): Promise<LoweredLocalAgentRuntime> => {
   const target = localAgentRuntimeTarget(options.target);
   const identity = inMemoryConversationTruthIdentity(options.identity);
+  const llm = localLlmAssembly(options.llm);
   const workspaceEnv = createLocalWorkspaceEnv({
     cwd: options.cwd,
     env: options.env,
@@ -493,7 +538,8 @@ export const lowerLocalAgentRuntime = async (
   ];
   const resolved = await resolveRuntime(host, capabilities, {
     identity: options.identity,
-    llm: defaultLocalLlm(options.llm),
+    llmTransport: llm.transport,
+    refResolver: llm.refResolver,
   });
   if (!resolved.ok) {
     throw new LocalAgentRuntimeResolveError(resolved.diagnostics);
@@ -504,6 +550,7 @@ export const lowerLocalAgentRuntime = async (
     host,
     capabilities,
     resolved: resolved.resolved,
+    defaultRoute: llm.defaultRoute,
   });
   return {
     target,

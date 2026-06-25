@@ -3,6 +3,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "@effect/vitest";
+import { Effect, Layer } from "effect";
+import {
+  HttpClient as HttpClientTag,
+  type HttpClient as HttpClientService,
+} from "effect/unstable/http/HttpClient";
+import type { HttpClientRequest } from "effect/unstable/http/HttpClientRequest";
+import type { HttpClientResponse } from "effect/unstable/http/HttpClientResponse";
 import { RUNTIME_EVENT_KIND } from "@agent-os/core/runtime-protocol";
 import {
   createLocalAgentRuntime,
@@ -14,6 +21,7 @@ import {
   WORKSPACE_OP_KIND,
   WORKSPACE_OP_PROJECTION_KIND,
 } from "../../src/workspace-op-carrier";
+import { makeOpenAiCompatibleLlmTransportLayer } from "../../src/llm-effect-ai/openai-compatible";
 
 const withTempWorkspace = async <A>(
   run: (root: string, base: string) => Promise<A>,
@@ -30,6 +38,22 @@ const withTempWorkspace = async <A>(
 
 const nodeCommand = (script: string): string =>
   `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`;
+
+const httpResponse = (status: number, body: unknown): HttpClientResponse =>
+  ({
+    status,
+    json: Effect.succeed(body),
+    text: Effect.succeed(JSON.stringify(body)),
+  }) as unknown as HttpClientResponse;
+
+const fakeHttpClient = (
+  execute: (request: HttpClientRequest) => Effect.Effect<HttpClientResponse>,
+): HttpClientService =>
+  ({
+    execute,
+  }) as unknown as HttpClientService;
+
+const httpClientLive = (client: HttpClientService) => Layer.succeed(HttpClientTag, client);
 
 describe("createLocalWorkspaceEnv", () => {
   it("wraps local filesystem operations in the shared workspace root contract", async () => {
@@ -112,6 +136,7 @@ describe("createLocalWorkspaceEnv", () => {
         identity: "local-runtime",
         cwd: root,
         llm: {
+          kind: "test",
           responses: [
             {
               items: [{ type: "message", text: "local done" }],
@@ -190,6 +215,61 @@ describe("createLocalWorkspaceEnv", () => {
     });
   });
 
+  it("installs an OpenAI-compatible local transport without product-side llm handler glue", async () => {
+    await withTempWorkspace(async (root) => {
+      let providerCalls = 0;
+      const client = fakeHttpClient(() => {
+        providerCalls += 1;
+        return Effect.succeed(
+          httpResponse(200, {
+            choices: [{ message: { content: "provider done" } }],
+            usage: { prompt_tokens: 4, completion_tokens: 5, total_tokens: 9 },
+          }),
+        );
+      });
+
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-openai-compatible",
+        cwd: root,
+        llm: {
+          kind: "transport",
+          route: {
+            kind: "openai-chat-compatible",
+            endpointRef: "openai",
+            credentialRef: "openai-key",
+            modelId: "gpt-test",
+          },
+          refResolver: {
+            material: (ref) => {
+              if (ref.kind === "endpoint" && ref.ref === "openai") {
+                return "https://provider.example/v1";
+              }
+              if (ref.kind === "credential" && ref.ref === "openai-key") {
+                return "sk-test";
+              }
+              return null;
+            },
+          },
+          transport: makeOpenAiCompatibleLlmTransportLayer().pipe(
+            Layer.provide(httpClientLive(client)),
+          ),
+        },
+      });
+
+      const result = await runtime.submit({ intent: "use configured provider route" });
+
+      expect(providerCalls).toBe(1);
+      expect(result).toMatchObject({
+        ok: true,
+        status: "delivered",
+        final: "provider done",
+        tokensUsed: 9,
+      });
+      expect(runtime.diagnostics()).toEqual([]);
+      expect(runtime.inspect().resolve.status).toBe("available");
+    });
+  });
+
   it("lowers local runtimes with explicit target identity", async () => {
     await withTempWorkspace(async (root) => {
       const localLowered = await lowerLocalAgentRuntime({
@@ -197,6 +277,7 @@ describe("createLocalWorkspaceEnv", () => {
         identity: "local-target-runtime",
         cwd: root,
         llm: {
+          kind: "test",
           responses: [
             {
               items: [{ type: "message", text: "local target done" }],
@@ -210,6 +291,7 @@ describe("createLocalWorkspaceEnv", () => {
         identity: "node-target-runtime",
         cwd: root,
         llm: {
+          kind: "test",
           responses: [
             {
               items: [{ type: "message", text: "node target done" }],
@@ -265,6 +347,7 @@ describe("createLocalWorkspaceEnv", () => {
         identity: "local-runtime-write-file",
         cwd: root,
         llm: {
+          kind: "test",
           responses: [
             {
               items: [

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { Schema } from "effect";
 import { defineCarrier, event, none } from "@agent-os/core/carrier";
 import { eventNamespace } from "@agent-os/core/extensions";
 import { credentialMaterialRef } from "@agent-os/core/material-ref";
 import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
-import type { LlmRoute } from "@agent-os/core/llm-protocol";
+import { LlmTransport, type LlmRoute } from "@agent-os/core/llm-protocol";
 import {
   WORKSPACE_OPERATION_HOST_FACT,
   resolveRuntime,
@@ -387,6 +387,25 @@ describe("resolveRuntime", () => {
     expect(resolved.resolved.manifest.host).toBe("node@1");
     expect(resolved.resolved.layer).toBeDefined();
     expect(resolved.resolved.bindings).toBeDefined();
+  });
+
+  it("fails preflight when test fixture and provider transport both claim LLM assembly", async () => {
+    const result = await resolveRuntime(nodeHost, [], {
+      identity: "llm-source-conflict",
+      llm: {},
+      llmTransport: Layer.succeed(LlmTransport, {
+        resolveRoute: () => Effect.die("unused"),
+        call: () => Effect.die("unused"),
+      }),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "config",
+        reason: expect.stringContaining("either test llm fixture options or llmTransport"),
+      }),
+    ]);
   });
 
   it("passes materialized host facts into capability install", async () => {

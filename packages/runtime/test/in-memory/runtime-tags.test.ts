@@ -40,6 +40,7 @@ import {
   type TestInMemoryRuntimeOptions,
 } from "./runtime-helper";
 import { InMemoryTriggerPumpLive } from "../../src/in-memory/trigger-pump";
+import { InMemoryLlmTransportLive } from "../../src/in-memory/llm";
 import { truthIdentity, runtimeEventIdentity } from "./identity";
 
 const structuredResponse = (args: Record<string, unknown>) => ({
@@ -804,7 +805,9 @@ describe("in-memory runtime backend", () => {
 
   it("AdmissionLive uses injected LlmTransport and commits evidence only", async () => {
     const { runtime } = makeRuntime("admission-scope", {
-      llm: { responses: [structuredResponse({ answer: "ok" })] },
+      llmTransport: InMemoryLlmTransportLive({
+        responses: [structuredResponse({ answer: "ok" })],
+      }),
     });
     try {
       const admission = await runtime.runPromise(Admission);
