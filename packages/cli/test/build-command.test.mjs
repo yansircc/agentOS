@@ -817,6 +817,7 @@ void test("agentos build emits one channel registry for cloudflare and node targ
       [
         'import { defineChannel, post } from "@agent-os/runtime/channel";',
         "export default defineChannel({",
+        '  verify: async (request) => ({ authority: "github.signature", subject: request.request.headers.get("x-github-delivery") ?? "missing-delivery" }),',
         "  routes: [",
         '    post("/events/:eventId", async (request) => new Response(request.params.eventId)),',
         "  ],",
@@ -896,16 +897,21 @@ void test("agentos build emits one channel registry for cloudflare and node targ
     );
     assert.match(cloudflareChannels, /from "\.\.\/\.\.\/agent\/channels\/github"/);
     assert.match(cloudflareChannels, /from "@agent-os\/runtime\/channel"/);
+    assert.match(cloudflareChannels, /createChannelContext/);
     assert.match(cloudflareChannels, /name: "github"/);
     assert.match(cloudflareChannels, /mountedChannelPath/);
     assert.match(cloudflareChannels, /routePatternsConflict/);
+    assert.match(cloudflareChannels, /route\.channel\.verify\(channelRequest\)/);
     assert.match(cloudflareChannels, /dispatchGeneratedChannelRequest/);
     const cloudflareWorker = readFileSync(
       path.join(cloudflareRoot, ".agentos/generated/worker.ts"),
       "utf8",
     );
     assert.match(cloudflareWorker, /from "\.\/channels"/);
-    assert.match(cloudflareWorker, /dispatchGeneratedChannelRequest\(request, env\)/);
+    assert.match(cloudflareWorker, /agentOSRpcClient/);
+    assert.match(cloudflareWorker, /Pick<AgentRuntimeClient, "events" \| "streamEvents">/);
+    assert.match(cloudflareWorker, /generatedChannelRuntimeFor\(env\)/);
+    assert.doesNotMatch(cloudflareWorker, /dispatchGeneratedChannelRequest\(request, env\)/);
 
     writeBaseAgent(nodeRoot, ['  "target": { "kind": "node@1" },']);
     const nodeResult = spawnSync(process.execPath, [cli, "build", "--cwd", nodeRoot], {
@@ -915,8 +921,9 @@ void test("agentos build emits one channel registry for cloudflare and node targ
     assert.match(nodeResult.stdout, /generated 6 agentOS files/);
     const nodeLocal = readFileSync(path.join(nodeRoot, ".agentos/generated/local.ts"), "utf8");
     assert.match(nodeLocal, /from "\.\/channels"/);
+    assert.match(nodeLocal, /ChannelRuntime/);
     assert.match(nodeLocal, /handleLocalAgentChannelRequest/);
-    assert.match(nodeLocal, /dispatchGeneratedChannelRequest\(request, context\)/);
+    assert.match(nodeLocal, /dispatchGeneratedChannelRequest\(request, runtime\)/);
     assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/channels.ts")), true);
   } finally {
     rmSync(cloudflareRoot, { recursive: true, force: true });
@@ -950,6 +957,7 @@ void test("generated channel registry rejects ambiguous channel route conflicts"
       [
         'import { defineChannel, post } from "@agent-os/runtime/channel";',
         "export default defineChannel({",
+        '  verify: () => ({ authority: "github.signature", subject: "installation:42" }),',
         "  routes: [",
         '    post("/events/:eventId", async () => new Response("param")),',
         '    post("/events/static", async () => new Response("literal")),',
@@ -993,6 +1001,142 @@ void test("generated channel registry rejects ambiguous channel route conflicts"
       importResult.stderr,
       /generated channel route conflict: POST \/channels\/github\/events\/:eventId conflicts with \/channels\/github\/events\/static/,
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("generated channel dispatch preserves raw request and restricts handler context", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-dispatch-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent/channels"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Handle provider-native channel input.");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "channel-dispatch",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "channel-dispatch-scope",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(root, "agent/channels/github.ts"),
+      [
+        'import { defineChannel, post } from "@agent-os/runtime/channel";',
+        "export default defineChannel({",
+        '  verify: async (request) => ({ authority: "github.signature", subject: request.request.headers.get("x-principal") ?? "missing-principal" }),',
+        "  routes: [",
+        '    post("/events/:eventId", async (request, context) => {',
+        "      const raw = await request.request.text();",
+        '      const submitResult = await context.submit({ intent: "channel", context: { eventId: request.params.eventId } });',
+        "      const dispatchResult = await context.dispatch({",
+        '        target: { bindingRef: { kind: "binding", provider: "test", bindingKind: "queue", ref: "outbound" }, scopeRef: { kind: "session", scopeId: "channel-dispatch-scope" }, effectAuthorityRef: { authorityClass: "channel", authorityId: context.principal.authority } },',
+        '        event: "channel.received",',
+        "        data: { eventId: request.params.eventId },",
+        "        idempotencyKey: request.params.eventId,",
+        "      });",
+        "      return Response.json({",
+        "        raw,",
+        "        eventId: request.params.eventId,",
+        "        path: request.path,",
+        "        principal: context.principal,",
+        "        contextKeys: Object.keys(context).sort(),",
+        "        submitStatus: submitResult.status,",
+        "        outboundEventId: dispatchResult.outboundEventId,",
+        "      });",
+        "    }),",
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "channel-dispatch" },',
+        '  "target": { "kind": "node@1" },',
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const buildResult = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.equal(buildResult.status, 0, buildResult.stderr);
+    linkGeneratedTargetSmokeDependencies(root);
+    const dispatchResult = runTypeScript(
+      [
+        'import { dispatchGeneratedChannelRequest } from "./.agentos/generated/channels.ts";',
+        "const calls = [];",
+        "const runtime = Object.freeze({",
+        "  submit: async (input) => {",
+        '    calls.push(["submit", input]);',
+        '    return { ok: true, status: "delivered", runId: 1, final: "ok", eventCount: 1, tokensUsed: 0 };',
+        "  },",
+        "  dispatch: async (spec) => {",
+        '    calls.push(["dispatch", spec]);',
+        "    return { outboundEventId: 9 };",
+        "  },",
+        "});",
+        'const request = new Request("http://agent.test/channels/github/events/evt_123", {',
+        '  method: "POST",',
+        '  headers: { "x-principal": "installation:42", "authorization": "secret-token" },',
+        '  body: "raw-provider-body",',
+        "});",
+        "const response = await dispatchGeneratedChannelRequest(request, runtime);",
+        "const body = await response.json();",
+        "console.log(JSON.stringify({ body, calls }));",
+      ].join("\n"),
+      { cwd: root, resolveDir: root },
+    );
+    assert.equal(dispatchResult.status, 0, dispatchResult.stderr);
+    const output = JSON.parse(dispatchResult.stdout);
+    assert.deepEqual(output.body, {
+      raw: "raw-provider-body",
+      eventId: "evt_123",
+      path: "/channels/github/events/evt_123",
+      principal: { authority: "github.signature", subject: "installation:42" },
+      contextKeys: ["dispatch", "principal", "submit"],
+      submitStatus: "delivered",
+      outboundEventId: 9,
+    });
+    assert.deepEqual(output.calls, [
+      ["submit", { intent: "channel", context: { eventId: "evt_123" } }],
+      [
+        "dispatch",
+        {
+          target: {
+            bindingRef: { kind: "binding", provider: "test", bindingKind: "queue", ref: "outbound" },
+            scopeRef: { kind: "session", scopeId: "channel-dispatch-scope" },
+            effectAuthorityRef: { authorityClass: "channel", authorityId: "github.signature" },
+          },
+          event: "channel.received",
+          data: { eventId: "evt_123" },
+          idempotencyKey: "evt_123",
+        },
+      ],
+    ]);
+    assert.doesNotMatch(JSON.stringify(output), /secret-token/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

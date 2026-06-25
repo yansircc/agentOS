@@ -1,6 +1,15 @@
+import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/core/types";
+import type { SubmitResult, SubmitRunInput } from "@agent-os/core/runtime-protocol";
+
 const CHANNEL_METHODS = new Set(["DELETE", "GET", "PATCH", "POST", "PUT"]);
 
 export type ChannelMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
+
+export type ChannelPrincipal = Readonly<{
+  authority: string;
+  subject: string;
+  claims?: Readonly<Record<string, unknown>>;
+}>;
 
 export type ChannelRequest = Readonly<{
   method: ChannelMethod;
@@ -10,83 +19,110 @@ export type ChannelRequest = Readonly<{
   url: URL;
 }>;
 
-export type ChannelContext<TContext = unknown> = TContext;
+export type ChannelSubmit = (input: SubmitRunInput) => Promise<SubmitResult>;
 
-export type ChannelHandler<TContext = unknown, TResult = Response> = (
+export type ChannelDispatch = (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
+
+export type ChannelRuntime = Readonly<{
+  submit: ChannelSubmit;
+  dispatch: ChannelDispatch;
+}>;
+
+export type ChannelContext = Readonly<
+  ChannelRuntime & {
+    principal: ChannelPrincipal;
+  }
+>;
+
+export type ChannelVerifier = (
   request: ChannelRequest,
-  context: ChannelContext<TContext>,
+) => ChannelPrincipal | Promise<ChannelPrincipal>;
+
+export type ChannelHandler<TResult = Response> = (
+  request: ChannelRequest,
+  context: ChannelContext,
 ) => TResult | Promise<TResult>;
 
 export type ChannelRoute<
   TMethod extends ChannelMethod = ChannelMethod,
-  TContext = unknown,
   TResult = Response,
 > = Readonly<{
   method: TMethod;
   path: string;
-  handler: ChannelHandler<TContext, TResult>;
+  handler: ChannelHandler<TResult>;
 }>;
 
 export type DefinedChannel<TRoutes extends readonly ChannelRoute[] = readonly ChannelRoute[]> =
   Readonly<{
+    verify: ChannelVerifier;
     routes: TRoutes;
   }>;
 
 export const defineChannel = <const TRoutes extends readonly ChannelRoute[]>(spec: {
+  readonly verify: ChannelVerifier;
   readonly routes: TRoutes;
 }): DefinedChannel<TRoutes> => {
+  if (typeof spec.verify !== "function") {
+    throw new TypeError("defineChannel requires a verifier");
+  }
   if (spec.routes.length === 0) {
     throw new TypeError("defineChannel requires at least one route");
   }
 
   const routes = spec.routes.map((route) => normalizeRoute(route)) as unknown as TRoutes;
   return Object.freeze({
+    verify: spec.verify,
     routes: Object.freeze(routes),
   });
 };
 
-export const get = <TContext = unknown, TResult = Response>(
-  path: string,
-  handler: ChannelHandler<TContext, TResult>,
-): ChannelRoute<"GET", TContext, TResult> => defineRoute("GET", path, handler);
+export const createChannelContext = (
+  runtime: ChannelRuntime,
+  principal: ChannelPrincipal,
+): ChannelContext => {
+  assertChannelRuntime(runtime);
+  const verifiedPrincipal = normalizePrincipal(principal);
+  return Object.freeze({
+    principal: verifiedPrincipal,
+    submit: runtime.submit,
+    dispatch: runtime.dispatch,
+  });
+};
 
-export const post = <TContext = unknown, TResult = Response>(
+export const get = <TResult = Response>(
   path: string,
-  handler: ChannelHandler<TContext, TResult>,
-): ChannelRoute<"POST", TContext, TResult> => defineRoute("POST", path, handler);
+  handler: ChannelHandler<TResult>,
+): ChannelRoute<"GET", TResult> => defineRoute("GET", path, handler);
 
-export const put = <TContext = unknown, TResult = Response>(
+export const post = <TResult = Response>(
   path: string,
-  handler: ChannelHandler<TContext, TResult>,
-): ChannelRoute<"PUT", TContext, TResult> => defineRoute("PUT", path, handler);
+  handler: ChannelHandler<TResult>,
+): ChannelRoute<"POST", TResult> => defineRoute("POST", path, handler);
 
-export const patch = <TContext = unknown, TResult = Response>(
+export const put = <TResult = Response>(
   path: string,
-  handler: ChannelHandler<TContext, TResult>,
-): ChannelRoute<"PATCH", TContext, TResult> => defineRoute("PATCH", path, handler);
+  handler: ChannelHandler<TResult>,
+): ChannelRoute<"PUT", TResult> => defineRoute("PUT", path, handler);
 
-export const del = <TContext = unknown, TResult = Response>(
+export const patch = <TResult = Response>(
   path: string,
-  handler: ChannelHandler<TContext, TResult>,
-): ChannelRoute<"DELETE", TContext, TResult> => defineRoute("DELETE", path, handler);
+  handler: ChannelHandler<TResult>,
+): ChannelRoute<"PATCH", TResult> => defineRoute("PATCH", path, handler);
 
-const defineRoute = <
-  TMethod extends ChannelMethod,
-  TContext = unknown,
-  TResult = Response,
->(
+export const del = <TResult = Response>(
+  path: string,
+  handler: ChannelHandler<TResult>,
+): ChannelRoute<"DELETE", TResult> => defineRoute("DELETE", path, handler);
+
+const defineRoute = <TMethod extends ChannelMethod, TResult = Response>(
   method: TMethod,
   path: string,
-  handler: ChannelHandler<TContext, TResult>,
-): ChannelRoute<TMethod, TContext, TResult> => normalizeRoute({ method, path, handler });
+  handler: ChannelHandler<TResult>,
+): ChannelRoute<TMethod, TResult> => normalizeRoute({ method, path, handler });
 
-const normalizeRoute = <
-  TMethod extends ChannelMethod,
-  TContext = unknown,
-  TResult = Response,
->(
-  route: ChannelRoute<TMethod, TContext, TResult>,
-): ChannelRoute<TMethod, TContext, TResult> => {
+const normalizeRoute = <TMethod extends ChannelMethod, TResult = Response>(
+  route: ChannelRoute<TMethod, TResult>,
+): ChannelRoute<TMethod, TResult> => {
   if (!CHANNEL_METHODS.has(route.method)) {
     throw new TypeError(`Unsupported channel method: ${String(route.method)}`);
   }
@@ -111,4 +147,42 @@ const assertRoutePath = (path: string): void => {
   if (path.includes("?") || path.includes("#")) {
     throw new TypeError(`Channel route path must not include query or hash: ${path}`);
   }
+};
+
+const assertChannelRuntime = (runtime: ChannelRuntime): void => {
+  if (!isRecord(runtime)) {
+    throw new TypeError("Channel runtime must be an object");
+  }
+  if (typeof runtime.submit !== "function") {
+    throw new TypeError("Channel runtime requires submit");
+  }
+  if (typeof runtime.dispatch !== "function") {
+    throw new TypeError("Channel runtime requires dispatch");
+  }
+};
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const nonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const normalizePrincipal = (principal: ChannelPrincipal): ChannelPrincipal => {
+  if (!isRecord(principal)) {
+    throw new TypeError("Channel verifier must return a principal object");
+  }
+  if (!nonEmptyString(principal.authority)) {
+    throw new TypeError("Channel principal requires authority");
+  }
+  if (!nonEmptyString(principal.subject)) {
+    throw new TypeError("Channel principal requires subject");
+  }
+  if (principal.claims !== undefined && !isRecord(principal.claims)) {
+    throw new TypeError("Channel principal claims must be an object");
+  }
+  return Object.freeze({
+    authority: principal.authority,
+    subject: principal.subject,
+    ...(principal.claims === undefined ? {} : { claims: Object.freeze({ ...principal.claims }) }),
+  });
 };

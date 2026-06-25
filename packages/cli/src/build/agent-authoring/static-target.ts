@@ -260,8 +260,9 @@ const renderChannelRegistry = (
           )
           .join("\n")}\n]`;
   return `${channelImports}
+${renderNamedImport(["createChannelContext"], modules.runtimeChannel)}
 ${renderTypeImport(
-  ["ChannelContext", "ChannelMethod", "ChannelRequest", "ChannelRoute", "DefinedChannel"],
+  ["ChannelMethod", "ChannelRequest", "ChannelRoute", "ChannelRuntime", "DefinedChannel"],
   modules.runtimeChannel,
 )}
 
@@ -274,6 +275,7 @@ type GeneratedChannelDefinition = {
 type GeneratedChannelRoute = ChannelRoute & {
   readonly channelName: string;
   readonly mountPath: string;
+  readonly channel: DefinedChannel;
 };
 
 export const generatedChannels = ${entries} as const satisfies ReadonlyArray<GeneratedChannelDefinition>;
@@ -286,6 +288,7 @@ const generatedRoutes = generatedChannels.flatMap((entry): ReadonlyArray<Generat
     ...route,
     channelName: entry.name,
     mountPath: mountedChannelPath(entry.name, route.path),
+    channel: entry.channel,
   })),
 );
 
@@ -351,7 +354,7 @@ const matchGeneratedChannelPath = (
 
 export const dispatchGeneratedChannelRequest = async (
   request: Request,
-  context: ChannelContext,
+  runtime: ChannelRuntime,
 ): Promise<Response | null> => {
   const url = new URL(request.url);
   const method = request.method.toUpperCase() as ChannelMethod;
@@ -366,6 +369,8 @@ export const dispatchGeneratedChannelRequest = async (
       request,
       url,
     };
+    const principal = await route.channel.verify(channelRequest);
+    const context = createChannelContext(runtime, principal);
     return route.handler(channelRequest, context);
   }
   return null;
@@ -1300,6 +1305,7 @@ const renderLocalAgentApp = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     ...(hasChannels ? [renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")] : []),
+    ...(hasChannels ? [renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
@@ -1378,8 +1384,8 @@ ${
   hasChannels
     ? `export const handleLocalAgentChannelRequest = (
   request: Request,
-  context: unknown = {},
-): Promise<Response | null> => dispatchGeneratedChannelRequest(request, context);`
+  runtime: ChannelRuntime,
+): Promise<Response | null> => dispatchGeneratedChannelRequest(request, runtime);`
     : ""
 }
 
@@ -1458,15 +1464,33 @@ const renderCloudflareWorkerEntry = (
   const target = cloudflareTargetFor(normalized.target);
   const hasChannels = normalized.channels.length > 0;
   return `${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n` : ""}${renderNamedImport([target.durableObject.className], "./target")}
-${hasChannels ? `${renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")}\n` : ""}${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
+${hasChannels ? `${renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")}\n${renderNamedImport(["agentOSRpcClient"], "./cloudflare-scope")}\n${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}\n${renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)}\n` : ""}${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
 export { ${target.durableObject.className}${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""} };
+
+${
+  hasChannels
+    ? `type AgentOSChannelRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
+  readonly submitRunInput: ChannelRuntime["submit"];
+  readonly dispatchToScope: ChannelRuntime["dispatch"];
+};
+
+const generatedChannelRuntimeFor = (env: AgentOSTargetEnv): ChannelRuntime => {
+  const runtime = agentOSRpcClient<AgentOSChannelRpc>(env);
+  return Object.freeze({
+    submit: (input) => runtime.submitRunInput(input),
+    dispatch: (spec) => runtime.dispatchToScope(spec),
+  });
+};
+`
+    : ""
+}
 
 export default {
   async fetch(request: Request, env: AgentOSTargetEnv): Promise<Response> {
     ${
       hasChannels
-        ? `const channelResponse = await dispatchGeneratedChannelRequest(request, env);
+        ? `const channelResponse = await dispatchGeneratedChannelRequest(request, generatedChannelRuntimeFor(env));
     if (channelResponse !== null) return channelResponse;`
         : ""
     }
