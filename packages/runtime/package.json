@@ -34,6 +34,10 @@
       "types": "./src/capability/index.ts",
       "default": "./src/capability/index.ts"
     },
+    "./channel": {
+      "types": "./src/channel/index.ts",
+      "default": "./src/channel/index.ts"
+    },
     "./workspace-binding": {
       "types": "./src/workspace-binding.ts",
       "default": "./src/workspace-binding.ts"
