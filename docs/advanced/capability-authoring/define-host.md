@@ -9,10 +9,12 @@
 ## Usage
 
 ```ts
-import { defineHost } from "@agent-os/runtime";
+import { WORKSPACE_OPERATION_HOST_FACT, defineHost } from "@agent-os/runtime";
 export const customHost = defineHost({
   target: "custom-host@1",
-  provides: ["storage.ledger", "fs.workspace"],
-  materialize: async () => ({}),
+  provides: ["storage.ledger", WORKSPACE_OPERATION_HOST_FACT],
+  materialize: () => ({
+    [WORKSPACE_OPERATION_HOST_FACT]: () => workspaceEnv,
+  }),
 });
 ```

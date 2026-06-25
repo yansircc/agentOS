@@ -43,10 +43,11 @@ import {
 } from "../workspace-op-local";
 import { defineCapability } from "./contract";
 import type { CapabilityInstallContext } from "./contract";
+import { WORKSPACE_OPERATION_HOST_FACT } from "./materialized-host-facts";
+
+export { WORKSPACE_OPERATION_HOST_FACT } from "./materialized-host-facts";
 
 type WorkspaceEnv = CreateWorkspaceOperationLocalProviderOptions["env"];
-
-export const WORKSPACE_OPERATION_HOST_FACT = "fs.workspace" as const;
 
 export interface WorkspaceOperationBindingEnvResolverInput {
   readonly mode: "binding";

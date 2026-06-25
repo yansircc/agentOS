@@ -56,6 +56,7 @@ import {
   type ResolvedRuntimeGraphRegistration,
   type ResolvedRuntimeGraphStatus,
 } from "../runtime-graph-status";
+import { allMaterializedHostFactContracts, hasResolvedHostFact } from "./materialized-host-facts";
 
 /**
  * Preflight diagnostic returned when resolve fails
@@ -154,6 +155,9 @@ const syncResult = <Value>(evaluate: () => Value): Result.Result<Value, unknown>
     catch: (cause) => cause,
   });
 
+const isResolvedHostFactsRecord = (value: unknown): value is ResolvedHostFacts =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const promiseResult = <Value>(
   evaluate: () => Value | Promise<Value>,
 ): Promise<Result.Result<Value, unknown>> =>
@@ -219,6 +223,55 @@ const normalizePeerRequirement = (
   req: string | CapabilityPeerRequirement,
 ): CapabilityPeerRequirement =>
   typeof req === "string" ? { capabilityId: req, optional: false } : req;
+
+const materializedHostFactDiagnostics = (
+  host: HostProfile,
+  resolvedHostFacts: ResolvedHostFacts,
+): ReadonlyArray<PreflightDiagnostic> => {
+  const diagnostics: PreflightDiagnostic[] = [];
+  for (const contract of allMaterializedHostFactContracts()) {
+    const declared = host.provides.has(contract.fact);
+    const materialized = hasResolvedHostFact(resolvedHostFacts, contract.fact);
+    if (!declared && !materialized) continue;
+
+    const detail = diagnosticDetail({
+      target: host.target,
+      fact: contract.fact,
+      expected: contract.expected,
+    });
+    if (!declared) {
+      diagnostics.push({
+        pass: "host_fact",
+        reason: `Host ${host.target} materialized undeclared fact: ${contract.fact}`,
+        detail,
+      });
+      continue;
+    }
+    if (!materialized) {
+      diagnostics.push({
+        pass: "host_fact",
+        reason: `Host ${host.target} did not materialize declared fact: ${contract.fact}`,
+        detail,
+      });
+      continue;
+    }
+
+    const value = resolvedHostFacts[contract.fact];
+    if (!contract.accepts(value)) {
+      diagnostics.push({
+        pass: "host_fact",
+        reason: `Host ${host.target} materialized invalid fact: ${contract.fact}`,
+        detail: diagnosticDetail({
+          target: host.target,
+          fact: contract.fact,
+          expected: contract.expected,
+          actualType: typeof value,
+        }),
+      });
+    }
+  }
+  return diagnostics;
+};
 
 /**
  * Topologically sort capabilities by peer dependencies
@@ -471,6 +524,9 @@ export const resolveRuntimeInstallGraph = (
     if (isThenable(materialized)) {
       throw new Error(`Host ${host.target} materialize returned an async result`);
     }
+    if (!isResolvedHostFactsRecord(materialized)) {
+      throw new Error(`Host ${host.target} materialize must return a host facts record`);
+    }
     return materialized;
   });
   if (Result.isFailure(hostFactsResult)) {
@@ -490,6 +546,12 @@ export const resolveRuntimeInstallGraph = (
       pass: "host_fact",
       reason: `Host ${host.target} did not materialize provided facts`,
     });
+    return failed();
+  }
+  for (const diagnostic of materializedHostFactDiagnostics(host, resolvedHostFacts)) {
+    addDiagnostic(diagnostic);
+  }
+  if (diagnostics.length > 0) {
     return failed();
   }
 

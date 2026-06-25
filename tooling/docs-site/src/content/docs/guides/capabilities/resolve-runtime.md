@@ -14,8 +14,22 @@ slug: "guides/capabilities/resolve-runtime"
 ## Usage
 
 ```ts
-import { resolveRuntime, nodeHost, workspaceOperations } from "@agent-os/runtime";
-const runtime = await resolveRuntime(nodeHost, [workspaceOperations({ env: process.env })], {
+import {
+  WORKSPACE_OPERATION_HOST_FACT,
+  defineHost,
+  resolveRuntime,
+  workspaceOperations,
+} from "@agent-os/runtime";
+
+const host = defineHost({
+  target: "custom-node@1",
+  provides: [WORKSPACE_OPERATION_HOST_FACT],
+  materialize: () => ({
+    [WORKSPACE_OPERATION_HOST_FACT]: () => workspaceEnv,
+  }),
+});
+
+const runtime = await resolveRuntime(host, [workspaceOperations({ toolNames: ["read_file"] })], {
   identity: "my-agent",
   config: {},
   secrets: {},
@@ -29,7 +43,7 @@ const { layer, bindings } = runtime.resolved;
 ## Preflight Passes
 
 1.  **name_unique**: Ensures no duplicate capability IDs
-2.  **host_fact**: Validates all required host facts are provided
+2.  **host_fact**: Validates all required host facts are provided and materialized facts satisfy the catalog contract
 3.  **peer_dag**: Validates peer dependencies exist, requested peer versions match, and the peer graph has no circular references
 4.  **config**: Validates required configuration values are present
 5.  **secret**: Validates required secrets are present

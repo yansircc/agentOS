@@ -13,7 +13,6 @@ export const nodeHost = defineHost({
   target: "node@1",
   provides: [
     "storage.ledger",
-    "fs.workspace",
     "timer.durable",
     "network.outbound",
     "secrets.store",

@@ -39,7 +39,7 @@ describe("defineCapability", () => {
 describe("defineHost", () => {
   it("creates a valid host profile", () => {
     expect(nodeHost.target).toBe("node@1");
-    expect(nodeHost.provides.has("fs.workspace")).toBe(true);
+    expect(nodeHost.provides.has("fs.workspace")).toBe(false);
     expect(nodeHost.provides.has("durability.do")).toBe(false);
   });
 });

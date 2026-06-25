@@ -124,6 +124,93 @@ describe("resolveRuntime", () => {
     );
   });
 
+  it("fails host_fact preflight before install for bare nodeHost workspace operations", async () => {
+    const result = await resolveRuntime(
+      nodeHost,
+      [workspaceOperations({ toolNames: ["read_file"] })],
+      { identity: "node-host-workspace-missing", llm: {} },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "host_fact",
+        capabilityId: WORKSPACE_OP_FACT_OWNER,
+        reason: expect.stringContaining(WORKSPACE_OPERATION_HOST_FACT),
+      }),
+    ]);
+  });
+
+  it("fails host_fact preflight when a materialized host fact is declared but missing", async () => {
+    const host = defineHost({
+      target: "missing-workspace@1",
+      provides: [WORKSPACE_OPERATION_HOST_FACT],
+      materialize: () => ({}),
+    });
+
+    const result = await resolveRuntime(host, [workspaceOperations({ toolNames: ["read_file"] })], {
+      identity: "missing-workspace",
+      llm: {},
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "host_fact",
+        reason: expect.stringContaining("did not materialize declared fact"),
+        detail: expect.stringContaining("WorkspaceOperationEnvResolver"),
+      }),
+    ]);
+  });
+
+  it("fails host_fact preflight when a materialized host fact has the wrong contract", async () => {
+    const host = defineHost({
+      target: "invalid-workspace@1",
+      provides: [WORKSPACE_OPERATION_HOST_FACT],
+      materialize: () => ({
+        [WORKSPACE_OPERATION_HOST_FACT]: "not a resolver",
+      }),
+    });
+
+    const result = await resolveRuntime(host, [workspaceOperations({ toolNames: ["read_file"] })], {
+      identity: "invalid-workspace",
+      llm: {},
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "host_fact",
+        reason: expect.stringContaining("materialized invalid fact"),
+        detail: expect.stringContaining('"actualType":"string"'),
+      }),
+    ]);
+  });
+
+  it("fails host_fact preflight when a materialized host fact is emitted but undeclared", async () => {
+    const host = defineHost({
+      target: "undeclared-workspace@1",
+      provides: [],
+      materialize: () => ({
+        [WORKSPACE_OPERATION_HOST_FACT]: () => undefined,
+      }),
+    });
+
+    const result = await resolveRuntime(host, [], {
+      identity: "undeclared-workspace",
+      llm: {},
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "host_fact",
+        reason: expect.stringContaining("materialized undeclared fact"),
+        detail: expect.stringContaining(WORKSPACE_OPERATION_HOST_FACT),
+      }),
+    ]);
+  });
+
   it("fails preflight when capabilityId is duplicate", async () => {
     const cap1 = defineCapability({
       capabilityId: workspaceOpCarrier.ownerId,
