@@ -512,6 +512,10 @@ export interface AgentSessionProjection {
   readonly pendingInputRequest?: InputRequestDescriptor;
 }
 
+export interface AgentSessionListProjection {
+  readonly sessions: ReadonlyArray<AgentSessionProjection>;
+}
+
 export interface WorkflowRunRuntimeLink {
   readonly workflowId: string;
   readonly workflowRunId: string;
@@ -553,6 +557,11 @@ export interface WorkflowRunProjection {
   readonly output?: unknown;
   readonly outputKind?: "text" | "json";
   readonly error?: WorkflowRunError;
+}
+
+export interface WorkflowRunListProjection {
+  readonly workflowId: string;
+  readonly runs: ReadonlyArray<WorkflowRunProjection>;
 }
 
 const sessionTurnRuntimeLinks = (
@@ -786,6 +795,56 @@ export const projectAgentSession = (
     }),
   );
 
+const agentSessionListProjection = defineProjectionSpec<
+  {
+    readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+  },
+  AgentSessionListProjection
+>({
+  id: "runtime.agent-session-list",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents }, ctx) => {
+    const sessionRefs = [
+      ...new Set(
+        runtimeEvents
+          .filter(
+            (
+              event,
+            ): event is RuntimeLedgerEventByKind<
+              typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED
+            > => event.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED,
+          )
+          .map((event) => event.payload.sessionRef),
+      ),
+    ];
+    const sessions = sessionRefs.map((sessionRef): AgentSessionProjection => {
+      const turns = sessionTurnRuntimeLinks(runtimeEvents, sessionRef).map(
+        (turn): AgentSessionTurnProjection => ({
+          ...turn,
+          status: runStatusFromRuntimeEvents(runtimeEvents, turn.runtimeRunId),
+        }),
+      );
+      return {
+        sessionRef,
+        ...sessionStatus(runtimeEvents, turns),
+        turns,
+      };
+    });
+
+    return ctx.ok({ sessions });
+  },
+});
+
+export const projectAgentSessions = (
+  events: ReadonlyArray<LedgerEvent>,
+): AgentSessionListProjection =>
+  projectionOutputOrFail(
+    project(agentSessionListProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+    }),
+  );
+
 const workflowRunLinkProjection = defineProjectionSpec<
   {
     readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
@@ -843,6 +902,36 @@ export const projectWorkflowRun = (
       runtimeEvents: runtimeEventsOf(events),
       workflowId,
       workflowRunId,
+    }),
+  );
+
+const workflowRunListProjection = defineProjectionSpec<
+  {
+    readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+    readonly workflowId: string;
+  },
+  WorkflowRunListProjection
+>({
+  id: "runtime.workflow-run-list",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, workflowId }, ctx) =>
+    ctx.ok({
+      workflowId,
+      runs: workflowRunRuntimeLinks(runtimeEvents, workflowId).map((link) =>
+        workflowRunProjectionFromLink(runtimeEvents, link),
+      ),
+    }),
+});
+
+export const projectWorkflowRuns = (
+  events: ReadonlyArray<LedgerEvent>,
+  workflowId: string,
+): WorkflowRunListProjection =>
+  projectionOutputOrFail(
+    project(workflowRunListProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      workflowId,
     }),
   );
 

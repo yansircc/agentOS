@@ -4,6 +4,7 @@ import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { ABORT } from "@agent-os/core/abort";
 import {
   projectAgentSession,
+  projectAgentSessions,
   projectAgentSessionTurnLinks,
   projectRunsPage,
   projectRunStatus,
@@ -11,6 +12,7 @@ import {
   projectSubmitResult,
   projectWorkflowRun,
   projectWorkflowRunLinks,
+  projectWorkflowRuns,
 } from "../src/run-projector";
 import {
   agentRunAbortedEvent,
@@ -484,6 +486,65 @@ describe("runtime run projectors", () => {
       startedAt: 10,
     });
     expect(projectSubmitResult(rows, 1)).toBe(null);
+  });
+
+  it("lists product projections through the runtime projector owner", () => {
+    const rows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "session one" })),
+      event(
+        2,
+        agentSessionTurnSubmittedEvent({
+          ...runtimeIdentity,
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 1,
+        }),
+      ),
+      event(3, agentRunStartedEvent({ ...runtimeIdentity, intent: "workflow one" })),
+      event(
+        4,
+        workflowRunSubmittedEvent({
+          ...runtimeIdentity,
+          workflowId: "summarize",
+          workflowRunId: "workflow-run:1",
+          runtimeRunId: 3,
+        }),
+      ),
+      event(
+        5,
+        agentRunCompletedEvent({
+          ...runtimeIdentity,
+          runId: 3,
+          final: "done",
+          output: "done",
+          outputKind: "text",
+          tokensUsed: 0,
+        }),
+      ),
+    ];
+
+    expect(projectAgentSessions(rows)).toMatchObject({
+      sessions: [
+        {
+          sessionRef: "session:s1",
+          status: "running",
+          activeRunId: 1,
+          turns: [{ turnRef: "turn:s1:1", runtimeRunId: 1 }],
+        },
+      ],
+    });
+    expect(projectWorkflowRuns(rows, "summarize")).toMatchObject({
+      workflowId: "summarize",
+      runs: [
+        {
+          workflowRunId: "workflow-run:1",
+          runtimeRunId: 3,
+          status: "succeeded",
+          output: "done",
+          outputKind: "text",
+        },
+      ],
+    });
   });
 
   it("projects workflow run lifecycle from product links and runtime terminal facts", () => {

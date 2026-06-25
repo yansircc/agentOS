@@ -194,6 +194,7 @@ const staticTargetModules = (scope: string) => ({
   workspaceBinding: publicPackageSpecifier(scope, "runtime/workspace-binding"),
   workspaceEnvCloudflare: publicPackageSpecifier(scope, "runtime/cloudflare"),
   runtimeChannel: publicPackageSpecifier(scope, "runtime/channel"),
+  runtimeRunProjector: publicPackageSpecifier(scope, "runtime/run-projector"),
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
@@ -519,6 +520,100 @@ const renderSubmitSpecFromRunInput = (
   ...(input.resume === undefined ? {} : { resume: input.resume }),
 });`;
 
+const renderProductApiHelpers = (): string => `export interface AgentSessionSubmitTurnInput extends SubmitRunInput {
+  readonly sessionRef: string;
+  readonly turnRef: string;
+}
+
+export interface AgentWorkflowRunInput extends SubmitRunInput {
+  readonly workflowId: string;
+  readonly workflowRunId: string;
+  readonly idempotencyKey?: string;
+  readonly inputDigest?: string;
+}
+
+export interface AgentWorkflowRunRef {
+  readonly workflowId: string;
+  readonly workflowRunId: string;
+}
+
+const submitRunInputFields = (input: SubmitRunInput): SubmitRunInput => ({
+  intent: input.intent,
+  context: input.context,
+  ...(input.system === undefined ? {} : { system: input.system }),
+  ...(input.budget === undefined ? {} : { budget: input.budget }),
+  ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
+  ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  ...(input.materials === undefined ? {} : { materials: input.materials }),
+  ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
+  ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
+  ...(input.decisionInterrupts === undefined ? {} : { decisionInterrupts: input.decisionInterrupts }),
+  ...(input.resume === undefined ? {} : { resume: input.resume }),
+});
+
+const submitRunInputFromWorkflowRun = (
+  input: AgentWorkflowRunInput,
+): SubmitRunInput => submitRunInputFields(input);
+
+const submitRunInputFromSessionTurn = (
+  input: AgentSessionSubmitTurnInput,
+): SubmitRunInput => submitRunInputFields(input);`;
+
+const renderProductApiDurableObjectMethods = (): string => `
+  submitSessionTurn(input: AgentSessionSubmitTurnInput): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.submitWithBindingsAndProductLink(
+          submitSpecFromRunInput(submitRunInputFromSessionTurn(input)),
+          bindings.value,
+          {
+            kind: "session_turn",
+            sessionRef: input.sessionRef,
+            turnRef: input.turnRef,
+          },
+        )
+      : rejectTargetFailure(bindings);
+  }
+
+  inspectSession(input: { readonly sessionRef: string }): Promise<AgentSessionProjection> {
+    return this.events(semanticTruthIdentity).then((events) =>
+      projectAgentSession(events, input.sessionRef),
+    );
+  }
+
+  listSessions(): Promise<AgentSessionListProjection> {
+    return this.events(semanticTruthIdentity).then((events) => projectAgentSessions(events));
+  }
+
+  runWorkflow(input: AgentWorkflowRunInput): Promise<SubmitResult> {
+    const bindings = generatedSubmitBindingsFor(this.targetEnv);
+    return bindings.ok
+      ? this.submitWithBindingsAndProductLink(
+          submitSpecFromRunInput(submitRunInputFromWorkflowRun(input)),
+          bindings.value,
+          {
+            kind: "workflow_run",
+            workflowId: input.workflowId,
+            workflowRunId: input.workflowRunId,
+            ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+            ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
+          },
+        )
+      : rejectTargetFailure(bindings);
+  }
+
+  inspectWorkflowRun(input: AgentWorkflowRunRef): Promise<WorkflowRunProjection | null> {
+    return this.events(semanticTruthIdentity).then((events) =>
+      projectWorkflowRun(events, input.workflowId, input.workflowRunId),
+    );
+  }
+
+  listWorkflowRuns(input: { readonly workflowId: string }): Promise<WorkflowRunListProjection> {
+    return this.events(semanticTruthIdentity).then((events) =>
+      projectWorkflowRuns(events, input.workflowId),
+    );
+  }`;
+
 const renderGeneratedWorkspaceOperations = (
   workspaceToolArray: string,
   usesMutationTools: boolean,
@@ -599,6 +694,11 @@ const renderWorkspaceStaticTarget = (
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
       modules.openAiCompatibleTransport,
     ),
+    renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol),
+    renderNamedImport(
+      ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
+      modules.runtimeRunProjector,
+    ),
     renderNamedImport(
       ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
       modules.workspaceAgentHost,
@@ -617,6 +717,15 @@ const renderWorkspaceStaticTarget = (
     renderTypeImport(
       ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
+    ),
+    renderTypeImport(
+      [
+        "AgentSessionListProjection",
+        "AgentSessionProjection",
+        "WorkflowRunListProjection",
+        "WorkflowRunProjection",
+      ],
+      modules.runtimeRunProjector,
     ),
     renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
     renderTypeImport(
@@ -643,6 +752,7 @@ export const targetDeclarations = semanticDeclarations;
 export const targetDeployment = deploymentProvenance;
 
 const semanticManifest = semanticDeclarations as AgentManifest;
+const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
 const generatedHandler = () => undefined;
 
 type AgentOSTargetEnv = {
@@ -889,6 +999,8 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
 
 ${renderSubmitSpecFromRunInput(hasSkills)}
 
+${renderProductApiHelpers()}
+
 export const workspaceMount = defineWorkspaceAgentMount({
   driver: { kind: "driver_mount", client: undefined as never },
   projectionSinks: [
@@ -938,6 +1050,8 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
       ? this.submitWithBindings(submitSpecFromRunInput(input), bindings.value)
       : rejectTargetFailure(bindings);
   }
+
+${renderProductApiDurableObjectMethods()}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
     const bindings = generatedSubmitBindingsFor(this.targetEnv);
@@ -1053,6 +1167,11 @@ const renderChatStaticTarget = (
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
       modules.openAiCompatibleTransport,
     ),
+    renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol),
+    renderNamedImport(
+      ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
+      modules.runtimeRunProjector,
+    ),
     renderNamedImport(
       [
         "deterministicToolInvocation",
@@ -1065,6 +1184,15 @@ const renderChatStaticTarget = (
     renderTypeImport(
       ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
+    ),
+    renderTypeImport(
+      [
+        "AgentSessionListProjection",
+        "AgentSessionProjection",
+        "WorkflowRunListProjection",
+        "WorkflowRunProjection",
+      ],
+      modules.runtimeRunProjector,
     ),
     renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
     renderTypeImport(
@@ -1084,6 +1212,7 @@ export const targetDeclarations = semanticDeclarations;
 export const targetDeployment = deploymentProvenance;
 
 const semanticManifest = semanticDeclarations as AgentManifest;
+const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
 const generatedHandler = () => undefined;
 
 type AgentOSTargetEnv = {
@@ -1219,6 +1348,8 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
 
 ${renderSubmitSpecFromRunInput(hasSkills)}
 
+${renderProductApiHelpers()}
+
 const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
   manifest: semanticManifest,
   agentBindings: {
@@ -1251,6 +1382,8 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
       ? this.submitWithBindings(submitSpecFromRunInput(input), bindings.value)
       : rejectTargetFailure(bindings);
   }
+
+${renderProductApiDurableObjectMethods()}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
     const bindings = generatedSubmitBindingsFor(this.targetEnv);
@@ -1311,7 +1444,20 @@ const renderLocalAgentApp = (
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
       modules.openAiCompatibleTransport,
     ),
-    renderTypeImport(["AgentManifest"], modules.runtimeProtocol),
+    renderNamedImport(
+      ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
+      modules.runtimeRunProjector,
+    ),
+    renderTypeImport(["AgentManifest", "SubmitResult", "SubmitRunInput"], modules.runtimeProtocol),
+    renderTypeImport(
+      [
+        "AgentSessionListProjection",
+        "AgentSessionProjection",
+        "WorkflowRunListProjection",
+        "WorkflowRunProjection",
+      ],
+      modules.runtimeRunProjector,
+    ),
     renderTypeImport(["CreateLocalAgentRuntimeOptions", "LocalAgentRuntime"], modules.localRuntime),
   ].join("\n");
   return `${imports}
@@ -1378,7 +1524,24 @@ const generatedLocalLlmFor = (
   };
 };
 
-export type LocalAgentApp = LocalAgentRuntime;
+${renderProductApiHelpers()}
+
+export interface LocalAgentApp {
+  readonly runtime: LocalAgentRuntime;
+  readonly sessions: {
+    readonly submitTurn: (input: AgentSessionSubmitTurnInput) => Promise<SubmitResult>;
+    readonly inspect: (sessionRef: string) => AgentSessionProjection;
+    readonly list: () => AgentSessionListProjection;
+  };
+  readonly workflows: {
+    readonly run: (input: AgentWorkflowRunInput) => Promise<SubmitResult>;
+    readonly inspectRun: (
+      workflowId: string,
+      workflowRunId: string,
+    ) => WorkflowRunProjection | null;
+    readonly listRuns: (workflowId: string) => WorkflowRunListProjection;
+  };
+}
 
 ${
   hasChannels
@@ -1409,7 +1572,32 @@ export const createLocalAgentApp = async (
     llm: options.llm ?? generatedLocalLlmFor(targetEnv),
     workspaceOperations: generatedWorkspaceOperations,
   });
-  return lowered.runtime;
+  return {
+    runtime: lowered.runtime,
+    sessions: {
+      submitTurn: (input) =>
+        lowered.submitWithProductLink(submitRunInputFromSessionTurn(input), {
+          kind: "session_turn",
+          sessionRef: input.sessionRef,
+          turnRef: input.turnRef,
+        }),
+      inspect: (sessionRef) => projectAgentSession(lowered.runtime.events(), sessionRef),
+      list: () => projectAgentSessions(lowered.runtime.events()),
+    },
+    workflows: {
+      run: (input) =>
+        lowered.submitWithProductLink(submitRunInputFromWorkflowRun(input), {
+          kind: "workflow_run",
+          workflowId: input.workflowId,
+          workflowRunId: input.workflowRunId,
+          ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+          ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
+        }),
+      inspectRun: (workflowId, workflowRunId) =>
+        projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
+      listRuns: (workflowId) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
+    },
+  };
 };
 `;
 };

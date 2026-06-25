@@ -31,6 +31,7 @@ import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
 import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "../in-memory/llm";
 import { internalSubmitSpec } from "../internal-submit";
 import { submitAgentEffect } from "../submit-agent";
+import type { SubmitAgentProductLink } from "../submit-agent";
 import {
   createWorkspaceEnv,
   WORKSPACE_TOOL_NAMES,
@@ -114,6 +115,10 @@ export interface LoweredLocalAgentRuntime {
   readonly target: LocalAgentRuntimeTarget;
   readonly manifest: ResolvedRuntime["manifest"];
   readonly runtime: LocalAgentRuntime;
+  readonly submitWithProductLink: (
+    input: LocalAgentSubmitInput,
+    productLink: SubmitAgentProductLink,
+  ) => Promise<SubmitResult>;
 }
 
 export class LocalWorkspaceEnvError extends Error {
@@ -503,7 +508,7 @@ const localInspectionEvents = (input: {
   return Array.from(rows.values()).sort((left, right) => left.id - right.id);
 };
 
-const localAgentRuntimeFacade = (input: {
+type LocalAgentRuntimeFacadeInput = {
   readonly identity: string;
   readonly truthIdentity: ReturnType<typeof inMemoryConversationTruthIdentity>;
   readonly host: HostProfile;
@@ -511,33 +516,43 @@ const localAgentRuntimeFacade = (input: {
   readonly resolved: ResolvedRuntime;
   readonly llm: ResolvedLocalAgentRuntimeLlm;
   readonly defaultRoute: LlmRoute;
-}): LocalAgentRuntime => ({
-  submit: (submitInput) => {
-    const diagnostics = localLlmPreflightDiagnostics(
-      input.llm,
-      submitInput.route ?? input.defaultRoute,
-      "submit",
-    );
-    if (diagnostics.length > 0)
-      return Promise.reject(new LocalAgentRuntimeResolveError(diagnostics));
-    return Effect.runPromise(
-      submitAgentEffect(
-        internalSubmitSpec(
-          submitSpecWithBindings(
-            submitInput,
-            input.resolved.bindings,
-            input.truthIdentity.effectAuthorityRef,
-            input.defaultRoute,
-          ),
-          {
-            scope: input.identity,
-            scopeRef: input.truthIdentity.scopeRef,
-          },
-          { runtimeGraphStatus: input.resolved.installGraph.graphStatus },
+};
+
+const submitLocalAgent = (
+  input: LocalAgentRuntimeFacadeInput,
+  submitInput: LocalAgentSubmitInput,
+  productLink?: SubmitAgentProductLink,
+): Promise<SubmitResult> => {
+  const diagnostics = localLlmPreflightDiagnostics(
+    input.llm,
+    submitInput.route ?? input.defaultRoute,
+    "submit",
+  );
+  if (diagnostics.length > 0) {
+    return Promise.reject(new LocalAgentRuntimeResolveError(diagnostics));
+  }
+  return Effect.runPromise(
+    submitAgentEffect(
+      internalSubmitSpec(
+        submitSpecWithBindings(
+          submitInput,
+          input.resolved.bindings,
+          input.truthIdentity.effectAuthorityRef,
+          input.defaultRoute,
         ),
-      ).pipe(Effect.provide(input.resolved.layer)),
-    );
-  },
+        {
+          scope: input.identity,
+          scopeRef: input.truthIdentity.scopeRef,
+        },
+        { runtimeGraphStatus: input.resolved.installGraph.graphStatus },
+      ),
+      productLink === undefined ? {} : { productLink },
+    ).pipe(Effect.provide(input.resolved.layer)),
+  );
+};
+
+const localAgentRuntimeFacade = (input: LocalAgentRuntimeFacadeInput): LocalAgentRuntime => ({
+  submit: (submitInput) => submitLocalAgent(input, submitInput),
   events: (opts = {}) => input.resolved.state.snapshot(input.truthIdentity, opts),
   diagnostics: () => input.resolved.state.telemetryDiagnostics(),
   inspect: () =>
@@ -590,7 +605,7 @@ export const lowerLocalAgentRuntime = async (
   if (!resolved.ok) {
     throw new LocalAgentRuntimeResolveError(resolved.diagnostics);
   }
-  const runtime = localAgentRuntimeFacade({
+  const facadeInput = {
     identity: options.identity,
     truthIdentity: identity,
     host,
@@ -598,11 +613,14 @@ export const lowerLocalAgentRuntime = async (
     resolved: resolved.resolved,
     llm,
     defaultRoute: llm.defaultRoute,
-  });
+  } satisfies LocalAgentRuntimeFacadeInput;
+  const runtime = localAgentRuntimeFacade(facadeInput);
   return {
     target,
     manifest: resolved.resolved.manifest,
     runtime,
+    submitWithProductLink: (submitInput, productLink) =>
+      submitLocalAgent(facadeInput, submitInput, productLink),
   };
 };
 

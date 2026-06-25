@@ -128,6 +128,62 @@ const makeServices = (
         events.push(...committed);
         return committed.map(decodeRecordedLedgerEvent);
       }),
+    commitPrepared: (build: (builder: any) => void) =>
+      Effect.sync(() => {
+        const refs = new Map<string, { readonly key: string }>();
+        const ids = new Map<string, number>();
+        const recipes: Array<{
+          readonly ref: { readonly key: string };
+          readonly recipe: {
+            readonly kind: string;
+            readonly payload?: unknown;
+            readonly buildPayload?: (context: {
+              readonly id: (ref: { readonly key: string }) => number;
+            }) => unknown;
+            readonly scopeRef: LedgerEvent["scopeRef"];
+            readonly effectAuthorityRef: LedgerEvent["effectAuthorityRef"];
+            readonly ts?: number;
+          };
+        }> = [];
+        let nextAnonymousRef = 0;
+        const ref = (key: string) => {
+          const existing = refs.get(key);
+          if (existing !== undefined) return existing;
+          const next = { key };
+          refs.set(key, next);
+          return next;
+        };
+        const id = (eventRef: { readonly key: string }) => {
+          const eventId = ids.get(eventRef.key);
+          if (eventId === undefined) throw new TypeError(`unknown ledger event ref: ${eventRef.key}`);
+          return eventId;
+        };
+        const append = (refOrRecipe: any, maybeRecipe?: any) => {
+          const eventRef = maybeRecipe === undefined ? ref(`event:${nextAnonymousRef++}`) : refOrRecipe;
+          const recipe = maybeRecipe === undefined ? refOrRecipe : maybeRecipe;
+          ids.set(eventRef.key, nextId++);
+          recipes.push({ ref: eventRef, recipe });
+          return eventRef;
+        };
+        build({ ref, id, append });
+        const committed = recipes.map(({ ref: eventRef, recipe }) => {
+          const eventId = id(eventRef);
+          return {
+            id: eventId,
+            ts: recipe.ts ?? eventId * 10,
+            kind: recipe.kind,
+            scopeRef: recipe.scopeRef,
+            effectAuthorityRef: recipe.effectAuthorityRef,
+            factOwnerRef: RUNTIME_FACT_OWNER,
+            payload:
+              recipe.buildPayload === undefined
+                ? recipe.payload
+                : recipe.buildPayload({ id }),
+          } satisfies LedgerEvent;
+        });
+        events.push(...committed);
+        return committed.map(decodeRecordedLedgerEvent);
+      }),
     events: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
     streamSnapshot: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
   };

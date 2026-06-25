@@ -14,6 +14,9 @@ import {
   recordLedgerPortEvents,
   runtimeStorageError,
   runtimeStorageOrJsonError,
+  type LedgerPreparedCommitBuilder,
+  type LedgerPreparedEventRef,
+  type LedgerPreparedEventSpec,
   type RuntimeStorageError,
 } from "../../ledger";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
@@ -132,6 +135,40 @@ export const LedgerLive = (
                     payload: event.payload,
                   });
                 }
+              },
+            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("ledger_commit", cause)));
+            return yield* recordLedgerPortEvents("ledger_commit", result.events);
+          }),
+        commitPrepared: (build) =>
+          Effect.gen(function* () {
+            const now = yield* Clock.currentTimeMillis;
+            const result = yield* commitLedgerTransaction(
+              storage,
+              bus,
+              { factOwnerRef: RUNTIME_FACT_OWNER },
+              (tx) => {
+                const builder: LedgerPreparedCommitBuilder = {
+                  ref: (key) => tx.ref(key),
+                  id: (ref) => tx.id(ref),
+                  append: (
+                    refOrRecipe: LedgerPreparedEventRef | LedgerPreparedEventSpec,
+                    maybeRecipe?: LedgerPreparedEventSpec,
+                  ): LedgerPreparedEventRef => {
+                    const appendRecipe = (recipe: LedgerPreparedEventSpec) => ({
+                      ts: recipe.ts ?? now,
+                      kind: recipe.kind,
+                      scopeRef: recipe.scopeRef,
+                      effectAuthorityRef: recipe.effectAuthorityRef,
+                      ...(recipe.buildPayload === undefined
+                        ? { payload: recipe.payload }
+                        : { buildPayload: recipe.buildPayload }),
+                    });
+                    return maybeRecipe === undefined
+                      ? tx.append(appendRecipe(refOrRecipe as LedgerPreparedEventSpec))
+                      : tx.append(refOrRecipe as LedgerPreparedEventRef, appendRecipe(maybeRecipe));
+                  },
+                };
+                build(builder);
               },
             ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("ledger_commit", cause)));
             return yield* recordLedgerPortEvents("ledger_commit", result.events);

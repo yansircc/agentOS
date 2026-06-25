@@ -43,6 +43,7 @@ import {
   agentRunInterruptedEvent,
   agentRunResumedEvent,
   agentRunStartedEvent,
+  agentSessionTurnSubmittedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON,
@@ -56,6 +57,7 @@ import {
   runtimeHistoryCompactedEvent,
   toolExecutedEvent,
   toolRejectedEvent,
+  workflowRunSubmittedEvent,
   type InputRequestResumePayload,
   type SubmitResult,
   type TurnRef,
@@ -165,8 +167,55 @@ export const buildInitialMessages = (
     }),
   );
 
+export type SubmitAgentProductLink =
+  | {
+      readonly kind: "session_turn";
+      readonly sessionRef: string;
+      readonly turnRef: string;
+    }
+  | {
+      readonly kind: "workflow_run";
+      readonly workflowId: string;
+      readonly workflowRunId: string;
+      readonly idempotencyKey?: string;
+      readonly inputDigest?: string;
+    };
+
+export interface SubmitAgentOptions {
+  readonly productLink?: SubmitAgentProductLink;
+}
+
+const productLinkEventFor = (
+  productLink: SubmitAgentProductLink,
+  identity: LedgerTruthIdentity,
+  runtimeRunId: number,
+  traceContext: InternalSubmitSpec["traceContext"],
+) => {
+  switch (productLink.kind) {
+    case "session_turn":
+      return agentSessionTurnSubmittedEvent({
+        ...identity,
+        sessionRef: productLink.sessionRef,
+        turnRef: productLink.turnRef,
+        runtimeRunId,
+        traceContext,
+      });
+    case "workflow_run":
+      return workflowRunSubmittedEvent({
+        ...identity,
+        workflowId: productLink.workflowId,
+        workflowRunId: productLink.workflowRunId,
+        runtimeRunId,
+        idempotencyKey: productLink.idempotencyKey,
+        inputDigest: productLink.inputDigest,
+        traceContext,
+      });
+  }
+};
+
 export const submitAgentEffect = (
   spec: InternalSubmitSpec,
+  options: SubmitAgentOptions = {},
 ): Effect.Effect<
   SubmitResult,
   | RuntimeStorageError
@@ -217,20 +266,36 @@ export const submitAgentEffect = (
           }),
         );
       }
+      if (spec.resume !== undefined && options.productLink !== undefined) {
+        return yield* Effect.fail(
+          runtimeStorageError("submit", {
+            reason: "product_link_excludes_resume",
+            productLinkKind: options.productLink.kind,
+          }),
+        );
+      }
 
       const priorEvents = spec.resume === undefined ? [] : yield* ledger.events(identity);
       let toolValidationFailures = 0;
+      const startEvent = agentRunStartedEvent({
+        ...identity,
+        intent: spec.intent,
+        executionIdentity: spec.executionIdentity,
+        traceContext,
+      });
       const started =
         spec.resume === undefined
-          ? (yield* appendRuntimeDriverAction(ledger, {
-              kind: "start",
-              event: agentRunStartedEvent({
-                ...identity,
-                intent: spec.intent,
-                executionIdentity: spec.executionIdentity,
-                traceContext,
-              }),
-            })).event
+          ? options.productLink === undefined
+            ? (yield* appendRuntimeDriverAction(ledger, {
+                kind: "start",
+                event: startEvent,
+              })).event
+            : (yield* appendRuntimeDriverAction(ledger, {
+                kind: "start_with_product_link",
+                start: startEvent,
+                productLink: (runId) =>
+                  productLinkEventFor(options.productLink!, identity, runId, traceContext),
+              })).event
           : priorEvents.find(
               (event) =>
                 event.id === spec.resume?.runId &&

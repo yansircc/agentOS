@@ -60,6 +60,37 @@ export const recordLedgerPortEvent = (
     catch: (cause) => runtimeStorageError(operation, cause),
   }).pipe(Effect.withSpan("agentos.runtime.ledger.record_event"));
 
+export type LedgerPreparedEventRef = {
+  readonly key: string;
+};
+
+export type LedgerPreparedPayloadContext = {
+  readonly id: (ref: LedgerPreparedEventRef) => number;
+};
+
+export type LedgerPreparedEventSpec =
+  | (Omit<LedgerCommitEventSpec, "payload"> & {
+      readonly payload: unknown;
+      readonly buildPayload?: never;
+    })
+  | (Omit<LedgerCommitEventSpec, "payload"> & {
+      readonly payload?: never;
+      readonly buildPayload: (context: LedgerPreparedPayloadContext) => unknown;
+    });
+
+export type LedgerPreparedCommitBuilder = {
+  readonly ref: (key: string) => LedgerPreparedEventRef;
+  readonly id: (ref: LedgerPreparedEventRef) => number;
+  readonly append: {
+    (recipe: LedgerPreparedEventSpec): LedgerPreparedEventRef;
+    (ref: LedgerPreparedEventRef, recipe: LedgerPreparedEventSpec): LedgerPreparedEventRef;
+  };
+};
+
+export type LedgerPreparedCommit = (
+  build: (builder: LedgerPreparedCommitBuilder) => void,
+) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError | JsonStringifyError>;
+
 /**
  * Backend-neutral ledger service for atomic fact commits and exact identity reads.
  *
@@ -78,6 +109,7 @@ export class Ledger extends Context.Service<
       ReadonlyArray<RecordedLedgerEvent>,
       RuntimeStorageError | JsonStringifyError
     >;
+    readonly commitPrepared: LedgerPreparedCommit;
     readonly events: (
       identity: LedgerTruthIdentity,
       opts?: EventQueryOptions,

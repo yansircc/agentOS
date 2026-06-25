@@ -99,7 +99,7 @@ import {
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
-import { submitAgentEffect } from "../submit-agent";
+import { submitAgentEffect, type SubmitAgentProductLink } from "../submit-agent";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   agentRunAbortedEvent,
@@ -610,6 +610,14 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     spec: AgentSubmitSpec,
     baseBindings: AgentSubmitBindings,
   ): Promise<SubmitResult> {
+    return this.submitWithBindingsAndProductLink(spec, baseBindings);
+  }
+
+  protected submitWithBindingsAndProductLink(
+    spec: AgentSubmitSpec,
+    baseBindings: AgentSubmitBindings,
+    productLink?: SubmitAgentProductLink,
+  ): Promise<SubmitResult> {
     return this.scopedPromise((scope) => {
       const truthIdentity = this.defaultTruthIdentityForScope(scope);
       if (truthIdentity instanceof UnsupportedScopeRef) {
@@ -625,6 +633,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
             this._toolIntents,
             truthIdentity.effectAuthorityRef,
           ),
+          productLink,
         );
       } catch (cause) {
         return Promise.reject(cause);
@@ -858,6 +867,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     scope: string,
     truthIdentity: BackendProtocolTruthIdentity,
     spec: SubmitSpec,
+    productLink?: SubmitAgentProductLink,
   ): Promise<SubmitResult> {
     const { identity, internalSpec } = scopedInternalSubmitSpec(
       scope,
@@ -865,7 +875,9 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       spec,
       this._graphStatus,
     );
-    return this.runtimeFor(scope, identity).runPromise(submitAgentEffect(internalSpec));
+    return this.runtimeFor(scope, identity).runPromise(
+      submitAgentEffect(internalSpec, productLink === undefined ? {} : { productLink }),
+    );
   }
 
   protected runWorkspaceJobFull(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {

@@ -18,7 +18,7 @@ import {
 } from "@agent-os/core/runtime-protocol";
 import type { LedgerCommitEventSpec } from "@agent-os/core/runtime-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
-import { runtimeStorageError, type RuntimeStorageError } from "./ledger";
+import { runtimeStorageError, type LedgerPreparedCommit, type RuntimeStorageError } from "./ledger";
 
 class DriverLedgerCommitShapeMismatch extends Data.TaggedError(
   "agent_os.driver_ledger_commit_shape_mismatch",
@@ -31,6 +31,7 @@ type LedgerAppender = {
   readonly commit: (
     events: ReadonlyArray<LedgerCommitEventSpec>,
   ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError | JsonStringifyError>;
+  readonly commitPrepared: LedgerPreparedCommit;
 };
 
 type BoundaryEventAppender = {
@@ -83,6 +84,16 @@ export type RuntimeDriverAction = {
   readonly [K in keyof RuntimeEventActionByKind]: RuntimeAppendAction<K>;
 }[keyof RuntimeEventActionByKind];
 
+type ProductLinkEventCommitSpec =
+  | RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
+  | RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>;
+
+export type StartWithProductLinkDriverAction = {
+  readonly kind: "start_with_product_link";
+  readonly start: RuntimeEventActionByKind["start"];
+  readonly productLink: (runId: number) => ProductLinkEventCommitSpec;
+};
+
 type RuntimeCommittedEventForSpec<Spec> =
   Spec extends RuntimeEventCommitSpecByKind<infer K> ? RuntimeLedgerEventByKind<K> : never;
 
@@ -121,6 +132,7 @@ export type CompleteAfterToolsDriverAction = {
 
 export type NextDriverAction =
   | RuntimeDriverAction
+  | StartWithProductLinkDriverAction
   | ParkDriverAction
   | ResumeDriverAction
   | CompleteAfterToolsDriverAction;
@@ -144,6 +156,13 @@ export type CompleteAfterToolsDriverActionResult = {
 
 export type DriverActionResult =
   | RuntimeDriverActionResult
+  | {
+      readonly kind: "start_with_product_link";
+      readonly event: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_STARTED>;
+      readonly productLink:
+        | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
+        | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>;
+    }
   | {
       readonly kind: "park";
       readonly request: RecordedLedgerEvent;
@@ -224,23 +243,75 @@ const commitRuntimeEvents = <
     return decoded as unknown as RuntimeCommittedEventsForSpecs<T>;
   });
 
+const commitStartWithProductLink = (
+  ledger: LedgerAppender,
+  action: StartWithProductLinkDriverAction,
+): Effect.Effect<
+  Extract<DriverActionResult, { readonly kind: "start_with_product_link" }>,
+  RuntimeStorageError | JsonStringifyError
+> =>
+  Effect.gen(function* () {
+    const events = yield* ledger.commitPrepared((tx) => {
+      const startRef = tx.ref("agent.run.started");
+      tx.append(startRef, action.start);
+      const productLinkShape = action.productLink(1);
+      tx.append({
+        kind: productLinkShape.kind,
+        scopeRef: productLinkShape.scopeRef,
+        effectAuthorityRef: productLinkShape.effectAuthorityRef,
+        buildPayload: (context) => action.productLink(context.id(startRef)).payload,
+      });
+    });
+    if (events.length !== 2) {
+      return yield* Effect.fail(
+        runtimeStorageError(
+          "driver",
+          new DriverLedgerCommitShapeMismatch({ expected: 2, actual: events.length }),
+        ),
+      );
+    }
+    const start = yield* decodeCommittedRuntimeEvent(
+      events[0] as RecordedLedgerEvent,
+      RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
+    );
+    const linkSpec = action.productLink(start.id);
+    const productLink = yield* decodeCommittedRuntimeEvent(
+      events[1] as RecordedLedgerEvent,
+      linkSpec.kind,
+    );
+    return { kind: "start_with_product_link", event: start, productLink } as Extract<
+      DriverActionResult,
+      { readonly kind: "start_with_product_link" }
+    >;
+  });
+
 export function appendRuntimeDriverAction(
   ledger: LedgerAppender,
   action: RuntimeDriverAction,
 ): Effect.Effect<RuntimeDriverActionResult, RuntimeStorageError | JsonStringifyError>;
 export function appendRuntimeDriverAction(
   ledger: LedgerAppender,
+  action: StartWithProductLinkDriverAction,
+): Effect.Effect<
+  Extract<DriverActionResult, { readonly kind: "start_with_product_link" }>,
+  RuntimeStorageError | JsonStringifyError
+>;
+export function appendRuntimeDriverAction(
+  ledger: LedgerAppender,
   action: CompleteAfterToolsDriverAction,
 ): Effect.Effect<CompleteAfterToolsDriverActionResult, RuntimeStorageError | JsonStringifyError>;
 export function appendRuntimeDriverAction(
   ledger: LedgerAppender,
-  action: RuntimeDriverAction | CompleteAfterToolsDriverAction,
+  action: RuntimeDriverAction | CompleteAfterToolsDriverAction | StartWithProductLinkDriverAction,
 ): Effect.Effect<
-  RuntimeDriverActionResult | CompleteAfterToolsDriverActionResult,
+  RuntimeDriverActionResult | CompleteAfterToolsDriverActionResult | DriverActionResult,
   RuntimeStorageError | JsonStringifyError
 > {
   return Effect.withSpan("agentos.runtime.driver.append_runtime_action")(
     Effect.gen(function* () {
+      if (action.kind === "start_with_product_link") {
+        return yield* commitStartWithProductLink(ledger, action);
+      }
       if (action.kind === "complete_after_tools") {
         const events = yield* commitRuntimeEvents(ledger, action.events);
         return {
@@ -294,6 +365,9 @@ export const appendNextDriverAction = (
             RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED,
           );
           return { kind: "resume", consumed, resumed };
+        }
+        case "start_with_product_link": {
+          return yield* appendRuntimeDriverAction(services.ledger, action);
         }
         case "complete_after_tools": {
           return yield* appendRuntimeDriverAction(services.ledger, action);
