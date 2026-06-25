@@ -9,6 +9,7 @@ import {
   projectRunStatus,
   projectRunTrace,
   projectSubmitResult,
+  projectWorkflowRun,
   projectWorkflowRunLinks,
 } from "../src/run-projector";
 import {
@@ -483,6 +484,125 @@ describe("runtime run projectors", () => {
       startedAt: 10,
     });
     expect(projectSubmitResult(rows, 1)).toBe(null);
+  });
+
+  it("projects workflow run lifecycle from product links and runtime terminal facts", () => {
+    const runningRows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "summarize one" })),
+      event(
+        2,
+        workflowRunSubmittedEvent({
+          ...runtimeIdentity,
+          workflowId: "summarize",
+          workflowRunId: "workflow-run:1",
+          runtimeRunId: 1,
+          idempotencyKey: "idem:1",
+          inputDigest: "sha256:input-1",
+        }),
+      ),
+      event(3, agentRunStartedEvent({ ...runtimeIdentity, intent: "summarize two" })),
+      event(
+        4,
+        workflowRunSubmittedEvent({
+          ...runtimeIdentity,
+          workflowId: "summarize",
+          workflowRunId: "workflow-run:2",
+          runtimeRunId: 3,
+          idempotencyKey: "idem:2",
+          inputDigest: "sha256:input-2",
+        }),
+      ),
+    ];
+
+    expect(projectWorkflowRunLinks(runningRows, "summarize")).toMatchObject({
+      workflowId: "summarize",
+      runs: [
+        { workflowRunId: "workflow-run:1", runtimeRunId: 1 },
+        { workflowRunId: "workflow-run:2", runtimeRunId: 3 },
+      ],
+    });
+    expect(projectWorkflowRun(runningRows, "summarize", "workflow-run:1")).toMatchObject({
+      workflowId: "summarize",
+      workflowRunId: "workflow-run:1",
+      runtimeRunId: 1,
+      eventId: 2,
+      submittedAt: 20,
+      status: "running",
+      idempotencyKey: "idem:1",
+      inputDigest: "sha256:input-1",
+      attempts: [{ runtimeRunId: 1, status: { kind: "open_without_terminal" } }],
+    });
+    expect(projectWorkflowRun(runningRows, "summarize", "workflow-run:2")).toMatchObject({
+      status: "running",
+      runtimeRunId: 3,
+      attempts: [{ runtimeRunId: 3, status: { kind: "open_without_terminal" } }],
+    });
+
+    const succeededRows = [
+      ...runningRows.slice(0, 2),
+      event(
+        3,
+        agentRunCompletedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          final: "done",
+          output: { summary: "done" },
+          outputKind: "json",
+          tokensUsed: 2,
+        }),
+      ),
+    ];
+    expect(projectWorkflowRun(succeededRows, "summarize", "workflow-run:1")).toMatchObject({
+      status: "succeeded",
+      output: { summary: "done" },
+      outputKind: "json",
+      attempts: [{ runtimeRunId: 1, status: { kind: "delivered" } }],
+    });
+
+    const failedRows = [
+      ...runningRows.slice(0, 2),
+      event(
+        3,
+        agentRunAbortedEvent({
+          ...runtimeIdentity,
+          kind: ABORT.TOOL_ERROR,
+          runId: 1,
+          tokensUsed: 1,
+          payload: { reason: "tool_error" },
+        }),
+      ),
+    ];
+    expect(projectWorkflowRun(failedRows, "summarize", "workflow-run:1")).toMatchObject({
+      status: "failed",
+      error: {
+        reason: "tool_error",
+        abortKind: "agent.aborted.tool_error",
+      },
+      attempts: [{ runtimeRunId: 1, status: { kind: "aborted" } }],
+    });
+
+    const cancelledRows = [
+      ...runningRows.slice(0, 2),
+      event(
+        3,
+        agentRunAbortedEvent({
+          ...runtimeIdentity,
+          kind: ABORT.DECISION_CANCELLED,
+          runId: 1,
+          tokensUsed: 1,
+          payload: { reason: "cancelled" },
+        }),
+      ),
+    ];
+    expect(projectWorkflowRun(cancelledRows, "summarize", "workflow-run:1")).toMatchObject({
+      status: "cancelled",
+      error: {
+        reason: "cancelled",
+        abortKind: "agent.aborted.cancelled",
+      },
+    });
+
+    expect(projectWorkflowRun(runningRows, "summarize", "missing")).toBe(null);
   });
 
   it("projects agent session lifecycle from product links and runtime run facts", () => {

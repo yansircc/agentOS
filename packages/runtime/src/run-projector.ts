@@ -527,6 +527,34 @@ export interface WorkflowRunLinksProjection {
   readonly runs: ReadonlyArray<WorkflowRunRuntimeLink>;
 }
 
+export type WorkflowRunStatus = "running" | "succeeded" | "failed" | "cancelled";
+
+export interface WorkflowRunAttemptProjection extends WorkflowRunRuntimeLink {
+  readonly status: RunStatus;
+}
+
+export interface WorkflowRunError {
+  readonly reason: string;
+  readonly abortKind?: string;
+  readonly evidence?: string;
+  readonly payload?: unknown;
+}
+
+export interface WorkflowRunProjection {
+  readonly workflowId: string;
+  readonly workflowRunId: string;
+  readonly runtimeRunId: number;
+  readonly eventId: number;
+  readonly submittedAt: number;
+  readonly status: WorkflowRunStatus;
+  readonly attempts: ReadonlyArray<WorkflowRunAttemptProjection>;
+  readonly idempotencyKey?: string;
+  readonly inputDigest?: string;
+  readonly output?: unknown;
+  readonly outputKind?: "text" | "json";
+  readonly error?: WorkflowRunError;
+}
+
 const sessionTurnRuntimeLinks = (
   runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
   sessionRef: string,
@@ -561,6 +589,87 @@ const pendingInputRequestForRun = (
   if (activeInterruption === undefined) return undefined;
   const inputRequest = inputRequestRefFromInterruptedEvent(activeInterruption);
   return inputRequest.ok ? inputRequest.descriptor : undefined;
+};
+
+const workflowRunRuntimeLinks = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  workflowId: string,
+): ReadonlyArray<WorkflowRunRuntimeLink> =>
+  runtimeEvents
+    .filter(
+      (
+        event,
+      ): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED> =>
+        event.kind === RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED &&
+        event.payload.workflowId === workflowId,
+    )
+    .sort((left, right) => left.id - right.id)
+    .map((event): WorkflowRunRuntimeLink => {
+      const payload: WorkflowRunSubmittedPayload = event.payload;
+      return {
+        workflowId: payload.workflowId,
+        workflowRunId: payload.workflowRunId,
+        runtimeRunId: payload.runtimeRunId,
+        eventId: event.id,
+        submittedAt: event.ts,
+        ...(payload.idempotencyKey === undefined ? {} : { idempotencyKey: payload.idempotencyKey }),
+        ...(payload.inputDigest === undefined ? {} : { inputDigest: payload.inputDigest }),
+      };
+    });
+
+const workflowRunProjectionFromLink = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  link: WorkflowRunRuntimeLink,
+): WorkflowRunProjection => {
+  const status = runStatusFromRuntimeEvents(runtimeEvents, link.runtimeRunId);
+  const attempt = { ...link, status };
+  const base = {
+    ...link,
+    attempts: [attempt],
+  };
+
+  if (status.kind === "delivered") {
+    const terminal = runTerminal(runtimeEvents, link.runtimeRunId);
+    const payload = terminal?.payload as
+      | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED>["payload"]
+      | undefined;
+    return {
+      ...base,
+      status: "succeeded",
+      ...(payload === undefined ? {} : { output: payload.output, outputKind: payload.outputKind }),
+    };
+  }
+
+  if (status.kind === "aborted") {
+    const terminal = runTerminal(runtimeEvents, link.runtimeRunId);
+    const abortKind = status.abortKind;
+    const reason = reasonOf(abortKind as AbortKind);
+    return {
+      ...base,
+      status: reason === "cancelled" ? "cancelled" : "failed",
+      error: {
+        reason,
+        abortKind,
+        ...(terminal?.payload === undefined ? {} : { payload: terminal.payload }),
+      },
+    };
+  }
+
+  if (status.kind === "orphaned") {
+    return {
+      ...base,
+      status: "failed",
+      error: {
+        reason: "runtime_run_orphaned",
+        evidence: status.evidence,
+      },
+    };
+  }
+
+  return {
+    ...base,
+    status: "running",
+  };
 };
 
 const sessionStatus = (
@@ -688,27 +797,7 @@ const workflowRunLinkProjection = defineProjectionSpec<
   version: 1,
   source: RUNTIME_LEDGER_PROJECTION_SOURCE,
   project: ({ runtimeEvents, workflowId }, ctx) => {
-    const runs = runtimeEvents
-      .filter(
-        (
-          event,
-        ): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED> =>
-          event.kind === RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED &&
-          event.payload.workflowId === workflowId,
-      )
-      .sort((left, right) => left.id - right.id)
-      .map((event): WorkflowRunRuntimeLink => {
-        const payload: WorkflowRunSubmittedPayload = event.payload;
-        return {
-          workflowId: payload.workflowId,
-          workflowRunId: payload.workflowRunId,
-          runtimeRunId: payload.runtimeRunId,
-          eventId: event.id,
-          submittedAt: event.ts,
-          ...(payload.idempotencyKey === undefined ? {} : { idempotencyKey: payload.idempotencyKey }),
-          ...(payload.inputDigest === undefined ? {} : { inputDigest: payload.inputDigest }),
-        };
-      });
+    const runs = workflowRunRuntimeLinks(runtimeEvents, workflowId);
 
     return ctx.ok({ workflowId, runs });
   },
@@ -722,6 +811,38 @@ export const projectWorkflowRunLinks = (
     project(workflowRunLinkProjection, {
       runtimeEvents: runtimeEventsOf(events),
       workflowId,
+    }),
+  );
+
+const workflowRunProjection = defineProjectionSpec<
+  {
+    readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+    readonly workflowId: string;
+    readonly workflowRunId: string;
+  },
+  WorkflowRunProjection | null
+>({
+  id: "runtime.workflow-run",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, workflowId, workflowRunId }, ctx) => {
+    const link = workflowRunRuntimeLinks(runtimeEvents, workflowId).find(
+      (candidate) => candidate.workflowRunId === workflowRunId,
+    );
+    return ctx.ok(link === undefined ? null : workflowRunProjectionFromLink(runtimeEvents, link));
+  },
+});
+
+export const projectWorkflowRun = (
+  events: ReadonlyArray<LedgerEvent>,
+  workflowId: string,
+  workflowRunId: string,
+): WorkflowRunProjection | null =>
+  projectionOutputOrFail(
+    project(workflowRunProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      workflowId,
+      workflowRunId,
     }),
   );
 

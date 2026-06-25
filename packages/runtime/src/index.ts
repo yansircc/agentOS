@@ -129,6 +129,7 @@ export {
   projectRunStatus,
   projectRunTrace,
   projectSubmitResult,
+  projectWorkflowRun,
   projectWorkflowRunLinks,
   RUN_BEARING_KINDS,
 } from "./run-projector";
@@ -138,8 +139,12 @@ export type {
   AgentSessionTurnProjection,
   AgentSessionTurnLinksProjection,
   AgentSessionTurnRuntimeLink,
+  WorkflowRunAttemptProjection,
+  WorkflowRunError,
   WorkflowRunLinksProjection,
+  WorkflowRunProjection,
   WorkflowRunRuntimeLink,
+  WorkflowRunStatus,
 } from "./run-projector";
 export { Scheduler } from "./scheduler";
 export {

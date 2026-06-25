@@ -185,6 +185,7 @@
 - `.:projectRunTrace`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
+- `.:projectWorkflowRun`
 - `.:projectWorkflowRunLinks`
 - `.:projectWorkspaceJobObservability`
 - `.:Quota`
@@ -265,8 +266,12 @@
 - `.:WitnessPortRejected`
 - `.:WitnessPortService`
 - `.:WitnessRequest`
+- `.:WorkflowRunAttemptProjection`
+- `.:WorkflowRunError`
 - `.:WorkflowRunLinksProjection`
+- `.:WorkflowRunProjection`
 - `.:WorkflowRunRuntimeLink`
+- `.:WorkflowRunStatus`
 - `.:WORKSPACE_AGENT_COMMAND`
 - `.:WORKSPACE_AGENT_PROJECTION`
 - `.:WORKSPACE_AGENT_PROJECTION_SCHEMA`
@@ -617,10 +622,15 @@
 - `./run-projector:projectRunStatus`
 - `./run-projector:projectRunTrace`
 - `./run-projector:projectSubmitResult`
+- `./run-projector:projectWorkflowRun`
 - `./run-projector:projectWorkflowRunLinks`
 - `./run-projector:RUN_BEARING_KINDS`
+- `./run-projector:WorkflowRunAttemptProjection`
+- `./run-projector:WorkflowRunError`
 - `./run-projector:WorkflowRunLinksProjection`
+- `./run-projector:WorkflowRunProjection`
 - `./run-projector:WorkflowRunRuntimeLink`
+- `./run-projector:WorkflowRunStatus`
 - `./sse-http:createAttachedStreamSseResponse`
 - `./sse-http:createSseHttpResponse`
 - `./sse-http:createSseHttpTextResponse`
