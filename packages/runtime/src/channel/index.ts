@@ -63,10 +63,10 @@ export const defineChannel = <const TRoutes extends readonly ChannelRoute[]>(spe
   readonly routes: TRoutes;
 }): DefinedChannel<TRoutes> => {
   if (typeof spec.verify !== "function") {
-    throw new TypeError("defineChannel requires a verifier");
+    return failChannelContract("defineChannel requires a verifier");
   }
   if (spec.routes.length === 0) {
-    throw new TypeError("defineChannel requires at least one route");
+    return failChannelContract("defineChannel requires at least one route");
   }
 
   const routes = spec.routes.map((route) => normalizeRoute(route)) as unknown as TRoutes;
@@ -124,11 +124,11 @@ const normalizeRoute = <TMethod extends ChannelMethod, TResult = Response>(
   route: ChannelRoute<TMethod, TResult>,
 ): ChannelRoute<TMethod, TResult> => {
   if (!CHANNEL_METHODS.has(route.method)) {
-    throw new TypeError(`Unsupported channel method: ${String(route.method)}`);
+    return failChannelContract(`Unsupported channel method: ${String(route.method)}`);
   }
   assertRoutePath(route.path);
   if (typeof route.handler !== "function") {
-    throw new TypeError(`Channel route ${route.method} ${route.path} requires a handler`);
+    return failChannelContract(`Channel route ${route.method} ${route.path} requires a handler`);
   }
   return Object.freeze({
     method: route.method,
@@ -139,25 +139,25 @@ const normalizeRoute = <TMethod extends ChannelMethod, TResult = Response>(
 
 const assertRoutePath = (path: string): void => {
   if (typeof path !== "string" || path.length === 0) {
-    throw new TypeError("Channel route path must be a non-empty string");
+    failChannelContract("Channel route path must be a non-empty string");
   }
   if (!path.startsWith("/")) {
-    throw new TypeError(`Channel route path must start with "/": ${path}`);
+    failChannelContract(`Channel route path must start with "/": ${path}`);
   }
   if (path.includes("?") || path.includes("#")) {
-    throw new TypeError(`Channel route path must not include query or hash: ${path}`);
+    failChannelContract(`Channel route path must not include query or hash: ${path}`);
   }
 };
 
 const assertChannelRuntime = (runtime: ChannelRuntime): void => {
   if (!isRecord(runtime)) {
-    throw new TypeError("Channel runtime must be an object");
+    failChannelContract("Channel runtime must be an object");
   }
   if (typeof runtime.submit !== "function") {
-    throw new TypeError("Channel runtime requires submit");
+    failChannelContract("Channel runtime requires submit");
   }
   if (typeof runtime.dispatch !== "function") {
-    throw new TypeError("Channel runtime requires dispatch");
+    failChannelContract("Channel runtime requires dispatch");
   }
 };
 
@@ -169,20 +169,24 @@ const nonEmptyString = (value: unknown): value is string =>
 
 const normalizePrincipal = (principal: ChannelPrincipal): ChannelPrincipal => {
   if (!isRecord(principal)) {
-    throw new TypeError("Channel verifier must return a principal object");
+    return failChannelContract("Channel verifier must return a principal object");
   }
   if (!nonEmptyString(principal.authority)) {
-    throw new TypeError("Channel principal requires authority");
+    return failChannelContract("Channel principal requires authority");
   }
   if (!nonEmptyString(principal.subject)) {
-    throw new TypeError("Channel principal requires subject");
+    return failChannelContract("Channel principal requires subject");
   }
   if (principal.claims !== undefined && !isRecord(principal.claims)) {
-    throw new TypeError("Channel principal claims must be an object");
+    return failChannelContract("Channel principal claims must be an object");
   }
   return Object.freeze({
     authority: principal.authority,
     subject: principal.subject,
     ...(principal.claims === undefined ? {} : { claims: Object.freeze({ ...principal.claims }) }),
   });
+};
+
+const failChannelContract = (message: string): never => {
+  throw new TypeError(message);
 };

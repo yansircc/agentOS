@@ -18,6 +18,8 @@ agent/
     review/SKILL.md      # packaged skill main file
     review/references/checklist.md
     review/scripts/review.sh
+  channels/
+    github.ts            # optional inbound provider request handler
   tools/                # optional custom execute code only
   workspace/reconcile.ts
 agentos.config.jsonc
@@ -77,6 +79,26 @@ not supporting-file contents. The model must call `read_skill_file` with
 `{ "name": "<name>", "path": "<package-relative-path>" }` to read one declared
 supporting file. Both tool names are reserved by this framework projection and
 cannot be used as authored `agent/tools/*.ts` tool names.
+
+`agent/channels/<name>.ts` is an optional inbound request slot. The path stem is
+the channel identity; there is no second channel name in `agent.json` or
+`agentos.config.jsonc`. Each file exports a `defineChannel` declaration from the
+runtime channel subpath with a verifier and HTTP method routes. The generated
+Cloudflare and node targets consume the same compiled channel registry.
+
+Channel handlers receive the provider-native `Request` and read the raw body
+themselves. The verifier maps request evidence, such as a signature check, to a
+principal. That principal is the authority for deciding whether the handler may
+call `submit` or `dispatch`; provider payload identity remains data. The channel
+context exposes only `principal`, `submit`, and `dispatch`.
+
+Provider SDK clients, outbound provider calls, response URL handling,
+deduplication state, retries, and lifecycle policy are application-owned channel
+code or application-owned tools. Raw credentials, webhook tokens, and provider
+response URLs must be redacted before data is sent to `submit`, `dispatch`,
+model context, or durable events. Runtime does not provide generic webhook
+helpers, provider lifecycle helpers, provider-normalized universal events, or
+deduplication substrate for channels.
 
 Default workspace tool policy is controlled as data in `agent/agent.json`.
 Unknown slugs fail closed. A default can be disabled with `false`; disabling a

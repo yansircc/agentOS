@@ -180,7 +180,7 @@
       "path": "packages/runtime",
       "status": "{releaseLine} public",
       "role": "Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry.",
-      "boundary": "runtime root exports only backend-neutral ledger/projection/service algebra. Platform/provider, testing, and wire-projection integrations live behind explicit subpath exports: ./ag-ui, ./channel, ./cloudflare, ./cloudflare/do-rpc, ./in-memory, ./local, ./node, ./llm-effect-ai, ./telemetry-otlp, and ./testing; root JS and root declarations must not leak subpath-only peers. The ./ag-ui subpath is a browser-safe projection over runtime-protocol Recorded vocabulary, not the client state model. The ./channel subpath is a pure authored ingress contract for generated targets, distinct from attached-stream outbound frame channels; it must not own provider SDK lifecycle, webhook helpers, durable deduplication, or AgentManifest facts.",
+      "boundary": "runtime root exports only backend-neutral ledger/projection/service algebra. Platform/provider, testing, and wire-projection integrations live behind explicit subpath exports: ./ag-ui, ./channel, ./cloudflare, ./cloudflare/do-rpc, ./in-memory, ./local, ./node, ./llm-effect-ai, ./telemetry-otlp, and ./testing; root JS and root declarations must not leak subpath-only peers. The ./ag-ui subpath is a browser-safe projection over runtime-protocol Recorded vocabulary, not the client state model. The ./channel subpath is a pure authored ingress contract for generated targets: define routes, verify provider requests into principals, and receive a restricted submit/dispatch context. It is distinct from attached-stream outbound frame channels and must not own provider SDK lifecycle, webhook helpers, durable deduplication, provider-normalized events, or AgentManifest facts.",
       "need": "Runtime substrate and statically linked adapter subpaths",
       "apiSource": "docs/api/runtime.md",
       "readmeStatus": "{releaseLine} active development. Runtime root is backend-neutral; optional integrations are selected by explicit subpath and optional peer dependencies.",
@@ -233,7 +233,7 @@
         {
           "subpath": "./channel",
           "audiences": ["generated-only", "advanced"],
-          "capability": "pure authored inbound channel contract for generated targets",
+          "capability": "pure verified inbound channel contract for generated targets",
           "surfaceClass": "stable-contract"
         },
         {

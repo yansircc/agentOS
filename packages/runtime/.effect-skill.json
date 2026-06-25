@@ -8,6 +8,12 @@
       "rules": ["EFF001"]
     },
     {
+      "path": "src/channel/index.ts",
+      "owner": "@agent-os/runtime/channel",
+      "reason": "pure authored channel contract owns synchronous fail-fast validation for malformed authored channel definitions before generated targets mount provider ingress; no Effect runtime boundary exists here",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "src/cloudflare/agent-do.ts",
       "owner": "@agent-os/runtime/cloudflare/cf-do",
       "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",

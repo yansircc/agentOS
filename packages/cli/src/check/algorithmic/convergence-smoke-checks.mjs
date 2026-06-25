@@ -296,6 +296,7 @@ const blueprintLifecycleOwnership = {
 };
 const blueprintLifecycleOwnershipAxes = Object.keys(blueprintLifecycleOwnership);
 const blueprintRecipePrimaryFiles = new Set([
+  "agent/channels/<name>.ts",
   "agentos.config.jsonc",
   "agent/agent.json",
   "package.json",
@@ -325,6 +326,15 @@ const blueprintForbiddenPatterns = [
       /\b(?:create|install)Cloudflare(?:Sandbox)?Workspace(?:EnvResolver|OperationProvider|JobProfile)\b/u,
   },
 ];
+const blueprintChannelBoundary = {
+  identity: "agent/channels/<name>.ts",
+  inboundRequest: "provider-native-raw-request",
+  authority: "verifier-derived-principal",
+  outboundSdk: "app-owned",
+  deduplication: "app-owned",
+  secretHandling: "redacted-before-submit-or-dispatch",
+};
+const blueprintChannelBoundaryAxes = Object.keys(blueprintChannelBoundary);
 
 const blueprintRecipeLabel = (source) => source.file ?? "blueprint recipe";
 
@@ -387,6 +397,34 @@ const validateBlueprintLifecycleOwnership = ({ label, kind, frontmatter, body, f
   }
 };
 
+const validateBlueprintChannelBoundary = ({ label, kind, frontmatter, body, findings }) => {
+  if (kind !== "channel") return;
+  const boundary = frontmatter.channelBoundary;
+  if (!isPlainRecord(boundary)) {
+    findings.push(`${label}: channel recipe requires channelBoundary object`);
+    return;
+  }
+
+  const actualAxes = Object.keys(boundary).sort((left, right) => left.localeCompare(right));
+  const expectedAxes = [...blueprintChannelBoundaryAxes].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  if (actualAxes.join(",") !== expectedAxes.join(",")) {
+    findings.push(`${label}: channelBoundary axes must be exactly ${expectedAxes.join(", ")}`);
+  }
+
+  for (const axis of blueprintChannelBoundaryAxes) {
+    const expectedValue = blueprintChannelBoundary[axis];
+    if (boundary[axis] !== expectedValue) {
+      findings.push(`${label}: channelBoundary.${axis} must be ${expectedValue}`);
+    }
+  }
+
+  if (!body.includes("## Channel Boundary")) {
+    findings.push(`${label}: channel recipe body must contain ## Channel Boundary`);
+  }
+};
+
 const validateBlueprintRecipe = (recipe, findings) => {
   const { file, frontmatter, body } = recipe;
   const id = frontmatter.id;
@@ -438,6 +476,7 @@ const validateBlueprintRecipe = (recipe, findings) => {
     if (file !== expectedPath) findings.push(`${label}: recipe path must be ${expectedPath}`);
   }
   validateBlueprintLifecycleOwnership({ label, kind, frontmatter, body, findings });
+  validateBlueprintChannelBoundary({ label, kind, frontmatter, body, findings });
 
   if (typeof title === "string" && !body.includes(`# ${title}`)) {
     findings.push(`${label}: body must contain # ${title}`);

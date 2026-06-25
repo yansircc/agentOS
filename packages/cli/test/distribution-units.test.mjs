@@ -62,6 +62,14 @@ const lifecycleOwnership = {
   credentials: "app-owned-material",
   network: "app-or-generated-target",
 };
+const channelBoundary = {
+  identity: "agent/channels/<name>.ts",
+  inboundRequest: "provider-native-raw-request",
+  authority: "verifier-derived-principal",
+  outboundSdk: "app-owned",
+  deduplication: "app-owned",
+  secretHandling: "redacted-before-submit-or-dispatch",
+};
 
 const blueprintRecipeMarkdown = ({
   id = "provider.material-binding",
@@ -70,6 +78,7 @@ const blueprintRecipeMarkdown = ({
   primaryFile = "agentos.config.jsonc",
   markerPath = primaryFile,
   ownership = lifecycleOwnership,
+  channel = undefined,
   bodySuffix = "",
 } = {}) => {
   const frontmatter = {
@@ -83,6 +92,7 @@ const blueprintRecipeMarkdown = ({
     upgradeGuide: "blueprints/UPGRADE.md",
   };
   if (ownership !== undefined) frontmatter.lifecycleOwnership = ownership;
+  if (channel !== undefined) frontmatter.channelBoundary = channel;
   return [
     "---json",
     JSON.stringify(frontmatter, null, 2),
@@ -99,6 +109,14 @@ const blueprintRecipeMarkdown = ({
     "",
     "Provider resources are created, reused, deleted, credentialed, and networked outside runtime.",
     "",
+    ...(channel === undefined
+      ? []
+      : [
+          "## Channel Boundary",
+          "",
+          "Inbound channels keep provider-native Request bodies in the handler and use verifier-derived principals for authority.",
+          "",
+        ]),
     "## Steps",
     "",
     "1. Update the app-owned primary file.",
@@ -340,6 +358,29 @@ void test("blueprint recipe contract accepts versioned markdown source", () => {
   );
 });
 
+void test("blueprint recipe contract accepts channel ingress boundary facts", () => {
+  assert.deepEqual(
+    blueprintRecipeFindingsForSources({
+      recipeSources: [
+        {
+          file: "blueprints/recipes/channel/inbound.md",
+          content: blueprintRecipeMarkdown({
+            id: "channel.inbound",
+            kind: "channel",
+            title: "Inbound Channel Boundary",
+            primaryFile: "agent/channels/<name>.ts",
+            ownership: undefined,
+            channel: channelBoundary,
+          }),
+        },
+      ],
+      upgradeGuideContent:
+        '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="channel.inbound" -->\n',
+    }),
+    [],
+  );
+});
+
 void test("blueprint recipe contract rejects target replacement and marker drift", () => {
   const findings = blueprintRecipeFindingsForSources({
     recipeSources: [
@@ -383,6 +424,70 @@ void test("blueprint recipe contract rejects target replacement and marker drift
   );
   assert.equal(
     findings.includes("blueprints/UPGRADE.md: unknown upgrade marker unknown.recipe"),
+    true,
+  );
+});
+
+void test("blueprint recipe contract rejects channel runtime lifecycle drift", () => {
+  const findings = blueprintRecipeFindingsForSources({
+    recipeSources: [
+      {
+        file: "blueprints/recipes/channel/inbound.md",
+        content: blueprintRecipeMarkdown({
+          id: "channel.inbound",
+          kind: "channel",
+          title: "Inbound Channel Boundary",
+          primaryFile: "agent/channels/<name>.ts",
+          ownership: undefined,
+          channel: {
+            ...channelBoundary,
+            authority: "provider-payload",
+            outboundSdk: "runtime-owned",
+          },
+          bodySuffix: [
+            "",
+            'import { WebClient } from "@slack/web-api";',
+            "Provider lifecycle code belongs here.",
+          ].join("\n"),
+        }),
+      },
+      {
+        file: "blueprints/recipes/channel/missing-boundary.md",
+        content: blueprintRecipeMarkdown({
+          id: "channel.missing-boundary",
+          kind: "channel",
+          title: "Missing Channel Boundary",
+          primaryFile: "agent/channels/<name>.ts",
+          ownership: undefined,
+        }),
+      },
+    ],
+    upgradeGuideContent:
+      '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="channel.inbound" -->\n<!-- agentos:blueprint-upgrade id="channel.missing-boundary" -->\n',
+  });
+
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/channel/inbound.md: channelBoundary.authority must be verifier-derived-principal",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/channel/inbound.md: channelBoundary.outboundSdk must be app-owned",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/channel/inbound.md: blueprint recipe must not contain source import statements",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/channel/missing-boundary.md: channel recipe requires channelBoundary object",
+    ),
     true,
   );
 });

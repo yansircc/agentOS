@@ -528,11 +528,17 @@
 - `./cloudflare/ops-api:ScopeSummary`
 - `./cloudflare/ops-api:ScopeSurface`
 - `./channel:ChannelContext`
+- `./channel:ChannelDispatch`
 - `./channel:ChannelHandler`
 - `./channel:ChannelMethod`
+- `./channel:ChannelPrincipal`
 - `./channel:ChannelRequest`
 - `./channel:ChannelRoute`
+- `./channel:ChannelRuntime`
+- `./channel:ChannelSubmit`
+- `./channel:ChannelVerifier`
 - `./channel:DefinedChannel`
+- `./channel:createChannelContext`
 - `./channel:defineChannel`
 - `./channel:get`
 - `./channel:post`

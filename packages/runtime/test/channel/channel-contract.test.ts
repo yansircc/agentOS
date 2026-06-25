@@ -14,7 +14,7 @@ import {
 } from "../../src/channel";
 import * as runtimeRoot from "../../src/index";
 
-const handler: ChannelHandler = () => new Response("ok");
+const handler: ChannelHandler = () => ({}) as Response;
 const verifier = () => ({ authority: "provider.signature", subject: "provider-user:123" });
 const channelRuntime: ChannelRuntime = {
   submit: async () => ({
