@@ -7,6 +7,7 @@ import {
   fail,
   gitStatusShort,
   gitValue,
+  installManifestPath,
   localConsumerMarkerName,
   mkdtempFixture,
   parseArgs,
@@ -14,7 +15,9 @@ import {
   publicSpecifier,
   publishScope,
   readJson,
+  releaseVersion,
   repoRoot,
+  sha256File,
   run,
   sourcePackageScope,
   surface,
@@ -70,16 +73,254 @@ export const resolveConsumerRoot = (value) => {
 export const localConsumerMarkerPath = (consumerRoot) =>
   path.join(consumerRoot, "node_modules", localConsumerMarkerName);
 
-export const nodeModulesRoot = (consumerRoot) => {
+const consumerPackageManagerName = (consumerRoot) => {
+  const packageJson = readJson(path.join(consumerRoot, "package.json"));
+  const packageManager =
+    typeof packageJson.packageManager === "string" ? packageJson.packageManager : "";
+  if (packageManager.startsWith("pnpm@")) return "pnpm";
+  if (packageManager.startsWith("npm@")) return "npm";
+  if (packageManager.startsWith("bun@")) return "bun";
+  if (packageManager.startsWith("yarn@")) return "yarn";
+  if (fs.existsSync(path.join(consumerRoot, "pnpm-lock.yaml"))) return "pnpm";
+  if (fs.existsSync(path.join(consumerRoot, "package-lock.json"))) return "npm";
+  if (fs.existsSync(path.join(consumerRoot, "bun.lock"))) return "bun";
+  if (fs.existsSync(path.join(consumerRoot, "bun.lockb"))) return "bun";
+  if (fs.existsSync(path.join(consumerRoot, "yarn.lock"))) return "yarn";
+  return null;
+};
+
+export const consumerInstallCommand = (consumerRoot) => {
+  const manager = consumerPackageManagerName(consumerRoot);
+  switch (manager) {
+    case "pnpm":
+      return {
+        manager,
+        cmd: "pnpm",
+        args: ["install", "--frozen-lockfile", "--ignore-scripts"],
+        env: { ...process.env, CI: "true", COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
+      };
+    case "npm":
+      return fs.existsSync(path.join(consumerRoot, "package-lock.json"))
+        ? {
+            manager,
+            cmd: "npm",
+            args: ["ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+            env: process.env,
+          }
+        : {
+            manager,
+            cmd: "npm",
+            args: [
+              "install",
+              "--package-lock=false",
+              "--ignore-scripts",
+              "--no-audit",
+              "--no-fund",
+            ],
+            env: process.env,
+          };
+    case "bun":
+      return {
+        manager,
+        cmd: "bun",
+        args: ["install", "--frozen-lockfile", "--ignore-scripts"],
+        env: { ...process.env, CI: "true" },
+      };
+    case "yarn":
+      return {
+        manager,
+        cmd: "yarn",
+        args: ["install", "--immutable", "--ignore-scripts"],
+        env: { ...process.env, CI: "true" },
+      };
+    default:
+      return null;
+  }
+};
+
+export const nodeModulesRoot = (consumerRoot, options = {}) => {
   const root = path.join(consumerRoot, "node_modules");
+  if (fs.existsSync(root)) return root;
+  if (options.install !== true) {
+    fail(
+      `${consumerRoot}: missing node_modules; run the consumer package manager install first, or rerun install-consumer without --no-install to let agentOS run a frozen install`,
+    );
+  }
+  const installCommand = consumerInstallCommand(consumerRoot);
+  if (installCommand === null) {
+    fail(
+      `${consumerRoot}: missing node_modules and no package manager/lockfile was detected; run the consumer install first`,
+    );
+  }
+  console.log(
+    `node_modules missing; running ${installCommand.cmd} ${installCommand.args.join(" ")} in ${consumerRoot}`,
+  );
+  run(installCommand.cmd, installCommand.args, {
+    cwd: consumerRoot,
+    capture: true,
+    env: installCommand.env,
+  });
   if (!fs.existsSync(root)) {
-    fail(`${consumerRoot}: missing node_modules; run the consumer package manager install first`);
+    fail(`${consumerRoot}: package manager install completed but node_modules is still missing`);
   }
   return root;
 };
 
 export const packageTargetDir = (nodeModules, packageName) =>
   path.join(nodeModules, ...packageName.split("/"));
+
+const currentSourceIdentity = () => ({
+  repoRoot,
+  branch: gitValue(["branch", "--show-current"], "unknown"),
+  head: gitValue(["rev-parse", "HEAD"], "unknown"),
+  dirty: gitStatusShort().length > 0,
+});
+
+const markerArtifact = (manifest) => ({
+  kind: "local-tarball-overlay",
+  packageScope: publishScope(),
+  installManifest: {
+    path: path.relative(repoRoot, installManifestPath).split(path.sep).join("/"),
+    sha256: sha256File(installManifestPath),
+    version: manifest.version,
+    generatedBy: manifest.generatedBy,
+  },
+});
+
+const packageOverlayRows = (consumerRoot, marker) => {
+  const nodeModules = path.join(consumerRoot, "node_modules");
+  return Object.entries(marker.packages ?? {})
+    .map(([packageName, record]) => {
+      const target = packageTargetDir(nodeModules, packageName);
+      const tarball = typeof record.tarball === "string" ? record.tarball : "";
+      const tarballExists = tarball.length > 0 && fs.existsSync(tarball);
+      const expectedSha = typeof record.sha256 === "string" ? record.sha256 : undefined;
+      const actualSha = tarballExists ? sha256File(tarball) : undefined;
+      return {
+        packageName,
+        target: record.target,
+        installed: fs.existsSync(target),
+        tarball,
+        tarballStatus: tarballExists
+          ? expectedSha === undefined || expectedSha === actualSha
+            ? "verified"
+            : "sha_mismatch"
+          : "missing",
+        sha256: expectedSha,
+      };
+    })
+    .sort((left, right) => left.packageName.localeCompare(right.packageName));
+};
+
+const overlaySourceStatus = (marker, currentSource) => {
+  if (marker.source?.repoRoot !== repoRoot) return "foreign_source";
+  if (marker.source?.head !== currentSource.head) return "stale_source";
+  if (marker.source?.dirty !== currentSource.dirty) return "dirty_state_changed";
+  return "current_source";
+};
+
+const packageVersionStatus = (marker) =>
+  marker.packageVersion === releaseVersion() ? "release_version_match" : "release_version_mismatch";
+
+const npmLatestNotChecked = () => ({
+  status: "not_checked",
+  reason: "pass --check-npm to compare against the registry",
+});
+
+const npmLatestFor = (packageNames, registry) => {
+  const packages = {};
+  for (const packageName of packageNames) {
+    const args = ["view", packageName, "version", "--json"];
+    if (typeof registry === "string" && registry.length > 0) args.push("--registry", registry);
+    const result = spawnSync("npm", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    packages[packageName] =
+      result.status === 0
+        ? { status: "resolved", version: JSON.parse(result.stdout.trim()) }
+        : { status: "unresolved", detail: result.stderr.trim() || result.stdout.trim() };
+  }
+  return { status: "checked", packages };
+};
+
+export const consumerStatusData = (consumerRoot, options = {}) => {
+  const markerPath = localConsumerMarkerPath(consumerRoot);
+  const currentSource = currentSourceIdentity();
+  if (!fs.existsSync(markerPath)) {
+    return {
+      schemaVersion: 1,
+      consumerRoot,
+      markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
+      localOverlay: { status: "missing" },
+      source: { current: currentSource },
+      packageVersion: { release: releaseVersion() },
+      npmLatest: options.checkNpm === true ? npmLatestFor([], options.registry) : npmLatestNotChecked(),
+    };
+  }
+  const marker = readJson(markerPath);
+  const packages = packageOverlayRows(consumerRoot, marker);
+  const sourceStatus = overlaySourceStatus(marker, currentSource);
+  return {
+    schemaVersion: 1,
+    consumerRoot,
+    markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
+    localOverlay: {
+      status: packages.every((pkg) => pkg.installed) ? "installed" : "partial",
+      sourceStatus,
+      generatedBy: marker.generatedBy,
+      installedAt: marker.installedAt,
+      artifact: marker.artifact ?? { kind: "legacy-local-overlay" },
+      packages,
+    },
+    source: {
+      current: currentSource,
+      overlay: marker.source,
+    },
+    packageVersion: {
+      release: releaseVersion(),
+      overlay: marker.packageVersion,
+      status: packageVersionStatus(marker),
+    },
+    npmLatest:
+      options.checkNpm === true
+        ? npmLatestFor(packages.map((pkg) => pkg.packageName), options.registry)
+        : npmLatestNotChecked(),
+  };
+};
+
+const printConsumerStatus = (status) => {
+  console.log(`consumer: ${status.consumerRoot}`);
+  console.log(`marker: ${status.markerPath}`);
+  console.log(`local overlay: ${status.localOverlay.status}`);
+  if (status.localOverlay.sourceStatus !== undefined) {
+    console.log(`source status: ${status.localOverlay.sourceStatus}`);
+  }
+  console.log(
+    `package version: overlay=${status.packageVersion.overlay ?? "none"} release=${status.packageVersion.release} status=${status.packageVersion.status ?? "none"}`,
+  );
+  console.log(`npm latest: ${status.npmLatest.status}`);
+  for (const pkg of status.localOverlay.packages ?? []) {
+    console.log(
+      `package ${pkg.packageName}: installed=${pkg.installed} tarball=${pkg.tarballStatus} sha256=${pkg.sha256}`,
+    );
+  }
+};
+
+export const consumerStatus = (rawArgs) => {
+  const args = parseArgs(rawArgs);
+  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
+  const status = consumerStatusData(consumerRoot, {
+    checkNpm: boolArg(args, "check-npm"),
+    registry: args.registry,
+  });
+  if (boolArg(args, "json")) {
+    console.log(JSON.stringify(status, null, 2));
+    return;
+  }
+  printConsumerStatus(status);
+};
 
 export const installConsumer = (rawArgs) => {
   const args = parseArgs(rawArgs);
@@ -88,7 +329,7 @@ export const installConsumer = (rawArgs) => {
   if (!boolArg(args, "skip-pack")) packInternal();
   const manifest = readInstallManifest();
   const entries = tarballPackageEntries(manifest);
-  const nodeModules = nodeModulesRoot(consumerRoot);
+  const nodeModules = nodeModulesRoot(consumerRoot, { install: !boolArg(args, "no-install") });
   const packages = {};
   for (const entry of entries) {
     const target = packageTargetDir(nodeModules, entry.packageName);
@@ -104,13 +345,9 @@ export const installConsumer = (rawArgs) => {
     generatedBy: "tooling/distribution/distribution.mjs install-consumer",
     installedAt: new Date().toISOString(),
     consumerRoot,
-    source: {
-      repoRoot,
-      branch: gitValue(["branch", "--show-current"], "unknown"),
-      head: gitValue(["rev-parse", "HEAD"], "unknown"),
-      dirty: gitStatusShort().length > 0,
-    },
+    source: currentSourceIdentity(),
     packageVersion: manifest.version,
+    artifact: markerArtifact(manifest),
     packages,
   });
   assertSnapshotUnchanged(snapshot, "install-consumer");
@@ -120,6 +357,7 @@ export const installConsumer = (rawArgs) => {
   console.log(
     `wrote ${path.relative(consumerRoot, localConsumerMarkerPath(consumerRoot)).split(path.sep).join("/")}`,
   );
+  printConsumerStatus(consumerStatusData(consumerRoot));
 };
 
 export const restoreConsumer = (rawArgs) => {
@@ -1047,10 +1285,82 @@ export const assertPackedPublicAssemblyEscapesAbsent = (dir) => {
   console.log("verified packed public assembly escape hatches are absent");
 };
 
+export const assertConsumerOverlayStatus = () => {
+  const dir = mkdtempFixture("agentos-consumer-overlay-status-");
+  writeConsumerApp(dir, {
+    effect: catalog().effect,
+    "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
+  });
+  npmInstall(dir);
+  installConsumer(["--skip-pack", dir]);
+  const markerPath = localConsumerMarkerPath(dir);
+  const marker = readJson(markerPath);
+  if (marker.artifact?.kind !== "local-tarball-overlay") {
+    fail("install-consumer marker did not record local-tarball-overlay artifact identity");
+  }
+  if (marker.artifact.installManifest?.sha256 !== sha256File(installManifestPath)) {
+    fail("install-consumer marker did not record install manifest digest");
+  }
+  const status = consumerStatusData(dir);
+  if (status.localOverlay.status !== "installed") {
+    fail(`consumer status did not report installed overlay: ${status.localOverlay.status}`);
+  }
+  if (status.localOverlay.sourceStatus !== "current_source") {
+    fail(`consumer status did not report current source: ${status.localOverlay.sourceStatus}`);
+  }
+  if (status.packageVersion.status !== "release_version_match") {
+    fail(`consumer status did not report release version match: ${status.packageVersion.status}`);
+  }
+  if (!status.localOverlay.packages.every((pkg) => pkg.tarballStatus === "verified")) {
+    fail("consumer status did not verify every local tarball digest");
+  }
+  writeJson(markerPath, {
+    ...marker,
+    source: {
+      ...marker.source,
+      head: "0000000000000000000000000000000000000000",
+    },
+  });
+  const staleStatus = consumerStatusData(dir);
+  if (staleStatus.localOverlay.sourceStatus !== "stale_source") {
+    fail(`consumer status did not expose stale source overlay: ${staleStatus.localOverlay.sourceStatus}`);
+  }
+  fs.rmSync(path.join(dir, "node_modules"), { recursive: true, force: true });
+  let missingNodeModulesFailed = false;
+  try {
+    installConsumer(["--skip-pack", "--no-install", dir]);
+  } catch (error) {
+    if (!String(error?.message ?? error).includes("missing node_modules")) {
+      throw error;
+    }
+    missingNodeModulesFailed = true;
+  }
+  if (!missingNodeModulesFailed) {
+    fail("install-consumer --no-install did not fail on missing node_modules");
+  }
+  const pnpmDir = mkdtempFixture("agentos-pnpm-install-command-");
+  writeJson(path.join(pnpmDir, "package.json"), {
+    name: "agentos-pnpm-install-command",
+    private: true,
+    packageManager: "pnpm@11.9.0",
+    dependencies: {},
+  });
+  const pnpmCommand = consumerInstallCommand(pnpmDir);
+  if (
+    pnpmCommand?.cmd !== "pnpm" ||
+    !pnpmCommand.args.includes("--frozen-lockfile") ||
+    pnpmCommand.env.CI !== "true"
+  ) {
+    fail("pnpm consumer install command is not frozen non-interactive install");
+  }
+  console.log("verified local consumer overlay status and install hardening");
+};
+
 export const testInternalConsumer = () => {
   packInternal();
   negativeContractTests();
   assertPeerFailure();
+  assertConsumerOverlayStatus();
   const dir = mkdtempFixture("agentos-internal-consumer-");
   writeConsumerApp(dir, {
     effect: catalog().effect,

@@ -178,7 +178,7 @@ export const withPackageVersion = (version, fn) => {
 
 export const parseArgs = (args) => {
   const parsed = { _: [] };
-  const booleanKeys = new Set(["skip-pack", "no-install"]);
+  const booleanKeys = new Set(["skip-pack", "no-install", "json", "check-npm"]);
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (!arg.startsWith("--")) {

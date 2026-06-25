@@ -27,6 +27,7 @@
     "registry:local": "node tooling/distribution/distribution.mjs local-registry",
     "publish:local": "node tooling/distribution/distribution.mjs publish-local",
     "install:consumer": "node tooling/distribution/distribution.mjs install-consumer",
+    "status:consumer": "node tooling/distribution/distribution.mjs consumer-status",
     "restore:consumer": "node tooling/distribution/distribution.mjs restore-consumer",
     "check:structural": "pnpm run agentos check structural"
   },

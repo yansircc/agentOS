@@ -2,7 +2,7 @@
 import { fail } from "./support.mjs";
 import { buildInternalPackages } from "./staging-build.mjs";
 import { checkDistribution, packInternal } from "./pack-check.mjs";
-import { installConsumer, restoreConsumer, testInternalConsumer } from "./consumer.mjs";
+import { consumerStatus, installConsumer, restoreConsumer, testInternalConsumer } from "./consumer.mjs";
 import { localRegistry, publishInternal, publishLocal } from "./publish-registry.mjs";
 
 const command = process.argv[2] ?? "check";
@@ -32,6 +32,9 @@ switch (command) {
     break;
   case "install-consumer":
     installConsumer(commandArgs);
+    break;
+  case "consumer-status":
+    consumerStatus(commandArgs);
     break;
   case "restore-consumer":
     restoreConsumer(commandArgs);

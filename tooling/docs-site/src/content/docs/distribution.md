@@ -79,8 +79,24 @@ pnpm run install:consumer /path/to/consumer
 `install:consumer` runs the same package projection and tarball pack path as a
 release, overlays the generated `@yansirplus/*` packages into the consumer
 `node_modules`, and writes `node_modules/.agentos-local.json` with the source
-revision and tarball hashes. It must not edit the consumer `package.json` or
-lockfile. Restore the consumer to registry truth with:
+revision, release package version, install-manifest digest, tarball hashes, and
+local artifact kind. The marker is proof of a local tarball overlay, not proof
+that the same version is published on npm. It must not edit the consumer
+`package.json` or lockfile. If `node_modules` is missing, the command runs the
+consumer package manager install in frozen/non-interactive mode before applying
+the overlay; pass `--no-install` to fail closed instead.
+
+Read the current consumer state with:
+
+```sh
+pnpm run status:consumer /path/to/consumer
+pnpm run status:consumer -- /path/to/consumer --json
+pnpm run status:consumer -- /path/to/consumer --check-npm
+```
+
+Without `--check-npm`, registry latest is reported as `not_checked`; this keeps
+normal local overlay work offline and makes the unknown registry state explicit.
+Restore the consumer to registry truth with:
 
 ```sh
 pnpm run restore:consumer /path/to/consumer

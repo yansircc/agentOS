@@ -31,17 +31,21 @@ instead of sharing the agentOS source workspace lockfile.
 /path/to/consumer` in agentOS. This overlays the generated final public package
    projection into the consumer `node_modules` without changing the consumer
    manifest or lockfile.
-6. Restore the consumer to registry truth with `pnpm run restore:consumer
+6. Inspect the overlay with `pnpm run status:consumer /path/to/consumer`.
+   Use `pnpm run status:consumer -- /path/to/consumer --json` for a
+   machine-readable report, or add `--check-npm` when the task needs an npm
+   latest comparison.
+7. Restore the consumer to registry truth with `pnpm run restore:consumer
 /path/to/consumer`.
-7. If the consumer must exercise registry or dist-tag behavior instead, run a
+8. If the consumer must exercise registry or dist-tag behavior instead, run a
    local registry channel: `pnpm run registry:local`, then
    `pnpm run publish:local` in agentOS.
-8. Read `dist/internal-npm/local-channel.json`.
-9. Copy the required `dependencies` entries into the consumer app. Use the
-   logical tag value, for example `agentos-dev`; do not copy worktree tarball
-   paths. Configure `@yansirplus:registry` once in the consumer `.npmrc` only
-   when consuming the local channel.
-10. Run the app typecheck and tests under its own lockfile.
+9. Read `dist/internal-npm/local-channel.json`.
+10. Copy the required `dependencies` entries into the consumer app. Use the
+    logical tag value, for example `agentos-dev`; do not copy worktree tarball
+    paths. Configure `@yansirplus:registry` once in the consumer `.npmrc` only
+    when consuming the local channel.
+11. Run the app typecheck and tests under its own lockfile.
 
 ## Import Surface
 
@@ -82,7 +86,19 @@ pnpm run install:consumer /path/to/consumer
 ```
 
 The overlay writes `node_modules/.agentos-local.json`; the consumer
-`package.json` and lockfile remain the registry contract. Restore with:
+`package.json` and lockfile remain the registry contract. The marker records
+the source revision, dirty bit, release package version, install-manifest digest,
+tarball hashes, and local artifact kind. A stale marker means the consumer is
+testing a known older local artifact, not current source HEAD. Inspect with:
+
+```sh
+pnpm run status:consumer /path/to/consumer
+```
+
+If `node_modules` is missing, `install:consumer` runs the consumer package
+manager install in frozen/non-interactive mode before overlaying packages.
+For pnpm consumers this sets `CI=true` and uses `pnpm install --frozen-lockfile`.
+Pass `--no-install` to fail closed instead. Restore with:
 
 ```sh
 pnpm run restore:consumer /path/to/consumer
