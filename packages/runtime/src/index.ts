@@ -152,6 +152,30 @@ export type {
   StructuredCallFailureClassification,
   StructuredDecodeResult,
 } from "./structured-output";
+export { projectInspectionSnapshot } from "./inspection";
+export type {
+  InspectionBindingSummary,
+  InspectionCompileSection,
+  InspectionExecutionDomain,
+  InspectionExecutionDomainBinding,
+  InspectionExecutionDomainReplayLaw,
+  InspectionGraphRegistration,
+  InspectionHostFactStatus,
+  InspectionManifestSummary,
+  InspectionNamedBinding,
+  InspectionReceiptBackedToolBinding,
+  InspectionResolveSection,
+  InspectionRuntimeSection,
+  InspectionSnapshot,
+  InspectionToolAuthority,
+  InspectionToolBinding,
+  InspectionToolExecution,
+  InspectionToolExecutionDeterministic,
+  InspectionToolExecutionExternal,
+  InspectionToolIntentBinding,
+  InspectionUnavailableSection,
+  ProjectInspectionSnapshotInput,
+} from "./inspection";
 export { projectTelemetryEventTree } from "./telemetry-tree";
 export {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
