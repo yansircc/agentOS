@@ -52,7 +52,8 @@ export type AuthoredAgentTreeFile =
   | AuthoredTextFile
   | AuthoredJsonFile
   | AuthoredToolFile
-  | AuthoredChannelFile;
+  | AuthoredChannelFile
+  | AuthoredWorkflowFile;
 
 export type AuthoredFileSourceKind = "regular" | "symlink" | "non_regular";
 
@@ -105,7 +106,19 @@ export interface AuthoredChannelFile {
   readonly sourceKind?: AuthoredFileSourceKind;
 }
 
+export interface AuthoredWorkflowFile {
+  readonly path: string;
+  readonly kind: "workflow";
+  readonly sourceKind?: AuthoredFileSourceKind;
+}
+
 export interface CompiledAgentChannel {
+  readonly name: string;
+  readonly path: string;
+  readonly origin: AgentManifestOrigin;
+}
+
+export interface CompiledAgentWorkflow {
   readonly name: string;
   readonly path: string;
   readonly origin: AgentManifestOrigin;
@@ -159,6 +172,7 @@ export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
   >;
   readonly toolFilePaths: Readonly<Record<string, string>>;
   readonly channels: ReadonlyArray<CompiledAgentChannel>;
+  readonly workflows: ReadonlyArray<CompiledAgentWorkflow>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
 }
 
@@ -253,6 +267,7 @@ interface CompilerState {
   readonly toolIds: Set<string>;
   readonly toolFilePaths: Map<string, string>;
   readonly channels: Map<string, CompiledAgentChannel>;
+  readonly workflows: Map<string, CompiledAgentWorkflow>;
   readonly skills: Map<string, CompiledAgentSkill>;
   readonly skillSupportFiles: Map<string, CompiledAgentSkillFile[]>;
   readonly skillSupportByteTotals: Map<string, number>;
@@ -266,6 +281,7 @@ const SKILL_SUPPORT_FILES_MAX_COUNT = 64;
 const SKILL_SUPPORT_PACKAGE_MAX_BYTES = 262_144;
 const skillNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const channelNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
+const workflowNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -285,7 +301,8 @@ const defaultOrigin = (factKey: AgentManifestFactKey): AgentManifestOrigin =>
 export const workspaceManifestMacroOrigin = (factKey: AgentManifestFactKey): AgentManifestOrigin =>
   `macro(workspace@1)#${factKey}`;
 
-const authoredPath = (path: string): string => (path.startsWith("agent/") ? path : `agent/${path}`);
+const authoredPath = (path: string): string =>
+  path.startsWith("workflows/") ? path : `agent/${path}`;
 
 const authorOrigin = (path: string, pointer: string): AgentManifestOrigin =>
   `author:${authoredPath(path)}#${pointer}`;
@@ -332,6 +349,8 @@ const utf8ByteLength = (value: string): number => textEncoder.encode(value).leng
 const isSkillName = (value: string): boolean => skillNamePattern.test(value);
 
 const isChannelName = (value: string): boolean => channelNamePattern.test(value);
+
+const isWorkflowName = (value: string): boolean => workflowNamePattern.test(value);
 
 const decodeUtf8Bytes = (
   state: CompilerState,
@@ -561,8 +580,23 @@ const parseOutputSchema = (
   };
 };
 
-const stripAgentPrefix = (path: string): string =>
-  path.startsWith("agent/") ? path.slice("agent/".length) : path;
+const agentGrammarRoots = new Set([
+  "agent.json",
+  "channels",
+  "domains",
+  "instructions.md",
+  "interactions",
+  "materials",
+  "skills",
+  "tools",
+]);
+
+const stripAgentPrefix = (path: string): string => {
+  if (!path.startsWith("agent/")) return path;
+  const rest = path.slice("agent/".length);
+  const root = rest.split("/")[0] ?? "";
+  return agentGrammarRoots.has(root) ? rest : path;
+};
 
 const normalizePath = (path: string): string | null => {
   if (path.length === 0 || path.startsWith("/") || path.includes("\\")) return null;
@@ -1378,6 +1412,33 @@ const recordChannelFile = (
   });
 };
 
+const recordWorkflowFile = (
+  state: CompilerState,
+  path: string,
+  sourceKind: AuthoredFileSourceKind | undefined,
+): void => {
+  const parts = path.split("/");
+  if (parts.length !== 2 || parts[0] !== "workflows" || !parts[1]?.endsWith(".ts")) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "workflow_path_not_in_grammar" });
+    return;
+  }
+  const name = parts[1].slice(0, -".ts".length);
+  if (name.length === 0) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
+    return;
+  }
+  if (!isWorkflowName(name)) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "workflow_name_invalid" });
+    return;
+  }
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
+  state.workflows.set(name, {
+    name,
+    path: authoredPath(path),
+    origin: pathOrigin(path),
+  });
+};
+
 const applyDefaults = (state: CompilerState): void => {
   putDefault(state, "/agentId", "agent");
   const agentId = state.facts.get("/agentId")?.value;
@@ -1577,6 +1638,9 @@ const buildToolFilePaths = (state: CompilerState): Readonly<Record<string, strin
 const buildChannels = (state: CompilerState): ReadonlyArray<CompiledAgentChannel> =>
   [...state.channels.values()].sort((left, right) => left.name.localeCompare(right.name));
 
+const buildWorkflows = (state: CompilerState): ReadonlyArray<CompiledAgentWorkflow> =>
+  [...state.workflows.values()].sort((left, right) => left.name.localeCompare(right.name));
+
 const validateSkillSupportFiles = (state: CompilerState): void => {
   for (const [skillName, files] of state.skillSupportFiles.entries()) {
     const skill = state.skills.get(skillName);
@@ -1602,9 +1666,10 @@ const buildSkills = (state: CompilerState): ReadonlyArray<CompiledAgentSkill> =>
     .sort((left, right) => left.name.localeCompare(right.name));
 
 /**
- * Compile an authored `agent/` tree into one normalized manifest plus
- * provenance. This is the app-author entrypoint; runtime facts and provider
- * material are rejected before they can become manifest truth.
+ * Compile authored `agent/` and `workflows/` roots into one normalized
+ * manifest plus authoring facts. This is the app-author entrypoint; runtime
+ * facts and provider material are rejected before they can become manifest
+ * truth.
  *
  * @agentosPrimitive primitive.agent-authoring.compileAgentTree
  * @agentosInvariant invariant.docs.agent-projection
@@ -1621,6 +1686,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     toolIds: new Set(),
     toolFilePaths: new Map(),
     channels: new Map(),
+    workflows: new Map(),
     skills: new Map(),
     skillSupportFiles: new Map(),
     skillSupportByteTotals: new Map(),
@@ -1645,6 +1711,9 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
         break;
       case "channel":
         recordChannelFile(state, path, file.sourceKind);
+        break;
+      case "workflow":
+        recordWorkflowFile(state, path, file.sourceKind);
         break;
     }
   }
@@ -1671,6 +1740,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       workspaceToolControls: buildWorkspaceToolControls(state),
       toolFilePaths: buildToolFilePaths(state),
       channels: buildChannels(state),
+      workflows: buildWorkflows(state),
       skills: buildSkills(state),
     },
   };

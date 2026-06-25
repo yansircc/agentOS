@@ -22,13 +22,16 @@ agent/
     github.ts            # optional inbound provider request handler
   tools/                # optional custom execute code only
   workspace/reconcile.ts
+workflows/
+  deploy.ts             # optional finite workflow authoring slot
 agentos.config.jsonc
 .agentos/generated/
 app/
 ```
 
-Only `agent/` and `agentos.config.jsonc` are required. `workspace/reconcile.ts`
-is optional authored policy. `app/` is product UI only.
+Only `agent/` and `agentos.config.jsonc` are required. `workflows/` is optional
+finite workflow authoring. `workspace/reconcile.ts` is optional authored policy.
+`app/` is product UI only.
 
 ## Authoring Tree
 
@@ -99,6 +102,14 @@ response URLs must be redacted before data is sent to `submit`, `dispatch`,
 model context, or durable events. Runtime does not provide generic webhook
 helpers, provider lifecycle helpers, provider-normalized universal events, or
 deduplication substrate for channels.
+
+`workflows/<name>.ts` is an optional finite workflow authoring slot. The path
+stem is the workflow identity; there is no second workflow name in `agent.json`,
+`agentos.config.jsonc`, `workspace@1`, or `chat@1`. The grammar accepts only
+direct `workflows/<name>.ts` files with lowercase slug names. Nested workflow
+files, symlinks, `agent/workflows/*`, and unsupported roots fail closed. Profile
+values such as `workspace@1` and `chat@1` describe capability surface, not
+lifecycle.
 
 Default workspace tool policy is controlled as data in `agent/agent.json`.
 Unknown slugs fail closed. A default can be disabled with `false`; disabling a

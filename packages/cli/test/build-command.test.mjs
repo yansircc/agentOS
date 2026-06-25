@@ -562,6 +562,127 @@ void test("compileAgentTree keeps channels as authoring-only path-stem facts", (
   ]);
 });
 
+void test("compileAgentTree splits workflow lifecycle identity from agent profile", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
+      'const agentJson = { path: "agent/agent.json", kind: "json", value: { agentId: "workflow-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "workflow-fixture" } } };',
+      "const compile = (file) => compileAgentTree({ files: [instructions, file] });",
+      "const valid = compileAgentTree({ files: [",
+      "  instructions,",
+      "  agentJson,",
+      '  { path: "workflows/deploy.ts", kind: "workflow" },',
+      '  { path: "workflows/reconcile_workspace.ts", kind: "workflow" },',
+      "] });",
+      "if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }",
+      "const baseConfig = {",
+      '  agent: "./agent",',
+      '  deployment: { id: "workflow-fixture" },',
+      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
+      '  client: { kind: "browser-direct@1" },',
+      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      "};",
+      'const chat = normalizeAgentOsConfig({ ...baseConfig, profile: "chat@1" }, valid.value);',
+      'const workspace = normalizeAgentOsConfig({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } }, valid.value);',
+      "if (!chat.ok) { console.error(JSON.stringify(chat.issues)); process.exit(1); }",
+      "if (!workspace.ok) { console.error(JSON.stringify(workspace.issues)); process.exit(1); }",
+      'const nested = compile({ path: "workflows/deploy/index.ts", kind: "workflow" });',
+      'const emptyName = compile({ path: "workflows/.ts", kind: "workflow" });',
+      'const invalidName = compile({ path: "workflows/Deploy.ts", kind: "workflow" });',
+      'const agentScoped = compile({ path: "agent/workflows/deploy.ts", kind: "workflow" });',
+      'const symlink = compile({ path: "workflows/deploy.ts", kind: "workflow", sourceKind: "symlink" });',
+      "const duplicate = compileAgentTree({ files: [",
+      "  instructions,",
+      '  { path: "workflows/deploy.ts", kind: "workflow" },',
+      '  { path: "workflows/deploy.ts", kind: "workflow" },',
+      "] });",
+      "console.log(JSON.stringify({",
+      "  valid: {",
+      "    workflows: valid.value.workflows,",
+      '    manifestHasWorkflows: Object.hasOwn(valid.value.manifest, "workflows"),',
+      '    provenanceWorkflowKeys: Object.keys(valid.value.provenance).filter((key) => key.includes("workflow")),',
+      "  },",
+      "  normalized: { chat: chat.value.workflows, workspace: workspace.value.workflows },",
+      "  nested,",
+      "  emptyName,",
+      "  invalidName,",
+      "  agentScoped,",
+      "  symlink,",
+      "  duplicate,",
+      "}));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  const workflows = [
+    {
+      name: "deploy",
+      path: "workflows/deploy.ts",
+      origin: "path:workflows/deploy.ts",
+    },
+    {
+      name: "reconcile_workspace",
+      path: "workflows/reconcile_workspace.ts",
+      origin: "path:workflows/reconcile_workspace.ts",
+    },
+  ];
+  assert.deepEqual(output.valid, {
+    workflows,
+    manifestHasWorkflows: false,
+    provenanceWorkflowKeys: [],
+  });
+  assert.deepEqual(output.normalized, { chat: workflows, workspace: workflows });
+  assert.equal(output.nested.ok, false);
+  assert.deepEqual(output.nested.issues, [
+    {
+      kind: "unsupported_path",
+      path: "workflows/deploy/index.ts",
+      reason: "workflow_path_not_in_grammar",
+    },
+  ]);
+  assert.equal(output.emptyName.ok, false);
+  assert.deepEqual(output.emptyName.issues, [
+    {
+      kind: "unsupported_path",
+      path: "workflows/.ts",
+      reason: "empty_path_identity",
+    },
+  ]);
+  assert.equal(output.invalidName.ok, false);
+  assert.deepEqual(output.invalidName.issues, [
+    {
+      kind: "unsupported_path",
+      path: "workflows/Deploy.ts",
+      reason: "workflow_name_invalid",
+    },
+  ]);
+  assert.equal(output.agentScoped.ok, false);
+  assert.deepEqual(output.agentScoped.issues, [
+    {
+      kind: "unsupported_path",
+      path: "agent/workflows/deploy.ts",
+      reason: "workflow_path_not_in_grammar",
+    },
+  ]);
+  assert.equal(output.symlink.ok, false);
+  assert.deepEqual(output.symlink.issues, [
+    {
+      kind: "unsupported_path",
+      path: "workflows/deploy.ts",
+      reason: "symlink_forbidden",
+    },
+  ]);
+  assert.equal(output.duplicate.ok, false);
+  assert.deepEqual(output.duplicate.issues, [
+    {
+      kind: "duplicate_path",
+      path: "workflows/deploy.ts",
+      existingPath: "workflows/deploy.ts",
+    },
+  ]);
+});
+
 void test("agentos build compiles an authored workspace tree into generated files", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-build-"));
   try {
@@ -1181,12 +1302,54 @@ void test("agentos build rejects nested channel files from the filesystem", () =
   }
 });
 
+void test("agentos build rejects nested workflow files from the filesystem", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-workflow-invalid-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    mkdirSync(path.join(root, "workflows/deploy"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Reject nested workflows.");
+    writeFileSync(path.join(root, "workflows/deploy/index.ts"), "export default {};");
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "workflow-invalid" },',
+        '  "target": { "kind": "node@1" },',
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /workflow_path_not_in_grammar/);
+    assert.match(result.stderr, /workflows\/deploy\/index\.ts/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test("agentos info emits compile-only inspection without generated writes", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-info-"));
   try {
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     mkdirSync(path.join(root, "agent"), { recursive: true });
+    mkdirSync(path.join(root, "workflows"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Operate.");
+    writeFileSync(path.join(root, "workflows/deploy.ts"), "export default {};");
     writeFileSync(
       path.join(root, "agent/agent.json"),
       JSON.stringify(
@@ -1244,6 +1407,7 @@ void test("agentos info emits compile-only inspection without generated writes",
     assert.equal(info.compile.deployment.adapter, "node@1");
     assert.deepEqual(info.compile.manifest.capabilities, ["@agent-os/workspace-op"]);
     assert.deepEqual(info.compile.manifest.tools, workspaceDefaultToolNames);
+    assert.deepEqual(info.compile.manifest.workflows, ["deploy"]);
     assert.deepEqual(info.resolve, {
       status: "unavailable",
       reason: "agentos info is compile-only; resolved install graph is unavailable",

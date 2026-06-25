@@ -108,7 +108,7 @@ const help = `Usage:
   agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
   agentos info [--cwd <path>] [--config <path>] [--json]
 
-Compiles agent/ + agentos.config.jsonc into .agentos/generated/.
+Compiles agent/ + workflows/ + agentos.config.jsonc into .agentos/generated/.
 Prints compile-only agent inspection without starting a runtime.
 `;
 
@@ -332,6 +332,17 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
     }
   }
 
+  const workflowsDir = path.join(cwd, "workflows");
+  if (await pathExists(workflowsDir)) {
+    for (const file of await collectFiles(workflowsDir)) {
+      files.push({
+        path: toAuthoredPath(cwd, file.path),
+        kind: "workflow",
+        sourceKind: file.sourceKind,
+      });
+    }
+  }
+
   const skillsDir = path.join(agentDir, "skills");
   if (await pathExists(skillsDir)) {
     for (const file of await collectFiles(skillsDir)) {
@@ -448,6 +459,7 @@ const projectInfo = (facts: CompileFacts) => ({
       tools: Object.keys(facts.normalized.deployment.manifest.tools ?? {}).sort((left, right) =>
         left.localeCompare(right),
       ),
+      workflows: facts.normalized.workflows.map((workflow) => workflow.name),
     },
     generated: {
       files: facts.linked.files.map((file) => file.path),
