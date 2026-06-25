@@ -123,11 +123,19 @@ export type {
 export { Quota } from "./quota-service";
 export { Resources } from "./resources";
 export {
+  projectAgentSessionTurnLinks,
   projectRunsPage,
   projectRunStatus,
   projectRunTrace,
   projectSubmitResult,
+  projectWorkflowRunLinks,
   RUN_BEARING_KINDS,
+} from "./run-projector";
+export type {
+  AgentSessionTurnLinksProjection,
+  AgentSessionTurnRuntimeLink,
+  WorkflowRunLinksProjection,
+  WorkflowRunRuntimeLink,
 } from "./run-projector";
 export { Scheduler } from "./scheduler";
 export {

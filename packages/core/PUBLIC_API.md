@@ -77,6 +77,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:AgentSchemaProjections`
 - `.:AgentSchemaSource`
 - `.:AgentSchemaSpec`
+- `.:agentSessionTurnSubmittedEvent`
+- `.:AgentSessionTurnSubmittedPayload`
+- `.:AgentSessionTurnSubmittedPayloadSchema`
 - `.:AgentScopeIdentityPolicy`
 - `.:AgentScopeKind`
 - `.:AgentSettlementKind`
@@ -816,6 +819,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:withResolvedMaterial`
 - `.:withToolReadRequirement`
 - `.:withToolWriteRequirement`
+- `.:workflowRunSubmittedEvent`
+- `.:WorkflowRunSubmittedPayload`
+- `.:WorkflowRunSubmittedPayloadSchema`
 - `.:WORKSPACE_AGENT_COMMAND`
 - `.:WORKSPACE_AGENT_PROJECTION`
 - `.:WORKSPACE_AGENT_PROJECTION_SCHEMA`
@@ -1304,6 +1310,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:chatIngestedEvent`
 - `./runtime-protocol:ChatIngestedPayload`
 - `./runtime-protocol:ChatIngestedPayloadSchema`
+- `./runtime-protocol:agentSessionTurnSubmittedEvent`
+- `./runtime-protocol:AgentSessionTurnSubmittedPayload`
+- `./runtime-protocol:AgentSessionTurnSubmittedPayloadSchema`
 - `./runtime-protocol:ContinuationAnswer`
 - `./runtime-protocol:ContinuationCause`
 - `./runtime-protocol:ContinuationRef`
@@ -1518,6 +1527,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:validateAgentMount`
 - `./runtime-protocol:validateIntentSettlementVocabulary`
 - `./runtime-protocol:validateRuntimeLedgerTransitions`
+- `./runtime-protocol:workflowRunSubmittedEvent`
+- `./runtime-protocol:WorkflowRunSubmittedPayload`
+- `./runtime-protocol:WorkflowRunSubmittedPayloadSchema`
 - `./runtime-protocol:WORKSPACE_TOPOLOGY`
 - `./runtime-protocol:workspaceBindingRef`
 - `./runtime-protocol:WorkspaceBindingRef`

@@ -24,6 +24,8 @@ import {
   type RuntimeAbortEventKind,
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
+  type AgentSessionTurnSubmittedPayload,
+  type WorkflowRunSubmittedPayload,
   type SubmitResult,
 } from "@agent-os/core/runtime-protocol";
 
@@ -69,6 +71,9 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
       return event.id;
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
     case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
       return event.payload.runId;
@@ -469,6 +474,130 @@ export const projectRunsPage = (
     project(runsPageProjection, {
       runtimeEvents: runtimeEventsOf(events),
       spec,
+    }),
+  );
+
+export interface AgentSessionTurnRuntimeLink {
+  readonly sessionRef: string;
+  readonly turnRef: string;
+  readonly runtimeRunId: number;
+  readonly eventId: number;
+  readonly submittedAt: number;
+}
+
+export interface AgentSessionTurnLinksProjection {
+  readonly sessionRef: string;
+  readonly turns: ReadonlyArray<AgentSessionTurnRuntimeLink>;
+}
+
+export interface WorkflowRunRuntimeLink {
+  readonly workflowId: string;
+  readonly workflowRunId: string;
+  readonly runtimeRunId: number;
+  readonly eventId: number;
+  readonly submittedAt: number;
+  readonly idempotencyKey?: string;
+  readonly inputDigest?: string;
+}
+
+export interface WorkflowRunLinksProjection {
+  readonly workflowId: string;
+  readonly runs: ReadonlyArray<WorkflowRunRuntimeLink>;
+}
+
+const sessionTurnLinkProjection = defineProjectionSpec<
+  {
+    readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+    readonly sessionRef: string;
+  },
+  AgentSessionTurnLinksProjection
+>({
+  id: "runtime.agent-session-turn-links",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, sessionRef }, ctx) => {
+    const turns = runtimeEvents
+      .filter(
+        (
+          event,
+        ): event is RuntimeLedgerEventByKind<
+          typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED
+        > =>
+          event.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED &&
+          event.payload.sessionRef === sessionRef,
+      )
+      .sort((left, right) => left.id - right.id)
+      .map((event): AgentSessionTurnRuntimeLink => {
+        const payload: AgentSessionTurnSubmittedPayload = event.payload;
+        return {
+          sessionRef: payload.sessionRef,
+          turnRef: payload.turnRef,
+          runtimeRunId: payload.runtimeRunId,
+          eventId: event.id,
+          submittedAt: event.ts,
+        };
+      });
+
+    return ctx.ok({ sessionRef, turns });
+  },
+});
+
+export const projectAgentSessionTurnLinks = (
+  events: ReadonlyArray<LedgerEvent>,
+  sessionRef: string,
+): AgentSessionTurnLinksProjection =>
+  projectionOutputOrFail(
+    project(sessionTurnLinkProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      sessionRef,
+    }),
+  );
+
+const workflowRunLinkProjection = defineProjectionSpec<
+  {
+    readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+    readonly workflowId: string;
+  },
+  WorkflowRunLinksProjection
+>({
+  id: "runtime.workflow-run-links",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, workflowId }, ctx) => {
+    const runs = runtimeEvents
+      .filter(
+        (
+          event,
+        ): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED> =>
+          event.kind === RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED &&
+          event.payload.workflowId === workflowId,
+      )
+      .sort((left, right) => left.id - right.id)
+      .map((event): WorkflowRunRuntimeLink => {
+        const payload: WorkflowRunSubmittedPayload = event.payload;
+        return {
+          workflowId: payload.workflowId,
+          workflowRunId: payload.workflowRunId,
+          runtimeRunId: payload.runtimeRunId,
+          eventId: event.id,
+          submittedAt: event.ts,
+          ...(payload.idempotencyKey === undefined ? {} : { idempotencyKey: payload.idempotencyKey }),
+          ...(payload.inputDigest === undefined ? {} : { inputDigest: payload.inputDigest }),
+        };
+      });
+
+    return ctx.ok({ workflowId, runs });
+  },
+});
+
+export const projectWorkflowRunLinks = (
+  events: ReadonlyArray<LedgerEvent>,
+  workflowId: string,
+): WorkflowRunLinksProjection =>
+  projectionOutputOrFail(
+    project(workflowRunLinkProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      workflowId,
     }),
   );
 

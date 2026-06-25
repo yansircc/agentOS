@@ -71,6 +71,22 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
         runId: event.payload.runId,
         intent: redactedSafeSummary(event.payload.intent, "run_input"),
       });
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+      return safeLedgerEvent(event, {
+        sessionRef: event.payload.sessionRef,
+        turnRef: event.payload.turnRef,
+        runtimeRunId: event.payload.runtimeRunId,
+      });
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      return safeLedgerEvent(event, {
+        workflowId: event.payload.workflowId,
+        workflowRunId: event.payload.workflowRunId,
+        runtimeRunId: event.payload.runtimeRunId,
+        ...(event.payload.idempotencyKey === undefined
+          ? {}
+          : { idempotencyKey: event.payload.idempotencyKey }),
+        ...(event.payload.inputDigest === undefined ? {} : { inputDigest: event.payload.inputDigest }),
+      });
     case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
       return safeLedgerEvent(event, {
         runId: event.payload.runId,

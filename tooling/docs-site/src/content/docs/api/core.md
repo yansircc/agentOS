@@ -78,6 +78,9 @@ slug: "api/core"
 - `.:AgentSchemaProjections`
 - `.:AgentSchemaSource`
 - `.:AgentSchemaSpec`
+- `.:agentSessionTurnSubmittedEvent`
+- `.:AgentSessionTurnSubmittedPayload`
+- `.:AgentSessionTurnSubmittedPayloadSchema`
 - `.:AgentScopeIdentityPolicy`
 - `.:AgentScopeKind`
 - `.:AgentSettlementKind`
@@ -817,6 +820,9 @@ slug: "api/core"
 - `.:withResolvedMaterial`
 - `.:withToolReadRequirement`
 - `.:withToolWriteRequirement`
+- `.:workflowRunSubmittedEvent`
+- `.:WorkflowRunSubmittedPayload`
+- `.:WorkflowRunSubmittedPayloadSchema`
 - `.:WORKSPACE_AGENT_COMMAND`
 - `.:WORKSPACE_AGENT_PROJECTION`
 - `.:WORKSPACE_AGENT_PROJECTION_SCHEMA`
@@ -1305,6 +1311,9 @@ slug: "api/core"
 - `./runtime-protocol:chatIngestedEvent`
 - `./runtime-protocol:ChatIngestedPayload`
 - `./runtime-protocol:ChatIngestedPayloadSchema`
+- `./runtime-protocol:agentSessionTurnSubmittedEvent`
+- `./runtime-protocol:AgentSessionTurnSubmittedPayload`
+- `./runtime-protocol:AgentSessionTurnSubmittedPayloadSchema`
 - `./runtime-protocol:ContinuationAnswer`
 - `./runtime-protocol:ContinuationCause`
 - `./runtime-protocol:ContinuationRef`
@@ -1519,6 +1528,9 @@ slug: "api/core"
 - `./runtime-protocol:validateAgentMount`
 - `./runtime-protocol:validateIntentSettlementVocabulary`
 - `./runtime-protocol:validateRuntimeLedgerTransitions`
+- `./runtime-protocol:workflowRunSubmittedEvent`
+- `./runtime-protocol:WorkflowRunSubmittedPayload`
+- `./runtime-protocol:WorkflowRunSubmittedPayloadSchema`
 - `./runtime-protocol:WORKSPACE_TOPOLOGY`
 - `./runtime-protocol:workspaceBindingRef`
 - `./runtime-protocol:WorkspaceBindingRef`

@@ -9,6 +9,8 @@ slug: "api/runtime"
 
 - `.:AcquireCtx`
 - `.:Admission`
+- `.:AgentSessionTurnLinksProjection`
+- `.:AgentSessionTurnRuntimeLink`
 - `.:AnyAttachedStreamHandler`
 - `.:AnyDurableTrigger`
 - `.:AnyMaterializedProjectionDefinition`
@@ -140,6 +142,7 @@ slug: "api/runtime"
 - `.:NormalizeWorkspaceToolPathOptions`
 - `.:nodeHost`
 - `.:parseSseHttpEventBlock`
+- `.:projectAgentSessionTurnLinks`
 - `.:projectContinuation`
 - `.:projectContinuationRefs`
 - `.:projectInputRequest`
@@ -183,6 +186,7 @@ slug: "api/runtime"
 - `.:projectRunTrace`
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
+- `.:projectWorkflowRunLinks`
 - `.:projectWorkspaceJobObservability`
 - `.:Quota`
 - `.:recordLedgerPortEvent`
@@ -262,6 +266,8 @@ slug: "api/runtime"
 - `.:WitnessPortRejected`
 - `.:WitnessPortService`
 - `.:WitnessRequest`
+- `.:WorkflowRunLinksProjection`
+- `.:WorkflowRunRuntimeLink`
 - `.:WORKSPACE_AGENT_COMMAND`
 - `.:WORKSPACE_AGENT_PROJECTION`
 - `.:WORKSPACE_AGENT_PROJECTION_SCHEMA`
@@ -601,11 +607,17 @@ slug: "api/runtime"
 - `./node:NodePostgresEventSubscription`
 - `./node:nodePostgresProjectionKey`
 - `./node:nodePostgresRuntimeIdentity`
+- `./run-projector:AgentSessionTurnLinksProjection`
+- `./run-projector:AgentSessionTurnRuntimeLink`
+- `./run-projector:projectAgentSessionTurnLinks`
 - `./run-projector:projectRunsPage`
 - `./run-projector:projectRunStatus`
 - `./run-projector:projectRunTrace`
 - `./run-projector:projectSubmitResult`
+- `./run-projector:projectWorkflowRunLinks`
 - `./run-projector:RUN_BEARING_KINDS`
+- `./run-projector:WorkflowRunLinksProjection`
+- `./run-projector:WorkflowRunRuntimeLink`
 - `./sse-http:createAttachedStreamSseResponse`
 - `./sse-http:createSseHttpResponse`
 - `./sse-http:createSseHttpTextResponse`

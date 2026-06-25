@@ -14,6 +14,7 @@ import {
   agentRunInterruptedEvent,
   agentRunResumedEvent,
   agentRunStartedEvent,
+  agentSessionTurnSubmittedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
   EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
@@ -32,6 +33,7 @@ import {
   toolResultSnapshotFromExecutedPayload,
   toolRejectedEvent,
   validateRuntimeLedgerTransitions,
+  workflowRunSubmittedEvent,
   type RuntimeEventCommitSpec,
 } from "../../src/runtime-protocol/runtime-events";
 import {
@@ -167,6 +169,22 @@ describe("runtime event vocabulary", () => {
         runId: 1,
         intent: "answer",
         context: { topic: "runtime" },
+        traceContext,
+      }),
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+        runtimeRunId: 1,
+        traceContext,
+      }),
+      workflowRunSubmittedEvent({
+        ...runtimeIdentity,
+        workflowId: "summarize",
+        workflowRunId: "workflow-run:1",
+        runtimeRunId: 1,
+        idempotencyKey: "idem:1",
+        inputDigest: "sha256:input",
         traceContext,
       }),
       llmRequestedEvent({
@@ -332,6 +350,46 @@ describe("runtime event vocabulary", () => {
         }),
       ),
     ).toThrow();
+  });
+
+  it("records product lifecycle links without terminal truth or execution identity overload", () => {
+    const sessionTurn = ledgerEvent(
+      2,
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+        runtimeRunId: 1,
+      }),
+    );
+    const workflowRun = ledgerEvent(
+      3,
+      workflowRunSubmittedEvent({
+        ...runtimeIdentity,
+        workflowId: "summarize",
+        workflowRunId: "workflow-run:1",
+        runtimeRunId: 1,
+        idempotencyKey: "idem:1",
+        inputDigest: "sha256:input",
+      }),
+    );
+
+    expect(projectRuntimeSafeLedgerEvent(sessionTurn)?.safePayload).toEqual({
+      sessionRef: "session:s1",
+      turnRef: "turn:s1:1",
+      runtimeRunId: 1,
+    });
+    expect(projectRuntimeSafeLedgerEvent(workflowRun)?.safePayload).toEqual({
+      workflowId: "summarize",
+      workflowRunId: "workflow-run:1",
+      runtimeRunId: 1,
+      idempotencyKey: "idem:1",
+      inputDigest: "sha256:input",
+    });
+    const serialized = JSON.stringify([sessionTurn, workflowRun]);
+    expect(serialized).not.toContain("status");
+    expect(serialized).not.toContain("terminal");
+    expect(serialized).not.toContain("executionIdentity");
   });
 
   it("projects LLM and complete-after-tools runtime facts without prompt or args", () => {
@@ -699,6 +757,119 @@ describe("runtime event vocabulary", () => {
     ).toEqual({
       ok: true,
     });
+  });
+
+  it("accepts product link events only as unique links to a prior runtime run", () => {
+    const started = ledgerEvent(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }));
+    const sessionTurn = ledgerEvent(
+      2,
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+        runtimeRunId: started.id,
+      }),
+    );
+    const workflowRun = ledgerEvent(
+      3,
+      workflowRunSubmittedEvent({
+        ...runtimeIdentity,
+        workflowId: "summarize",
+        workflowRunId: "workflow-run:1",
+        runtimeRunId: started.id,
+        idempotencyKey: "idem:1",
+        inputDigest: "sha256:input",
+      }),
+    );
+
+    expect(validateRuntimeLedgerTransitions({ history: [started], events: [sessionTurn, workflowRun] }))
+      .toEqual({ ok: true });
+
+    const duplicateSessionTurn = ledgerEvent(
+      4,
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+        runtimeRunId: started.id,
+      }),
+    );
+    const duplicateWorkflowRun = ledgerEvent(
+      5,
+      workflowRunSubmittedEvent({
+        ...runtimeIdentity,
+        workflowId: "summarize",
+        workflowRunId: "workflow-run:1",
+        runtimeRunId: started.id,
+      }),
+    );
+
+    const duplicateValidation = validateRuntimeLedgerTransitions({
+      history: [started, sessionTurn, workflowRun],
+      events: [duplicateSessionTurn, duplicateWorkflowRun],
+    });
+    expect(duplicateValidation.ok).toBe(false);
+    if (!duplicateValidation.ok) {
+      expect(duplicateValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_product_link_duplicate",
+        "runtime_product_link_duplicate",
+      ]);
+    }
+  });
+
+  it("rejects product link events without a prior non-terminal runtime run", () => {
+    const started = ledgerEvent(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }));
+    const completed = ledgerEvent(
+      2,
+      agentRunCompletedEvent({
+        ...runtimeIdentity,
+        runId: started.id,
+        final: "done",
+        output: "done",
+        outputKind: "text",
+        tokensUsed: 1,
+      }),
+    );
+    const missingRunLink = ledgerEvent(
+      3,
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+        runtimeRunId: 99,
+      }),
+    );
+    const terminalRunLink = ledgerEvent(
+      4,
+      workflowRunSubmittedEvent({
+        ...runtimeIdentity,
+        workflowId: "summarize",
+        workflowRunId: "workflow-run:1",
+        runtimeRunId: started.id,
+      }),
+    );
+
+    const missingRunValidation = validateRuntimeLedgerTransitions({
+      history: [],
+      events: [missingRunLink],
+    });
+    expect(missingRunValidation.ok).toBe(false);
+    if (!missingRunValidation.ok) {
+      expect(missingRunValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_run_missing_start",
+      ]);
+    }
+
+    const terminalRunValidation = validateRuntimeLedgerTransitions({
+      history: [started, completed],
+      events: [terminalRunLink],
+    });
+    expect(terminalRunValidation.ok).toBe(false);
+    if (!terminalRunValidation.ok) {
+      expect(terminalRunValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_run_already_terminal",
+      ]);
+    }
   });
 
   it("rejects runtime transitions without a proven prior source", () => {

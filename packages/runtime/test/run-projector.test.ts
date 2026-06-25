@@ -3,10 +3,12 @@ import type { LedgerEvent } from "@agent-os/core/types";
 import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { ABORT } from "@agent-os/core/abort";
 import {
+  projectAgentSessionTurnLinks,
   projectRunsPage,
   projectRunStatus,
   projectRunTrace,
   projectSubmitResult,
+  projectWorkflowRunLinks,
 } from "../src/run-projector";
 import {
   agentRunAbortedEvent,
@@ -14,9 +16,11 @@ import {
   agentRunInterruptedEvent,
   agentRunResumedEvent,
   agentRunStartedEvent,
+  agentSessionTurnSubmittedEvent,
   chatIngestedEvent,
   llmResponseEvent,
   toolExecutedEvent,
+  workflowRunSubmittedEvent,
   type RuntimeEventCommitSpec,
 } from "@agent-os/core/runtime-protocol";
 
@@ -420,6 +424,64 @@ describe("runtime run projectors", () => {
       at: 30,
       event: "agent.run.completed",
     });
+  });
+
+  it("projects product runtime links without fabricating terminal run truth", () => {
+    const rows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "summarize" })),
+      event(
+        2,
+        agentSessionTurnSubmittedEvent({
+          ...runtimeIdentity,
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 1,
+        }),
+      ),
+      event(
+        3,
+        workflowRunSubmittedEvent({
+          ...runtimeIdentity,
+          workflowId: "summarize",
+          workflowRunId: "workflow-run:1",
+          runtimeRunId: 1,
+          idempotencyKey: "idem:1",
+          inputDigest: "sha256:input",
+        }),
+      ),
+    ];
+
+    expect(projectAgentSessionTurnLinks(rows, "session:s1")).toEqual({
+      sessionRef: "session:s1",
+      turns: [
+        {
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 1,
+          eventId: 2,
+          submittedAt: 20,
+        },
+      ],
+    });
+    expect(projectWorkflowRunLinks(rows, "summarize")).toEqual({
+      workflowId: "summarize",
+      runs: [
+        {
+          workflowId: "summarize",
+          workflowRunId: "workflow-run:1",
+          runtimeRunId: 1,
+          eventId: 3,
+          submittedAt: 30,
+          idempotencyKey: "idem:1",
+          inputDigest: "sha256:input",
+        },
+      ],
+    });
+    expect(projectRunStatus(rows, 1)).toEqual({
+      kind: "open_without_terminal",
+      startedAt: 10,
+    });
+    expect(projectSubmitResult(rows, 1)).toBe(null);
   });
 
   it("does not fabricate SubmitResult without a terminal runtime fact", () => {

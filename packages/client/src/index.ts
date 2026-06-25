@@ -182,6 +182,9 @@ const runIdFromEvent = (event: RuntimeLedgerEvent): number | undefined => {
     case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
     case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
       return event.payload.runId;
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return event.payload.turn.id;
     default:

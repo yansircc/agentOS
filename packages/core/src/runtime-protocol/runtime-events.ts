@@ -52,6 +52,8 @@ export const RUNTIME_EVENT_KIND = {
   AGENT_RUN_INTERRUPTED: "agent.run.interrupted",
   AGENT_RUN_RESUMED: "agent.run.resumed",
   CHAT_INGESTED: "chat.ingested",
+  AGENT_SESSION_TURN_SUBMITTED: "agent_session.turn_submitted",
+  WORKFLOW_RUN_SUBMITTED: "workflow.run_submitted",
   LLM_REQUESTED: "llm.requested",
   LLM_RESPONSE: "llm.response",
   TOOL_EXECUTED: "tool.executed",
@@ -129,6 +131,22 @@ export type ChatIngestedPayload = {
   readonly runId: number;
   readonly intent: string;
   readonly context: unknown;
+  readonly traceContext?: TraceContext;
+};
+
+export type AgentSessionTurnSubmittedPayload = {
+  readonly sessionRef: string;
+  readonly turnRef: string;
+  readonly runtimeRunId: number;
+  readonly traceContext?: TraceContext;
+};
+
+export type WorkflowRunSubmittedPayload = {
+  readonly workflowId: string;
+  readonly workflowRunId: string;
+  readonly runtimeRunId: number;
+  readonly idempotencyKey?: string;
+  readonly inputDigest?: string;
   readonly traceContext?: TraceContext;
 };
 
@@ -400,6 +418,24 @@ export const ChatIngestedPayloadSchema: Schema.Decoder<ChatIngestedPayload> = Sc
   traceContext: Schema.optional(TraceContextSchema),
 });
 
+export const AgentSessionTurnSubmittedPayloadSchema: Schema.Decoder<AgentSessionTurnSubmittedPayload> =
+  Schema.Struct({
+    sessionRef: nonEmptyString,
+    turnRef: nonEmptyString,
+    runtimeRunId: positiveInt,
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
+export const WorkflowRunSubmittedPayloadSchema: Schema.Decoder<WorkflowRunSubmittedPayload> =
+  Schema.Struct({
+    workflowId: nonEmptyString,
+    workflowRunId: nonEmptyString,
+    runtimeRunId: positiveInt,
+    idempotencyKey: Schema.optional(nonEmptyString),
+    inputDigest: Schema.optional(nonEmptyString),
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
 export const LlmResponsePayloadSchema: Schema.Decoder<LlmResponsePayload> = Schema.Struct({
   turn: TurnRefSchema,
   items: Schema.Array(LlmOutputItemSchema),
@@ -551,6 +587,8 @@ export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED]: AgentRunInterruptedPayload;
   readonly [RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED]: AgentRunResumedPayload;
   readonly [RUNTIME_EVENT_KIND.CHAT_INGESTED]: ChatIngestedPayload;
+  readonly [RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED]: AgentSessionTurnSubmittedPayload;
+  readonly [RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED]: WorkflowRunSubmittedPayload;
   readonly [RUNTIME_EVENT_KIND.LLM_REQUESTED]: LlmRequestedPayload;
   readonly [RUNTIME_EVENT_KIND.LLM_RESPONSE]: LlmResponsePayload;
   readonly [RUNTIME_EVENT_KIND.TOOL_EXECUTED]: ToolExecutedPayload;
@@ -640,6 +678,14 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
       return Schema.decodeUnknownSync(ChatIngestedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+      return Schema.decodeUnknownSync(AgentSessionTurnSubmittedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      return Schema.decodeUnknownSync(WorkflowRunSubmittedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
       return Schema.decodeUnknownSync(LlmRequestedPayloadSchema)(
         payload,
@@ -708,6 +754,14 @@ const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
       return Schema.decodeUnknownOption(ChatIngestedPayloadSchema)(payload) as Option.Option<
         RuntimeEventPayloadByKind[K]
       >;
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+      return Schema.decodeUnknownOption(AgentSessionTurnSubmittedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      return Schema.decodeUnknownOption(WorkflowRunSubmittedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
       return Schema.decodeUnknownOption(LlmRequestedPayloadSchema)(payload) as Option.Option<
         RuntimeEventPayloadByKind[K]
@@ -786,6 +840,7 @@ export type RuntimeLedgerTransitionIssueCode =
   | "runtime_run_duplicate_start"
   | "runtime_run_duplicate_terminal"
   | "runtime_run_missing_start"
+  | "runtime_product_link_duplicate"
   | "runtime_source_event_not_before"
   | "runtime_source_event_missing"
   | "runtime_source_event_not_runtime"
@@ -939,14 +994,33 @@ type RuntimeRunState = {
   readonly interruptions: Map<string, RuntimeRunInterruptionState>;
 };
 
+type RuntimeProductLinkState = {
+  readonly sessionTurns: Set<string>;
+  readonly workflowRuns: Set<string>;
+};
+
 const makeRuntimeRunState = (): RuntimeRunState => ({
   interruptions: new Map(),
 });
+
+const makeRuntimeProductLinkState = (): RuntimeProductLinkState => ({
+  sessionTurns: new Set(),
+  workflowRuns: new Set(),
+});
+
+const sessionTurnLinkKey = (payload: AgentSessionTurnSubmittedPayload): string =>
+  `${payload.sessionRef}\u0000${payload.turnRef}`;
+
+const workflowRunLinkKey = (payload: WorkflowRunSubmittedPayload): string =>
+  `${payload.workflowId}\u0000${payload.workflowRunId}`;
 
 const runtimeRunId = (event: RuntimeLedgerEvent): number => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
       return event.id;
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return event.payload.turn.id;
     case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
@@ -1012,6 +1086,7 @@ const consumedDecisionRef = (event: LedgerEvent): string | null => {
 
 const applyHistoricalRuntimeRunEvent = (
   states: Map<number, RuntimeRunState>,
+  productLinks: RuntimeProductLinkState,
   event: RuntimeLedgerEvent,
 ): void => {
   const runId = runtimeRunId(event);
@@ -1030,6 +1105,12 @@ const applyHistoricalRuntimeRunEvent = (
             : { decision: { gateRef: event.payload.decision.gateRef } }),
         });
       }
+      break;
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+      productLinks.sessionTurns.add(sessionTurnLinkKey(event.payload));
+      break;
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      productLinks.workflowRuns.add(workflowRunLinkKey(event.payload));
       break;
     case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED: {
       const interruption = state.interruptions.get(event.payload.interruptId);
@@ -1069,12 +1150,13 @@ export const validateRuntimeLedgerTransitions = (input: {
 }): RuntimeLedgerTransitionValidation => {
   const priorById = new Map(input.history.map((event) => [event.id, event] as const));
   const runStates = new Map<number, RuntimeRunState>();
+  const productLinks = makeRuntimeProductLinkState();
   const issues: RuntimeLedgerTransitionIssue[] = [];
 
   for (const historical of input.history) {
     const decoded = decodeRuntimeLedgerEventSafe(historical);
     if (decoded?._tag === "runtime") {
-      applyHistoricalRuntimeRunEvent(runStates, decoded.event);
+      applyHistoricalRuntimeRunEvent(runStates, productLinks, decoded.event);
     }
   }
 
@@ -1294,6 +1376,36 @@ export const validateRuntimeLedgerTransitions = (input: {
         }
         break;
       }
+      case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED: {
+        const key = sessionTurnLinkKey(event.payload);
+        if (productLinks.sessionTurns.has(key)) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_product_link_duplicate",
+              event,
+              "agent_session.turn_submitted must be the only runtime link for a session turn",
+            ),
+          );
+        } else if (hasStarted && !hasTerminal) {
+          productLinks.sessionTurns.add(key);
+        }
+        break;
+      }
+      case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED: {
+        const key = workflowRunLinkKey(event.payload);
+        if (productLinks.workflowRuns.has(key)) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_product_link_duplicate",
+              event,
+              "workflow.run_submitted must be the only runtime link for a workflow run",
+            ),
+          );
+        } else if (hasStarted && !hasTerminal) {
+          productLinks.workflowRuns.add(key);
+        }
+        break;
+      }
       case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
       case ABORT.BUDGET_TOKENS:
       case ABORT.BUDGET_TIME:
@@ -1374,6 +1486,40 @@ export const chatIngestedEvent = (
     runId: spec.runId,
     intent: spec.intent,
     context: spec.context,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const agentSessionTurnSubmittedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly sessionRef: string;
+    readonly turnRef: string;
+    readonly runtimeRunId: number;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED, {
+    sessionRef: spec.sessionRef,
+    turnRef: spec.turnRef,
+    runtimeRunId: spec.runtimeRunId,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const workflowRunSubmittedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly workflowId: string;
+    readonly workflowRunId: string;
+    readonly runtimeRunId: number;
+    readonly idempotencyKey?: string;
+    readonly inputDigest?: string;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED, {
+    workflowId: spec.workflowId,
+    workflowRunId: spec.workflowRunId,
+    runtimeRunId: spec.runtimeRunId,
+    ...(spec.idempotencyKey === undefined ? {} : { idempotencyKey: spec.idempotencyKey }),
+    ...(spec.inputDigest === undefined ? {} : { inputDigest: spec.inputDigest }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

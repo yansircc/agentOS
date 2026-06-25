@@ -68,6 +68,9 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
     case ABORT.DECISION_CANCELLED:
     case ABORT.DECISION_EXPIRED:
       return event.payload.runId;
+    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+      return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return event.payload.turn.id;
