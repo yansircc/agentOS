@@ -499,6 +499,102 @@ void test("agentos build emits node local agent app target", () => {
   }
 });
 
+void test("agentos info emits compile-only inspection without generated writes", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-info-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Operate.");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "info-agent",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "info-agent-scope",
+          },
+          effectAuthorityRef: {
+            authorityClass: "effect",
+            authorityId: "info-agent",
+          },
+          tools: {
+            write_file: { interaction: "approval" },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "info-deployment", "version": "0.1.0" },',
+        '  "target": { "kind": "node@1" },',
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const jsonResult = spawnSync(process.execPath, [cli, "info", "--cwd", root, "--json"], {
+      encoding: "utf8",
+    });
+    assert.equal(jsonResult.status, 0, jsonResult.stderr);
+    const info = JSON.parse(jsonResult.stdout);
+    assert.equal(info.compile.status, "available");
+    assert.equal(info.compile.profile, "workspace@1");
+    assert.equal(info.compile.target, "node@1");
+    assert.equal(info.compile.agent.id, "info-agent");
+    assert.equal(info.compile.deployment.id, "info-deployment");
+    assert.equal(info.compile.deployment.backend, "node");
+    assert.equal(info.compile.deployment.adapter, "node@1");
+    assert.deepEqual(info.compile.manifest.capabilities, ["@agent-os/workspace-op"]);
+    assert.deepEqual(info.compile.manifest.tools, workspaceDefaultToolNames);
+    assert.deepEqual(info.resolve, {
+      status: "unavailable",
+      reason: "agentos info is compile-only; resolved install graph is unavailable",
+    });
+    assert.deepEqual(info.runtime, {
+      status: "unavailable",
+      reason: "agentos info does not start a local or Cloudflare runtime",
+    });
+    assert.equal(existsSync(path.join(root, ".agentos")), false);
+
+    const humanResult = spawnSync(process.execPath, [cli, "info", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.equal(humanResult.status, 0, humanResult.stderr);
+    assert.match(humanResult.stdout, /agentOS info/);
+    assert.match(humanResult.stdout, /profile: workspace@1/);
+    assert.match(humanResult.stdout, /target: node@1/);
+    assert.match(humanResult.stdout, /resolve: unavailable/);
+    assert.match(humanResult.stdout, /runtime: unavailable/);
+
+    const runnerSource = readFileSync(
+      path.join(repoRoot, "packages/cli/src/build/build-cli.ts"),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      runnerSource,
+      /resolveRuntime|lowerLocalAgentRuntime|createLocalAgentRuntime|wrangler/i,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test("agentos build compiles chat profile without workspace surface", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-chat-build-"));
   try {

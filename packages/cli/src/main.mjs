@@ -25,6 +25,7 @@ Usage:
   agentos --help
   agentos --version
   agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
+  agentos info [--cwd <path>] [--config <path>] [--json]
   agentos check all
   agentos check default
   agentos check structural
@@ -52,6 +53,7 @@ const fail = (message) => {
   if (
     message.startsWith("agentos:") ||
     message.startsWith("agentos build:") ||
+    message.startsWith("agentos info:") ||
     message.startsWith("agentos check:") ||
     message.startsWith("agentos generate:")
   ) {
@@ -68,7 +70,7 @@ const expectNoExtraArgs = (args, command) => {
 
 const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-const runBuild = async (args) => {
+const runBuildRunner = async (command, args) => {
   const runner = fileURLToPath(new URL("./build/build-cli.ts", import.meta.url));
   const bundled = await bundleModuleForNode(runner, {
     prefix: "agentos-build-runner-",
@@ -76,19 +78,19 @@ const runBuild = async (args) => {
   });
   try {
     await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [bundled.outfile, "build", ...args], {
+      const child = spawn(process.execPath, [bundled.outfile, command, ...args], {
         stdio: "inherit",
       });
       child.on("error", (error) => {
-        reject(new Error(`agentos build: failed to start node build runner: ${error.message}`));
+        reject(new Error(`agentos ${command}: failed to start node build runner: ${error.message}`));
       });
       child.on("exit", (code, signal) => {
         if (signal !== null) {
-          reject(new Error(`agentos build: build runner terminated by ${signal}`));
+          reject(new Error(`agentos ${command}: build runner terminated by ${signal}`));
           return;
         }
         if (code !== 0) {
-          reject(new Error(`agentos build: build runner failed with exit code ${code ?? 1}`));
+          reject(new Error(`agentos ${command}: build runner failed with exit code ${code ?? 1}`));
           return;
         }
         resolve();
@@ -98,6 +100,10 @@ const runBuild = async (args) => {
     await bundled.cleanup();
   }
 };
+
+const runBuild = async (args) => runBuildRunner("build", args);
+
+const runInfo = async (args) => runBuildRunner("info", args);
 
 const runCheck = async (args) => {
   const [command, ...rest] = args;
@@ -229,6 +235,9 @@ const main = async () => {
     case "build":
       await runBuild(rest);
       return;
+    case "info":
+      await runInfo(rest);
+      return;
     case "check":
       await runCheck(rest);
       return;
@@ -236,7 +245,7 @@ const main = async () => {
       await runGenerate(rest);
       return;
     default:
-      throw new Error("agentos: choose one of build, check, generate");
+      throw new Error("agentos: choose one of build, info, check, generate");
   }
 };
 

@@ -10,6 +10,8 @@ import {
   normalizeAgentOsConfig,
   type AuthoredAgentTree,
   type AuthoredToolDeclaration,
+  type NormalizedAgentOsConfig,
+  type StaticTargetLink,
 } from "./agent-authoring";
 import { importBundledModule } from "../lib/ts-module-loader.mjs";
 
@@ -19,9 +21,16 @@ interface BuildArgs {
   readonly packageScope?: string;
 }
 
+interface InfoArgs {
+  readonly cwd: string;
+  readonly config: string;
+  readonly json: boolean;
+}
+
 type CliArgs =
   | { readonly command: "help" }
-  | { readonly command: "build"; readonly args: BuildArgs };
+  | { readonly command: "build"; readonly args: BuildArgs }
+  | { readonly command: "info"; readonly args: InfoArgs };
 
 const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
   const args: {
@@ -57,18 +66,50 @@ const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
   return args;
 };
 
+const parseInfoArgs = (rawArgs: ReadonlyArray<string>): InfoArgs => {
+  const args = {
+    cwd: process.cwd(),
+    config: "agentos.config.jsonc",
+    json: false,
+  };
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
+    switch (arg) {
+      case "--cwd":
+        if (rawArgs[index + 1] === undefined) throw new Error("--cwd requires a value");
+        args.cwd = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--config":
+        if (rawArgs[index + 1] === undefined) throw new Error("--config requires a value");
+        args.config = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--json":
+        args.json = true;
+        break;
+      default:
+        throw new Error(`unexpected argument ${arg}`);
+    }
+  }
+  return args;
+};
+
 const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
   const [command, ...rest] = rawArgs;
   if (command === undefined || command === "--help" || command === "-h") return { command: "help" };
-  if (command !== "build") throw new Error("choose one of build");
   if (rest.includes("--help") || rest.includes("-h")) return { command: "help" };
-  return { command: "build", args: parseBuildArgs(rest) };
+  if (command === "build") return { command: "build", args: parseBuildArgs(rest) };
+  if (command === "info") return { command: "info", args: parseInfoArgs(rest) };
+  throw new Error("choose one of build, info");
 };
 
 const help = `Usage:
   agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
+  agentos info [--cwd <path>] [--config <path>] [--json]
 
 Compiles agent/ + agentos.config.jsonc into .agentos/generated/.
+Prints compile-only agent inspection without starting a runtime.
 `;
 
 const stripJsonc = (text: string): string => {
@@ -283,13 +324,15 @@ const writeGeneratedFiles = async (
   }
 };
 
-const main = async (): Promise<void> => {
-  const parsed = parseArgs(process.argv.slice(2));
-  if (parsed.command === "help") {
-    process.stdout.write(help);
-    return;
-  }
-  const args = parsed.args;
+interface CompileFacts {
+  readonly cwd: string;
+  readonly normalized: NormalizedAgentOsConfig;
+  readonly linked: StaticTargetLink;
+}
+
+const loadCompileFacts = async (
+  args: Pick<BuildArgs, "cwd" | "config" | "packageScope">,
+): Promise<CompileFacts> => {
   const cwd = path.resolve(args.cwd);
   const configPath = path.resolve(cwd, args.config);
   const configValue = await readJsonc(configPath);
@@ -323,15 +366,95 @@ const main = async (): Promise<void> => {
     throw new Error(`static target link failed: ${JSON.stringify(linked.issues, null, 2)}`);
   }
 
-  await writeGeneratedFiles(cwd, linked.value.files);
-  console.log(`generated ${linked.value.files.length} agentOS files`);
+  return { cwd, normalized: normalized.value, linked: linked.value };
+};
+
+const unavailable = (reason: string) => ({ status: "unavailable" as const, reason });
+
+const manifestCapabilityBindingRefs = (
+  capabilities: NormalizedAgentOsConfig["deployment"]["manifest"]["capabilities"],
+): ReadonlyArray<string> =>
+  Object.values(capabilities ?? {})
+    .map((capability) => capability.bindingRef)
+    .sort((left, right) => left.localeCompare(right));
+
+const projectInfo = (facts: CompileFacts) => ({
+  compile: {
+    status: "available" as const,
+    cwd: facts.cwd,
+    profile: facts.normalized.profile,
+    target: facts.normalized.target.kind,
+    agent: {
+      id: facts.normalized.deployment.manifest.agentId,
+      scope: facts.normalized.deployment.manifest.scope,
+    },
+    deployment: {
+      id: facts.normalized.deployment.deploymentId,
+      backend: facts.normalized.deployment.backend,
+      adapter: facts.normalized.deployment.adapter,
+      version: facts.normalized.deploymentVersion,
+    },
+    manifest: {
+      host: facts.normalized.target.kind,
+      capabilities: manifestCapabilityBindingRefs(facts.normalized.deployment.manifest.capabilities),
+      tools: Object.keys(facts.normalized.deployment.manifest.tools ?? {}).sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    },
+    generated: {
+      files: facts.linked.files.map((file) => file.path),
+      mount: facts.linked.mount,
+      canonicalDeployment: facts.linked.canonicalDeployment,
+    },
+    provenance: facts.normalized.provenance,
+  },
+  resolve: unavailable("agentos info is compile-only; resolved install graph is unavailable"),
+  runtime: unavailable("agentos info does not start a local or Cloudflare runtime"),
+});
+
+const printInfoHuman = (info: ReturnType<typeof projectInfo>): void => {
+  const lines = [
+    "agentOS info",
+    `profile: ${info.compile.profile}`,
+    `target: ${info.compile.target}`,
+    `agent: ${info.compile.agent.id}`,
+    `deployment: ${info.compile.deployment.id} (${info.compile.deployment.backend}/${info.compile.deployment.adapter})`,
+    `generated files: ${info.compile.generated.files.length}`,
+    `resolve: ${info.resolve.status} - ${info.resolve.reason}`,
+    `runtime: ${info.runtime.status} - ${info.runtime.reason}`,
+  ];
+  process.stdout.write(`${lines.join("\n")}\n`);
+};
+
+const main = async (): Promise<void> => {
+  const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.command === "help") {
+    process.stdout.write(help);
+    return;
+  }
+  if (parsed.command === "build") {
+    const facts = await loadCompileFacts(parsed.args);
+    await writeGeneratedFiles(facts.cwd, facts.linked.files);
+    console.log(`generated ${facts.linked.files.length} agentOS files`);
+    return;
+  }
+  const facts = await loadCompileFacts({ ...parsed.args, packageScope: undefined });
+  const info = projectInfo(facts);
+  if (parsed.args.json) {
+    process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);
+  } else {
+    printInfoHuman(info);
+  }
 };
 
 try {
   await main();
 } catch (error) {
+  const command = process.argv[2];
+  const prefix =
+    command === "build" ? "agentos build" : command === "info" ? "agentos info" : "agentos";
   process.stderr.write(
-    `agentos build: ${error instanceof Error ? error.message : String(error)}\n`,
+    `${prefix}: ${error instanceof Error ? error.message : String(error)}\n`,
   );
   process.exitCode = 1;
 }
