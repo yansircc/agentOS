@@ -32,6 +32,7 @@ algebra, durable trigger authoring, and ledger-derived projections.
 | `@agent-os/runtime/run-projector`                   | `advanced`                   | runtime run projection helpers                              |
 | `@agent-os/runtime/sse-http`                        | `generated-only`, `advanced` | SSE HTTP helpers                                            |
 | `@agent-os/runtime/telemetry-otlp`                  | `advanced`                   | OTLP telemetry projection                                   |
+| `@agent-os/runtime/testing`                         | `advanced`                   | deterministic in-memory WorkspaceEnv test fixture           |
 | `@agent-os/runtime/workspace-agent`                 | `generated-only`             | generated workspace agent host types                        |
 | `@agent-os/runtime/workspace-binding`               | `generated-only`             | generated workspace tool binding                            |
 

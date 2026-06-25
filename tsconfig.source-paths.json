@@ -58,7 +58,8 @@
       "@agent-os/runtime/llm-effect-ai/openai-compatible": [
         "./packages/runtime/src/llm-effect-ai/openai-compatible.ts"
       ],
-      "@agent-os/runtime/telemetry-otlp": ["./packages/runtime/src/telemetry-otlp/index.ts"]
+      "@agent-os/runtime/telemetry-otlp": ["./packages/runtime/src/telemetry-otlp/index.ts"],
+      "@agent-os/runtime/testing": ["./packages/runtime/src/testing/index.ts"]
     }
   }
 }

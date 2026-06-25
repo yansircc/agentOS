@@ -77,6 +77,10 @@
     "./telemetry-otlp": {
       "types": "./src/telemetry-otlp/index.ts",
       "default": "./src/telemetry-otlp/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "default": "./src/testing/index.ts"
     }
   },
   "scripts": {

@@ -49,6 +49,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/runtime/run-projector", "packages/runtime/src/run-projector.ts"],
   ["@agent-os/runtime/sse-http", "packages/runtime/src/sse-http.ts"],
   ["@agent-os/runtime/telemetry-otlp", "packages/runtime/src/telemetry-otlp/index.ts"],
+  ["@agent-os/runtime/testing", "packages/runtime/src/testing/index.ts"],
   ["@agent-os/runtime/workspace-agent", "packages/runtime/src/workspace-agent.ts"],
   ["@agent-os/runtime/workspace-binding", "packages/runtime/src/workspace-binding.ts"],
   ["@agent-os/client", "packages/client/src/index.ts"],

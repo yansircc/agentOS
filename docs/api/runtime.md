@@ -629,6 +629,10 @@
 - `./telemetry-otlp:OtlpProjection`
 - `./telemetry-otlp:OtlpProjectionSpan`
 - `./telemetry-otlp:projectOtlpSpans`
+- `./testing:createInMemoryWorkspaceEnv`
+- `./testing:CreateInMemoryWorkspaceEnvOptions`
+- `./testing:InMemoryWorkspaceEnvError`
+- `./testing:InMemoryWorkspaceExecScript`
 - `./workspace-agent:defineWorkspaceAgentMount`
 - `./workspace-agent:isWorkspaceAgentCommandName`
 - `./workspace-agent:isWorkspaceAgentProjectionName`

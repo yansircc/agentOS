@@ -48,12 +48,12 @@ state to make a product flow appear complete.
 
 <!-- agentos:generated package-map:start -->
 
-| Package             | Role                                                                                                                                                                                                              |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-os/core`    | neutral substrate axioms, owner identity helpers, value brands, protocol schemas, shared errors, material refs, AgentSchema, tool algebra, and backend/runtime/LLM/telemetry vocabulary                           |
-| `@agent-os/runtime` | Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry. |
-| `@agent-os/client`  | transport-neutral agent client store, typed command surface, and optional framework subpath bridges                                                                                                               |
-| `@agent-os/cli`     | developer command surface for generated projections, authored agent builds, structural checks, and distribution gates                                                                                             |
+| Package             | Role                                                                                                                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@agent-os/core`    | neutral substrate axioms, owner identity helpers, value brands, protocol schemas, shared errors, material refs, AgentSchema, tool algebra, and backend/runtime/LLM/telemetry vocabulary                                                           |
+| `@agent-os/runtime` | Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry. |
+| `@agent-os/client`  | transport-neutral agent client store, typed command surface, and optional framework subpath bridges                                                                                                                                               |
+| `@agent-os/cli`     | developer command surface for generated projections, authored agent builds, structural checks, and distribution gates                                                                                                                             |
 
 <!-- agentos:generated package-map:end -->
 

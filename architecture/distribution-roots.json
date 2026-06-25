@@ -53,7 +53,8 @@
         "@yansirplus/runtime/llm-effect-ai/openai-compatible",
         "@yansirplus/runtime/run-projector",
         "@yansirplus/runtime/sse-http",
-        "@yansirplus/runtime/telemetry-otlp"
+        "@yansirplus/runtime/telemetry-otlp",
+        "@yansirplus/runtime/testing"
       ],
       "forbiddenSpecifiers": ["node:", "cloudflare:", "react", "svelte"]
     },

@@ -286,6 +286,12 @@
           "moduleBuckets": ["projection"],
           "targetProfiles": ["neutral"],
           "optionalPeers": []
+        },
+        {
+          "subpath": "./testing",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
         }
       ]
     },
