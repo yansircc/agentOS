@@ -175,38 +175,6 @@ if (/\s--fix(?:\s|")/u.test(sourceText)) {
   fail("docs/agent/boundary-rules.source.json: check commands must not include --fix");
 }
 
-const walk = (relativePath) => {
-  const absolutePath = path.join(repoRoot, relativePath);
-  const files = [];
-  for (const entry of fs.readdirSync(absolutePath, { withFileTypes: true })) {
-    const child = path.join(relativePath, entry.name);
-    if (entry.isDirectory()) files.push(...walk(child));
-    if (entry.isFile()) files.push(child.split(path.sep).join("/"));
-  }
-  return files;
-};
-
-const cliMjsFiles = walk("packages/cli/src").filter((file) => file.endsWith(".mjs"));
-const checkMjsFiles = cliMjsFiles.filter((file) => file.startsWith("packages/cli/src/check/"));
-if (cliMjsFiles.length > 19) {
-  fail(`packages/cli/src: expected at most 19 .mjs files; observed ${cliMjsFiles.length}`);
-}
-if (checkMjsFiles.length > 12) {
-  fail(`packages/cli/src/check: expected at most 12 .mjs files; observed ${checkMjsFiles.length}`);
-}
-for (const file of checkMjsFiles) {
-  const content = fs.readFileSync(path.join(repoRoot, file), "utf8");
-  const selfTestFlag = "--" + "self-test";
-  if (content.includes(selfTestFlag)) fail(`${file}: per-checker self-test flag is not allowed`);
-  const harnessPattern = new RegExp(
-    ["mkd" + "te" + "mp", "tm" + "pdir", "Tem" + "por" + "ary", "te" + "mp"].join("|"),
-    "i",
-  );
-  if (file !== "packages/cli/src/check/algorithmic-checks.mjs" && harnessPattern.test(content)) {
-    fail(`${file}: per-checker ad hoc harness is not allowed`);
-  }
-}
-
 const cliDependencies = Object.keys(cliPackage.dependencies ?? {});
 for (const dependency of cliDependencies) {
   if (

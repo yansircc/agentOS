@@ -408,14 +408,14 @@
       "assertions": [
         {
           "failureCondition": "decision-gate-lifecycle-boundary: post-migration verdict must reject violations owned by @agent-os/decision-gate",
-          "negativeWitness": "packages/runtime/test/submit-agent-runtime-events.test.ts: \"does not execute a tool when the matching decision is rejected\"; packages/runtime/test/submit-agent-runtime-events.test.ts: \"consumes an approved decision exactly once before resuming tool execution\"",
+          "negativeWitness": "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts: \"does not execute a tool when the matching decision is rejected\"; packages/runtime/test/_submit-agent-interrupt-resume-cases.ts: \"consumes an approved decision exactly once before resuming tool execution\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "file": "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts",
               "name": "does not execute a tool when the matching decision is rejected"
             },
             {
-              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "file": "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts",
               "name": "consumes an approved decision exactly once before resuming tool execution"
             }
           ]
@@ -775,14 +775,14 @@
       "assertions": [
         {
           "failureCondition": "workspace-job failure explanation must be a runtime join",
-          "negativeWitness": "packages/runtime/test/workspace-job.test.ts: \"joins exact submit run diagnostics without leaking submitRunId to consumers\"; packages/runtime/test/workspace-job.test.ts: \"keeps pre-submit seed failures uncorrelated and still observable\"",
+          "negativeWitness": "packages/runtime/test/_workspace-job-idempotency-cases.ts: \"joins exact submit run diagnostics without leaking submitRunId to consumers\"; packages/runtime/test/_workspace-job-failure-reconcile-cases.ts: \"keeps pre-submit seed failures uncorrelated and still observable\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime/test/workspace-job.test.ts",
+              "file": "packages/runtime/test/_workspace-job-idempotency-cases.ts",
               "name": "joins exact submit run diagnostics without leaking submitRunId to consumers"
             },
             {
-              "file": "packages/runtime/test/workspace-job.test.ts",
+              "file": "packages/runtime/test/_workspace-job-failure-reconcile-cases.ts",
               "name": "keeps pre-submit seed failures uncorrelated and still observable"
             }
           ]
@@ -1039,14 +1039,14 @@
       "assertions": [
         {
           "failureCondition": "run-scoped-material-bindings: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "packages/runtime/test/submit-agent-runtime-events.test.ts: \"rejects non-symbolic material values before resolver lookup\"; packages/runtime/test/submit-agent-runtime-events.test.ts: \"ignores smuggled submit-scoped resolved material values and uses the resolver\"",
+          "negativeWitness": "packages/runtime/test/_submit-agent-material-cases.ts: \"rejects non-symbolic material values before resolver lookup\"; packages/runtime/test/_submit-agent-material-cases.ts: \"ignores smuggled submit-scoped resolved material values and uses the resolver\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "file": "packages/runtime/test/_submit-agent-material-cases.ts",
               "name": "rejects non-symbolic material values before resolver lookup"
             },
             {
-              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "file": "packages/runtime/test/_submit-agent-material-cases.ts",
               "name": "ignores smuggled submit-scoped resolved material values and uses the resolver"
             }
           ]
@@ -1363,14 +1363,14 @@
       "assertions": [
         {
           "failureCondition": "workspace-job terminal vocabulary remains carrier-owned",
-          "negativeWitness": "packages/runtime/test/workspace-job.test.ts: \"commits verifier_rejected as a product verdict distinct from failed\"; packages/runtime/test/workspace-job.test.ts: \"verifies finalized bytes and commits a verified projection digest for delivery bytes\"",
+          "negativeWitness": "packages/runtime/test/_workspace-job-data-plane-cases.ts: \"commits verifier_rejected as a product verdict distinct from failed\"; packages/runtime/test/_workspace-job-data-plane-cases.ts: \"verifies finalized bytes and commits a verified projection digest for delivery bytes\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime/test/workspace-job.test.ts",
+              "file": "packages/runtime/test/_workspace-job-data-plane-cases.ts",
               "name": "commits verifier_rejected as a product verdict distinct from failed"
             },
             {
-              "file": "packages/runtime/test/workspace-job.test.ts",
+              "file": "packages/runtime/test/_workspace-job-data-plane-cases.ts",
               "name": "verifies finalized bytes and commits a verified projection digest for delivery bytes"
             }
           ]
@@ -1415,14 +1415,14 @@
       "assertions": [
         {
           "failureCondition": "workspace tool exposure defaults to read-only and opts in to receipt-backed mutations",
-          "negativeWitness": "packages/runtime/test/submit-agent-runtime-events.test.ts: \"does not execute an external tool without a receipt-backed terminal contract\"; packages/runtime/test/submit-agent-runtime-events.test.ts: \"records receipt-backed external tool execution from a declared bridge result\"",
+          "negativeWitness": "packages/runtime/test/_submit-agent-tool-boundary-cases.ts: \"does not execute an external tool without a receipt-backed terminal contract\"; packages/runtime/test/_submit-agent-tool-boundary-cases.ts: \"records receipt-backed external tool execution from a declared bridge result\"",
           "packageWitnesses": [
             {
-              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "file": "packages/runtime/test/_submit-agent-tool-boundary-cases.ts",
               "name": "does not execute an external tool without a receipt-backed terminal contract"
             },
             {
-              "file": "packages/runtime/test/submit-agent-runtime-events.test.ts",
+              "file": "packages/runtime/test/_submit-agent-tool-boundary-cases.ts",
               "name": "records receipt-backed external tool execution from a declared bridge result"
             }
           ]
