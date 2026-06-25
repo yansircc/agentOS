@@ -214,7 +214,7 @@
     "all": [
       {
         "type": "command",
-        "command": "vp check"
+        "command": "vp fmt --check"
       },
       {
         "type": "group",

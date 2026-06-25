@@ -404,7 +404,7 @@ const checkConsumerImports = convergenceSmokeChecks.checkConsumerImports;
 const checkDogfoodSmoke = convergenceSmokeChecks.checkDogfoodSmoke;
 const checkBlueprintRecipes = convergenceSmokeChecks.checkBlueprintRecipes;
 
-const checkBoundaryProjection = () => runCommand("vp check", { cwd: repoRoot });
+const checkBoundaryProjection = () => runCommand("vp fmt --check", { cwd: repoRoot });
 
 const checkerById = new Map([
   ["architecture-sources", checkArchitectureSources],
