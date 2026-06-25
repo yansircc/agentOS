@@ -20,6 +20,11 @@ import {
   type AgentClientCommandSpec,
   type AgentClientStreamSource,
 } from "../src/index";
+import {
+  createWorkspaceAgentClientBridge,
+  WORKSPACE_AGENT_PRODUCT_COMMAND,
+  type WorkspaceAgentProductProjectionTypes,
+} from "../src/workspace-agent";
 
 const identity = {
   scopeRef: { kind: "session" as const, scopeId: "client-test" },
@@ -226,6 +231,95 @@ describe("@agent-os/client", () => {
     expect(snapshot.events.map((event) => event.kind)).toEqual([
       "agent.run.started",
       "agent.run.completed",
+    ]);
+  });
+
+  it("routes session and workflow product methods through generated RPC command names", async () => {
+    interface ProductProjections extends WorkspaceAgentProductProjectionTypes {
+      readonly session: { readonly sessionRef: string };
+      readonly sessionList: { readonly sessions: ReadonlyArray<{ readonly sessionRef: string }> };
+      readonly workflowRun: { readonly workflowRunId: string };
+      readonly workflowRunList: {
+        readonly runs: ReadonlyArray<{ readonly workflowRunId: string }>;
+      };
+    }
+    const calls: Array<{ readonly name: string; readonly input: unknown }> = [];
+    const bridge = createWorkspaceAgentClientBridge<ProductProjections>({
+      rpcInvoker: async (name, input) => {
+        calls.push({ name, input });
+        if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_SESSION) {
+          return { sessionRef: "support:42" };
+        }
+        if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_SESSIONS) {
+          return { sessions: [{ sessionRef: "support:42" }] };
+        }
+        if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_WORKFLOW_RUN) {
+          return { workflowRunId: "workflow-run:report:1" };
+        }
+        if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_WORKFLOW_RUNS) {
+          return { runs: [{ workflowRunId: "workflow-run:report:1" }] };
+        }
+        return { status: "accepted", runId: 1, submittedAtEventId: 1 };
+      },
+    });
+
+    await bridge.sessions.submitTurn({
+      sessionRef: "support:42",
+      turnRef: "turn:support:42:1",
+      intent: "reply to support",
+      context: {},
+    });
+    await expect(bridge.sessions.inspect("support:42")).resolves.toEqual({
+      sessionRef: "support:42",
+    });
+    await expect(bridge.sessions.list()).resolves.toEqual({
+      sessions: [{ sessionRef: "support:42" }],
+    });
+    await bridge.workflows.run({
+      workflowId: "report",
+      workflowRunId: "workflow-run:report:1",
+      intent: "write report",
+      context: {},
+    });
+    await expect(bridge.workflows.inspectRun("report", "workflow-run:report:1")).resolves.toEqual({
+      workflowRunId: "workflow-run:report:1",
+    });
+    await expect(bridge.workflows.listRuns("report")).resolves.toEqual({
+      runs: [{ workflowRunId: "workflow-run:report:1" }],
+    });
+
+    expect(calls).toEqual([
+      {
+        name: WORKSPACE_AGENT_PRODUCT_COMMAND.SUBMIT_SESSION_TURN,
+        input: {
+          sessionRef: "support:42",
+          turnRef: "turn:support:42:1",
+          intent: "reply to support",
+          context: {},
+        },
+      },
+      {
+        name: WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_SESSION,
+        input: { sessionRef: "support:42" },
+      },
+      { name: WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_SESSIONS, input: {} },
+      {
+        name: WORKSPACE_AGENT_PRODUCT_COMMAND.RUN_WORKFLOW,
+        input: {
+          workflowId: "report",
+          workflowRunId: "workflow-run:report:1",
+          intent: "write report",
+          context: {},
+        },
+      },
+      {
+        name: WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_WORKFLOW_RUN,
+        input: { workflowId: "report", workflowRunId: "workflow-run:report:1" },
+      },
+      {
+        name: WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_WORKFLOW_RUNS,
+        input: { workflowId: "report" },
+      },
     ]);
   });
 });

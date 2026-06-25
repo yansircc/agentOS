@@ -1764,6 +1764,11 @@ const generatedClientModuleImports = (
             "createWorkspaceAgentClientBridge",
             "CreateWorkspaceAgentClientOptions",
             "WorkspaceAgentClientBridge",
+            "WorkspaceAgentProductClient",
+            "WorkspaceAgentProductCommandMap",
+            "WorkspaceAgentProductProjectionTypes",
+            "WorkspaceAgentProductCommandOutputByName",
+            "WORKSPACE_AGENT_PRODUCT_COMMAND",
           ]
         : [
             "WORKSPACE_AGENT_COMMAND",
@@ -1816,6 +1821,7 @@ const renderWorkspaceSvelteKitRemote = (
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
 ${renderNamedImport(["Result", "Schema"], modules.effect)}
 ${renderNamedImport(["WORKSPACE_AGENT_COMMAND"], modules.workspaceAgentHost)}
+${renderNamedImport(["WORKSPACE_AGENT_PRODUCT_COMMAND"], modules.workspaceAgentClient)}
 ${renderNamedImport(
   ["decodeRuntimeLedgerEvent", "isInputRequestRef", "parseInputRequestResumePayload"],
   modules.runtimeProtocol,
@@ -1826,6 +1832,15 @@ ${renderTypeImport(["SseHttpEvent"], modules.sseHttp)}
 ${renderTypeImport(
   ["RuntimeLedgerEvent", "SubmitResult", "SubmitRunInput"],
   modules.runtimeProtocol,
+)}
+${renderTypeImport(
+  [
+    "AgentSessionListProjection",
+    "AgentSessionProjection",
+    "WorkflowRunListProjection",
+    "WorkflowRunProjection",
+  ],
+  modules.runtimeRunProjector,
 )}
 ${renderTypeImport(
   [
@@ -1840,10 +1855,31 @@ ${renderTypeImport(
   ],
   modules.workspaceAgentHost,
 )}
+${renderTypeImport(
+  [
+    "WorkspaceAgentSessionSubmitTurnInput",
+    "WorkspaceAgentWorkflowRunInput",
+    "WorkspaceAgentWorkflowRunRef",
+    "WorkspaceAgentWorkflowRunsInput",
+  ],
+  modules.workspaceAgentClient,
+)}
 ${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
 type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
+  readonly submitSessionTurn: (input: WorkspaceAgentSessionSubmitTurnInput) => Promise<SubmitResult>;
+  readonly inspectSession: (
+    input: { readonly sessionRef: string },
+  ) => Promise<AgentSessionProjection>;
+  readonly listSessions: () => Promise<AgentSessionListProjection>;
+  readonly runWorkflow: (input: WorkspaceAgentWorkflowRunInput) => Promise<SubmitResult>;
+  readonly inspectWorkflowRun: (
+    input: WorkspaceAgentWorkflowRunRef,
+  ) => Promise<WorkflowRunProjection | null>;
+  readonly listWorkflowRuns: (
+    input: WorkspaceAgentWorkflowRunsInput,
+  ) => Promise<WorkflowRunListProjection>;
   readonly resumeInputRequest: (
     input: WorkspaceAgentResumeInputRequestCommandInput,
   ) => Promise<SubmitResult>;
@@ -1924,6 +1960,78 @@ const submitInputFromUnknown = (
     return fail(400, "invalid submit run input");
   }
   return { ok: true, value: { input: value.input as unknown as AgentOSSubmitRunInput } };
+};
+
+const productSubmitInputFromUnknown = (
+  value: unknown,
+  label: string,
+): GeneratedResult<AgentOSSubmitRunInput> => {
+  if (!isRecord(value)) return fail(400, \`invalid \${label} command input\`);
+  if (typeof value.intent !== "string" || !isRecord(value.context)) {
+    return fail(400, \`invalid \${label} submit run input\`);
+  }
+  return { ok: true, value: value as unknown as AgentOSSubmitRunInput };
+};
+
+const sessionTurnInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentSessionSubmitTurnInput> => {
+  const submitInput = productSubmitInputFromUnknown(value, "submitSessionTurn");
+  if (!submitInput.ok) return submitInput;
+  if (!isRecord(value)) return fail(400, "invalid submitSessionTurn command input");
+  if (typeof value.sessionRef !== "string" || typeof value.turnRef !== "string") {
+    return fail(400, "invalid session turn identity");
+  }
+  return { ok: true, value: value as unknown as WorkspaceAgentSessionSubmitTurnInput };
+};
+
+const sessionInspectInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<{ readonly sessionRef: string }> => {
+  if (!isRecord(value) || typeof value.sessionRef !== "string") {
+    return fail(400, "invalid inspectSession command input");
+  }
+  return { ok: true, value: { sessionRef: value.sessionRef } };
+};
+
+const workflowRunInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentWorkflowRunInput> => {
+  const submitInput = productSubmitInputFromUnknown(value, "runWorkflow");
+  if (!submitInput.ok) return submitInput;
+  if (!isRecord(value)) return fail(400, "invalid runWorkflow command input");
+  if (typeof value.workflowId !== "string" || typeof value.workflowRunId !== "string") {
+    return fail(400, "invalid workflow run identity");
+  }
+  if (value.idempotencyKey !== undefined && typeof value.idempotencyKey !== "string") {
+    return fail(400, "invalid workflow run idempotencyKey");
+  }
+  if (value.inputDigest !== undefined && typeof value.inputDigest !== "string") {
+    return fail(400, "invalid workflow run inputDigest");
+  }
+  return { ok: true, value: value as unknown as WorkspaceAgentWorkflowRunInput };
+};
+
+const workflowRunRefFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentWorkflowRunRef> => {
+  if (!isRecord(value)) return fail(400, "invalid inspectWorkflowRun command input");
+  if (typeof value.workflowId !== "string" || typeof value.workflowRunId !== "string") {
+    return fail(400, "invalid workflow run identity");
+  }
+  return {
+    ok: true,
+    value: { workflowId: value.workflowId, workflowRunId: value.workflowRunId },
+  };
+};
+
+const workflowRunsInputFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentWorkflowRunsInput> => {
+  if (!isRecord(value) || typeof value.workflowId !== "string") {
+    return fail(400, "invalid listWorkflowRuns command input");
+  }
+  return { ok: true, value: { workflowId: value.workflowId } };
 };
 
 const resumeInputRequestFromUnknown = (
@@ -2159,6 +2267,33 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
     return submitInput.ok
       ? runtime.submitRunInput(submitInput.value.input)
       : rejectFailure(submitInput);
+  }
+  if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.SUBMIT_SESSION_TURN) {
+    const sessionInput = sessionTurnInputFromUnknown(input);
+    return sessionInput.ok ? runtime.submitSessionTurn(sessionInput.value) : rejectFailure(sessionInput);
+  }
+  if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_SESSION) {
+    const sessionInput = sessionInspectInputFromUnknown(input);
+    return sessionInput.ok ? runtime.inspectSession(sessionInput.value) : rejectFailure(sessionInput);
+  }
+  if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_SESSIONS) {
+    return runtime.listSessions();
+  }
+  if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.RUN_WORKFLOW) {
+    const workflowInput = workflowRunInputFromUnknown(input);
+    return workflowInput.ok ? runtime.runWorkflow(workflowInput.value) : rejectFailure(workflowInput);
+  }
+  if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_WORKFLOW_RUN) {
+    const workflowInput = workflowRunRefFromUnknown(input);
+    return workflowInput.ok
+      ? runtime.inspectWorkflowRun(workflowInput.value)
+      : rejectFailure(workflowInput);
+  }
+  if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_WORKFLOW_RUNS) {
+    const workflowInput = workflowRunsInputFromUnknown(input);
+    return workflowInput.ok
+      ? runtime.listWorkflowRuns(workflowInput.value)
+      : rejectFailure(workflowInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST) {
     const resumeInput = resumeInputRequestFromUnknown(input);
@@ -2541,12 +2676,34 @@ const renderWorkspaceStaticClient = (
   if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
     return `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentClient)}
 ${renderTypeImport(
-  ["CreateWorkspaceAgentClientOptions", "WorkspaceAgentClientBridge"],
+  [
+    "AgentSessionListProjection",
+    "AgentSessionProjection",
+    "WorkflowRunListProjection",
+    "WorkflowRunProjection",
+  ],
+  modules.runtimeRunProjector,
+)}
+${renderTypeImport(
+  [
+    "CreateWorkspaceAgentClientOptions",
+    "WorkspaceAgentClientBridge",
+    "WorkspaceAgentProductCommandMap",
+    "WorkspaceAgentProductProjectionTypes",
+  ],
   modules.workspaceAgentClient,
 )}
 
-export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
-export type GeneratedAgentClient = WorkspaceAgentClientBridge;
+export interface GeneratedAgentClientProductProjections extends WorkspaceAgentProductProjectionTypes {
+  readonly session: AgentSessionProjection;
+  readonly sessionList: AgentSessionListProjection;
+  readonly workflowRun: WorkflowRunProjection;
+  readonly workflowRunList: WorkflowRunListProjection;
+}
+
+export type GeneratedAgentClientOptions =
+  CreateWorkspaceAgentClientOptions<WorkspaceAgentProductCommandMap<GeneratedAgentClientProductProjections>>;
+export type GeneratedAgentClient = WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections>;
 
 export const createAgentOSClient = (
   options: GeneratedAgentClientOptions = {},
@@ -2560,18 +2717,37 @@ ${renderNamedImport(["clientReadable", "selectClientReadable"], modules.clientSv
 ${renderTypeImport(["AgentClientSnapshot"], modules.clientCore)}
 ${renderTypeImport(
   [
+    "AgentSessionListProjection",
+    "AgentSessionProjection",
+    "WorkflowRunListProjection",
+    "WorkflowRunProjection",
+  ],
+  modules.runtimeRunProjector,
+)}
+${renderTypeImport(
+  [
     "CreateWorkspaceAgentClientOptions",
-    "WorkspaceAgentClient",
     "WorkspaceAgentClientBridge",
-    "WorkspaceAgentCommandOutputByName",
+    "WorkspaceAgentProductClient",
+    "WorkspaceAgentProductCommandMap",
+    "WorkspaceAgentProductProjectionTypes",
   ],
   modules.workspaceAgentClient,
 )}
 ${renderTypeImport(["Readable"], modules.svelteStore)}
 
-export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
+export interface GeneratedAgentClientProductProjections extends WorkspaceAgentProductProjectionTypes {
+  readonly session: AgentSessionProjection;
+  readonly sessionList: AgentSessionListProjection;
+  readonly workflowRun: WorkflowRunProjection;
+  readonly workflowRunList: WorkflowRunListProjection;
+}
 
-export interface GeneratedAgentClient extends WorkspaceAgentClientBridge {
+export type GeneratedAgentClientOptions =
+  CreateWorkspaceAgentClientOptions<WorkspaceAgentProductCommandMap<GeneratedAgentClientProductProjections>>;
+
+export interface GeneratedAgentClient
+  extends WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections> {
   readonly snapshot: Readable<AgentClientSnapshot>;
   readonly events: Readable<AgentClientSnapshot["events"]>;
   readonly connection: Readable<AgentClientSnapshot["connection"]>;
@@ -2586,8 +2762,10 @@ const generatedStreamSource: NonNullable<GeneratedAgentClientOptions["streamSour
     }),
 };
 
-const generatedRpcInvoker: WorkspaceAgentClient["invoke"] = (name, input) =>
-  invokeAgentCommand({ name, input }) as Promise<WorkspaceAgentCommandOutputByName[typeof name]>;
+const generatedRpcInvoker = ((name, input) =>
+  invokeAgentCommand({ name, input })) as WorkspaceAgentProductClient<
+  GeneratedAgentClientProductProjections
+>["invoke"];
 
 export const createAgentOSClient = (
   options: GeneratedAgentClientOptions = {},

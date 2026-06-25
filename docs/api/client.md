@@ -41,6 +41,7 @@
 - `./workspace-agent:createWorkspaceAgentClientBridge`
 - `./workspace-agent:CreateWorkspaceAgentClientOptions`
 - `./workspace-agent:WORKSPACE_AGENT_COMMAND`
+- `./workspace-agent:WORKSPACE_AGENT_PRODUCT_COMMAND`
 - `./workspace-agent:WorkspaceAgentClient`
 - `./workspace-agent:WorkspaceAgentClientBridge`
 - `./workspace-agent:WorkspaceAgentCommandInputByName`
@@ -52,6 +53,12 @@
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`
 - `./workspace-agent:WorkspaceAgentFileEntry`
 - `./workspace-agent:WorkspaceAgentMutationCommandOutput`
+- `./workspace-agent:WorkspaceAgentProductClient`
+- `./workspace-agent:WorkspaceAgentProductCommandInputByName`
+- `./workspace-agent:WorkspaceAgentProductCommandMap`
+- `./workspace-agent:WorkspaceAgentProductCommandName`
+- `./workspace-agent:WorkspaceAgentProductCommandOutputByName`
+- `./workspace-agent:WorkspaceAgentProductProjectionTypes`
 - `./workspace-agent:WorkspaceAgentProjectionName`
 - `./workspace-agent:WorkspaceAgentReadFileCommandInput`
 - `./workspace-agent:WorkspaceAgentReadFileCommandOutput`
@@ -59,7 +66,14 @@
 - `./workspace-agent:WorkspaceAgentReadStateCommandOutput`
 - `./workspace-agent:WorkspaceAgentResetCommandInput`
 - `./workspace-agent:WorkspaceAgentResumeInputRequestCommandInput`
+- `./workspace-agent:WorkspaceAgentSessionInspectInput`
+- `./workspace-agent:WorkspaceAgentSessionsClient`
+- `./workspace-agent:WorkspaceAgentSessionSubmitTurnInput`
 - `./workspace-agent:WorkspaceAgentSubmitCommandInput`
+- `./workspace-agent:WorkspaceAgentWorkflowRunInput`
+- `./workspace-agent:WorkspaceAgentWorkflowRunRef`
+- `./workspace-agent:WorkspaceAgentWorkflowRunsInput`
+- `./workspace-agent:WorkspaceAgentWorkflowsClient`
 
 ## Experimental exports
 

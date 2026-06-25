@@ -236,6 +236,35 @@ Generated `client.ts` rides on `@agent-os/client` and the selected framework
 bridge. Browser-direct streams and server bridges inject `streamSource` and
 `rpcInvoker`; they do not copy the client state machine.
 
+Generated workspace clients expose product lifecycle methods above the runtime
+run substrate:
+
+```ts
+const agent = createAgentOSClient();
+
+await agent.sessions.submitTurn({
+  sessionRef: "support:ticket-42",
+  turnRef: "support:ticket-42:turn-1",
+  intent: "reply to the support ticket",
+  context: { ticketId: "ticket-42" },
+});
+const ticketThread = await agent.sessions.inspect("support:ticket-42");
+
+await agent.workflows.run({
+  workflowId: "weekly-report",
+  workflowRunId: "weekly-report:2026-06-26",
+  intent: "write the weekly report",
+  context: { week: "2026-W26" },
+});
+const reportRun = await agent.workflows.inspectRun("weekly-report", "weekly-report:2026-06-26");
+```
+
+Slack, GitHub, support, and other continuing conversation surfaces submit
+session turns. Summarize, report, check, build, and other finite operation
+surfaces run workflows. `client.run`, runtime events, and
+`runtime.runs`-style traces remain the substrate debug and ops view; product UI
+should not derive session or workflow lifecycle by renaming raw run status.
+
 Product UI starts after the generated client. Timeline rows, file review
 panels, layout, and product-specific visual state belong in `app/`.
 

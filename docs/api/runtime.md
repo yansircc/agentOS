@@ -141,6 +141,7 @@
 - `.:nodeHost`
 - `.:parseSseHttpEventBlock`
 - `.:projectAgentSession`
+- `.:projectAgentSessions`
 - `.:projectAgentSessionTurnLinks`
 - `.:projectContinuation`
 - `.:projectContinuationRefs`
@@ -186,6 +187,7 @@
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
 - `.:projectWorkflowRun`
+- `.:projectWorkflowRuns`
 - `.:projectWorkflowRunLinks`
 - `.:projectWorkspaceJobObservability`
 - `.:Quota`

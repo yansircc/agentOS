@@ -146,6 +146,7 @@ slug: "api/runtime"
 - `.:nodeHost`
 - `.:parseSseHttpEventBlock`
 - `.:projectAgentSession`
+- `.:projectAgentSessions`
 - `.:projectAgentSessionTurnLinks`
 - `.:projectContinuation`
 - `.:projectContinuationRefs`
@@ -191,6 +192,7 @@ slug: "api/runtime"
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
 - `.:projectWorkflowRun`
+- `.:projectWorkflowRuns`
 - `.:projectWorkflowRunLinks`
 - `.:projectWorkspaceJobObservability`
 - `.:Quota`

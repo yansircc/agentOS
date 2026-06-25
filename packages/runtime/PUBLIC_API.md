@@ -145,6 +145,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:nodeHost`
 - `.:parseSseHttpEventBlock`
 - `.:projectAgentSession`
+- `.:projectAgentSessions`
 - `.:projectAgentSessionTurnLinks`
 - `.:projectContinuation`
 - `.:projectContinuationRefs`
@@ -190,6 +191,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:projectSubmitResult`
 - `.:projectTelemetryEventTree`
 - `.:projectWorkflowRun`
+- `.:projectWorkflowRuns`
 - `.:projectWorkflowRunLinks`
 - `.:projectWorkspaceJobObservability`
 - `.:Quota`

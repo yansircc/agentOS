@@ -843,8 +843,19 @@ void test("agentos build compiles an authored workspace tree into generated file
       remote,
       /import \{ agentOSRpcClient, agentOSTruthIdentity \} from "\.\/cloudflare-scope";/,
     );
+    assert.match(remote, /WORKSPACE_AGENT_PRODUCT_COMMAND/);
+    assert.match(remote, /runtime\.submitSessionTurn/);
+    assert.match(remote, /runtime\.inspectSession/);
+    assert.match(remote, /runtime\.listSessions/);
+    assert.match(remote, /runtime\.runWorkflow/);
+    assert.match(remote, /runtime\.inspectWorkflowRun/);
+    assert.match(remote, /runtime\.listWorkflowRuns/);
     assert.doesNotMatch(remote, /durableObjectRpcClient/);
     assert.doesNotMatch(remote, /manifestTruthIdentity/);
+    const client = readFileSync(path.join(root, ".agentos/generated/client.ts"), "utf8");
+    assert.match(client, /GeneratedAgentClientProductProjections/);
+    assert.match(client, /WorkspaceAgentProductCommandMap/);
+    assert.match(client, /WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections>/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
