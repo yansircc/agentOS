@@ -11,6 +11,7 @@ import {
   publicPackageName,
   publicSpecifier,
   publishAccess,
+  repoRoot,
   repoPath,
   rewritePublicScopePlaceholders,
   rewritePublicSpecifiers,
@@ -282,30 +283,162 @@ export const emitJs = (record) => {
   }
 };
 
-export const emitDeclarations = (record) => {
-  for (const file of sourceFiles(record)) {
-    const rel = path.relative(path.join(record.packageDir, "src"), file);
-    const out = path.join(record.stageDir, "dist", rel.replace(/\.ts$/u, ".d.ts"));
-    const source = fs.readFileSync(file, "utf8");
-    const result = ts.transpileDeclaration(source, {
-      fileName: file,
-      compilerOptions: {
-        target: ts.ScriptTarget.ES2022,
-        module: ts.ModuleKind.ES2022,
-        strict: true,
-        isolatedDeclarations: true,
-        removeComments: true,
-      },
-    });
+export const sourceDeclaresContextService = (file, source) => {
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const isContextServiceExpression = (expression) => {
+    if (ts.isCallExpression(expression)) return isContextServiceExpression(expression.expression);
+    return (
+      ts.isPropertyAccessExpression(expression) &&
+      expression.name.text === "Service" &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === "Context"
+    );
+  };
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (ts.isClassDeclaration(node)) {
+      for (const clause of node.heritageClauses ?? []) {
+        if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue;
+        for (const type of clause.types) {
+          if (isContextServiceExpression(type.expression)) {
+            found = true;
+            return;
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+};
+
+export const emitIsolatedDeclaration = (record, file, source) => {
+  const rel = path.relative(path.join(record.packageDir, "src"), file);
+  const out = path.join(record.stageDir, "dist", rel.replace(/\.ts$/u, ".d.ts"));
+  const result = ts.transpileDeclaration(source, {
+    fileName: file,
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ES2022,
+      strict: true,
+      isolatedDeclarations: true,
+      removeComments: true,
+    },
+  });
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(
+    out,
+    rewritePublicScopePlaceholders(
+      rewriteModuleSpecifiers(record, result.outputText, file, out, true),
+    ),
+  );
+};
+
+export const emitSemanticDeclaration = (record, file) => {
+  const sourceRoot = path.join(record.packageDir, "src");
+  const configPath = path.join(record.packageDir, "tsconfig.json");
+  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (config.error !== undefined) {
+    fail(`${record.packagePath}: failed to read tsconfig\n${formatTsDiagnostics([config.error])}`);
+  }
+  const parsed = ts.parseJsonConfigFileContent(
+    config.config,
+    ts.sys,
+    record.packageDir,
+    {
+      noEmit: false,
+      declaration: true,
+      emitDeclarationOnly: true,
+      declarationMap: false,
+      removeComments: true,
+      noEmitOnError: false,
+      noCheck: true,
+      outDir: path.join(record.stageDir, "dist"),
+      rootDir: repoRoot,
+      incremental: false,
+      composite: false,
+    },
+    configPath,
+  );
+  if (parsed.errors.length > 0) {
+    fail(
+      `${record.packagePath}: failed to parse tsconfig\n${formatTsDiagnostics(parsed.errors)}`,
+    );
+  }
+  const options = {
+    ...parsed.options,
+    noEmit: false,
+    declaration: true,
+    emitDeclarationOnly: true,
+    declarationMap: false,
+    removeComments: true,
+    noEmitOnError: false,
+    noCheck: true,
+    outDir: path.join(record.stageDir, "dist"),
+    rootDir: repoRoot,
+    incremental: false,
+    composite: false,
+    tsBuildInfoFile: undefined,
+  };
+  const outForSourceFile = (file) => {
+    const rel = path.relative(sourceRoot, file);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
+    return path.join(record.stageDir, "dist", rel.replace(/\.ts$/u, ".d.ts"));
+  };
+  const emitted = new Set();
+  const host = ts.createCompilerHost(options);
+  host.writeFile = (fileName, text, writeByteOrderMark, onError, sourceFileList) => {
+    const sourceFile = sourceFileList?.find((candidate) => outForSourceFile(candidate.fileName));
+    const out = sourceFile === undefined ? undefined : outForSourceFile(sourceFile.fileName);
+    if (out === undefined) return;
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(
       out,
       rewritePublicScopePlaceholders(
-        rewriteModuleSpecifiers(record, result.outputText, file, out, true),
+        rewriteModuleSpecifiers(record, text, sourceFile.fileName, out, true),
       ),
+      writeByteOrderMark ? { encoding: "utf8" } : "utf8",
+    );
+    emitted.add(out);
+  };
+  const program = ts.createProgram([file], options, host);
+  const sourceFile = program.getSourceFile(file);
+  if (sourceFile === undefined) {
+    fail(`${record.packagePath}: semantic declaration source not found ${repoPath(file)}`);
+  }
+  const emitResult = program.emit(sourceFile, host.writeFile, undefined, true);
+  if (emitResult.emitSkipped) {
+    fail(
+      `${record.packagePath}: semantic declaration emit skipped ${repoPath(file)}\n${formatTsDiagnostics(
+        emitResult.diagnostics,
+      )}`,
     );
   }
+  const out = outForSourceFile(file);
+  if (out !== undefined && !emitted.has(out)) {
+    fail(`${record.packagePath}: semantic declaration emit skipped ${repoPath(file)}`);
+  }
 };
+
+export const emitDeclarations = (record) => {
+  for (const file of sourceFiles(record)) {
+    const source = fs.readFileSync(file, "utf8");
+    if (sourceDeclaresContextService(file, source)) {
+      emitSemanticDeclaration(record, file);
+      continue;
+    }
+    emitIsolatedDeclaration(record, file, source);
+  }
+};
+
+export const formatTsDiagnostics = (diagnostics) =>
+  ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+    getCanonicalFileName: (file) => file,
+    getCurrentDirectory: () => repoRoot,
+    getNewLine: () => "\n",
+  });
 
 export const exportedJsonAssets = (record) =>
   exportEntries(record)
