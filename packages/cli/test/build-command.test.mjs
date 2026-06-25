@@ -78,6 +78,16 @@ const linkGeneratedTargetSmokeDependencies = (root) => {
   linkSmokeDependency(root, "effect", path.join(repoRoot, "node_modules/effect"));
 };
 
+void test("agentos --version derives from the release source fact", () => {
+  const rootPackage = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  const result = spawnSync(process.execPath, [cli, "--version"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), rootPackage.agentOsRelease.version);
+});
+
 void test("compileAgentTree keeps skills as authoring-only output", () => {
   const result = runTypeScript(
     [

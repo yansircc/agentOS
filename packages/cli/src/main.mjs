@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,7 +18,22 @@ import {
 import { runDefaultGate } from "./check/default-gate.mjs";
 import { listGuards, runGroup, runGuard } from "./runner.mjs";
 
-const version = "0.5.16";
+const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+const repoRootFromMain = () => path.dirname(path.dirname(packageRootFromMain()));
+
+const readReleaseVersion = () => {
+  const packageJson = JSON.parse(
+    readFileSync(path.join(repoRootFromMain(), "package.json"), "utf8"),
+  );
+  const version = packageJson.agentOsRelease?.version;
+  if (typeof version !== "string" || version.length === 0) {
+    throw new Error("package.json agentOsRelease.version must be a non-empty string");
+  }
+  return version;
+};
+
+const version = readReleaseVersion();
 
 const helpText = `agentOS repository CLI ${version}
 
@@ -67,8 +83,6 @@ const expectNoExtraArgs = (args, command) => {
     throw new Error(`${command}: unexpected argument ${args.join(" ")}`);
   }
 };
-
-const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 const runBuildRunner = async (command, args) => {
   const runner = fileURLToPath(new URL("./build/build-cli.ts", import.meta.url));
