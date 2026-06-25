@@ -249,8 +249,15 @@ const loadToolDeclaration = async (file: string): Promise<AuthoredToolDeclaratio
   return mod.declaration as AuthoredToolDeclaration;
 };
 
-const collectFiles = async (dir: string): Promise<ReadonlyArray<string>> => {
-  const files: string[] = [];
+type CollectedSourceKind = "regular" | "symlink" | "non_regular";
+
+interface CollectedFile {
+  readonly path: string;
+  readonly sourceKind: CollectedSourceKind;
+}
+
+const collectFiles = async (dir: string): Promise<ReadonlyArray<CollectedFile>> => {
+  const files: CollectedFile[] = [];
   const entries = (await readdir(dir, { withFileTypes: true })).sort((left, right) =>
     left.name.localeCompare(right.name),
   );
@@ -260,9 +267,25 @@ const collectFiles = async (dir: string): Promise<ReadonlyArray<string>> => {
       files.push(...(await collectFiles(file)));
       continue;
     }
-    if (entry.isFile()) files.push(file);
+    if (entry.isFile()) {
+      files.push({ path: file, sourceKind: "regular" });
+      continue;
+    }
+    if (entry.isSymbolicLink()) {
+      files.push({ path: file, sourceKind: "symlink" });
+      continue;
+    }
+    files.push({ path: file, sourceKind: "non_regular" });
   }
   return files;
+};
+
+const isMainSkillRelativePath = (relativePath: string): boolean => {
+  const parts = relativePath.split(path.sep);
+  return (
+    (parts.length === 1 && (parts[0] ?? "").endsWith(".md")) ||
+    (parts.length === 2 && parts[1] === "SKILL.md")
+  );
 };
 
 const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<AuthoredAgentTree> => {
@@ -301,10 +324,22 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
   const skillsDir = path.join(agentDir, "skills");
   if (await pathExists(skillsDir)) {
     for (const file of await collectFiles(skillsDir)) {
+      const authoredPath = toAuthoredPath(cwd, file.path);
+      const relativeSkillPath = path.relative(skillsDir, file.path);
+      if (isMainSkillRelativePath(relativeSkillPath)) {
+        files.push({
+          path: authoredPath,
+          kind: "markdown",
+          text: file.sourceKind === "regular" ? await readFile(file.path, "utf8") : "",
+          sourceKind: file.sourceKind,
+        });
+        continue;
+      }
       files.push({
-        path: toAuthoredPath(cwd, file),
-        kind: "markdown",
-        text: await readFile(file, "utf8"),
+        path: authoredPath,
+        kind: "text",
+        bytes: file.sourceKind === "regular" ? await readFile(file.path) : new Uint8Array(),
+        sourceKind: file.sourceKind,
       });
     }
   }

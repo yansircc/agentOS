@@ -26,6 +26,7 @@ import {
   digestText,
   findFunctionPath,
   GENERATED_LOAD_SKILL_TOOL_NAME,
+  GENERATED_READ_SKILL_FILE_TOOL_NAME,
   hasFunction,
   isNonEmptyString,
   isRecord,
@@ -46,12 +47,26 @@ export interface AuthoredAgentTree {
   readonly files: ReadonlyArray<AuthoredAgentTreeFile>;
 }
 
-export type AuthoredAgentTreeFile = AuthoredMarkdownFile | AuthoredJsonFile | AuthoredToolFile;
+export type AuthoredAgentTreeFile =
+  | AuthoredMarkdownFile
+  | AuthoredTextFile
+  | AuthoredJsonFile
+  | AuthoredToolFile;
+
+export type AuthoredFileSourceKind = "regular" | "symlink" | "non_regular";
 
 export interface AuthoredMarkdownFile {
   readonly path: string;
   readonly kind: "markdown";
   readonly text: string;
+  readonly sourceKind?: AuthoredFileSourceKind;
+}
+
+export interface AuthoredTextFile {
+  readonly path: string;
+  readonly kind: "text";
+  readonly bytes: Uint8Array;
+  readonly sourceKind?: AuthoredFileSourceKind;
 }
 
 export interface AuthoredJsonFile {
@@ -88,6 +103,14 @@ export interface CompiledAgentSkill {
   readonly description: string;
   readonly path: string;
   readonly digest: string;
+  readonly text: string;
+  readonly files: ReadonlyArray<CompiledAgentSkillFile>;
+}
+
+export interface CompiledAgentSkillFile {
+  readonly path: string;
+  readonly digest: string;
+  readonly bytes: number;
   readonly text: string;
 }
 
@@ -216,11 +239,19 @@ interface CompilerState {
   readonly toolIds: Set<string>;
   readonly toolFilePaths: Map<string, string>;
   readonly skills: Map<string, CompiledAgentSkill>;
+  readonly skillSupportFiles: Map<string, CompiledAgentSkillFile[]>;
+  readonly skillSupportByteTotals: Map<string, number>;
   readonly workspaceToolControls: Map<WorkspaceToolName, WorkspaceDefaultToolControl>;
 }
 
 const SKILL_DESCRIPTION_MAX_BYTES = 240;
+const SKILL_BODY_MAX_BYTES = 131_072;
+const SKILL_SUPPORT_FILE_MAX_BYTES = 65_536;
+const SKILL_SUPPORT_FILES_MAX_COUNT = 64;
+const SKILL_SUPPORT_PACKAGE_MAX_BYTES = 262_144;
+const skillNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
 export type WorkspaceDefaultToolControl =
   | { readonly kind: "disabled"; readonly origin: AgentManifestOrigin }
@@ -281,6 +312,48 @@ const parseStringField = (
 };
 
 const utf8ByteLength = (value: string): number => textEncoder.encode(value).length;
+
+const isSkillName = (value: string): boolean => skillNamePattern.test(value);
+
+const decodeUtf8Bytes = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  bytes: Uint8Array,
+): string | null => {
+  try {
+    return textDecoder.decode(bytes);
+  } catch {
+    invalidAuthoredValue(state, path, field, "utf8_required");
+    return null;
+  }
+};
+
+const assertNoNulText = (
+  state: CompilerState,
+  path: string,
+  field: string,
+  text: string,
+): boolean => {
+  if (!text.includes("\0")) return true;
+  invalidAuthoredValue(state, path, field, "nul_byte_forbidden");
+  return false;
+};
+
+const assertRegularSkillSource = (
+  state: CompilerState,
+  path: string,
+  sourceKind: AuthoredFileSourceKind | undefined,
+): boolean => {
+  const kind = sourceKind ?? "regular";
+  if (kind === "regular") return true;
+  state.issues.push({
+    kind: "unsupported_path",
+    path,
+    reason: kind === "symlink" ? "symlink_forbidden" : "regular_file_required",
+  });
+  return false;
+};
 
 const parseSkillFrontmatterStringField = (
   state: CompilerState,
@@ -1024,12 +1097,31 @@ const skillIdentityForPath = (path: string): string | null => {
   if (parts[0] !== "skills") return null;
   if (parts.length === 2 && parts[1]?.endsWith(".md")) {
     const name = parts[1].slice(0, -".md".length);
-    return name.length === 0 ? null : name;
+    return isSkillName(name) ? name : null;
   }
   if (parts.length === 3 && parts[2] === "SKILL.md") {
-    return parts[1]?.length === 0 ? null : (parts[1] ?? null);
+    const name = parts[1] ?? "";
+    return isSkillName(name) ? name : null;
   }
   return null;
+};
+
+const isPackagedSkillPath = (skill: CompiledAgentSkill): boolean =>
+  skill.path === `agent/skills/${skill.name}/SKILL.md`;
+
+const skillSupportPathForPath = (
+  path: string,
+): { readonly skillName: string; readonly packagePath: string } | null => {
+  const parts = path.split("/");
+  if (parts[0] !== "skills" || parts.length < 4) return null;
+  const skillName = parts[1] ?? "";
+  if (!isSkillName(skillName)) return null;
+  const root = parts[2];
+  if (root !== "references" && root !== "scripts") return null;
+  return {
+    skillName,
+    packagePath: [root, ...parts.slice(3)].join("/"),
+  };
 };
 
 const stripYamlQuotes = (value: string): string => {
@@ -1096,14 +1188,16 @@ const recordSkillFile = (
   path: string,
   expectedName: string,
   text: string,
+  sourceKind: AuthoredFileSourceKind | undefined,
 ): void => {
-  if (!isManifestMapId(expectedName)) {
+  if (!isSkillName(expectedName)) {
     state.issues.push({ kind: "unsupported_path", path, reason: "skill_name_invalid" });
     return;
   }
+  if (!assertRegularSkillSource(state, path, sourceKind)) return;
   const parsed = parseSkillFrontmatter(state, path, text);
   if (parsed === null) return;
-  if (!isManifestMapId(parsed.name)) {
+  if (!isSkillName(parsed.name)) {
     invalidAuthoredValue(state, path, "/frontmatter/name", "skill_name_invalid");
     return;
   }
@@ -1116,6 +1210,11 @@ const recordSkillFile = (
     });
     return;
   }
+  if (utf8ByteLength(parsed.body) > SKILL_BODY_MAX_BYTES) {
+    invalidAuthoredValue(state, path, "/body", "skill_body_too_large");
+    return;
+  }
+  if (!assertNoNulText(state, path, "/body", parsed.body)) return;
   const existing = state.skills.get(expectedName);
   if (existing !== undefined) {
     state.issues.push({
@@ -1132,17 +1231,57 @@ const recordSkillFile = (
     path: authoredPath(path),
     digest: digestText(parsed.body),
     text: parsed.body,
+    files: [],
   });
 };
 
-const recordMarkdownFile = (state: CompilerState, path: string, text: string): void => {
+const recordSkillSupportFile = (
+  state: CompilerState,
+  path: string,
+  supportPath: { readonly skillName: string; readonly packagePath: string },
+  bytes: Uint8Array,
+  sourceKind: AuthoredFileSourceKind | undefined,
+): void => {
+  if (!assertRegularSkillSource(state, path, sourceKind)) return;
+  if (bytes.byteLength > SKILL_SUPPORT_FILE_MAX_BYTES) {
+    invalidAuthoredValue(state, path, "/bytes", "skill_file_too_large");
+    return;
+  }
+  const files = state.skillSupportFiles.get(supportPath.skillName) ?? [];
+  if (files.length >= SKILL_SUPPORT_FILES_MAX_COUNT) {
+    invalidAuthoredValue(state, path, "/bytes", "skill_package_too_many_files");
+    return;
+  }
+  const currentBytes = state.skillSupportByteTotals.get(supportPath.skillName) ?? 0;
+  if (currentBytes + bytes.byteLength > SKILL_SUPPORT_PACKAGE_MAX_BYTES) {
+    invalidAuthoredValue(state, path, "/bytes", "skill_package_too_large");
+    return;
+  }
+  const text = decodeUtf8Bytes(state, path, "/bytes", bytes);
+  if (text === null || !assertNoNulText(state, path, "/bytes", text)) return;
+  files.push({
+    path: supportPath.packagePath,
+    digest: digestText(text),
+    bytes: bytes.byteLength,
+    text,
+  });
+  state.skillSupportFiles.set(supportPath.skillName, files);
+  state.skillSupportByteTotals.set(supportPath.skillName, currentBytes + bytes.byteLength);
+};
+
+const recordMarkdownFile = (
+  state: CompilerState,
+  path: string,
+  text: string,
+  sourceKind?: AuthoredFileSourceKind,
+): void => {
   const skillName = skillIdentityForPath(path);
   if (path.startsWith("skills/")) {
     if (skillName === null) {
       state.issues.push({ kind: "unsupported_path", path, reason: "skill_path_not_in_grammar" });
       return;
     }
-    recordSkillFile(state, path, skillName, text);
+    recordSkillFile(state, path, skillName, text, sourceKind);
     return;
   }
   if (path !== "instructions.md") {
@@ -1155,6 +1294,20 @@ const recordMarkdownFile = (state: CompilerState, path: string, text: string): v
     digest: digestText(text),
   };
   putAuthored(state, "/instructions", instructions, pathOrigin(path));
+};
+
+const recordTextFile = (
+  state: CompilerState,
+  path: string,
+  bytes: Uint8Array,
+  sourceKind?: AuthoredFileSourceKind,
+): void => {
+  const supportPath = skillSupportPathForPath(path);
+  if (supportPath === null) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "text_path_not_in_grammar" });
+    return;
+  }
+  recordSkillSupportFile(state, path, supportPath, bytes, sourceKind);
 };
 
 const recordToolFile = (
@@ -1172,7 +1325,7 @@ const recordToolFile = (
     state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
     return;
   }
-  if (toolId === GENERATED_LOAD_SKILL_TOOL_NAME) {
+  if (toolId === GENERATED_LOAD_SKILL_TOOL_NAME || toolId === GENERATED_READ_SKILL_FILE_TOOL_NAME) {
     state.issues.push({ kind: "reserved_tool_name", path, toolId });
     return;
   }
@@ -1376,8 +1529,29 @@ const buildToolFilePaths = (state: CompilerState): Readonly<Record<string, strin
   return paths;
 };
 
+const validateSkillSupportFiles = (state: CompilerState): void => {
+  for (const [skillName, files] of state.skillSupportFiles.entries()) {
+    const skill = state.skills.get(skillName);
+    if (skill !== undefined && isPackagedSkillPath(skill)) continue;
+    for (const file of files) {
+      state.issues.push({
+        kind: "unsupported_path",
+        path: `skills/${skillName}/${file.path}`,
+        reason: "skill_support_requires_packaged_skill",
+      });
+    }
+  }
+};
+
 const buildSkills = (state: CompilerState): ReadonlyArray<CompiledAgentSkill> =>
-  [...state.skills.values()].sort((left, right) => left.name.localeCompare(right.name));
+  [...state.skills.values()]
+    .map((skill) => ({
+      ...skill,
+      files: [...(state.skillSupportFiles.get(skill.name) ?? [])].sort((left, right) =>
+        left.path.localeCompare(right.path),
+      ),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 
 /**
  * Compile an authored `agent/` tree into one normalized manifest plus
@@ -1399,6 +1573,8 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     toolIds: new Set(),
     toolFilePaths: new Map(),
     skills: new Map(),
+    skillSupportFiles: new Map(),
+    skillSupportByteTotals: new Map(),
     workspaceToolControls: new Map(),
   };
 
@@ -1407,7 +1583,10 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     if (path === null) continue;
     switch (file.kind) {
       case "markdown":
-        recordMarkdownFile(state, path, file.text);
+        recordMarkdownFile(state, path, file.text, file.sourceKind);
+        break;
+      case "text":
+        recordTextFile(state, path, file.bytes, file.sourceKind);
         break;
       case "json":
         recordJsonFile(state, path, file.value);
@@ -1418,6 +1597,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     }
   }
 
+  validateSkillSupportFiles(state);
   applyDefaults(state);
   enforceL0(state);
   if (state.issues.length > 0) return { ok: false, issues: state.issues };

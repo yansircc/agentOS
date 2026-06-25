@@ -69,12 +69,15 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
   const result = runTypeScript(
     [
       'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const utf8 = (text) => new TextEncoder().encode(text);",
       "const compiled = compileAgentTree({",
       "  files: [",
       '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
       '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace facts\\n---\\nUse echo." },',
       '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review output carefully\\n---\\nReview carefully." },',
+      '    { path: "agent/skills/review/references/checklist.md", kind: "text", bytes: utf8("Check every claim.") },',
+      '    { path: "agent/skills/review/scripts/audit.sh", kind: "text", bytes: utf8("echo audit") },',
       "  ],",
       "});",
       "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
@@ -103,6 +106,7 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
       description: skill.description,
       path: skill.path,
       text: skill.text,
+      files: skill.files,
     })),
     [
       {
@@ -110,12 +114,27 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
         description: "Echo workspace facts",
         path: "agent/skills/echo.md",
         text: "Use echo.",
+        files: [],
       },
       {
         name: "review",
         description: "Review output carefully",
         path: "agent/skills/review/SKILL.md",
         text: "Review carefully.",
+        files: [
+          {
+            path: "references/checklist.md",
+            digest: digestText("Check every claim."),
+            bytes: 18,
+            text: "Check every claim.",
+          },
+          {
+            path: "scripts/audit.sh",
+            digest: digestText("echo audit"),
+            bytes: 10,
+            text: "echo audit",
+          },
+        ],
       },
     ],
   );
@@ -201,12 +220,15 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
   ]);
 });
 
-void test("compileAgentTree rejects invalid skill identity and v1 sibling files", () => {
+void test("compileAgentTree rejects invalid skill identity and packaged skill file violations", () => {
   const result = runTypeScript(
     [
       'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const utf8 = (text) => new TextEncoder().encode(text);",
+      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
+      'const packagedReview = { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview." };',
       "const compile = (file) => compileAgentTree({ files: [",
-      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      "  instructions,",
       "  file,",
       "] });",
       'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\ndescription: Echo facts\\n---\\nUse echo." });',
@@ -215,17 +237,53 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
       'const emptyDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription:   \\n---\\nUse echo." });',
       'const oversizedDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: `---\\nname: echo\\ndescription: ${"x".repeat(241)}\\n---\\nUse echo.` });',
       'const unknownFrontmatter = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo facts\\nallowed-tools: bash\\n---\\nUse echo." });',
-      'const sibling = compile({ path: "agent/skills/echo/references/ref.md", kind: "markdown", text: "Ref." });',
+      'const supportWithoutPackage = compile({ path: "agent/skills/echo/references/ref.md", kind: "text", bytes: utf8("Ref.") });',
+      "const flatSupport = compileAgentTree({ files: [",
+      "  instructions,",
+      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo facts\\n---\\nUse echo." },',
+      '  { path: "agent/skills/echo/references/ref.md", kind: "text", bytes: utf8("Ref.") },',
+      "] });",
+      'const unsupportedRoot = compile({ path: "agent/skills/echo/assets/icon.txt", kind: "text", bytes: utf8("icon") });',
+      'const dotdotPath = compile({ path: "agent/skills/echo/references/../secret.md", kind: "text", bytes: utf8("secret") });',
+      "const symlinkSupport = compileAgentTree({ files: [",
+      "  instructions,",
+      "  packagedReview,",
+      '  { path: "agent/skills/review/references/ref.md", kind: "text", bytes: new Uint8Array(), sourceKind: "symlink" },',
+      "] });",
+      "const invalidUtf8 = compileAgentTree({ files: [",
+      "  instructions,",
+      "  packagedReview,",
+      '  { path: "agent/skills/review/references/ref.md", kind: "text", bytes: new Uint8Array([0xff]) },',
+      "] });",
+      "const oversizedFile = compileAgentTree({ files: [",
+      "  instructions,",
+      "  packagedReview,",
+      '  { path: "agent/skills/review/references/ref.md", kind: "text", bytes: utf8("x".repeat(65537)) },',
+      "] });",
+      "const tooManyFiles = compileAgentTree({ files: [",
+      "  instructions,",
+      "  packagedReview,",
+      '  ...Array.from({ length: 65 }, (_, index) => ({ path: `agent/skills/review/references/${index}.txt`, kind: "text", bytes: utf8("x") })),',
+      "] });",
+      "const packageTooLarge = compileAgentTree({ files: [",
+      "  instructions,",
+      "  packagedReview,",
+      '  ...Array.from({ length: 5 }, (_, index) => ({ path: `agent/skills/review/references/large-${index}.txt`, kind: "text", bytes: utf8("x".repeat(65536)) })),',
+      "] });",
       "const duplicate = compileAgentTree({ files: [",
-      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      "  instructions,",
       '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo one\\n---\\nOne." },',
       '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo two\\n---\\nTwo." },',
       "] });",
       "const reservedTool = compileAgentTree({ files: [",
-      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      "  instructions,",
       '  { path: "agent/tools/load_skill.ts", kind: "tool", declaration: {} },',
       "] });",
-      "console.log(JSON.stringify({ mismatch, duplicateName, missingDescription, emptyDescription, oversizedDescription, unknownFrontmatter, sibling, duplicate, reservedTool }));",
+      "const reservedReadSkillFile = compileAgentTree({ files: [",
+      "  instructions,",
+      '  { path: "agent/tools/read_skill_file.ts", kind: "tool", declaration: {} },',
+      "] });",
+      "console.log(JSON.stringify({ mismatch, duplicateName, missingDescription, emptyDescription, oversizedDescription, unknownFrontmatter, supportWithoutPackage, flatSupport, unsupportedRoot, dotdotPath, symlinkSupport, invalidUtf8, oversizedFile, tooManyFiles, packageTooLarge, duplicate, reservedTool, reservedReadSkillFile }));",
     ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
@@ -283,12 +341,80 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
       field: "allowed-tools",
     },
   ]);
-  assert.equal(output.sibling.ok, false);
-  assert.deepEqual(output.sibling.issues, [
+  assert.equal(output.supportWithoutPackage.ok, false);
+  assert.deepEqual(output.supportWithoutPackage.issues, [
     {
       kind: "unsupported_path",
       path: "skills/echo/references/ref.md",
-      reason: "skill_path_not_in_grammar",
+      reason: "skill_support_requires_packaged_skill",
+    },
+  ]);
+  assert.equal(output.flatSupport.ok, false);
+  assert.deepEqual(output.flatSupport.issues, [
+    {
+      kind: "unsupported_path",
+      path: "skills/echo/references/ref.md",
+      reason: "skill_support_requires_packaged_skill",
+    },
+  ]);
+  assert.equal(output.unsupportedRoot.ok, false);
+  assert.deepEqual(output.unsupportedRoot.issues, [
+    {
+      kind: "unsupported_path",
+      path: "skills/echo/assets/icon.txt",
+      reason: "text_path_not_in_grammar",
+    },
+  ]);
+  assert.equal(output.dotdotPath.ok, false);
+  assert.deepEqual(output.dotdotPath.issues, [
+    {
+      kind: "unsupported_path",
+      path: "agent/skills/echo/references/../secret.md",
+      reason: "path_not_normalized",
+    },
+  ]);
+  assert.equal(output.symlinkSupport.ok, false);
+  assert.deepEqual(output.symlinkSupport.issues, [
+    {
+      kind: "unsupported_path",
+      path: "skills/review/references/ref.md",
+      reason: "symlink_forbidden",
+    },
+  ]);
+  assert.equal(output.invalidUtf8.ok, false);
+  assert.deepEqual(output.invalidUtf8.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/review/references/ref.md",
+      field: "/bytes",
+      reason: "utf8_required",
+    },
+  ]);
+  assert.equal(output.oversizedFile.ok, false);
+  assert.deepEqual(output.oversizedFile.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/review/references/ref.md",
+      field: "/bytes",
+      reason: "skill_file_too_large",
+    },
+  ]);
+  assert.equal(output.tooManyFiles.ok, false);
+  assert.deepEqual(output.tooManyFiles.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/review/references/64.txt",
+      field: "/bytes",
+      reason: "skill_package_too_many_files",
+    },
+  ]);
+  assert.equal(output.packageTooLarge.ok, false);
+  assert.deepEqual(output.packageTooLarge.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "skills/review/references/large-4.txt",
+      field: "/bytes",
+      reason: "skill_package_too_large",
     },
   ]);
   assert.equal(output.duplicate.ok, false);
@@ -306,6 +432,14 @@ void test("compileAgentTree rejects invalid skill identity and v1 sibling files"
       kind: "reserved_tool_name",
       path: "tools/load_skill.ts",
       toolId: "load_skill",
+    },
+  ]);
+  assert.equal(output.reservedReadSkillFile.ok, false);
+  assert.deepEqual(output.reservedReadSkillFile.issues, [
+    {
+      kind: "reserved_tool_name",
+      path: "tools/read_skill_file.ts",
+      toolId: "read_skill_file",
     },
   ]);
 });
@@ -951,6 +1085,77 @@ export const __agentosSkillSmoke = async () => {
     assert.equal(output.loaded.description, "Echo marker loader");
     assert.equal(output.loaded.text, "ECHO_MARKER_560");
     assert.equal(output.unknownRejected, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos build rejects unsafe packaged skill supporting files from the filesystem", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-skill-package-negative-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent/skills/review/references"), { recursive: true });
+    mkdirSync(path.join(root, "agent/skills/review/scripts"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
+    writeFileSync(
+      path.join(root, "agent/skills/review/SKILL.md"),
+      "---\nname: review\ndescription: Review output carefully\n---\nReview carefully.",
+    );
+    writeFileSync(path.join(root, "agent/skills/review/references/checklist.md"), "Check claims.");
+    writeFileSync(path.join(root, "agent/skills/review/scripts/audit.sh"), "echo audit");
+    writeFileSync(path.join(root, "unsafe-target.md"), "Unsafe.");
+    symlinkSync(
+      path.join(root, "unsafe-target.md"),
+      path.join(root, "agent/skills/review/references/link.md"),
+    );
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "skill-package-negative",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "skill-package-negative-scope",
+          },
+          effectAuthorityRef: {
+            authorityId: "skill-package-negative",
+            proofClass: "test",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "chat@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "skill-package-negative", "version": "0.1.0" },',
+        '  "target": {',
+        '    "kind": "cloudflare-do@1",',
+        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+        "  },",
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /symlink_forbidden/);
+    assert.match(result.stderr, /skills\/review\/references\/link\.md/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
