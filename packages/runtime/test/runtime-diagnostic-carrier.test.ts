@@ -3,10 +3,11 @@ import {
   runtimeDiagnosticCarrier,
   RUNTIME_DIAGNOSTIC_KIND,
   RUNTIME_DIAGNOSTIC_RESERVED_KINDS,
+  RUNTIME_DIAGNOSTIC_RESERVED_KIND_CONDITIONS,
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
   ProviderMaterialPreflightDetailSchema,
   providerMaterialPreflightDetailJson,
-} from "../src/runtime-diagnostic-carrier";
+} from "../src/runtime-diagnostic-carrier/definition";
 import { Schema } from "effect";
 
 describe("runtime diagnostic carrier", () => {
@@ -31,6 +32,10 @@ describe("runtime diagnostic carrier", () => {
 
   it("keeps handler_missing reserved until a required-handler contract exists", () => {
     expect(RUNTIME_DIAGNOSTIC_RESERVED_KINDS).toEqual([RUNTIME_DIAGNOSTIC_KIND.HANDLER_MISSING]);
+    expect(RUNTIME_DIAGNOSTIC_RESERVED_KIND_CONDITIONS).toEqual({
+      [RUNTIME_DIAGNOSTIC_KIND.HANDLER_MISSING]:
+        "requires a declared required-handler contract and production runtime call point",
+    });
   });
 
   it("owns provider material preflight detail schema", () => {

@@ -118,6 +118,10 @@ export const runtimeDiagnosticCarrier = defineCarrier({
 export const RUNTIME_DIAGNOSTIC_KIND = runtimeDiagnosticCarrier.kind;
 export const RUNTIME_DIAGNOSTIC_EVENTS = runtimeDiagnosticCarrier.events;
 export const RUNTIME_DIAGNOSTIC_RESERVED_KINDS = [RUNTIME_DIAGNOSTIC_KIND.HANDLER_MISSING] as const;
+export const RUNTIME_DIAGNOSTIC_RESERVED_KIND_CONDITIONS = {
+  [RUNTIME_DIAGNOSTIC_KIND.HANDLER_MISSING]:
+    "requires a declared required-handler contract and production runtime call point",
+} as const satisfies Readonly<Record<(typeof RUNTIME_DIAGNOSTIC_RESERVED_KINDS)[number], string>>;
 export const runtimeDiagnosticBoundaryContract = runtimeDiagnosticCarrier.boundaryContract;
 export const runtimeDiagnosticSettlementContract = runtimeDiagnosticCarrier.settlementContract;
 export const runtimeDiagnosticBoundaryPackage = runtimeDiagnosticCarrier.boundaryPackage;

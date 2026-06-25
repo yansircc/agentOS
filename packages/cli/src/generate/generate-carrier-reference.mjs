@@ -238,6 +238,27 @@ const namespaceEventKinds = (entries, prefixes) => {
   return [...events].sort((left, right) => left.localeCompare(right));
 };
 
+/** @returns {{ kinds: Set<string>, conditions: Map<string, string> }} */
+const reservedEventMetadata = (entries) => {
+  const kinds = new Set();
+  const conditions = new Map();
+  for (const entry of entries) {
+    if (entry.exportName.endsWith("RESERVED_KINDS") && Array.isArray(entry.value)) {
+      for (const value of entry.value) {
+        if (typeof value === "string" && value.length > 0) kinds.add(value);
+      }
+    }
+    if (entry.exportName.endsWith("RESERVED_KIND_CONDITIONS") && isRecord(entry.value)) {
+      for (const [eventKind, condition] of Object.entries(entry.value)) {
+        if (typeof condition === "string" && condition.length > 0) {
+          conditions.set(eventKind, condition);
+        }
+      }
+    }
+  }
+  return { kinds, conditions };
+};
+
 const discoverCarriers = async () => {
   const carriers = [];
   const seenOwnerIds = new Set();
@@ -287,6 +308,7 @@ const discoverCarriers = async () => {
     if (exportedCarriers.length === 1) {
       const entry = exportedCarriers[0];
       validateCarrier(entry.carrier, pkg);
+      const reserved = reservedEventMetadata(entries);
 
       if (seenOwnerIds.has(entry.carrier.ownerId)) {
         failures.push(`${entry.carrier.ownerId}: duplicate carrier ownerId`);
@@ -299,6 +321,20 @@ const discoverCarriers = async () => {
         }
         seenEventKinds.add(eventKind);
       }
+      for (const eventKind of reserved.kinds) {
+        if (!(eventKind in entry.carrier.boundaryContract.events)) {
+          failures.push(
+            `${entry.carrier.ownerId}: reserved event kind ${eventKind} is not declared`,
+          );
+        }
+      }
+      for (const eventKind of reserved.conditions.keys()) {
+        if (!reserved.kinds.has(eventKind)) {
+          failures.push(
+            `${entry.carrier.ownerId}: reserved condition for non-reserved event kind ${eventKind}`,
+          );
+        }
+      }
 
       carriers.push({
         kind: "carrier",
@@ -306,6 +342,7 @@ const discoverCarriers = async () => {
         file,
         exportName: entry.exportName,
         carrier: entry.carrier,
+        reserved,
       });
       continue;
     }
@@ -345,13 +382,16 @@ const discoverCarriers = async () => {
   );
 };
 
-const renderCarrier = ({ pkg, file, exportName, carrier }) => {
+const renderCarrier = ({ pkg, file, exportName, carrier, reserved }) => {
   const boundary = carrier.boundaryContract;
   const settlement = carrier.settlementContract;
   const eventRows = Object.entries(boundary.events)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([eventKind, contract]) => [
       `\`${eventKind}\``,
+      reserved.kinds.has(eventKind)
+        ? `reserved${reserved.conditions.has(eventKind) ? `: ${reserved.conditions.get(eventKind)}` : ""}`
+        : "active",
       claimSummary(contract.claim),
       payloadFields(contract.payloadSchema),
     ]);
@@ -371,7 +411,7 @@ const renderCarrier = ({ pkg, file, exportName, carrier }) => {
     "",
     "### Event Kinds",
     "",
-    table(["Event kind", "Claim", "Payload fields"], eventRows),
+    table(["Event kind", "Status", "Claim", "Payload fields"], eventRows),
     "",
     "### Settlement Vocabulary",
     "",

@@ -100,7 +100,8 @@ prove them from a positive contract. `handler_failed` is emitted by resolved
 capability handler wrappers. `projection_timeout` is emitted by tool projection
 waits with operation, authority, and requested-event provenance. `preflight_failed`
 uses schema-owned string detail. `handler_missing` remains reserved vocabulary
-until capability requirements declare required handler contracts.
+until capability requirements declare required handler contracts and runtime
+code emits it from that contract.
 
 ## Minimal Usage
 
