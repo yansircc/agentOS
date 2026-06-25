@@ -18,6 +18,19 @@ import { buildSync } from "esbuild";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const cli = path.join(repoRoot, "packages/cli/src/main.mjs");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
+const forbiddenCloudflareLifecycleTargetFragments = [
+  /installCloudflareWorkspaceOperationProvider/,
+  /installCloudflareWorkspaceJobProfile/,
+  /createCloudflareWorkspaceEnvResolver/,
+  /createCloudflareSandboxWorkspaceEnvResolver/,
+  /workspace-job-profile/,
+];
+
+const assertNoCloudflareLifecycleTargetWiring = (target) => {
+  for (const fragment of forbiddenCloudflareLifecycleTargetFragments) {
+    assert.doesNotMatch(target, fragment);
+  }
+};
 
 const runTypeScript = (source, { cwd = repoRoot, resolveDir = repoRoot } = {}) => {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "agentos-ts-eval-"));
@@ -540,7 +553,7 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(target, /from "@agent-os\/core\/runtime-protocol";/);
     assert.match(target, /from "@agent-os\/core\/tools";/);
     assert.doesNotMatch(target, /from "@agent-os\/runtime\/workspace-binding";/);
-    assert.doesNotMatch(target, /installCloudflareWorkspaceOperationProvider/);
+    assertNoCloudflareLifecycleTargetWiring(target);
     assert.doesNotMatch(target, /bindWorkspaceToolsForRuntime/);
     assert.match(target, /generatedWorkspaceToolInteractions/);
     assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
@@ -872,7 +885,7 @@ void test("agentos build compiles chat profile without workspace surface", () =>
     assert.match(target, /customCommand\(input: WorkspaceAgentCustomCommandInput\)/);
     assert.match(target, /generatedCustomTools/);
     assert.doesNotMatch(target, /@cloudflare\/sandbox/);
-    assert.doesNotMatch(target, /installCloudflareWorkspaceOperationProvider/);
+    assertNoCloudflareLifecycleTargetWiring(target);
     assert.doesNotMatch(target, /bindWorkspaceToolsForRuntime/);
     assert.doesNotMatch(target, /makeCloudflareWorkspaceEnv/);
     assert.doesNotMatch(target, /readWorkspaceState/);
