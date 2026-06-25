@@ -21,6 +21,7 @@ import {
   inputRequestRefFromInterruptedEvent,
   isRuntimeAbortEventKind,
   RUNTIME_EVENT_KIND,
+  type InputRequestDescriptor,
   type RuntimeAbortEventKind,
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
@@ -277,43 +278,49 @@ export const projectRunTrace = (
     }),
   );
 
+const runStatusFromRuntimeEvents = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  runId: number,
+): RunStatus => {
+  const start = startFor(runtimeEvents, runId);
+  const terminal = runTerminal(runtimeEvents, runId);
+
+  if (terminal?.kind === "delivered") {
+    return { kind: "delivered", at: terminal.at, event: terminal.event };
+  }
+  if (terminal?.kind === "aborted") {
+    return { kind: "aborted", at: terminal.at, abortKind: terminal.event };
+  }
+
+  const activeInterruption = activeInterruptionFor(runtimeEvents, runId);
+  if (activeInterruption !== undefined) {
+    return {
+      kind: "interrupted",
+      at: activeInterruption.ts,
+      event: RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
+      interruptId: activeInterruption.payload.interruptId,
+      reason: activeInterruption.payload.reason,
+    };
+  }
+
+  if (start !== undefined) {
+    return { kind: "open_without_terminal", startedAt: start.ts };
+  }
+
+  const evidence = runtimeEvents.find((event) => runtimeRunId(event) === runId);
+  return {
+    kind: "orphaned",
+    startedAt: evidence?.ts ?? 0,
+    evidence: evidence?.kind ?? "no_run_evidence",
+  };
+};
+
 const runStatusProjection = defineProjectionSpec<RunProjectionInput, RunStatus>({
   id: "runtime.run-status",
   version: 1,
   source: RUNTIME_LEDGER_PROJECTION_SOURCE,
-  project: ({ runtimeEvents, runId }, ctx) => {
-    const start = startFor(runtimeEvents, runId);
-    const terminal = runTerminal(runtimeEvents, runId);
-
-    if (terminal?.kind === "delivered") {
-      return ctx.ok({ kind: "delivered", at: terminal.at, event: terminal.event });
-    }
-    if (terminal?.kind === "aborted") {
-      return ctx.ok({ kind: "aborted", at: terminal.at, abortKind: terminal.event });
-    }
-
-    const activeInterruption = activeInterruptionFor(runtimeEvents, runId);
-    if (activeInterruption !== undefined) {
-      return ctx.ok({
-        kind: "interrupted",
-        at: activeInterruption.ts,
-        event: RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED,
-        interruptId: activeInterruption.payload.interruptId,
-        reason: activeInterruption.payload.reason,
-      });
-    }
-
-    if (start !== undefined) {
-      return ctx.ok({ kind: "open_without_terminal", startedAt: start.ts });
-    }
-
-    const evidence = runtimeEvents.find((event) => runtimeRunId(event) === runId);
-    return ctx.ok({
-      kind: "orphaned",
-      startedAt: evidence?.ts ?? 0,
-      evidence: evidence?.kind ?? "no_run_evidence",
-    });
-  },
+  project: ({ runtimeEvents, runId }, ctx) =>
+    ctx.ok(runStatusFromRuntimeEvents(runtimeEvents, runId)),
 });
 
 /**
@@ -490,6 +497,21 @@ export interface AgentSessionTurnLinksProjection {
   readonly turns: ReadonlyArray<AgentSessionTurnRuntimeLink>;
 }
 
+export type AgentSessionStatus = "idle" | "running" | "waiting_for_user" | "failed";
+
+export interface AgentSessionTurnProjection extends AgentSessionTurnRuntimeLink {
+  readonly status: RunStatus;
+}
+
+export interface AgentSessionProjection {
+  readonly sessionRef: string;
+  readonly status: AgentSessionStatus;
+  readonly turns: ReadonlyArray<AgentSessionTurnProjection>;
+  readonly activeRunId?: number;
+  readonly latestRunId?: number;
+  readonly pendingInputRequest?: InputRequestDescriptor;
+}
+
 export interface WorkflowRunRuntimeLink {
   readonly workflowId: string;
   readonly workflowRunId: string;
@@ -505,6 +527,91 @@ export interface WorkflowRunLinksProjection {
   readonly runs: ReadonlyArray<WorkflowRunRuntimeLink>;
 }
 
+const sessionTurnRuntimeLinks = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  sessionRef: string,
+): ReadonlyArray<AgentSessionTurnRuntimeLink> =>
+  runtimeEvents
+    .filter(
+      (
+        event,
+      ): event is RuntimeLedgerEventByKind<
+        typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED
+      > =>
+        event.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED &&
+        event.payload.sessionRef === sessionRef,
+    )
+    .sort((left, right) => left.id - right.id)
+    .map((event): AgentSessionTurnRuntimeLink => {
+      const payload: AgentSessionTurnSubmittedPayload = event.payload;
+      return {
+        sessionRef: payload.sessionRef,
+        turnRef: payload.turnRef,
+        runtimeRunId: payload.runtimeRunId,
+        eventId: event.id,
+        submittedAt: event.ts,
+      };
+    });
+
+const pendingInputRequestForRun = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  runId: number,
+): InputRequestDescriptor | undefined => {
+  const activeInterruption = activeInterruptionFor(runtimeEvents, runId);
+  if (activeInterruption === undefined) return undefined;
+  const inputRequest = inputRequestRefFromInterruptedEvent(activeInterruption);
+  return inputRequest.ok ? inputRequest.descriptor : undefined;
+};
+
+const sessionStatus = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  turns: ReadonlyArray<AgentSessionTurnProjection>,
+): Omit<AgentSessionProjection, "sessionRef" | "turns"> => {
+  const latest = turns.at(-1);
+  const active = [...turns]
+    .reverse()
+    .find(
+      (turn) =>
+        turn.status.kind === "open_without_terminal" || turn.status.kind === "interrupted",
+    );
+
+  if (active !== undefined) {
+    if (active.status.kind === "interrupted") {
+      const pendingInputRequest = pendingInputRequestForRun(runtimeEvents, active.runtimeRunId);
+      return {
+        status: "waiting_for_user",
+        activeRunId: active.runtimeRunId,
+        latestRunId: latest?.runtimeRunId,
+        ...(pendingInputRequest === undefined ? {} : { pendingInputRequest }),
+      };
+    }
+    return {
+      status: "running",
+      activeRunId: active.runtimeRunId,
+      latestRunId: latest?.runtimeRunId,
+    };
+  }
+
+  if (latest === undefined || latest.status.kind === "delivered") {
+    return {
+      status: "idle",
+      ...(latest === undefined ? {} : { latestRunId: latest.runtimeRunId }),
+    };
+  }
+
+  if (latest.status.kind === "aborted" || latest.status.kind === "orphaned") {
+    return {
+      status: "failed",
+      latestRunId: latest.runtimeRunId,
+    };
+  }
+
+  return {
+    status: "idle",
+    latestRunId: latest.runtimeRunId,
+  };
+};
+
 const sessionTurnLinkProjection = defineProjectionSpec<
   {
     readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
@@ -516,27 +623,7 @@ const sessionTurnLinkProjection = defineProjectionSpec<
   version: 1,
   source: RUNTIME_LEDGER_PROJECTION_SOURCE,
   project: ({ runtimeEvents, sessionRef }, ctx) => {
-    const turns = runtimeEvents
-      .filter(
-        (
-          event,
-        ): event is RuntimeLedgerEventByKind<
-          typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED
-        > =>
-          event.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED &&
-          event.payload.sessionRef === sessionRef,
-      )
-      .sort((left, right) => left.id - right.id)
-      .map((event): AgentSessionTurnRuntimeLink => {
-        const payload: AgentSessionTurnSubmittedPayload = event.payload;
-        return {
-          sessionRef: payload.sessionRef,
-          turnRef: payload.turnRef,
-          runtimeRunId: payload.runtimeRunId,
-          eventId: event.id,
-          submittedAt: event.ts,
-        };
-      });
+    const turns = sessionTurnRuntimeLinks(runtimeEvents, sessionRef);
 
     return ctx.ok({ sessionRef, turns });
   },
@@ -548,6 +635,43 @@ export const projectAgentSessionTurnLinks = (
 ): AgentSessionTurnLinksProjection =>
   projectionOutputOrFail(
     project(sessionTurnLinkProjection, {
+      runtimeEvents: runtimeEventsOf(events),
+      sessionRef,
+    }),
+  );
+
+const agentSessionProjection = defineProjectionSpec<
+  {
+    readonly runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>;
+    readonly sessionRef: string;
+  },
+  AgentSessionProjection
+>({
+  id: "runtime.agent-session",
+  version: 1,
+  source: RUNTIME_LEDGER_PROJECTION_SOURCE,
+  project: ({ runtimeEvents, sessionRef }, ctx) => {
+    const turns = sessionTurnRuntimeLinks(runtimeEvents, sessionRef).map(
+      (turn): AgentSessionTurnProjection => ({
+        ...turn,
+        status: runStatusFromRuntimeEvents(runtimeEvents, turn.runtimeRunId),
+      }),
+    );
+
+    return ctx.ok({
+      sessionRef,
+      ...sessionStatus(runtimeEvents, turns),
+      turns,
+    });
+  },
+});
+
+export const projectAgentSession = (
+  events: ReadonlyArray<LedgerEvent>,
+  sessionRef: string,
+): AgentSessionProjection =>
+  projectionOutputOrFail(
+    project(agentSessionProjection, {
       runtimeEvents: runtimeEventsOf(events),
       sessionRef,
     }),

@@ -841,6 +841,7 @@ export type RuntimeLedgerTransitionIssueCode =
   | "runtime_run_duplicate_terminal"
   | "runtime_run_missing_start"
   | "runtime_product_link_duplicate"
+  | "runtime_session_active_run_conflict"
   | "runtime_source_event_not_before"
   | "runtime_source_event_missing"
   | "runtime_source_event_not_runtime"
@@ -996,6 +997,7 @@ type RuntimeRunState = {
 
 type RuntimeProductLinkState = {
   readonly sessionTurns: Set<string>;
+  readonly sessionRuns: Map<string, Set<number>>;
   readonly workflowRuns: Set<string>;
 };
 
@@ -1005,6 +1007,7 @@ const makeRuntimeRunState = (): RuntimeRunState => ({
 
 const makeRuntimeProductLinkState = (): RuntimeProductLinkState => ({
   sessionTurns: new Set(),
+  sessionRuns: new Map(),
   workflowRuns: new Set(),
 });
 
@@ -1013,6 +1016,33 @@ const sessionTurnLinkKey = (payload: AgentSessionTurnSubmittedPayload): string =
 
 const workflowRunLinkKey = (payload: WorkflowRunSubmittedPayload): string =>
   `${payload.workflowId}\u0000${payload.workflowRunId}`;
+
+const addSessionTurnLink = (
+  productLinks: RuntimeProductLinkState,
+  payload: AgentSessionTurnSubmittedPayload,
+): void => {
+  productLinks.sessionTurns.add(sessionTurnLinkKey(payload));
+  const existing = productLinks.sessionRuns.get(payload.sessionRef);
+  if (existing !== undefined) {
+    existing.add(payload.runtimeRunId);
+    return;
+  }
+  productLinks.sessionRuns.set(payload.sessionRef, new Set([payload.runtimeRunId]));
+};
+
+const activeSessionRunId = (
+  productLinks: RuntimeProductLinkState,
+  runStates: ReadonlyMap<number, RuntimeRunState>,
+  sessionRef: string,
+): number | undefined => {
+  for (const runId of productLinks.sessionRuns.get(sessionRef) ?? []) {
+    const state = runStates.get(runId);
+    if (state?.startedEventId !== undefined && state.terminalEventId === undefined) {
+      return runId;
+    }
+  }
+  return undefined;
+};
 
 const runtimeRunId = (event: RuntimeLedgerEvent): number => {
   switch (event.kind) {
@@ -1107,7 +1137,7 @@ const applyHistoricalRuntimeRunEvent = (
       }
       break;
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
-      productLinks.sessionTurns.add(sessionTurnLinkKey(event.payload));
+      addSessionTurnLink(productLinks, event.payload);
       break;
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       productLinks.workflowRuns.add(workflowRunLinkKey(event.payload));
@@ -1378,6 +1408,11 @@ export const validateRuntimeLedgerTransitions = (input: {
       }
       case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED: {
         const key = sessionTurnLinkKey(event.payload);
+        const activeRunId = activeSessionRunId(
+          productLinks,
+          runStates,
+          event.payload.sessionRef,
+        );
         if (productLinks.sessionTurns.has(key)) {
           issues.push(
             runTransitionIssue(
@@ -1386,8 +1421,19 @@ export const validateRuntimeLedgerTransitions = (input: {
               "agent_session.turn_submitted must be the only runtime link for a session turn",
             ),
           );
+        } else if (activeRunId !== undefined) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_session_active_run_conflict",
+              event,
+              "agent_session.turn_submitted cannot start a new session turn while the session " +
+                "has an active runtime run",
+              activeRunId,
+              RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
+            ),
+          );
         } else if (hasStarted && !hasTerminal) {
-          productLinks.sessionTurns.add(key);
+          addSessionTurnLink(productLinks, event.payload);
         }
         break;
       }

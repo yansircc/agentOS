@@ -123,6 +123,7 @@ export type {
 export { Quota } from "./quota-service";
 export { Resources } from "./resources";
 export {
+  projectAgentSession,
   projectAgentSessionTurnLinks,
   projectRunsPage,
   projectRunStatus,
@@ -132,6 +133,9 @@ export {
   RUN_BEARING_KINDS,
 } from "./run-projector";
 export type {
+  AgentSessionProjection,
+  AgentSessionStatus,
+  AgentSessionTurnProjection,
   AgentSessionTurnLinksProjection,
   AgentSessionTurnRuntimeLink,
   WorkflowRunLinksProjection,

@@ -3,6 +3,7 @@ import type { LedgerEvent } from "@agent-os/core/types";
 import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { ABORT } from "@agent-os/core/abort";
 import {
+  projectAgentSession,
   projectAgentSessionTurnLinks,
   projectRunsPage,
   projectRunStatus,
@@ -482,6 +483,132 @@ describe("runtime run projectors", () => {
       startedAt: 10,
     });
     expect(projectSubmitResult(rows, 1)).toBe(null);
+  });
+
+  it("projects agent session lifecycle from product links and runtime run facts", () => {
+    expect(projectAgentSession([], "session:s1")).toEqual({
+      sessionRef: "session:s1",
+      status: "idle",
+      turns: [],
+    });
+
+    const runningRows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "turn 1" })),
+      event(
+        2,
+        agentSessionTurnSubmittedEvent({
+          ...runtimeIdentity,
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 1,
+        }),
+      ),
+    ];
+
+    expect(projectAgentSession(runningRows, "session:s1")).toEqual({
+      sessionRef: "session:s1",
+      status: "running",
+      activeRunId: 1,
+      latestRunId: 1,
+      turns: [
+        {
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 1,
+          eventId: 2,
+          submittedAt: 20,
+          status: { kind: "open_without_terminal", startedAt: 10 },
+        },
+      ],
+    });
+
+    const waitingRows = [
+      ...runningRows,
+      event(
+        3,
+        agentRunInterruptedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          turn: { id: 1, index: 0 },
+          interruptId: "approval-1",
+          reason: "approval_required",
+          resumeSchema: { type: "object", required: ["approved"] },
+          tokensUsed: 4,
+          decision: {
+            gateRef: "gate:approval-1",
+            subjectRef: "tool:lookup",
+            toolCallId: "call-1",
+            toolName: "lookup",
+          },
+        }),
+      ),
+    ];
+
+    expect(projectAgentSession(waitingRows, "session:s1")).toMatchObject({
+      sessionRef: "session:s1",
+      status: "waiting_for_user",
+      activeRunId: 1,
+      latestRunId: 1,
+      pendingInputRequest: {
+        kind: "approval",
+        subjectRef: "tool:lookup",
+        toolCallId: "call-1",
+        toolName: "lookup",
+      },
+      turns: [
+        {
+          runtimeRunId: 1,
+          status: {
+            kind: "interrupted",
+            interruptId: "approval-1",
+            reason: "approval_required",
+          },
+        },
+      ],
+    });
+
+    const completedRows = [
+      ...runningRows,
+      event(
+        3,
+        agentRunCompletedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          final: "done",
+          output: "done",
+          outputKind: "text",
+          tokensUsed: 1,
+        }),
+      ),
+    ];
+
+    expect(projectAgentSession(completedRows, "session:s1")).toMatchObject({
+      sessionRef: "session:s1",
+      status: "idle",
+      latestRunId: 1,
+      turns: [{ runtimeRunId: 1, status: { kind: "delivered" } }],
+    });
+
+    const failedRows = [
+      ...runningRows,
+      event(
+        3,
+        agentRunAbortedEvent({
+          ...runtimeIdentity,
+          kind: ABORT.TOOL_ERROR,
+          runId: 1,
+          tokensUsed: 1,
+          payload: { reason: "tool_error" },
+        }),
+      ),
+    ];
+
+    expect(projectAgentSession(failedRows, "session:s1")).toMatchObject({
+      sessionRef: "session:s1",
+      status: "failed",
+      latestRunId: 1,
+      turns: [{ runtimeRunId: 1, status: { kind: "aborted" } }],
+    });
   });
 
   it("does not fabricate SubmitResult without a terminal runtime fact", () => {

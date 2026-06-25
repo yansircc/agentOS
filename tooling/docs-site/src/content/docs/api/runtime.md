@@ -9,6 +9,9 @@ slug: "api/runtime"
 
 - `.:AcquireCtx`
 - `.:Admission`
+- `.:AgentSessionProjection`
+- `.:AgentSessionStatus`
+- `.:AgentSessionTurnProjection`
 - `.:AgentSessionTurnLinksProjection`
 - `.:AgentSessionTurnRuntimeLink`
 - `.:AnyAttachedStreamHandler`
@@ -142,6 +145,7 @@ slug: "api/runtime"
 - `.:NormalizeWorkspaceToolPathOptions`
 - `.:nodeHost`
 - `.:parseSseHttpEventBlock`
+- `.:projectAgentSession`
 - `.:projectAgentSessionTurnLinks`
 - `.:projectContinuation`
 - `.:projectContinuationRefs`
@@ -607,8 +611,12 @@ slug: "api/runtime"
 - `./node:NodePostgresEventSubscription`
 - `./node:nodePostgresProjectionKey`
 - `./node:nodePostgresRuntimeIdentity`
+- `./run-projector:AgentSessionProjection`
+- `./run-projector:AgentSessionStatus`
+- `./run-projector:AgentSessionTurnProjection`
 - `./run-projector:AgentSessionTurnLinksProjection`
 - `./run-projector:AgentSessionTurnRuntimeLink`
+- `./run-projector:projectAgentSession`
 - `./run-projector:projectAgentSessionTurnLinks`
 - `./run-projector:projectRunsPage`
 - `./run-projector:projectRunStatus`

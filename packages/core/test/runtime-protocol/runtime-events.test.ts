@@ -782,8 +782,9 @@ describe("runtime event vocabulary", () => {
       }),
     );
 
-    expect(validateRuntimeLedgerTransitions({ history: [started], events: [sessionTurn, workflowRun] }))
-      .toEqual({ ok: true });
+    expect(
+      validateRuntimeLedgerTransitions({ history: [started], events: [sessionTurn, workflowRun] }),
+    ).toEqual({ ok: true });
 
     const duplicateSessionTurn = ledgerEvent(
       4,
@@ -815,6 +816,66 @@ describe("runtime event vocabulary", () => {
         "runtime_product_link_duplicate",
       ]);
     }
+  });
+
+  it("rejects a new session turn while the same session has an active runtime run", () => {
+    const firstStarted = ledgerEvent(
+      1,
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "first turn" }),
+    );
+    const firstTurn = ledgerEvent(
+      2,
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+        runtimeRunId: firstStarted.id,
+      }),
+    );
+    const secondStarted = ledgerEvent(
+      3,
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "second turn" }),
+    );
+    const secondTurn = ledgerEvent(
+      4,
+      agentSessionTurnSubmittedEvent({
+        ...runtimeIdentity,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:2",
+        runtimeRunId: secondStarted.id,
+      }),
+    );
+
+    const activeConflict = validateRuntimeLedgerTransitions({
+      history: [firstStarted, firstTurn, secondStarted],
+      events: [secondTurn],
+    });
+
+    expect(activeConflict.ok).toBe(false);
+    if (!activeConflict.ok) {
+      expect(activeConflict.issues.map((issue) => issue.code)).toEqual([
+        "runtime_session_active_run_conflict",
+      ]);
+    }
+
+    const firstCompleted = ledgerEvent(
+      5,
+      agentRunCompletedEvent({
+        ...runtimeIdentity,
+        runId: firstStarted.id,
+        final: "done",
+        output: "done",
+        outputKind: "text",
+        tokensUsed: 1,
+      }),
+    );
+
+    expect(
+      validateRuntimeLedgerTransitions({
+        history: [firstStarted, firstTurn, firstCompleted, secondStarted],
+        events: [secondTurn],
+      }),
+    ).toEqual({ ok: true });
   });
 
   it("rejects product link events without a prior non-terminal runtime run", () => {
