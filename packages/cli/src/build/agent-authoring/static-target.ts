@@ -1,7 +1,12 @@
 import type { ProviderResourceId } from "@agent-os/core/runtime-protocol";
 import type { HandlerKind } from "@agent-os/core/runtime-protocol";
 import { WORKSPACE_TOOL_EXPOSURE_PROFILES, type WorkspaceToolName } from "@agent-os/runtime";
-import { digestText, GENERATED_LOAD_SKILL_TOOL_NAME, isWorkspaceToolName } from "./shared";
+import {
+  digestText,
+  GENERATED_LOAD_SKILL_TOOL_NAME,
+  GENERATED_READ_SKILL_FILE_TOOL_NAME,
+  isWorkspaceToolName,
+} from "./shared";
 import type { AuthoredAgentManifest, CompiledAgentSkill } from "./manifest-compiler";
 import {
   AGENTOS_CONFIG_CLIENT,
@@ -217,6 +222,12 @@ const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string =
         stableJsonValue({
           description: skill.description,
           digest: skill.digest,
+          files: skill.files.map((file) => ({
+            bytes: file.bytes,
+            digest: file.digest,
+            path: file.path,
+            text: file.text,
+          })),
           name: skill.name,
           path: skill.path,
           text: skill.text,
@@ -238,6 +249,18 @@ type GeneratedSkill = {
   readonly path: string;
   readonly digest: string;
   readonly text: string;
+  readonly files: ReadonlyArray<{
+    readonly path: string;
+    readonly digest: string;
+    readonly bytes: number;
+    readonly text: string;
+  }>;
+};
+
+type GeneratedSkillFile = GeneratedSkill["files"][number];
+
+type LoadedGeneratedSkill = Omit<GeneratedSkill, "files"> & {
+  readonly files: ReadonlyArray<Omit<GeneratedSkillFile, "text">>;
 };
 
 const generatedSkillCatalog = ${renderSkillCatalog(skills)} satisfies ReadonlyArray<GeneratedSkill>;
@@ -245,6 +268,9 @@ const generatedSkillNames = generatedSkillCatalog.map((skill) => skill.name);
 const generatedSkillByName = Object.fromEntries(
   generatedSkillCatalog.map((skill) => [skill.name, skill]),
 ) as Readonly<Record<(typeof generatedSkillNames)[number], GeneratedSkill>>;
+const generatedSkillFilePathCatalog = generatedSkillCatalog.flatMap((skill) =>
+  skill.files.map((file) => ({ name: skill.name, path: file.path })),
+);
 const generatedSkillsSystemAdvert = [
   "Available agent skills are not loaded by default.",
   ...generatedSkillCatalog.map((skill) => \`- \${skill.name}: \${skill.description}\`),
@@ -256,6 +282,19 @@ const generatedSystemPrompt = (system: string | undefined): string =>
     ? generatedSkillsSystemAdvert
     : \`\${system}\\n\\n\${generatedSkillsSystemAdvert}\`;
 
+const generatedLoadedSkill = (skill: GeneratedSkill): LoadedGeneratedSkill => ({
+  name: skill.name,
+  description: skill.description,
+  path: skill.path,
+  digest: skill.digest,
+  text: skill.text,
+  files: skill.files.map((file) => ({
+    path: file.path,
+    digest: file.digest,
+    bytes: file.bytes,
+  })),
+});
+
 const generatedLoadSkillTool = defineProductTool({
   name: ${jsString(GENERATED_LOAD_SKILL_TOOL_NAME)},
   description: "Load the full text of a CLI-authored agent skill by name.",
@@ -263,10 +302,39 @@ const generatedLoadSkillTool = defineProductTool({
   authority: "agentos.generated.skills",
   authorityId: "agentos.generated.skills.load_skill",
   admit: () => Effect.succeed({ ok: true as const }),
-  execute: ({ name }) => Effect.succeed(generatedSkillByName[name]),
+  execute: ({ name }) => Effect.succeed(generatedLoadedSkill(generatedSkillByName[name])),
 });
+
+const generatedReadSkillFileTool = defineProductTool({
+  name: ${jsString(GENERATED_READ_SKILL_FILE_TOOL_NAME)},
+  description: "Read one declared supporting file from a CLI-authored agent skill package.",
+  args: Schema.Struct({
+    name: ${renderSkillNameSchema(skills)},
+    path: Schema.String,
+  }),
+  authority: "agentos.generated.skills",
+  authorityId: "agentos.generated.skills.read_skill_file",
+  admit: ({ name, path }) =>
+    Effect.succeed({
+      ok: generatedSkillFilePathCatalog.some((file) => file.name === name && file.path === path),
+    } as const),
+  execute: ({ name, path }) => {
+    const file = generatedSkillByName[name].files.find((candidate) => candidate.path === path);
+    if (file === undefined) {
+      return Effect.fail(Error(\`unknown skill file \${name}/\${path}\`));
+    }
+    return Effect.succeed({
+      name,
+      path: file.path,
+      digest: file.digest,
+      text: file.text,
+    });
+  },
+});
+
 const generatedFrameworkTools = {
   ${jsString(GENERATED_LOAD_SKILL_TOOL_NAME)}: generatedLoadSkillTool,
+  ${jsString(GENERATED_READ_SKILL_FILE_TOOL_NAME)}: generatedReadSkillFileTool,
 } satisfies Readonly<Record<string, Tool>>;
 `;
 };

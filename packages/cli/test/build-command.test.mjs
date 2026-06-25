@@ -910,11 +910,13 @@ void test("static target injects skill advert and load_skill for workspace and c
   const result = runTypeScript(
     [
       'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const utf8 = (text) => new TextEncoder().encode(text);",
       "const compiled = compileAgentTree({ files: [",
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
       '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace routing\\n---\\nUse workspace echo skill." },',
       '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review chat routing\\n---\\nUse chat review skill." },',
+      '  { path: "agent/skills/review/references/checklist.md", kind: "text", bytes: utf8("Check output.") },',
       "] });",
       "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
       "const baseConfig = {",
@@ -937,11 +939,16 @@ void test("static target injects skill advert and load_skill for workspace and c
       "  defineProductTool: text.includes('defineProductTool'),",
       "  advert: text.includes('generatedSkillsSystemAdvert'),",
       "  loadSkill: text.includes('name: \"load_skill\"'),",
+      "  readSkillFile: text.includes('name: \"read_skill_file\"'),",
       "  system: text.includes('system: generatedSystemPrompt(input.system)'),",
       "  echoDescription: text.includes('Echo workspace routing'),",
       "  reviewDescription: text.includes('Review chat routing'),",
       "  advertUsesDescription: text.includes('${skill.name}: ${skill.description}'),",
       "  legacyPathDigestAdvert: text.includes('to load ${skill.path}'),",
+      "  fileCatalog: text.includes('generatedSkillFilePathCatalog'),",
+      "  metadataLoader: text.includes('generatedLoadedSkill'),",
+      "  supportingPath: text.includes('references/checklist.md'),",
+      "  supportingText: text.includes('Check output.'),",
       "  echoBody: text.includes('Use workspace echo skill.'),",
       "  reviewBody: text.includes('Use chat review skill.'),",
       "  frameworkTools: text.includes('...generatedFrameworkTools'),",
@@ -967,12 +974,15 @@ void test("agentos build emits skill artifact and load_skill executes determinis
   try {
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "agent/skills"), { recursive: true });
+    mkdirSync(path.join(root, "agent/skills/echo/references"), { recursive: true });
+    mkdirSync(path.join(root, "agent/skills/echo/scripts"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
     writeFileSync(
-      path.join(root, "agent/skills/echo.md"),
+      path.join(root, "agent/skills/echo/SKILL.md"),
       "---\nname: echo\ndescription: Echo marker loader\n---\nECHO_MARKER_560",
     );
+    writeFileSync(path.join(root, "agent/skills/echo/references/checklist.md"), "CHECK_MARKER_560");
+    writeFileSync(path.join(root, "agent/skills/echo/scripts/audit.sh"), "SCRIPT_MARKER_560");
     writeFileSync(
       path.join(root, "agent/agent.json"),
       JSON.stringify(
@@ -1025,7 +1035,10 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     assert.equal(Object.hasOwn(manifest, "skills"), false);
     const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
     assert.match(target, /ECHO_MARKER_560/);
+    assert.match(target, /CHECK_MARKER_560/);
+    assert.match(target, /SCRIPT_MARKER_560/);
     assert.match(target, /name: "load_skill"/);
+    assert.match(target, /name: "read_skill_file"/);
 
     let smokeSource = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
     smokeSource = smokeSource
@@ -1046,6 +1059,24 @@ export const __agentosSkillSmoke = async () => {
     const loaded = await Effect.runPromise(
       unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "echo" })),
     );
+    const readReference = await Effect.runPromise(
+      unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("read_skill_file", {
+          name: "echo",
+          path: "references/checklist.md",
+        }),
+      ),
+    );
+    const readScript = await Effect.runPromise(
+      unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("read_skill_file", {
+          name: "echo",
+          path: "scripts/audit.sh",
+        }),
+      ),
+    );
     let unknownRejected = false;
     try {
       await Effect.runPromise(
@@ -1054,13 +1085,32 @@ export const __agentosSkillSmoke = async () => {
     } catch {
       unknownRejected = true;
     }
+    let unknownFileRejected = false;
+    try {
+      await Effect.runPromise(
+        unsafeRunToolByName(
+          tools,
+          deterministicToolInvocation("read_skill_file", {
+            name: "echo",
+            path: "references/missing.md",
+          }),
+        ),
+      );
+    } catch {
+      unknownFileRejected = true;
+    }
     return {
       toolNames: Object.keys(tools).sort(),
       systemIncludesAdvert: spec.system.includes("Available agent skills"),
       systemIncludesDescription: spec.system.includes("Echo marker loader"),
       systemIncludesBody: spec.system.includes("ECHO_MARKER_560"),
+      systemIncludesReference: spec.system.includes("CHECK_MARKER_560"),
+      systemIncludesScript: spec.system.includes("SCRIPT_MARKER_560"),
       loaded,
+      readReference,
+      readScript,
       unknownRejected,
+      unknownFileRejected,
     };
   };
   return await agent.submitRunInput({ intent: "smoke", context: {} });
@@ -1077,14 +1127,42 @@ export const __agentosSkillSmoke = async () => {
     );
     assert.equal(smoke.status, 0, smoke.stderr);
     const output = JSON.parse(smoke.stdout);
-    assert.deepEqual(output.toolNames, ["load_skill"]);
+    assert.deepEqual(output.toolNames, ["load_skill", "read_skill_file"]);
     assert.equal(output.systemIncludesAdvert, true);
     assert.equal(output.systemIncludesDescription, true);
     assert.equal(output.systemIncludesBody, false);
+    assert.equal(output.systemIncludesReference, false);
+    assert.equal(output.systemIncludesScript, false);
     assert.equal(output.loaded.name, "echo");
     assert.equal(output.loaded.description, "Echo marker loader");
     assert.equal(output.loaded.text, "ECHO_MARKER_560");
+    assert.deepEqual(output.loaded.files, [
+      {
+        path: "references/checklist.md",
+        digest: digestText("CHECK_MARKER_560"),
+        bytes: 16,
+      },
+      {
+        path: "scripts/audit.sh",
+        digest: digestText("SCRIPT_MARKER_560"),
+        bytes: 17,
+      },
+    ]);
+    assert.equal(JSON.stringify(output.loaded).includes("CHECK_MARKER_560"), false);
+    assert.deepEqual(output.readReference, {
+      name: "echo",
+      path: "references/checklist.md",
+      digest: digestText("CHECK_MARKER_560"),
+      text: "CHECK_MARKER_560",
+    });
+    assert.deepEqual(output.readScript, {
+      name: "echo",
+      path: "scripts/audit.sh",
+      digest: digestText("SCRIPT_MARKER_560"),
+      text: "SCRIPT_MARKER_560",
+    });
     assert.equal(output.unknownRejected, true);
+    assert.equal(output.unknownFileRejected, true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
