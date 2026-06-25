@@ -1,3 +1,5 @@
+import ts from "typescript";
+
 const runtimeSurfaceClassValues = [
   "stable-contract",
   "first-party-host-substrate",
@@ -51,6 +53,127 @@ const runtimeExportSubpaths = (runtimePackageJson) =>
         .sort((left, right) => left.localeCompare(right))
     : [];
 
+const publicApiSections = ["Public exports", "Experimental exports", "Deprecated exports"];
+
+const markdownSectionBody = (source, heading) => {
+  const start = source.indexOf(`## ${heading}`);
+  if (start === -1) return "";
+  const bodyStart = start + heading.length + 3;
+  const rest = source.slice(bodyStart);
+  const next = rest.search(/^## /mu);
+  return next === -1 ? rest : rest.slice(0, next);
+};
+
+const runtimeApiSymbolsForSubpath = (source, subpath) =>
+  new Set(
+    publicApiSections
+      .flatMap((section) => [
+        ...markdownSectionBody(source, section).matchAll(/`([^`:]+):([^`]+)`/gu),
+      ])
+      .filter((match) => match[1] === subpath)
+      .map((match) => match[2]),
+  );
+
+const exportedDeclarationNames = (statement) => {
+  if (ts.isExportAssignment(statement)) {
+    return [statement.isExportEquals === true ? "export=" : "default"];
+  }
+  if (
+    statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) !== true
+  ) {
+    return [];
+  }
+  if (statement.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)) {
+    return ["default"];
+  }
+  if (
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isFunctionDeclaration(statement) ||
+    ts.isEnumDeclaration(statement)
+  ) {
+    return statement.name === undefined ? [] : [statement.name.text];
+  }
+  if (ts.isVariableStatement(statement)) {
+    return statement.declarationList.declarations
+      .map((declaration) =>
+        ts.isIdentifier(declaration.name) ? declaration.name.text : undefined,
+      )
+      .filter((name) => name !== undefined);
+  }
+  return [];
+};
+
+const explicitPublicBarrelSymbols = ({ source, file }) => {
+  const findings = [];
+  const names = new Set();
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      if (statement.exportClause === undefined || ts.isNamespaceExport(statement.exportClause)) {
+        const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+          statement.getStart(sourceFile),
+        );
+        findings.push(
+          `${file}:${line + 1}:${character + 1}: runtime cloudflare public barrel must use explicit named exports; export-star syntax is forbidden`,
+        );
+        continue;
+      }
+
+      for (const element of statement.exportClause.elements) {
+        names.add(element.name.text);
+      }
+      continue;
+    }
+
+    for (const name of exportedDeclarationNames(statement)) names.add(name);
+  }
+
+  return { findings, names };
+};
+
+const cloudflarePublicBarrelFindings = ({
+  runtimeApiMarkdown,
+  cloudflarePublicBarrelSource,
+  cloudflarePublicBarrelPath,
+}) => {
+  if (typeof runtimeApiMarkdown !== "string" || typeof cloudflarePublicBarrelSource !== "string") {
+    return [];
+  }
+
+  const docsSymbols = runtimeApiSymbolsForSubpath(runtimeApiMarkdown, "./cloudflare");
+  const barrel = explicitPublicBarrelSymbols({
+    source: cloudflarePublicBarrelSource,
+    file: cloudflarePublicBarrelPath,
+  });
+  const findings = [...barrel.findings];
+
+  for (const symbol of [...barrel.names].sort((left, right) => left.localeCompare(right))) {
+    if (!docsSymbols.has(symbol)) {
+      findings.push(
+        `${cloudflarePublicBarrelPath}: exports ./cloudflare:${symbol}, but docs/api/runtime.md does not declare it`,
+      );
+    }
+  }
+  for (const symbol of [...docsSymbols].sort((left, right) => left.localeCompare(right))) {
+    if (!barrel.names.has(symbol)) {
+      findings.push(
+        `docs/api/runtime.md: declares ./cloudflare:${symbol}, but ${cloudflarePublicBarrelPath} does not export it`,
+      );
+    }
+  }
+
+  return findings;
+};
+
 const isFirstPartyRuntimeHostSubpath = (subpath) =>
   runtimeFirstPartyHostPrefixes.some(
     (prefix) => subpath === prefix || subpath.startsWith(`${prefix}/`),
@@ -69,7 +192,13 @@ const runtimeExtensionCategoriesForSubpath = (subpath) => {
     .map(([category]) => category);
 };
 
-export const runtimePublicSurfaceFindings = ({ surfacePackage, runtimePackageJson }) => {
+export const runtimePublicSurfaceFindings = ({
+  surfacePackage,
+  runtimePackageJson,
+  runtimeApiMarkdown,
+  cloudflarePublicBarrelSource,
+  cloudflarePublicBarrelPath = "packages/runtime/src/cloudflare/index.ts",
+}) => {
   const findings = [];
   if (!isPlainRecord(surfacePackage)) {
     return ["docs/surface.json: @agent-os/runtime package is missing"];
@@ -141,6 +270,14 @@ export const runtimePublicSurfaceFindings = ({ surfacePackage, runtimePackageJso
       );
     }
   }
+
+  findings.push(
+    ...cloudflarePublicBarrelFindings({
+      runtimeApiMarkdown,
+      cloudflarePublicBarrelSource,
+      cloudflarePublicBarrelPath,
+    }),
+  );
 
   return findings.sort((left, right) => left.localeCompare(right));
 };
@@ -418,6 +555,8 @@ export const createConvergenceSmokeChecks = ({
       ...runtimePublicSurfaceFindings({
         surfacePackage: surfaceByName.get("@agent-os/runtime"),
         runtimePackageJson: readJson("packages/runtime/package.json"),
+        runtimeApiMarkdown: read("docs/api/runtime.md"),
+        cloudflarePublicBarrelSource: read("packages/runtime/src/cloudflare/index.ts"),
       }),
     );
     const retiredPackages = new Set(manifest.retiredPackages ?? []);

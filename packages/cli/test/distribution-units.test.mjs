@@ -37,6 +37,22 @@ const runtimePackage = (subpaths) => ({
   exports: Object.fromEntries(subpaths.map((subpath) => [subpath, { default: "./src/index.ts" }])),
 });
 
+const runtimeApiMarkdown = (symbols) =>
+  [
+    "## Public exports",
+    "",
+    ...symbols.map((symbol) => `- \`${symbol}\``),
+    "",
+    "## Experimental exports",
+    "",
+    "None.",
+    "",
+    "## Deprecated exports",
+    "",
+    "None.",
+    "",
+  ].join("\n");
+
 const blueprintRecipeMarkdown = ({
   id = "provider.material-binding",
   kind = "provider",
@@ -198,6 +214,97 @@ void test("runtime public surface guard requires package exports and surface fac
 
   assert.deepEqual(findings, [
     "@agent-os/runtime/discord: runtime package export is missing docs/surface.json entrypoint",
+  ]);
+});
+
+void test("runtime public surface guard accepts docs-derived cloudflare public barrel symbols", () => {
+  assert.deepEqual(
+    runtimePublicSurfaceFindings({
+      surfacePackage: runtimeSurface([
+        {
+          subpath: "./cloudflare",
+          audiences: ["generated-only", "advanced"],
+          capability: "Cloudflare Durable Object runtime adapter",
+          surfaceClass: "first-party-host-substrate",
+        },
+      ]),
+      runtimePackageJson: runtimePackage(["./cloudflare"]),
+      runtimeApiMarkdown: runtimeApiMarkdown([
+        "./cloudflare:AgentRuntimeClient",
+        "./cloudflare:createAgentDurableObject",
+      ]),
+      cloudflarePublicBarrelSource: [
+        'export { createAgentDurableObject } from "./agent-do";',
+        'export type { AgentRuntimeClient } from "./agent-do";',
+      ].join("\n"),
+    }),
+    [],
+  );
+});
+
+void test("runtime public surface guard rejects cloudflare public barrel export-star leakage", () => {
+  const findings = runtimePublicSurfaceFindings({
+    surfacePackage: runtimeSurface([
+      {
+        subpath: "./cloudflare",
+        audiences: ["generated-only", "advanced"],
+        capability: "Cloudflare Durable Object runtime adapter",
+        surfaceClass: "first-party-host-substrate",
+      },
+    ]),
+    runtimePackageJson: runtimePackage(["./cloudflare"]),
+    runtimeApiMarkdown: runtimeApiMarkdown([]),
+    cloudflarePublicBarrelSource: 'export * from "./workspace-job-profile";',
+  });
+
+  assert.deepEqual(findings, [
+    "packages/runtime/src/cloudflare/index.ts:1:1: runtime cloudflare public barrel must use explicit named exports; export-star syntax is forbidden",
+  ]);
+});
+
+void test("runtime public surface guard rejects cloudflare exports absent from api docs", () => {
+  const findings = runtimePublicSurfaceFindings({
+    surfacePackage: runtimeSurface([
+      {
+        subpath: "./cloudflare",
+        audiences: ["generated-only", "advanced"],
+        capability: "Cloudflare Durable Object runtime adapter",
+        surfaceClass: "first-party-host-substrate",
+      },
+    ]),
+    runtimePackageJson: runtimePackage(["./cloudflare"]),
+    runtimeApiMarkdown: runtimeApiMarkdown(["./cloudflare:createAgentDurableObject"]),
+    cloudflarePublicBarrelSource: [
+      'export { createAgentDurableObject } from "./agent-do";',
+      'export { installCloudflareWorkspaceJobProfile } from "./workspace-job-profile";',
+    ].join("\n"),
+  });
+
+  assert.deepEqual(findings, [
+    "packages/runtime/src/cloudflare/index.ts: exports ./cloudflare:installCloudflareWorkspaceJobProfile, but docs/api/runtime.md does not declare it",
+  ]);
+});
+
+void test("runtime public surface guard rejects cloudflare api docs absent from public barrel", () => {
+  const findings = runtimePublicSurfaceFindings({
+    surfacePackage: runtimeSurface([
+      {
+        subpath: "./cloudflare",
+        audiences: ["generated-only", "advanced"],
+        capability: "Cloudflare Durable Object runtime adapter",
+        surfaceClass: "first-party-host-substrate",
+      },
+    ]),
+    runtimePackageJson: runtimePackage(["./cloudflare"]),
+    runtimeApiMarkdown: runtimeApiMarkdown([
+      "./cloudflare:createAgentDurableObject",
+      "./cloudflare:createCloudflareWorkspaceEnvResolver",
+    ]),
+    cloudflarePublicBarrelSource: 'export { createAgentDurableObject } from "./agent-do";',
+  });
+
+  assert.deepEqual(findings, [
+    "docs/api/runtime.md: declares ./cloudflare:createCloudflareWorkspaceEnvResolver, but packages/runtime/src/cloudflare/index.ts does not export it",
   ]);
 });
 
