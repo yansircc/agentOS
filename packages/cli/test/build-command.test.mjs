@@ -467,6 +467,101 @@ void test("compileAgentTree rejects invalid skill identity and packaged skill fi
   ]);
 });
 
+void test("compileAgentTree keeps channels as authoring-only path-stem facts", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
+      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
+      "const compile = (file) => compileAgentTree({ files: [instructions, file] });",
+      "const valid = compileAgentTree({ files: [",
+      "  instructions,",
+      '  { path: "agent/channels/github.ts", kind: "channel" },',
+      '  { path: "agent/channels/stripe_events.ts", kind: "channel" },',
+      "] });",
+      "if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }",
+      'const nested = compile({ path: "agent/channels/github/events.ts", kind: "channel" });',
+      'const emptyName = compile({ path: "agent/channels/.ts", kind: "channel" });',
+      'const invalidName = compile({ path: "agent/channels/GitHub.ts", kind: "channel" });',
+      'const symlink = compile({ path: "agent/channels/github.ts", kind: "channel", sourceKind: "symlink" });',
+      "const duplicate = compileAgentTree({ files: [",
+      "  instructions,",
+      '  { path: "agent/channels/github.ts", kind: "channel" },',
+      '  { path: "channels/github.ts", kind: "channel" },',
+      "] });",
+      "console.log(JSON.stringify({",
+      "  valid: {",
+      "    channels: valid.value.channels,",
+      '    manifestHasChannels: Object.hasOwn(valid.value.manifest, "channels"),',
+      '    provenanceChannelKeys: Object.keys(valid.value.provenance).filter((key) => key.includes("channel")),',
+      "  },",
+      "  nested,",
+      "  emptyName,",
+      "  invalidName,",
+      "  symlink,",
+      "  duplicate,",
+      "}));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.valid, {
+    channels: [
+      {
+        name: "github",
+        path: "agent/channels/github.ts",
+        origin: "path:agent/channels/github.ts",
+      },
+      {
+        name: "stripe_events",
+        path: "agent/channels/stripe_events.ts",
+        origin: "path:agent/channels/stripe_events.ts",
+      },
+    ],
+    manifestHasChannels: false,
+    provenanceChannelKeys: [],
+  });
+  assert.equal(output.nested.ok, false);
+  assert.deepEqual(output.nested.issues, [
+    {
+      kind: "unsupported_path",
+      path: "channels/github/events.ts",
+      reason: "channel_path_not_in_grammar",
+    },
+  ]);
+  assert.equal(output.emptyName.ok, false);
+  assert.deepEqual(output.emptyName.issues, [
+    {
+      kind: "unsupported_path",
+      path: "channels/.ts",
+      reason: "empty_path_identity",
+    },
+  ]);
+  assert.equal(output.invalidName.ok, false);
+  assert.deepEqual(output.invalidName.issues, [
+    {
+      kind: "unsupported_path",
+      path: "channels/GitHub.ts",
+      reason: "channel_name_invalid",
+    },
+  ]);
+  assert.equal(output.symlink.ok, false);
+  assert.deepEqual(output.symlink.issues, [
+    {
+      kind: "unsupported_path",
+      path: "channels/github.ts",
+      reason: "symlink_forbidden",
+    },
+  ]);
+  assert.equal(output.duplicate.ok, false);
+  assert.deepEqual(output.duplicate.issues, [
+    {
+      kind: "duplicate_path",
+      path: "channels/github.ts",
+      existingPath: "channels/github.ts",
+    },
+  ]);
+});
+
 void test("agentos build compiles an authored workspace tree into generated files", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-build-"));
   try {

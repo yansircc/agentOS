@@ -222,6 +222,12 @@
           "optionalPeers": []
         },
         {
+          "subpath": "./channel",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
           "subpath": "./workspace-binding",
           "moduleBuckets": ["adapter"],
           "targetProfiles": ["cloudflare-worker"],

@@ -47,6 +47,7 @@
         "@yansirplus/runtime/admission",
         "@yansirplus/runtime/ag-ui",
         "@yansirplus/runtime/capability",
+        "@yansirplus/runtime/channel",
         "@yansirplus/runtime/in-memory",
         "@yansirplus/runtime/llm-effect-ai",
         "@yansirplus/runtime/llm-effect-ai/anthropic",

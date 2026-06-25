@@ -51,7 +51,8 @@ export type AuthoredAgentTreeFile =
   | AuthoredMarkdownFile
   | AuthoredTextFile
   | AuthoredJsonFile
-  | AuthoredToolFile;
+  | AuthoredToolFile
+  | AuthoredChannelFile;
 
 export type AuthoredFileSourceKind = "regular" | "symlink" | "non_regular";
 
@@ -96,6 +97,18 @@ export interface AuthoredToolFile {
   readonly path: string;
   readonly kind: "tool";
   readonly declaration?: AuthoredToolDeclaration;
+}
+
+export interface AuthoredChannelFile {
+  readonly path: string;
+  readonly kind: "channel";
+  readonly sourceKind?: AuthoredFileSourceKind;
+}
+
+export interface CompiledAgentChannel {
+  readonly name: string;
+  readonly path: string;
+  readonly origin: AgentManifestOrigin;
 }
 
 export interface CompiledAgentSkill {
@@ -145,6 +158,7 @@ export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
     Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>>
   >;
   readonly toolFilePaths: Readonly<Record<string, string>>;
+  readonly channels: ReadonlyArray<CompiledAgentChannel>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
 }
 
@@ -238,6 +252,7 @@ interface CompilerState {
   readonly pathKeys: Map<string, string>;
   readonly toolIds: Set<string>;
   readonly toolFilePaths: Map<string, string>;
+  readonly channels: Map<string, CompiledAgentChannel>;
   readonly skills: Map<string, CompiledAgentSkill>;
   readonly skillSupportFiles: Map<string, CompiledAgentSkillFile[]>;
   readonly skillSupportByteTotals: Map<string, number>;
@@ -250,6 +265,7 @@ const SKILL_SUPPORT_FILE_MAX_BYTES = 65_536;
 const SKILL_SUPPORT_FILES_MAX_COUNT = 64;
 const SKILL_SUPPORT_PACKAGE_MAX_BYTES = 262_144;
 const skillNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
+const channelNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -315,6 +331,8 @@ const utf8ByteLength = (value: string): number => textEncoder.encode(value).leng
 
 const isSkillName = (value: string): boolean => skillNamePattern.test(value);
 
+const isChannelName = (value: string): boolean => channelNamePattern.test(value);
+
 const decodeUtf8Bytes = (
   state: CompilerState,
   path: string,
@@ -340,7 +358,7 @@ const assertNoNulText = (
   return false;
 };
 
-const assertRegularSkillSource = (
+const assertRegularAuthoredSource = (
   state: CompilerState,
   path: string,
   sourceKind: AuthoredFileSourceKind | undefined,
@@ -1194,7 +1212,7 @@ const recordSkillFile = (
     state.issues.push({ kind: "unsupported_path", path, reason: "skill_name_invalid" });
     return;
   }
-  if (!assertRegularSkillSource(state, path, sourceKind)) return;
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
   const parsed = parseSkillFrontmatter(state, path, text);
   if (parsed === null) return;
   if (!isSkillName(parsed.name)) {
@@ -1242,7 +1260,7 @@ const recordSkillSupportFile = (
   bytes: Uint8Array,
   sourceKind: AuthoredFileSourceKind | undefined,
 ): void => {
-  if (!assertRegularSkillSource(state, path, sourceKind)) return;
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
   if (bytes.byteLength > SKILL_SUPPORT_FILE_MAX_BYTES) {
     invalidAuthoredValue(state, path, "/bytes", "skill_file_too_large");
     return;
@@ -1331,6 +1349,33 @@ const recordToolFile = (
   }
   state.toolFilePaths.set(toolId, path);
   recordToolFacts(state, toolId, path, declaration ?? {}, (field) => authorOrigin(path, field));
+};
+
+const recordChannelFile = (
+  state: CompilerState,
+  path: string,
+  sourceKind: AuthoredFileSourceKind | undefined,
+): void => {
+  const parts = path.split("/");
+  if (parts.length !== 2 || parts[0] !== "channels" || !parts[1]?.endsWith(".ts")) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "channel_path_not_in_grammar" });
+    return;
+  }
+  const name = parts[1].slice(0, -".ts".length);
+  if (name.length === 0) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
+    return;
+  }
+  if (!isChannelName(name)) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "channel_name_invalid" });
+    return;
+  }
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
+  state.channels.set(name, {
+    name,
+    path: authoredPath(path),
+    origin: pathOrigin(path),
+  });
 };
 
 const applyDefaults = (state: CompilerState): void => {
@@ -1529,6 +1574,9 @@ const buildToolFilePaths = (state: CompilerState): Readonly<Record<string, strin
   return paths;
 };
 
+const buildChannels = (state: CompilerState): ReadonlyArray<CompiledAgentChannel> =>
+  [...state.channels.values()].sort((left, right) => left.name.localeCompare(right.name));
+
 const validateSkillSupportFiles = (state: CompilerState): void => {
   for (const [skillName, files] of state.skillSupportFiles.entries()) {
     const skill = state.skills.get(skillName);
@@ -1572,6 +1620,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     pathKeys: new Map(),
     toolIds: new Set(),
     toolFilePaths: new Map(),
+    channels: new Map(),
     skills: new Map(),
     skillSupportFiles: new Map(),
     skillSupportByteTotals: new Map(),
@@ -1593,6 +1642,9 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
         break;
       case "tool":
         recordToolFile(state, path, file.declaration);
+        break;
+      case "channel":
+        recordChannelFile(state, path, file.sourceKind);
         break;
     }
   }
@@ -1618,6 +1670,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       provenance: buildProvenance(state),
       workspaceToolControls: buildWorkspaceToolControls(state),
       toolFilePaths: buildToolFilePaths(state),
+      channels: buildChannels(state),
       skills: buildSkills(state),
     },
   };
