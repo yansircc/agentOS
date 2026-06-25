@@ -10,8 +10,7 @@
       "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_op."],
       "allowedPrimitives": [
         "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget",
-        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
+        "primitive.agent-authoring.linkWorkspaceStaticTarget"
       ],
       "forbiddenWrites": [
         {
@@ -75,18 +74,14 @@
       "gates": ["ag-ui-sse-axis", "ag-ui-egress-allowlist"]
     },
     {
-      "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
+      "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
       "intents": [
-        "run a workspace job and stream observable result to UI",
-        "consume workspace-job failure observability without reading raw ledger payload"
+        "respond to a workspace job request from the workspace-job projection",
+        "materialize Cloudflare HTTP responses without reading raw workspace-job ledger payload"
       ],
-      "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_job.", "workspace_op."],
+      "sourceFactPrefixes": ["workspace_job."],
       "allowedPrimitives": [
-        "primitive.ag-ui.projectLedgerSseToAgUiSse",
-        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
-        "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
         "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
-        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
         "primitive.runtime.projectWorkspaceJobObservability",
         "primitive.runtime.runWorkspaceJobEffect"
       ],
@@ -101,15 +96,6 @@
           "invariant": "invariant.d10.namespace-integrity"
         },
         {
-          "actor": "product",
-          "action": "read_raw_ledger_payload",
-          "target": {
-            "kind": "eventPrefix",
-            "value": "workspace_op."
-          },
-          "invariant": "invariant.boundary.owner-owned-safe-projection"
-        },
-        {
           "actor": "public_submit",
           "action": "carry_resolved_provider_material",
           "target": {
@@ -119,12 +105,7 @@
           "invariant": "invariant.d10.truth-identity"
         }
       ],
-      "gates": [
-        "cloudflare-profile",
-        "observability",
-        "workspace-job",
-        "workspace-agui-integration-fixture"
-      ]
+      "gates": ["workspace-job", "observability", "public-api"]
     },
     {
       "primitive": "primitive.kernel.defineProductTool",

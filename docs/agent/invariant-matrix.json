@@ -287,7 +287,7 @@
     {
       "invariant": "invariant.workspace-op.carrier-single-writer",
       "statement": "Only the workspace-op carrier constructs workspace_op.* terminal payloads; host providers execute requested facts and commit through the carrier boundary capability.",
-      "primitives": ["primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider"],
+      "primitives": [],
       "errors": [],
       "docs": ["docs/packages/runtime.md"],
       "tests": [
@@ -298,10 +298,7 @@
     {
       "invariant": "invariant.workspace-job.host-workspace-lifecycle",
       "statement": "Cloudflare hosts resolve one provider-neutral WorkspaceEnv lease per scope/runId and keep Sandbox binding validation and cleanup outside product modules.",
-      "primitives": [
-        "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
-        "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver"
-      ],
+      "primitives": [],
       "errors": [],
       "docs": ["docs/packages/runtime.md"],
       "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
@@ -328,10 +325,7 @@
     {
       "invariant": "invariant.workspace-job.failure-observability-join",
       "statement": "Workspace job failure explanation is derived by runtime composition from workspace-job terminal facts joined with runtime diagnostic projections; carrier facts remain terminal vocabulary and consumer projections do not expose runtime numeric run ids.",
-      "primitives": [
-        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
-        "primitive.runtime.projectWorkspaceJobObservability"
-      ],
+      "primitives": ["primitive.runtime.projectWorkspaceJobObservability"],
       "errors": [],
       "docs": ["docs/packages/runtime.md"],
       "tests": [

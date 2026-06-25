@@ -109,40 +109,6 @@
       }
     },
     {
-      "id": "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
-      "package": "@agent-os/runtime",
-      "packagePath": "packages/runtime",
-      "entrypoints": ["./cloudflare"],
-      "symbol": "createCloudflareSandboxWorkspaceEnvResolver",
-      "exportKey": "./cloudflare:createCloudflareSandboxWorkspaceEnvResolver",
-      "sourceFile": "packages/runtime/src/cloudflare/workspace-env.ts",
-      "summary": "Resolves a run-scoped Cloudflare Sandbox binding into a WorkspaceEnv. This high-level host helper owns the Sandbox binding composition: products choose the Durable Object namespace, while agentOS fixes `scope/runId -> sandbox lease`, validates the binding/client shape, disables implicit default sessions, and pins one transport per run. The lower-level resolver remains available for tests or non-Sandbox hosts.",
-      "aliases": [],
-      "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
-      "docs": "docs/packages/runtime.md",
-      "capabilityKind": "runtime",
-      "testEvidence": {
-        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-      }
-    },
-    {
-      "id": "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver",
-      "package": "@agent-os/runtime",
-      "packagePath": "packages/runtime",
-      "entrypoints": ["./cloudflare"],
-      "symbol": "createCloudflareWorkspaceEnvResolver",
-      "exportKey": "./cloudflare:createCloudflareWorkspaceEnvResolver",
-      "sourceFile": "packages/runtime/src/cloudflare/workspace-env.ts",
-      "summary": "Resolves a run-scoped Cloudflare Sandbox workspace into a WorkspaceEnv. The resolver owns the host lifecycle axis: `scope/runId` determines the sandbox id, so a run receives one sandbox lease and products receive only the provider-neutral WorkspaceEnv.",
-      "aliases": [],
-      "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
-      "docs": "docs/packages/runtime.md",
-      "capabilityKind": "runtime",
-      "testEvidence": {
-        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-      }
-    },
-    {
       "id": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
       "package": "@agent-os/runtime",
       "packagePath": "packages/runtime",
@@ -155,40 +121,6 @@
       "invariants": ["invariant.workspace-job.verified-terminal"],
       "docs": "docs/packages/runtime.md",
       "capabilityKind": "facade",
-      "testEvidence": {
-        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-      }
-    },
-    {
-      "id": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
-      "package": "@agent-os/runtime",
-      "packagePath": "packages/runtime",
-      "entrypoints": ["./cloudflare"],
-      "symbol": "installCloudflareWorkspaceJobProfile",
-      "exportKey": "./cloudflare:installCloudflareWorkspaceJobProfile",
-      "sourceFile": "packages/runtime/src/cloudflare/workspace-job-profile.ts",
-      "summary": "Installs the Cloudflare workspace-job consumer profile. The profile is a thin composition surface: workspace leases come from the supplied resolver, workspace-op provider glue is the existing installer, AG-UI responses are the existing SSE helpers, and job responses read the runtime-owned observability projection. It does not parse workspace-job facts or own failure classification.",
-      "aliases": [],
-      "invariants": ["invariant.workspace-job.failure-observability-join"],
-      "docs": "docs/packages/runtime.md",
-      "capabilityKind": "profile",
-      "testEvidence": {
-        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-      }
-    },
-    {
-      "id": "primitive.cloudflare-do.installCloudflareWorkspaceOperationProvider",
-      "package": "@agent-os/runtime",
-      "packagePath": "packages/runtime",
-      "entrypoints": ["./cloudflare"],
-      "symbol": "installCloudflareWorkspaceOperationProvider",
-      "exportKey": "./cloudflare:installCloudflareWorkspaceOperationProvider",
-      "sourceFile": "packages/runtime/src/cloudflare/workspace-op.ts",
-      "summary": "Installs workspace-op provider glue for Cloudflare DO hosts. This adapter keeps existing Cloudflare generated targets on the same workspace-op install algebra as the host-neutral capability.",
-      "aliases": [],
-      "invariants": ["invariant.workspace-op.carrier-single-writer"],
-      "docs": "docs/packages/runtime.md",
-      "capabilityKind": "runtime",
       "testEvidence": {
         "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
       }

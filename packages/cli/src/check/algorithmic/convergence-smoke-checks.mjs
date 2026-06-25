@@ -97,9 +97,7 @@ const exportedDeclarationNames = (statement) => {
   }
   if (ts.isVariableStatement(statement)) {
     return statement.declarationList.declarations
-      .map((declaration) =>
-        ts.isIdentifier(declaration.name) ? declaration.name.text : undefined,
-      )
+      .map((declaration) => (ts.isIdentifier(declaration.name) ? declaration.name.text : undefined))
       .filter((name) => name !== undefined);
   }
   return [];
@@ -156,7 +154,9 @@ const cloudflarePublicBarrelFindings = ({
   });
   const findings = [...barrel.findings];
 
-  for (const symbol of [...barrel.names].sort((left, right) => left.localeCompare(right))) {
+  for (const symbol of [...barrel.names]
+    .map(String)
+    .sort((left, right) => left.localeCompare(right))) {
     if (!docsSymbols.has(symbol)) {
       findings.push(
         `${cloudflarePublicBarrelPath}: exports ./cloudflare:${symbol}, but docs/api/runtime.md does not declare it`,
@@ -286,6 +286,15 @@ const blueprintRecipeSchemaVersion = 1;
 const blueprintRecipeKinds = ["channel", "sandbox", "database", "provider", "observability"];
 const blueprintRecipeKindSet = new Set(blueprintRecipeKinds);
 const blueprintRecipeActions = ["agentos add", "agentos update"];
+const blueprintLifecycleOwnershipKinds = new Set(["provider", "sandbox"]);
+const blueprintLifecycleOwnership = {
+  create: "app-or-generated-target",
+  reuse: "app-or-generated-target",
+  delete: "app-or-generated-target",
+  credentials: "app-owned-material",
+  network: "app-or-generated-target",
+};
+const blueprintLifecycleOwnershipAxes = Object.keys(blueprintLifecycleOwnership);
 const blueprintRecipePrimaryFiles = new Set([
   "agentos.config.jsonc",
   "agent/agent.json",
@@ -304,6 +313,17 @@ const blueprintForbiddenTokens = [
   "@agent-os/runtime/",
   "@yansirplus/runtime/",
   ".dev.vars",
+];
+const blueprintForbiddenPatterns = [
+  {
+    label: "source import statements",
+    pattern: /(?:^|\n)\s*import\s+[\s\S]*?\s+from\s+["'][^"']+["']/u,
+  },
+  {
+    label: "Cloudflare workspace lifecycle helper wiring",
+    pattern:
+      /\b(?:create|install)Cloudflare(?:Sandbox)?Workspace(?:EnvResolver|OperationProvider|JobProfile)\b/u,
+  },
 ];
 
 const blueprintRecipeLabel = (source) => source.file ?? "blueprint recipe";
@@ -338,6 +358,34 @@ const collectMarkerValues = (content, pattern) => {
 };
 
 const requiredBlueprintActionSet = new Set(blueprintRecipeActions);
+
+const validateBlueprintLifecycleOwnership = ({ label, kind, frontmatter, body, findings }) => {
+  if (!blueprintLifecycleOwnershipKinds.has(kind)) return;
+  const ownership = frontmatter.lifecycleOwnership;
+  if (!isPlainRecord(ownership)) {
+    findings.push(`${label}: ${kind} recipe requires lifecycleOwnership object`);
+    return;
+  }
+
+  const actualAxes = Object.keys(ownership).sort((left, right) => left.localeCompare(right));
+  const expectedAxes = [...blueprintLifecycleOwnershipAxes].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  if (actualAxes.join(",") !== expectedAxes.join(",")) {
+    findings.push(`${label}: lifecycleOwnership axes must be exactly ${expectedAxes.join(", ")}`);
+  }
+
+  for (const axis of blueprintLifecycleOwnershipAxes) {
+    const expectedOwner = blueprintLifecycleOwnership[axis];
+    if (ownership[axis] !== expectedOwner) {
+      findings.push(`${label}: lifecycleOwnership.${axis} must be ${expectedOwner}`);
+    }
+  }
+
+  if (!body.includes("## Lifecycle Ownership")) {
+    findings.push(`${label}: ${kind} recipe body must contain ## Lifecycle Ownership`);
+  }
+};
 
 const validateBlueprintRecipe = (recipe, findings) => {
   const { file, frontmatter, body } = recipe;
@@ -389,6 +437,7 @@ const validateBlueprintRecipe = (recipe, findings) => {
     const expectedPath = `blueprints/recipes/${idKind}/${slug}.md`;
     if (file !== expectedPath) findings.push(`${label}: recipe path must be ${expectedPath}`);
   }
+  validateBlueprintLifecycleOwnership({ label, kind, frontmatter, body, findings });
 
   if (typeof title === "string" && !body.includes(`# ${title}`)) {
     findings.push(`${label}: body must contain # ${title}`);
@@ -407,6 +456,11 @@ const validateBlueprintRecipe = (recipe, findings) => {
   for (const token of blueprintForbiddenTokens) {
     if (body.includes(token))
       findings.push(`${label}: blueprint recipe must not reference ${token}`);
+  }
+  for (const { label: patternLabel, pattern } of blueprintForbiddenPatterns) {
+    if (pattern.test(body)) {
+      findings.push(`${label}: blueprint recipe must not contain ${patternLabel}`);
+    }
   }
 };
 

@@ -204,10 +204,9 @@
       ],
       "allowedPrimitives": [
         "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget",
-        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
+        "primitive.agent-authoring.linkWorkspaceStaticTarget"
       ],
-      "allowedPrimitivePackages": ["@agent-os/cli", "@agent-os/runtime"],
+      "allowedPrimitivePackages": ["@agent-os/cli"],
       "forbiddenWrites": [
         {
           "actor": "generated_target",
@@ -229,16 +228,8 @@
         }
       ],
       "gates": ["convergence-boundary", "public-api", "spike-hygiene"],
-      "invariants": [
-        "invariant.algebra.single-code-source",
-        "invariant.docs.agent-projection",
-        "invariant.workspace-job.failure-observability-join"
-      ],
-      "docs": [
-        "docs/guides/build-natural-language-workspace-agent.md",
-        "docs/packages/runtime.md",
-        "docs/verification.md"
-      ],
+      "invariants": ["invariant.algebra.single-code-source", "invariant.docs.agent-projection"],
+      "docs": ["docs/guides/build-natural-language-workspace-agent.md", "docs/verification.md"],
       "testEvidence": [
         {
           "primitive": "primitive.agent-authoring.compileAgentTree",
@@ -247,56 +238,19 @@
         {
           "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
           "tests": ["packages/cli/test/build-command.test.mjs"]
-        },
-        {
-          "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
-          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         }
       ]
     },
     {
-      "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
+      "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
       "intents": [
-        "run a workspace job and stream observable result to UI",
-        "consume workspace-job failure observability without reading raw ledger payload"
+        "respond to a workspace job request from the workspace-job projection",
+        "materialize Cloudflare HTTP responses without reading raw workspace-job ledger payload"
       ],
       "coordinationPackage": "@agent-os/runtime",
-      "coordinationCapabilityKind": "profile",
-      "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_job.", "workspace_op."],
+      "coordinationCapabilityKind": "facade",
+      "sourceFactPrefixes": ["workspace_job."],
       "sourceFactOwners": [
-        {
-          "prefix": "agent.",
-          "owner": "@agent-os/runtime-protocol",
-          "declarations": [
-            {
-              "prefix": "agent.",
-              "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/core/src/errors.ts"
-            }
-          ]
-        },
-        {
-          "prefix": "llm.",
-          "owner": "@agent-os/runtime-protocol",
-          "declarations": [
-            {
-              "prefix": "llm.",
-              "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/core/src/errors.ts"
-            }
-          ]
-        },
-        {
-          "prefix": "tool.",
-          "owner": "@agent-os/runtime-protocol",
-          "declarations": [
-            {
-              "prefix": "tool.",
-              "owner": "@agent-os/runtime-protocol",
-              "filePath": "packages/core/src/errors.ts"
-            }
-          ]
-        },
         {
           "prefix": "workspace_job.",
           "owner": "@agent-os/workspace-job",
@@ -307,25 +261,10 @@
               "filePath": "packages/runtime/src/workspace-job-carrier/definition.ts"
             }
           ]
-        },
-        {
-          "prefix": "workspace_op.",
-          "owner": "@agent-os/workspace-op",
-          "declarations": [
-            {
-              "prefix": "workspace_op.",
-              "owner": "@agent-os/workspace-op",
-              "filePath": "packages/runtime/src/workspace-op-carrier/definition.ts"
-            }
-          ]
         }
       ],
       "allowedPrimitives": [
-        "primitive.ag-ui.projectLedgerSseToAgUiSse",
-        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
-        "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
         "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
-        "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
         "primitive.runtime.projectWorkspaceJobObservability",
         "primitive.runtime.runWorkspaceJobEffect"
       ],
@@ -341,15 +280,6 @@
           "invariant": "invariant.d10.namespace-integrity"
         },
         {
-          "actor": "product",
-          "action": "read_raw_ledger_payload",
-          "target": {
-            "kind": "eventPrefix",
-            "value": "workspace_op."
-          },
-          "invariant": "invariant.boundary.owner-owned-safe-projection"
-        },
-        {
           "actor": "public_submit",
           "action": "carry_resolved_provider_material",
           "target": {
@@ -359,15 +289,8 @@
           "invariant": "invariant.d10.truth-identity"
         }
       ],
-      "gates": [
-        "cloudflare-profile",
-        "observability",
-        "workspace-job",
-        "workspace-agui-integration-fixture"
-      ],
+      "gates": ["workspace-job", "observability", "public-api"],
       "invariants": [
-        "invariant.ag-ui.sse-axis",
-        "invariant.boundary.owner-owned-safe-projection",
         "invariant.d10.namespace-integrity",
         "invariant.d10.truth-identity",
         "invariant.workspace-job.failure-observability-join",
@@ -375,29 +298,12 @@
       ],
       "docs": [
         "docs/boundary-contract.md",
-        "docs/concepts/ag-ui-wire-adapter.md",
         "docs/concepts/durable-truth.md",
         "docs/packages/runtime.md"
       ],
       "testEvidence": [
         {
-          "primitive": "primitive.ag-ui.projectLedgerSseToAgUiSse",
-          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-        },
-        {
-          "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
-          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-        },
-        {
-          "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
-          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-        },
-        {
           "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
-          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
-        },
-        {
-          "primitive": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
           "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
         },
         {
@@ -607,31 +513,17 @@
       {
         "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
         "capabilityKind": "facade",
-        "routePrimitives": [
-          "primitive.ag-ui.projectLedgerSseToAgUiSse",
-          "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
-        ]
+        "routePrimitives": ["primitive.ag-ui.projectLedgerSseToAgUiSse"]
       },
       {
         "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
         "capabilityKind": "facade",
-        "routePrimitives": [
-          "primitive.ag-ui.projectLedgerSseToAgUiSse",
-          "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
-        ]
+        "routePrimitives": ["primitive.ag-ui.projectLedgerSseToAgUiSse"]
       },
       {
         "id": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
         "capabilityKind": "facade",
-        "routePrimitives": ["primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"]
-      },
-      {
-        "id": "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile",
-        "capabilityKind": "profile",
-        "routePrimitives": [
-          "primitive.agent-authoring.linkWorkspaceStaticTarget",
-          "primitive.cloudflare-do.installCloudflareWorkspaceJobProfile"
-        ]
+        "routePrimitives": ["primitive.cloudflare-do.createCloudflareWorkspaceJobResponse"]
       }
     ]
   }

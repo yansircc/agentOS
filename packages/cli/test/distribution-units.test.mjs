@@ -53,12 +53,21 @@ const runtimeApiMarkdown = (symbols) =>
     "",
   ].join("\n");
 
+const lifecycleOwnership = {
+  create: "app-or-generated-target",
+  reuse: "app-or-generated-target",
+  delete: "app-or-generated-target",
+  credentials: "app-owned-material",
+  network: "app-or-generated-target",
+};
+
 const blueprintRecipeMarkdown = ({
   id = "provider.material-binding",
   kind = "provider",
   title = "Provider Material Binding",
   primaryFile = "agentos.config.jsonc",
   markerPath = primaryFile,
+  ownership = lifecycleOwnership,
   bodySuffix = "",
 } = {}) => {
   const frontmatter = {
@@ -71,6 +80,7 @@ const blueprintRecipeMarkdown = ({
     appliesTo: ["agentos add", "agentos update"],
     upgradeGuide: "blueprints/UPGRADE.md",
   };
+  if (ownership !== undefined) frontmatter.lifecycleOwnership = ownership;
   return [
     "---json",
     JSON.stringify(frontmatter, null, 2),
@@ -82,6 +92,10 @@ const blueprintRecipeMarkdown = ({
     "## Boundary",
     "",
     "The recipe records app-owned integration steps without runtime subpath code.",
+    "",
+    "## Lifecycle Ownership",
+    "",
+    "Provider resources are created, reused, deleted, credentialed, and networked outside runtime.",
     "",
     "## Steps",
     "",
@@ -367,6 +381,79 @@ void test("blueprint recipe contract rejects target replacement and marker drift
   );
   assert.equal(
     findings.includes("blueprints/UPGRADE.md: unknown upgrade marker unknown.recipe"),
+    true,
+  );
+});
+
+void test("blueprint recipe contract requires provider and sandbox lifecycle ownership facts", () => {
+  const findings = blueprintRecipeFindingsForSources({
+    recipeSources: [
+      {
+        file: "blueprints/recipes/provider/material-binding.md",
+        content: blueprintRecipeMarkdown({ ownership: null }),
+      },
+      {
+        file: "blueprints/recipes/sandbox/lifecycle-boundary.md",
+        content: blueprintRecipeMarkdown({
+          id: "sandbox.lifecycle-boundary",
+          kind: "sandbox",
+          title: "Sandbox Lifecycle Boundary",
+          ownership: {
+            create: "runtime",
+            reuse: "app-or-generated-target",
+            delete: "app-or-generated-target",
+            credentials: "app-owned-material",
+            network: "app-or-generated-target",
+          },
+        }),
+      },
+    ],
+    upgradeGuideContent:
+      '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="provider.material-binding" -->\n<!-- agentos:blueprint-upgrade id="sandbox.lifecycle-boundary" -->\n',
+  });
+
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/provider/material-binding.md: provider recipe requires lifecycleOwnership object",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/sandbox/lifecycle-boundary.md: lifecycleOwnership.create must be app-or-generated-target",
+    ),
+    true,
+  );
+});
+
+void test("blueprint recipe contract rejects provider lifecycle source wiring", () => {
+  const findings = blueprintRecipeFindingsForSources({
+    recipeSources: [
+      {
+        file: "blueprints/recipes/provider/material-binding.md",
+        content: blueprintRecipeMarkdown({
+          bodySuffix: [
+            "",
+            'import OpenAI from "openai";',
+            "createCloudflareWorkspaceEnvResolver();",
+          ].join("\n"),
+        }),
+      },
+    ],
+    upgradeGuideContent:
+      '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="provider.material-binding" -->\n',
+  });
+
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/provider/material-binding.md: blueprint recipe must not contain source import statements",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/provider/material-binding.md: blueprint recipe must not contain Cloudflare workspace lifecycle helper wiring",
+    ),
     true,
   );
 });
