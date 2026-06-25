@@ -472,6 +472,16 @@ describe("§6.1 ops-api source contains no app nouns", () => {
       }
     }
   });
+
+  it("does not mount the deferred /agentos/v1/info endpoint", async () => {
+    const handler = makeHandler();
+    const res = await get(handler, "/agentos/v1/info", { principal: "ops@team" });
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({
+      error: "scope_not_found",
+      message: "not an ops-api path",
+    });
+  });
 });
 
 // ============================================================

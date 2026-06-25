@@ -9,7 +9,11 @@ import {
   createLocalWorkspaceEnv,
   lowerLocalAgentRuntime,
 } from "@agent-os/runtime/local";
-import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND } from "../../src/workspace-op-carrier";
+import {
+  WORKSPACE_OP_FACT_OWNER,
+  WORKSPACE_OP_KIND,
+  WORKSPACE_OP_PROJECTION_KIND,
+} from "../../src/workspace-op-carrier";
 
 const withTempWorkspace = async <A>(
   run: (root: string, base: string) => Promise<A>,
@@ -254,9 +258,10 @@ describe("createLocalWorkspaceEnv", () => {
     });
   });
 
-  it("runs write_file through host-owned local workspace operations", async () => {
+  it("runs write_file through host-owned node@1 workspace operations and inspects live rows", async () => {
     await withTempWorkspace(async (root) => {
-      const runtime = await createLocalAgentRuntime({
+      const lowered = await lowerLocalAgentRuntime({
+        target: "node@1",
         identity: "local-runtime-write-file",
         cwd: root,
         llm: {
@@ -283,6 +288,46 @@ describe("createLocalWorkspaceEnv", () => {
           ],
         },
       });
+      const runtime = lowered.runtime;
+
+      const initialInspection = runtime.inspect();
+      expect(initialInspection.compile).toEqual({
+        status: "available",
+        target: "node@1",
+        manifest: expect.objectContaining({
+          host: "node@1",
+          capabilities: expect.arrayContaining([WORKSPACE_OP_FACT_OWNER]),
+        }),
+      });
+      expect(initialInspection.resolve.status).toBe("available");
+      if (initialInspection.resolve.status !== "available") return;
+      expect(initialInspection.resolve.graph.handlers).toEqual(
+        expect.arrayContaining([
+          {
+            kind: WORKSPACE_OP_KIND.REQUESTED,
+            capabilityId: WORKSPACE_OP_FACT_OWNER,
+          },
+        ]),
+      );
+      expect(initialInspection.resolve.graph.projections).toEqual(
+        expect.arrayContaining([
+          {
+            kind: WORKSPACE_OP_PROJECTION_KIND,
+            capabilityId: WORKSPACE_OP_FACT_OWNER,
+          },
+        ]),
+      );
+      expect(initialInspection.resolve.bindings.tools).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: "write_file",
+            authority: expect.objectContaining({
+              authorityClass: "agentos.workspace.capability",
+            }),
+            receiptBackedIntentKinds: [WORKSPACE_OP_KIND.REQUESTED],
+          }),
+        ]),
+      );
 
       const result = await runtime.submit({
         intent: "write a local file",
@@ -322,6 +367,26 @@ describe("createLocalWorkspaceEnv", () => {
         claim: {
           phase: "lived",
           anchorRef: { anchorKind: "external_receipt" },
+        },
+      });
+      const inspectionAfterWrite = runtime.inspect();
+      expect(inspectionAfterWrite.runtime.status).toBe("available");
+      if (inspectionAfterWrite.runtime.status !== "available") return;
+      expect(inspectionAfterWrite.runtime.diagnostics).toEqual([]);
+      const workspaceRows = inspectionAfterWrite.runtime.events.filter(
+        (event) => event.factOwnerRef === WORKSPACE_OP_FACT_OWNER,
+      );
+      expect(workspaceRows.map((event) => event.kind)).toEqual([
+        WORKSPACE_OP_KIND.REQUESTED,
+        WORKSPACE_OP_KIND.COMPLETED,
+      ]);
+      expect(workspaceRows.at(-1)).toMatchObject({
+        kind: WORKSPACE_OP_KIND.COMPLETED,
+        factOwnerRef: WORKSPACE_OP_FACT_OWNER,
+        payload: {
+          toolName: "write_file",
+          path: "nested/local-result.txt",
+          bytesWritten: 29,
         },
       });
     });

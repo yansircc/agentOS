@@ -171,6 +171,12 @@ describe("InspectionSnapshot", () => {
         },
       ]),
     );
+    expect(snapshot.resolve.graph.handlers).not.toHaveProperty("get");
+    expect(snapshot.resolve.graph.handlers).not.toHaveProperty("set");
+    expect(snapshot.resolve.graph.projections).not.toHaveProperty("get");
+    expect(snapshot.resolve.graph.projections).not.toHaveProperty("set");
+    expect(snapshot.resolve.graph).not.toHaveProperty("handler");
+    expect(snapshot.resolve.graph).not.toHaveProperty("projection");
     expect(snapshot.resolve.bindings.tools).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -374,6 +374,60 @@ const localAgentRuntimeTarget = (target: LocalAgentRuntimeTarget): LocalAgentRun
   throw new TypeError(`unsupported local agent runtime target: ${String(target)}`);
 };
 
+const inspectionBoundaryEventIdentities = (
+  truthIdentity: ReturnType<typeof inMemoryConversationTruthIdentity>,
+  bindings: AgentSubmitBindings,
+) => {
+  const intentOwners = new Map(
+    (bindings.toolIntents ?? []).map((intent) => [
+      intent.kind,
+      intent.boundaryPackage.ownerId,
+    ]),
+  );
+  const identities = new Map<
+    string,
+    {
+      readonly scopeRef: typeof truthIdentity.scopeRef;
+      readonly effectAuthorityRef: AuthorityRef;
+      readonly factOwnerRef: string;
+    }
+  >();
+  for (const [toolName, receiptBinding] of Object.entries(bindings.receiptBackedTools ?? {})) {
+    const tool = bindings.tools?.[toolName];
+    if (tool === undefined) continue;
+    for (const intentKind of receiptBinding.intentKinds) {
+      const factOwnerRef = intentOwners.get(intentKind);
+      if (factOwnerRef === undefined) continue;
+      const identity = {
+        scopeRef: truthIdentity.scopeRef,
+        effectAuthorityRef: tool.contract.effectAuthorityRef,
+        factOwnerRef,
+      };
+      identities.set(JSON.stringify(identity), identity);
+    }
+  }
+  return Array.from(identities.values());
+};
+
+const localInspectionEvents = (input: {
+  readonly truthIdentity: ReturnType<typeof inMemoryConversationTruthIdentity>;
+  readonly resolved: ResolvedRuntime;
+}): ReadonlyArray<LedgerEvent> => {
+  const rows = new Map<number, LedgerEvent>();
+  for (const event of input.resolved.state.snapshot(input.truthIdentity)) {
+    rows.set(event.id, event);
+  }
+  for (const identity of inspectionBoundaryEventIdentities(
+    input.truthIdentity,
+    input.resolved.bindings,
+  )) {
+    for (const event of input.resolved.state.eventSnapshot(identity)) {
+      rows.set(event.id, event);
+    }
+  }
+  return Array.from(rows.values()).sort((left, right) => left.id - right.id);
+};
+
 const localAgentRuntimeFacade = (input: {
   readonly identity: string;
   readonly truthIdentity: ReturnType<typeof inMemoryConversationTruthIdentity>;
@@ -407,7 +461,10 @@ const localAgentRuntimeFacade = (input: {
       capabilities: input.capabilities,
       runtime: {
         status: "available",
-        events: input.resolved.state.snapshot(input.truthIdentity),
+        events: localInspectionEvents({
+          truthIdentity: input.truthIdentity,
+          resolved: input.resolved,
+        }),
         diagnostics: input.resolved.state.telemetryDiagnostics(),
       },
     }),

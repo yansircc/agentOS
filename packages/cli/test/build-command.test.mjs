@@ -570,6 +570,7 @@ void test("agentos info emits compile-only inspection without generated writes",
       status: "unavailable",
       reason: "agentos info does not start a local or Cloudflare runtime",
     });
+    assert.doesNotMatch(jsonResult.stdout, /\/agentos\/v1\/info/);
     assert.equal(existsSync(path.join(root, ".agentos")), false);
 
     const humanResult = spawnSync(process.execPath, [cli, "info", "--cwd", root], {
@@ -590,6 +591,11 @@ void test("agentos info emits compile-only inspection without generated writes",
       runnerSource,
       /resolveRuntime|lowerLocalAgentRuntime|createLocalAgentRuntime|wrangler/i,
     );
+    const staticTargetSource = readFileSync(
+      path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
+      "utf8",
+    );
+    assert.doesNotMatch(staticTargetSource, /\/agentos\/v1\/info/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
