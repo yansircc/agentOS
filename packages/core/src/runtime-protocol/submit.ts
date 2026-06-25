@@ -41,8 +41,8 @@ export interface SubmitToolPolicy {
   /**
    * Force each LLM turn to return a tool call until this tool has executed.
    *
-   * This is a runtime-owned policy for workflows whose terminal fact depends on
-   * a specific tool effect. It prevents pre-terminal prose from becoming the
+   * This is a runtime-owned policy for runs whose terminal fact depends on a
+   * specific tool effect. It prevents pre-terminal prose from becoming the
    * effective output channel while still allowing read/inspect tools before the
    * terminal tool runs.
    */
@@ -53,7 +53,7 @@ export interface SubmitToolPolicy {
   /**
    * Complete the submit run immediately after every listed tool has executed.
    *
-   * Artifact-first workflows often use tool effects as the terminal evidence
+   * Artifact-first submissions often use tool effects as the terminal evidence
    * and do not need one more model prose turn after the files are written. The
    * runtime treats these tools as required until they execute, then commits the
    * run completion fact without another LLM call.

@@ -14,11 +14,11 @@ modules inside the scoped spike until promotion is explicit.
 
 ## Steps
 
-1. Register product run state with `defineProjection`.
-2. Keep run workflow vocabulary in the app module, not a substrate package.
+1. Register product-owned lifecycle state with `defineProjection`.
+2. Keep session/workflow vocabulary in the app module, not a substrate package.
 3. Use attached streams for live turn frames.
-4. Commit terminal run facts to the ledger.
-5. Read current run state through `MaterializedProjections`.
+4. Commit terminal runtime run facts to the ledger.
+5. Read current product state through `MaterializedProjections`.
 6. Add workspace state as projection modules: `workspace.file`,
    `workspace.git`, `workspace.port`, `workspace.artifact`, and
    `workspace.url`.
