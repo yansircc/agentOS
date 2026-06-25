@@ -14,6 +14,7 @@ import { RUNTIME_EVENT_KIND } from "@agent-os/core/runtime-protocol";
 import {
   createLocalAgentRuntime,
   createLocalWorkspaceEnv,
+  LocalAgentRuntimeResolveError,
   lowerLocalAgentRuntime,
 } from "@agent-os/runtime/local";
 import {
@@ -21,7 +22,10 @@ import {
   WORKSPACE_OP_KIND,
   WORKSPACE_OP_PROJECTION_KIND,
 } from "../../src/workspace-op-carrier";
-import { makeOpenAiCompatibleLlmTransportLayer } from "../../src/llm-effect-ai/openai-compatible";
+import {
+  makeOpenAiCompatibleLlmTransportLayer,
+  preflightOpenAiCompatibleProviderMaterial,
+} from "../../src/llm-effect-ai/openai-compatible";
 
 const withTempWorkspace = async <A>(
   run: (root: string, base: string) => Promise<A>,
@@ -253,6 +257,7 @@ describe("createLocalWorkspaceEnv", () => {
           transport: makeOpenAiCompatibleLlmTransportLayer().pipe(
             Layer.provide(httpClientLive(client)),
           ),
+          preflight: preflightOpenAiCompatibleProviderMaterial,
         },
       });
 
@@ -267,6 +272,65 @@ describe("createLocalWorkspaceEnv", () => {
       });
       expect(runtime.diagnostics()).toEqual([]);
       expect(runtime.inspect().resolve.status).toBe("available");
+    });
+  });
+
+  it("rejects missing local OpenAI-compatible provider material before provider execution", async () => {
+    await withTempWorkspace(async (root) => {
+      let providerCalls = 0;
+      const client = fakeHttpClient(() => {
+        providerCalls += 1;
+        return Effect.succeed(httpResponse(200, {}));
+      });
+
+      let thrown: unknown;
+      try {
+        await createLocalAgentRuntime({
+          identity: "local-openai-compatible-missing-material",
+          cwd: root,
+          llm: {
+            kind: "transport",
+            route: {
+              kind: "openai-chat-compatible",
+              endpointRef: "openai",
+              credentialRef: "openai-key",
+              modelId: "gpt-test",
+            },
+            refResolver: {
+              material: (ref) => (ref.kind === "credential" ? "sk-secret" : null),
+            },
+            transport: makeOpenAiCompatibleLlmTransportLayer().pipe(
+              Layer.provide(httpClientLive(client)),
+            ),
+            preflight: preflightOpenAiCompatibleProviderMaterial,
+          },
+        });
+      } catch (cause) {
+        thrown = cause;
+      }
+
+      expect(thrown).toBeInstanceOf(LocalAgentRuntimeResolveError);
+      const diagnostics = (thrown as LocalAgentRuntimeResolveError).diagnostics;
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          pass: "provider_material",
+          reason: "OpenAI-compatible provider material preflight failed",
+        }),
+      ]);
+      const detail = JSON.parse(diagnostics[0]?.detail ?? "{}");
+      expect(detail).toMatchObject({
+        kind: "provider_material_preflight",
+        provider: "openai-compatible",
+        routeKind: "openai-chat-compatible",
+        routeStatus: "present",
+        materials: expect.arrayContaining([
+          { kind: "endpoint", ref: "openai", status: "missing" },
+          { kind: "credential", ref: "openai-key", status: "present" },
+          { kind: "model", ref: "modelId", status: "present" },
+        ]),
+      });
+      expect(JSON.stringify(diagnostics)).not.toContain("sk-secret");
+      expect(providerCalls).toBe(0);
     });
   });
 

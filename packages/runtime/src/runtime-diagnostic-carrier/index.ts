@@ -5,8 +5,13 @@ export {
   RUNTIME_DIAGNOSTIC_KIND,
   RUNTIME_DIAGNOSTIC_EVENTS,
   RUNTIME_DIAGNOSTIC_RESERVED_KINDS,
+  ProviderMaterialPreflightDetailSchema,
+  providerMaterialPreflightDetailJson,
   runtimeDiagnosticBoundaryContract,
   runtimeDiagnosticSettlementContract,
   runtimeDiagnosticBoundaryPackage,
+  type ProviderMaterialPreflightDetail,
+  type ProviderMaterialPreflightStatus,
   type PreflightDiagnosticSink,
+  type RuntimePreflightPass,
 } from "./definition";

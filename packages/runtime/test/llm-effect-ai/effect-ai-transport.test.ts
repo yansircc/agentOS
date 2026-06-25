@@ -42,7 +42,9 @@ import {
 import {
   makeOpenAiCompatibleLlmTransportLayer,
   OpenAiCompatibleLlmTransportLive,
+  preflightOpenAiCompatibleProviderMaterial,
 } from "../../src/llm-effect-ai/openai-compatible";
+import { ProviderMaterialPreflightDetailSchema } from "../../src/runtime-diagnostic-carrier";
 
 const usage = (spec: {
   readonly inputTokens: number | undefined;
@@ -280,6 +282,40 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       });
     }),
   );
+
+  it("preflights OpenAI-compatible provider material without exposing secret values", () => {
+    const diagnostics = preflightOpenAiCompatibleProviderMaterial({
+      route: openAiRoute(),
+      refResolver: {
+        material: (ref) => (ref.kind === "credential" ? "sk-secret" : null),
+      },
+      routeBindingRef: "default",
+      modelMaterial: { ref: "openai-model", value: "gpt-test" },
+    });
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "provider_material",
+        reason: "OpenAI-compatible provider material preflight failed",
+      }),
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("sk-secret");
+    const detail = Schema.decodeUnknownSync(ProviderMaterialPreflightDetailSchema)(
+      JSON.parse(diagnostics[0]?.detail ?? "{}"),
+    );
+    expect(detail).toMatchObject({
+      kind: "provider_material_preflight",
+      provider: "openai-compatible",
+      routeKind: "openai-chat-compatible",
+      routeBindingRef: "default",
+      routeStatus: "present",
+      materials: expect.arrayContaining([
+        { kind: "endpoint", ref: "openai", status: "missing" },
+        { kind: "credential", ref: "openai-key", status: "present" },
+        { kind: "model", ref: "openai-model", status: "present" },
+      ]),
+    });
+  });
 
   it.effect("maps openai-chat-compatible provider HTTP failures into provider taxonomy", () =>
     Effect.gen(function* () {

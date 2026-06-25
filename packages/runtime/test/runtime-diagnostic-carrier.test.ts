@@ -4,7 +4,10 @@ import {
   RUNTIME_DIAGNOSTIC_KIND,
   RUNTIME_DIAGNOSTIC_RESERVED_KINDS,
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
+  ProviderMaterialPreflightDetailSchema,
+  providerMaterialPreflightDetailJson,
 } from "../src/runtime-diagnostic-carrier";
+import { Schema } from "effect";
 
 describe("runtime diagnostic carrier", () => {
   it("defines all 4 diagnostic event types correctly", () => {
@@ -28,5 +31,29 @@ describe("runtime diagnostic carrier", () => {
 
   it("keeps handler_missing reserved until a required-handler contract exists", () => {
     expect(RUNTIME_DIAGNOSTIC_RESERVED_KINDS).toEqual([RUNTIME_DIAGNOSTIC_KIND.HANDLER_MISSING]);
+  });
+
+  it("owns provider material preflight detail schema", () => {
+    const detail = Schema.decodeUnknownSync(ProviderMaterialPreflightDetailSchema)(
+      JSON.parse(
+        providerMaterialPreflightDetailJson({
+          kind: "provider_material_preflight",
+          provider: "openai-compatible",
+          routeKind: "openai-chat-compatible",
+          routeBindingRef: "default",
+          routeStatus: "present",
+          materials: [
+            { kind: "endpoint", ref: "openai", status: "missing" },
+            { kind: "credential", ref: "openai-key", status: "present" },
+            { kind: "model", ref: "openai-model", status: "present" },
+          ],
+        }),
+      ),
+    );
+    expect(detail.materials.map((row) => `${row.kind}:${row.ref}:${row.status}`)).toEqual([
+      "endpoint:openai:missing",
+      "credential:openai-key:present",
+      "model:openai-model:present",
+    ]);
   });
 });

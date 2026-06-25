@@ -1,1 +1,7 @@
-export { makeOpenAiCompatibleLlmTransportLayer, OpenAiCompatibleLlmTransportLive } from "./index";
+export {
+  makeOpenAiCompatibleLlmTransportLayer,
+  OpenAiCompatibleLlmTransportLive,
+  preflightOpenAiCompatibleProviderMaterial,
+  type OpenAiCompatibleProviderMaterialPreflightInput,
+  type ProviderMaterialPreflightDiagnostic,
+} from "./index";

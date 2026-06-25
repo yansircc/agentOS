@@ -5,6 +5,63 @@ export const RUNTIME_DIAGNOSTIC_EVENT_PREFIX = "runtime_diagnostic.";
 export const RUNTIME_DIAGNOSTIC_FACT_OWNER = "@agent-os/runtime-diagnostic";
 
 const NonEmptyString = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
+const PREFLIGHT_PASSES = [
+  "name_unique",
+  "host_fact",
+  "peer_dag",
+  "config",
+  "secret",
+  "provider_material",
+  "self_diagnostic",
+  "global_unique",
+  "install",
+  "diagnostic_sink",
+] as const;
+
+export type RuntimePreflightPass = (typeof PREFLIGHT_PASSES)[number];
+
+export type ProviderMaterialPreflightStatus =
+  | "present"
+  | "missing"
+  | "invalid"
+  | "resolver_threw"
+  | "unbound";
+
+export interface ProviderMaterialPreflightDetail {
+  readonly kind: "provider_material_preflight";
+  readonly provider: string;
+  readonly routeKind?: string;
+  readonly routeBindingRef?: string;
+  readonly routeStatus: "present" | "invalid";
+  readonly materials: ReadonlyArray<{
+    readonly kind: "endpoint" | "credential" | "model";
+    readonly ref: string;
+    readonly status: ProviderMaterialPreflightStatus;
+  }>;
+}
+
+export const ProviderMaterialPreflightDetailSchema = Schema.Struct({
+  kind: Schema.Literal("provider_material_preflight"),
+  provider: NonEmptyString,
+  routeKind: Schema.optional(NonEmptyString),
+  routeBindingRef: Schema.optional(NonEmptyString),
+  routeStatus: Schema.Literals(["present", "invalid"]),
+  materials: Schema.Array(
+    Schema.Struct({
+      kind: Schema.Literals(["endpoint", "credential", "model"]),
+      ref: NonEmptyString,
+      status: Schema.Literals(["present", "missing", "invalid", "resolver_threw", "unbound"]),
+    }),
+  ),
+});
+
+const decodeProviderMaterialPreflightDetail = Schema.decodeUnknownSync(
+  ProviderMaterialPreflightDetailSchema,
+);
+
+export const providerMaterialPreflightDetailJson = (
+  detail: ProviderMaterialPreflightDetail,
+): string => JSON.stringify(decodeProviderMaterialPreflightDetail(detail));
 
 export const runtimeDiagnosticCarrier = defineCarrier({
   ownerId: RUNTIME_DIAGNOSTIC_FACT_OWNER,
@@ -49,17 +106,7 @@ export const runtimeDiagnosticCarrier = defineCarrier({
       kind: "preflight_failed",
       payload: Schema.Struct({
         capabilityId: Schema.optional(NonEmptyString),
-        pass: Schema.Literals([
-          "name_unique",
-          "host_fact",
-          "peer_dag",
-          "config",
-          "secret",
-          "self_diagnostic",
-          "global_unique",
-          "install",
-          "diagnostic_sink",
-        ]),
+        pass: Schema.Literals(PREFLIGHT_PASSES),
         reason: NonEmptyString,
         detail: Schema.optional(Schema.String),
       }),
@@ -82,16 +129,7 @@ export const runtimeDiagnosticBoundaryPackage = runtimeDiagnosticCarrier.boundar
 export interface PreflightDiagnosticSink {
   readonly commit: (diagnostic: {
     readonly capabilityId?: string;
-    readonly pass:
-      | "name_unique"
-      | "host_fact"
-      | "peer_dag"
-      | "config"
-      | "secret"
-      | "self_diagnostic"
-      | "global_unique"
-      | "install"
-      | "diagnostic_sink";
+    readonly pass: RuntimePreflightPass;
     readonly reason: string;
     readonly detail?: string;
   }) => Promise<void> | void;

@@ -63,9 +63,20 @@ export interface LocalAgentRuntimeTransportLlm {
   readonly transport: Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly refResolver?: RefResolver;
   readonly route: LlmRoute;
+  readonly preflight?: LocalAgentRuntimeLlmPreflight;
 }
 
 export type LocalAgentRuntimeLlm = LocalAgentRuntimeTestLlm | LocalAgentRuntimeTransportLlm;
+
+export interface LocalAgentRuntimeLlmPreflightInput {
+  readonly route: LlmRoute;
+  readonly refResolver?: RefResolver;
+  readonly routeBindingRef?: string;
+}
+
+export type LocalAgentRuntimeLlmPreflight = (
+  input: LocalAgentRuntimeLlmPreflightInput,
+) => ReadonlyArray<PreflightDiagnostic>;
 
 export interface CreateLocalAgentRuntimeOptions {
   readonly identity: string;
@@ -347,6 +358,7 @@ interface ResolvedLocalAgentRuntimeLlm {
   readonly transport: Layer.Layer<LlmTransport, never, RefResolverService>;
   readonly refResolver?: RefResolver;
   readonly defaultRoute: LlmRoute;
+  readonly preflight?: LocalAgentRuntimeLlmPreflight;
 }
 
 const localLlmTestFixture = (
@@ -373,9 +385,30 @@ const localLlmAssembly = (
       transport: options.transport,
       refResolver: options.refResolver,
       defaultRoute: options.route,
+      preflight: options.preflight,
     };
   }
   return localLlmTestFixture(options);
+};
+
+const routeRequiresProviderPreflight = (route: LlmRoute): boolean =>
+  route.kind === "openai-chat-compatible";
+
+const localLlmPreflightDiagnostics = (
+  llm: ResolvedLocalAgentRuntimeLlm,
+  route: LlmRoute,
+  routeBindingRef: string,
+): ReadonlyArray<PreflightDiagnostic> => {
+  if (llm.preflight !== undefined) {
+    return llm.preflight({ route, refResolver: llm.refResolver, routeBindingRef });
+  }
+  if (!routeRequiresProviderPreflight(route)) return [];
+  return [
+    {
+      pass: "provider_material",
+      reason: "OpenAI-compatible local LLM routes require provider material preflight",
+    },
+  ];
 };
 
 const mergeToolContext = (
@@ -476,10 +509,18 @@ const localAgentRuntimeFacade = (input: {
   readonly host: HostProfile;
   readonly capabilities: ReadonlyArray<CapabilityContract>;
   readonly resolved: ResolvedRuntime;
+  readonly llm: ResolvedLocalAgentRuntimeLlm;
   readonly defaultRoute: LlmRoute;
 }): LocalAgentRuntime => ({
-  submit: (submitInput) =>
-    Effect.runPromise(
+  submit: (submitInput) => {
+    const diagnostics = localLlmPreflightDiagnostics(
+      input.llm,
+      submitInput.route ?? input.defaultRoute,
+      "submit",
+    );
+    if (diagnostics.length > 0)
+      return Promise.reject(new LocalAgentRuntimeResolveError(diagnostics));
+    return Effect.runPromise(
       submitAgentEffect(
         internalSubmitSpec(
           submitSpecWithBindings(
@@ -495,7 +536,8 @@ const localAgentRuntimeFacade = (input: {
           { runtimeGraphStatus: input.resolved.installGraph.graphStatus },
         ),
       ).pipe(Effect.provide(input.resolved.layer)),
-    ),
+    );
+  },
   events: (opts = {}) => input.resolved.state.snapshot(input.truthIdentity, opts),
   diagnostics: () => input.resolved.state.telemetryDiagnostics(),
   inspect: () =>
@@ -526,6 +568,10 @@ export const lowerLocalAgentRuntime = async (
   const target = localAgentRuntimeTarget(options.target);
   const identity = inMemoryConversationTruthIdentity(options.identity);
   const llm = localLlmAssembly(options.llm);
+  const llmPreflightDiagnostics = localLlmPreflightDiagnostics(llm, llm.defaultRoute, "default");
+  if (llmPreflightDiagnostics.length > 0) {
+    throw new LocalAgentRuntimeResolveError(llmPreflightDiagnostics);
+  }
   const workspaceEnv = createLocalWorkspaceEnv({
     cwd: options.cwd,
     env: options.env,
@@ -550,6 +596,7 @@ export const lowerLocalAgentRuntime = async (
     host,
     capabilities,
     resolved: resolved.resolved,
+    llm,
     defaultRoute: llm.defaultRoute,
   });
   return {

@@ -264,6 +264,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "resolveRuntimeInstallGraph",
       "workspaceOperations",
       "OpenAiCompatibleLlmTransportLive",
+      "preflightOpenAiCompatibleProviderMaterial",
       "defineWorkspaceAgentMount",
       "makeCloudflareWorkspaceEnv",
       "getSandbox",

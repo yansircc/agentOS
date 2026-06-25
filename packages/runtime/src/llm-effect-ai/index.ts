@@ -52,6 +52,7 @@ import {
 import {
   RefResolutionFailed,
   RefResolverService,
+  type RefResolver,
   type ResolvedMaterialService,
 } from "@agent-os/core/ref-resolver";
 import { openLive } from "@agent-os/core/live-edge";
@@ -61,6 +62,10 @@ import {
   UpstreamFailure,
 } from "@agent-os/core/errors";
 import type { ToolDefinition } from "@agent-os/core/tools";
+import {
+  providerMaterialPreflightDetailJson,
+  type ProviderMaterialPreflightDetail,
+} from "../runtime-diagnostic-carrier";
 
 const ANTHROPIC_DEFAULT_VERSION = "2023-06-01";
 
@@ -83,6 +88,22 @@ export type EffectAiSupportedRoute = OpenAiChatCompatibleRoute | AnthropicMessag
 
 type EffectAiLanguageModelRoute = AnthropicMessagesRoute;
 
+export interface ProviderMaterialPreflightDiagnostic {
+  readonly pass: "provider_material";
+  readonly reason: string;
+  readonly detail: string;
+}
+
+export interface OpenAiCompatibleProviderMaterialPreflightInput {
+  readonly route: LlmRoute;
+  readonly refResolver?: RefResolver;
+  readonly routeBindingRef?: string;
+  readonly modelMaterial?: {
+    readonly ref: string;
+    readonly value: unknown;
+  };
+}
+
 const hasRouteMaterial = (
   route: LlmRoute,
 ): route is LlmRoute & {
@@ -99,6 +120,108 @@ const hasRouteMaterial = (
 const isEffectAiSupportedRoute = (route: LlmRoute): route is EffectAiSupportedRoute =>
   hasRouteMaterial(route) &&
   (route.kind === "openai-chat-compatible" || route.kind === "anthropic-messages");
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isHttpEndpoint = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+const routeKind = (route: LlmRoute): string | undefined =>
+  typeof route.kind === "string" && route.kind.length > 0 ? route.kind : undefined;
+
+const materialStatusForValue = (
+  value: unknown,
+  validate: (value: string) => boolean,
+): ProviderMaterialPreflightDetail["materials"][number]["status"] => {
+  if (value === null || value === undefined) return "missing";
+  if (!isNonEmptyString(value)) return "invalid";
+  return validate(value) ? "present" : "invalid";
+};
+
+const resolverMaterialStatus = (
+  refResolver: RefResolver | undefined,
+  ref: ReturnType<typeof endpointMaterialRef> | ReturnType<typeof credentialMaterialRef>,
+  validate: (value: string) => boolean,
+): ProviderMaterialPreflightDetail["materials"][number]["status"] => {
+  if (refResolver === undefined) return "missing";
+  try {
+    return materialStatusForValue(refResolver.material(ref), validate);
+  } catch {
+    return "resolver_threw";
+  }
+};
+
+export const preflightOpenAiCompatibleProviderMaterial = (
+  input: OpenAiCompatibleProviderMaterialPreflightInput,
+): ReadonlyArray<ProviderMaterialPreflightDiagnostic> => {
+  const route = input.route;
+  const routeIsOpenAi = route.kind === "openai-chat-compatible";
+  const endpointRef =
+    routeIsOpenAi && isNonEmptyString(route.endpointRef) ? route.endpointRef : undefined;
+  const credentialRef =
+    routeIsOpenAi && isNonEmptyString(route.credentialRef) ? route.credentialRef : undefined;
+  const routeModelStatus = routeIsOpenAi && isNonEmptyString(route.modelId) ? "present" : "invalid";
+  const modelStatus =
+    input.modelMaterial === undefined
+      ? routeModelStatus
+      : materialStatusForValue(input.modelMaterial.value, isNonEmptyString);
+  const materials: ProviderMaterialPreflightDetail["materials"] = [
+    {
+      kind: "endpoint",
+      ref: endpointRef ?? "endpointRef",
+      status:
+        endpointRef === undefined
+          ? "invalid"
+          : resolverMaterialStatus(
+              input.refResolver,
+              endpointMaterialRef(endpointRef),
+              isHttpEndpoint,
+            ),
+    },
+    {
+      kind: "credential",
+      ref: credentialRef ?? "credentialRef",
+      status:
+        credentialRef === undefined
+          ? "invalid"
+          : resolverMaterialStatus(
+              input.refResolver,
+              credentialMaterialRef(credentialRef),
+              isNonEmptyString,
+            ),
+    },
+    {
+      kind: "model",
+      ref: input.modelMaterial?.ref ?? "modelId",
+      status: modelStatus,
+    },
+  ];
+  const detail: ProviderMaterialPreflightDetail = {
+    kind: "provider_material_preflight",
+    provider: "openai-compatible",
+    ...(routeKind(route) === undefined ? {} : { routeKind: routeKind(route) }),
+    ...(input.routeBindingRef === undefined ? {} : { routeBindingRef: input.routeBindingRef }),
+    routeStatus: routeIsOpenAi && routeModelStatus === "present" ? "present" : "invalid",
+    materials,
+  };
+  if (detail.routeStatus === "present" && materials.every((row) => row.status === "present")) {
+    return [];
+  }
+  return [
+    {
+      pass: "provider_material",
+      reason: "OpenAI-compatible provider material preflight failed",
+      detail: providerMaterialPreflightDetailJson(detail),
+    },
+  ];
+};
 
 export interface EffectAiResolvedRoute<
   Route extends EffectAiSupportedRoute = EffectAiSupportedRoute,

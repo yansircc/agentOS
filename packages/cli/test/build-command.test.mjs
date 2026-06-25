@@ -548,6 +548,7 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(target, /readonly AGENTOS_CREDENTIAL_OPENROUTER_KEY\?: string;/);
     assert.match(target, /readonly AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL\?: string;/);
     assert.match(target, /materialEnvValue\(env, "AGENTOS_ENDPOINT_OPENROUTER"\)/);
+    assert.match(target, /preflightOpenAiCompatibleProviderMaterial/);
     assert.doesNotMatch(target, /readonly OPENROUTER_KEY\?: string;/);
     assert.doesNotMatch(target, /readonly OPENROUTER_ENDPOINT\?: string;/);
     assert.doesNotMatch(target, /readonly OPENROUTER_DEFAULT_TEXT_MODEL\?: string;/);
@@ -1047,13 +1048,17 @@ void test("agentos build emits skill artifact and load_skill executes determinis
         "const createAgentDurableObject = () => class {};",
       )
       .replace(
-        'import { OpenAiCompatibleLlmTransportLive } from "@agent-os/runtime/llm-effect-ai/openai-compatible";',
-        "const OpenAiCompatibleLlmTransportLive = {};",
+        /import \{[^}]*OpenAiCompatibleLlmTransportLive[^}]*preflightOpenAiCompatibleProviderMaterial[^}]*\} from "@agent-os\/runtime\/llm-effect-ai\/openai-compatible";/s,
+        "const OpenAiCompatibleLlmTransportLive = {}; const preflightOpenAiCompatibleProviderMaterial = () => [];",
       );
     smokeSource += `
 export const __agentosSkillSmoke = async () => {
   const agent = Object.create(AgentOS.prototype);
-  agent.targetEnv = { AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model" };
+  agent.targetEnv = {
+    AGENTOS_ENDPOINT_OPENROUTER: "https://openrouter.example/v1",
+    AGENTOS_CREDENTIAL_OPENROUTER_KEY: "smoke-secret",
+    AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model",
+  };
   agent.submitWithBindings = async (spec, bindings) => {
     const tools = bindings.tools ?? {};
     const loaded = await Effect.runPromise(

@@ -432,7 +432,10 @@ const renderWorkspaceStaticTarget = (
       ],
       modules.runtimeCapability,
     ),
-    renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
+    renderNamedImport(
+      ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
+      modules.openAiCompatibleTransport,
+    ),
     renderNamedImport(
       ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
       modules.workspaceAgentHost,
@@ -488,16 +491,29 @@ ${generatedLlmEnvFields}
 type GeneratedTargetFailure = {
   readonly ok: false;
   readonly message: string;
+  readonly diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
 };
 
 type GeneratedTargetResult<Value> =
   | { readonly ok: true; readonly value: Value }
   | GeneratedTargetFailure;
 
-const targetFailure = (message: string): GeneratedTargetFailure => ({ ok: false, message });
+const targetFailure = (
+  message: string,
+  diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>,
+): GeneratedTargetFailure => ({
+  ok: false,
+  message,
+  ...(diagnostics === undefined || diagnostics.length === 0 ? {} : { diagnostics }),
+});
 
-const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
-  Promise.reject(Error(failure.message));
+const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> => {
+  const error = Error(failure.message) as Error & {
+    diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
+  };
+  if (failure.diagnostics !== undefined) error.diagnostics = failure.diagnostics;
+  return Promise.reject(error);
+};
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
 const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
@@ -634,6 +650,26 @@ const materialValue = (
   return null;
 };
 
+const generatedProviderPreflightDiagnosticsFor = (
+  env: AgentOSTargetEnv,
+): ReturnType<typeof preflightOpenAiCompatibleProviderMaterial> => {
+  const modelValue = materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} });
+  return preflightOpenAiCompatibleProviderMaterial({
+    route: {
+      kind: "openai-chat-compatible",
+      endpointRef: ${jsString(normalized.llm.endpointRef)},
+      credentialRef: ${jsString(normalized.llm.credentialRef)},
+      modelId: typeof modelValue === "string" ? modelValue : "",
+    },
+    refResolver: { material: (ref) => materialValue(env, ref) },
+    routeBindingRef: "default",
+    modelMaterial: {
+      ref: ${jsString(normalized.llm.modelRef)},
+      value: modelValue,
+    },
+  });
+};
+
 const requiredStringMaterial = (
   kind: string,
   ref: string,
@@ -662,6 +698,13 @@ const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonN
 };
 
 const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {
+  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
+  if (preflightDiagnostics.length > 0) {
+    return targetFailure(
+      "OpenAI-compatible provider material preflight failed",
+      preflightDiagnostics,
+    );
+  }
   const capabilityGraph = generatedCapabilityInstallGraphFor(env);
   const route = generatedLlmRouteFor(env);
   if (!route.ok) return route;
@@ -843,7 +886,10 @@ const renderChatStaticTarget = (
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
-    renderNamedImport(["OpenAiCompatibleLlmTransportLive"], modules.openAiCompatibleTransport),
+    renderNamedImport(
+      ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
+      modules.openAiCompatibleTransport,
+    ),
     renderNamedImport(
       [
         "deterministicToolInvocation",
@@ -885,16 +931,29 @@ ${generatedLlmEnvFields}
 type GeneratedTargetFailure = {
   readonly ok: false;
   readonly message: string;
+  readonly diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
 };
 
 type GeneratedTargetResult<Value> =
   | { readonly ok: true; readonly value: Value }
   | GeneratedTargetFailure;
 
-const targetFailure = (message: string): GeneratedTargetFailure => ({ ok: false, message });
+const targetFailure = (
+  message: string,
+  diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>,
+): GeneratedTargetFailure => ({
+  ok: false,
+  message,
+  ...(diagnostics === undefined || diagnostics.length === 0 ? {} : { diagnostics }),
+});
 
-const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
-  Promise.reject(Error(failure.message));
+const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> => {
+  const error = Error(failure.message) as Error & {
+    diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
+  };
+  if (failure.diagnostics !== undefined) error.diagnostics = failure.diagnostics;
+  return Promise.reject(error);
+};
 
 const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
 ${renderSkillSupport(normalized.skills)}
@@ -918,6 +977,26 @@ const materialValue = (
     return materialEnvValue(env, ${jsString(llmEnvByKind.model)});
   }
   return null;
+};
+
+const generatedProviderPreflightDiagnosticsFor = (
+  env: AgentOSTargetEnv,
+): ReturnType<typeof preflightOpenAiCompatibleProviderMaterial> => {
+  const modelValue = materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} });
+  return preflightOpenAiCompatibleProviderMaterial({
+    route: {
+      kind: "openai-chat-compatible",
+      endpointRef: ${jsString(normalized.llm.endpointRef)},
+      credentialRef: ${jsString(normalized.llm.credentialRef)},
+      modelId: typeof modelValue === "string" ? modelValue : "",
+    },
+    refResolver: { material: (ref) => materialValue(env, ref) },
+    routeBindingRef: "default",
+    modelMaterial: {
+      ref: ${jsString(normalized.llm.modelRef)},
+      value: modelValue,
+    },
+  });
 };
 
 const requiredStringMaterial = (
@@ -948,6 +1027,13 @@ const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonN
 };
 
 const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {
+  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
+  if (preflightDiagnostics.length > 0) {
+    return targetFailure(
+      "OpenAI-compatible provider material preflight failed",
+      preflightDiagnostics,
+    );
+  }
   const route = generatedLlmRouteFor(env);
   if (!route.ok) return route;
   return {

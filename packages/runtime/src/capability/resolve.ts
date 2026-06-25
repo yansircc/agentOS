@@ -23,6 +23,7 @@ import {
   RUNTIME_DIAGNOSTIC_KIND,
   runtimeDiagnosticBoundaryContract,
   runtimeDiagnosticBoundaryPackage,
+  type RuntimePreflightPass,
   type PreflightDiagnosticSink,
 } from "../runtime-diagnostic-carrier";
 import {
@@ -61,16 +62,7 @@ import {
  */
 export interface PreflightDiagnostic {
   readonly capabilityId?: string;
-  readonly pass:
-    | "name_unique"
-    | "host_fact"
-    | "peer_dag"
-    | "config"
-    | "secret"
-    | "self_diagnostic"
-    | "global_unique"
-    | "install"
-    | "diagnostic_sink";
+  readonly pass: RuntimePreflightPass;
   readonly reason: string;
   readonly detail?: string;
 }
