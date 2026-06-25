@@ -1149,6 +1149,7 @@ export const __agentosSkillSmoke = async () => {
       },
     ]);
     assert.equal(JSON.stringify(output.loaded).includes("CHECK_MARKER_560"), false);
+    assert.equal(JSON.stringify(output.loaded).includes("SCRIPT_MARKER_560"), false);
     assert.deepEqual(output.readReference, {
       name: "echo",
       path: "references/checklist.md",

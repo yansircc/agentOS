@@ -328,6 +328,8 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
 
 export const writeGeneratedTargetConsumerApp = (dir) => {
   fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "agent", "skills", "review", "references"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "agent", "skills", "review", "scripts"), { recursive: true });
   writeJson(path.join(dir, "package.json"), {
     name: "agentos-generated-target-consumer-fixture",
     private: true,
@@ -341,6 +343,25 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   });
   fs.writeFileSync(path.join(dir, "Dockerfile"), 'FROM alpine:3.20\nCMD ["sleep", "infinity"]\n');
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the workspace.\n");
+  fs.writeFileSync(
+    path.join(dir, "agent", "skills", "review", "SKILL.md"),
+    [
+      "---",
+      "name: review",
+      "description: Review generated consumer output",
+      "---",
+      "REVIEW_BODY_MARKER_659",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(dir, "agent", "skills", "review", "references", "checklist.md"),
+    "REVIEW_REFERENCE_MARKER_659",
+  );
+  fs.writeFileSync(
+    path.join(dir, "agent", "skills", "review", "scripts", "audit.sh"),
+    "REVIEW_SCRIPT_MARKER_659",
+  );
   writeJson(path.join(dir, "agent", "agent.json"), {
     agentId: "generated-target-consumer",
     scope: {
@@ -399,6 +420,18 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     ],
     { capture: true },
   );
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(dir, ".agentos", "generated", "manifest.json"), "utf8"),
+  );
+  if (Object.hasOwn(manifest, "skills")) {
+    fail("generated target consumer leaked skills into manifest.json");
+  }
+  const manifestToolNames = Object.keys(manifest.tools ?? {});
+  for (const forbiddenToolName of ["load_skill", "read_skill_file", "audit", "audit.sh"]) {
+    if (manifestToolNames.includes(forbiddenToolName)) {
+      fail(`generated target consumer leaked generated/script tool ${forbiddenToolName}`);
+    }
+  }
   const generatedFiles = allFiles(path.join(dir, ".agentos", "generated")).filter((file) =>
     /\.(?:ts|json|jsonc)$/u.test(file),
   );
@@ -435,6 +468,37 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   }
   if (/workspace:\*|catalog:/u.test(generatedText)) {
     fail("generated target consumer leaked workspace/catalog protocol");
+  }
+  const requiredSkillFragments = [
+    'name: "load_skill"',
+    'name: "read_skill_file"',
+    "Review generated consumer output",
+    "REVIEW_BODY_MARKER_659",
+    "references/checklist.md",
+    "REVIEW_REFERENCE_MARKER_659",
+    "scripts/audit.sh",
+    "REVIEW_SCRIPT_MARKER_659",
+    "generatedLoadedSkill",
+    "generatedSkillFilePathCatalog",
+    "${skill.name}: ${skill.description}",
+  ];
+  for (const fragment of requiredSkillFragments) {
+    if (!generatedText.includes(fragment)) {
+      fail(`generated target consumer missing packaged skill fragment ${fragment}`);
+    }
+  }
+  for (const forbiddenFragment of [
+    "to load ${skill.path}",
+    "execFile",
+    "spawn(",
+    "chmod",
+    "SCRIPT_MARKER_CAPABILITY",
+  ]) {
+    if (generatedText.includes(forbiddenFragment)) {
+      fail(
+        `generated target consumer exposed executable or legacy skill fragment ${forbiddenFragment}`,
+      );
+    }
   }
 };
 
