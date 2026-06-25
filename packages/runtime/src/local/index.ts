@@ -19,10 +19,12 @@ import {
   resolveRuntime,
   workspaceOperations,
   type CapabilityContract,
+  type HostProfile,
   type PreflightDiagnostic,
   type ResolvedRuntime,
   type WorkspaceOperationsOptions,
 } from "../capability";
+import { projectInspectionSnapshot, type InspectionSnapshot } from "../inspection";
 import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
 import type { InMemoryLlmTransportOptions } from "../in-memory/llm";
 import { internalSubmitSpec } from "../internal-submit";
@@ -78,6 +80,7 @@ export interface LocalAgentRuntime {
   readonly submit: (input: LocalAgentSubmitInput) => Promise<SubmitResult>;
   readonly events: (opts?: EventQueryOptions) => ReadonlyArray<LedgerEvent>;
   readonly diagnostics: () => ReadonlyArray<TelemetryFanoutDiagnostic>;
+  readonly inspect: () => InspectionSnapshot;
 }
 
 export interface LoweredLocalAgentRuntime {
@@ -374,6 +377,8 @@ const localAgentRuntimeTarget = (target: LocalAgentRuntimeTarget): LocalAgentRun
 const localAgentRuntimeFacade = (input: {
   readonly identity: string;
   readonly truthIdentity: ReturnType<typeof inMemoryConversationTruthIdentity>;
+  readonly host: HostProfile;
+  readonly capabilities: ReadonlyArray<CapabilityContract>;
   readonly resolved: ResolvedRuntime;
 }): LocalAgentRuntime => ({
   submit: (submitInput) =>
@@ -395,6 +400,17 @@ const localAgentRuntimeFacade = (input: {
     ),
   events: (opts = {}) => input.resolved.state.snapshot(input.truthIdentity, opts),
   diagnostics: () => input.resolved.state.telemetryDiagnostics(),
+  inspect: () =>
+    projectInspectionSnapshot({
+      resolved: input.resolved,
+      host: input.host,
+      capabilities: input.capabilities,
+      runtime: {
+        status: "available",
+        events: input.resolved.state.snapshot(input.truthIdentity),
+        diagnostics: input.resolved.state.telemetryDiagnostics(),
+      },
+    }),
 });
 
 /**
@@ -413,20 +429,23 @@ export const lowerLocalAgentRuntime = async (
     env: options.env,
     inheritEnv: options.inheritEnv,
   });
-  const resolved = await resolveRuntime(
-    localAgentHost(target, workspaceEnv),
-    [localWorkspaceOperations(options.workspaceOperations), ...(options.capabilities ?? [])],
-    {
-      identity: options.identity,
-      llm: defaultLocalLlm(options.llm),
-    },
-  );
+  const host = localAgentHost(target, workspaceEnv);
+  const capabilities = [
+    localWorkspaceOperations(options.workspaceOperations),
+    ...(options.capabilities ?? []),
+  ];
+  const resolved = await resolveRuntime(host, capabilities, {
+    identity: options.identity,
+    llm: defaultLocalLlm(options.llm),
+  });
   if (!resolved.ok) {
     throw new LocalAgentRuntimeResolveError(resolved.diagnostics);
   }
   const runtime = localAgentRuntimeFacade({
     identity: options.identity,
     truthIdentity: identity,
+    host,
+    capabilities,
     resolved: resolved.resolved,
   });
   return {

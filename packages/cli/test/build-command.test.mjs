@@ -482,6 +482,7 @@ void test("agentos build emits node local agent app target", () => {
     const local = readFileSync(path.join(root, ".agentos/generated/local.ts"), "utf8");
     assert.match(local, /from "@agent-os\/runtime\/local";/);
     assert.match(local, /lowerLocalAgentRuntime/);
+    assert.match(local, /export type LocalAgentApp = LocalAgentRuntime/);
     assert.match(local, /export const createLocalAgentApp/);
     assert.match(local, /target: "node@1"/);
     assert.match(local, /workspaceOperations: generatedWorkspaceOperations/);

@@ -9,6 +9,7 @@ import {
   createLocalWorkspaceEnv,
   lowerLocalAgentRuntime,
 } from "@agent-os/runtime/local";
+import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND } from "../../src/workspace-op-carrier";
 
 const withTempWorkspace = async <A>(
   run: (root: string, base: string) => Promise<A>,
@@ -116,7 +117,45 @@ describe("createLocalWorkspaceEnv", () => {
         },
       });
 
-      expect(Object.keys(runtime).sort()).toEqual(["diagnostics", "events", "submit"]);
+      expect(Object.keys(runtime).sort()).toEqual(["diagnostics", "events", "inspect", "submit"]);
+      const initialInspection = runtime.inspect();
+      expect(initialInspection.compile).toEqual({
+        status: "available",
+        target: "local@1",
+        manifest: expect.objectContaining({ host: "local@1" }),
+      });
+      expect(initialInspection.resolve.status).toBe("available");
+      if (initialInspection.resolve.status !== "available") return;
+      expect(initialInspection.resolve.hostFacts).toContainEqual({
+        fact: "fs.workspace",
+        status: "provided",
+        requiredBy: [WORKSPACE_OP_FACT_OWNER],
+        optionalFor: [],
+      });
+      expect(initialInspection.resolve.graph.handlers).toEqual(
+        expect.arrayContaining([
+          {
+            kind: WORKSPACE_OP_KIND.REQUESTED,
+            capabilityId: WORKSPACE_OP_FACT_OWNER,
+          },
+        ]),
+      );
+      expect(initialInspection.resolve.bindings.tools).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: "write_file",
+            authority: expect.objectContaining({
+              authorityClass: "agentos.workspace.capability",
+            }),
+            receiptBackedIntentKinds: [WORKSPACE_OP_KIND.REQUESTED],
+          }),
+        ]),
+      );
+      expect(initialInspection.runtime).toEqual({
+        status: "available",
+        events: [],
+        diagnostics: [],
+      });
       const result = await runtime.submit({ intent: "finish locally" });
 
       expect(result).toMatchObject({
@@ -131,6 +170,16 @@ describe("createLocalWorkspaceEnv", () => {
           RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
           RUNTIME_EVENT_KIND.LLM_REQUESTED,
           RUNTIME_EVENT_KIND.LLM_RESPONSE,
+          RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
+        ]),
+      );
+      const inspectionAfterSubmit = runtime.inspect();
+      expect(inspectionAfterSubmit.runtime.status).toBe("available");
+      if (inspectionAfterSubmit.runtime.status !== "available") return;
+      expect(inspectionAfterSubmit.runtime.diagnostics).toEqual([]);
+      expect(inspectionAfterSubmit.runtime.events.map((event) => event.kind)).toEqual(
+        expect.arrayContaining([
+          RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
           RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
         ]),
       );
@@ -170,7 +219,22 @@ describe("createLocalWorkspaceEnv", () => {
       expect(localLowered.manifest.host).toBe("local@1");
       expect(lowered.target).toBe("node@1");
       expect(lowered.manifest.host).toBe("node@1");
-      expect(Object.keys(lowered.runtime).sort()).toEqual(["diagnostics", "events", "submit"]);
+      expect(Object.keys(lowered.runtime).sort()).toEqual([
+        "diagnostics",
+        "events",
+        "inspect",
+        "submit",
+      ]);
+      expect(localLowered.runtime.inspect().compile).toEqual({
+        status: "available",
+        target: "local@1",
+        manifest: expect.objectContaining({ host: "local@1" }),
+      });
+      expect(lowered.runtime.inspect().compile).toEqual({
+        status: "available",
+        target: "node@1",
+        manifest: expect.objectContaining({ host: "node@1" }),
+      });
 
       const result = await lowered.runtime.submit({ intent: "finish with node target" });
 
@@ -181,6 +245,12 @@ describe("createLocalWorkspaceEnv", () => {
         tokensUsed: 4,
       });
       expect(lowered.runtime.diagnostics()).toEqual([]);
+      const nodeInspection = lowered.runtime.inspect();
+      expect(nodeInspection.runtime.status).toBe("available");
+      if (nodeInspection.runtime.status !== "available") return;
+      expect(nodeInspection.runtime.events.map((event) => event.kind)).toEqual(
+        expect.arrayContaining([RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED]),
+      );
     });
   });
 
