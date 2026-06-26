@@ -12,6 +12,7 @@ import {
   mkdtempFixture,
   parseArgs,
   positionalArgs,
+  publicPackageName,
   publicSpecifier,
   publishScope,
   readJson,
@@ -25,7 +26,7 @@ import {
   writeJson,
 } from "./support.mjs";
 import { catalog, packageImportsEffect, publishedRecords } from "./package-records.mjs";
-import { allFiles } from "./staging-build.mjs";
+import { agentCatalogProvenance, allFiles } from "./staging-build.mjs";
 import {
   packageDepsFromTarballs,
   packInternal,
@@ -168,6 +169,52 @@ export const nodeModulesRoot = (consumerRoot, options = {}) => {
 
 export const packageTargetDir = (nodeModules, packageName) =>
   path.join(nodeModules, ...packageName.split("/"));
+
+const relativeFileSet = (root) =>
+  new Set(allFiles(root).map((file) => path.relative(root, file).split(path.sep).join("/")));
+
+export const assertInstalledAgentCatalog = (dir) => {
+  const { catalogRoot, sourcePackage } = agentCatalogProvenance();
+  const sourceRoot = path.join(repoRoot, catalogRoot);
+  const sourceFiles = relativeFileSet(sourceRoot);
+  const ownerPackage = publicPackageName(sourcePackage);
+  const nodeModules = path.join(dir, "node_modules");
+
+  for (const record of publishedRecords()) {
+    const packageName = publicPackageName(record.packageJson.name);
+    const installedCatalogRoot = path.join(packageTargetDir(nodeModules, packageName), catalogRoot);
+    if (packageName !== ownerPackage) {
+      if (fs.existsSync(installedCatalogRoot)) {
+        fail(`${packageName}: installed package must not contain ${catalogRoot}`);
+      }
+      continue;
+    }
+
+    if (!fs.existsSync(installedCatalogRoot)) {
+      fail(`${packageName}: installed package is missing ${catalogRoot}`);
+    }
+    const installedFiles = relativeFileSet(installedCatalogRoot);
+    for (const file of sourceFiles) {
+      const source = path.join(sourceRoot, file);
+      const installed = path.join(installedCatalogRoot, file);
+      if (!installedFiles.has(file)) {
+        fail(`${packageName}: installed catalog missing ${catalogRoot}/${file}`);
+      }
+      if (sha256File(source) !== sha256File(installed)) {
+        fail(`${packageName}: installed catalog drifted ${catalogRoot}/${file}`);
+      }
+    }
+    for (const file of installedFiles) {
+      if (!sourceFiles.has(file)) {
+        fail(`${packageName}: installed catalog has extra ${catalogRoot}/${file}`);
+      }
+    }
+    const provenance = readJson(path.join(installedCatalogRoot, "references", "provenance.json"));
+    if (provenance.package?.publicPackage !== ownerPackage) {
+      fail(`${packageName}: installed catalog provenance public package mismatch`);
+    }
+  }
+};
 
 const currentSourceIdentity = () => ({
   repoRoot,
@@ -1934,6 +1981,7 @@ export const testInternalConsumer = () => {
   });
   npmInstall(dir);
   assertPackageNotInstalled(dir, "@effect/ai-anthropic");
+  assertInstalledAgentCatalog(dir);
   assertPackedRootInternalSymbolsAbsent(dir);
   assertPackedPublicAssemblyEscapesAbsent(dir);
   assertPackedCloudflareLifecycleHelpersAbsent(dir);

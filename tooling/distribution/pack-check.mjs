@@ -11,6 +11,7 @@ import {
   publicPackageName,
   publishScope,
   readJson,
+  repoRoot,
   repoPath,
   run,
   sha256File,
@@ -22,7 +23,12 @@ import {
   writeJson,
 } from "./support.mjs";
 import { publishedRecords, sourcePublishGuards } from "./package-records.mjs";
-import { allFiles, buildInternalPackages } from "./staging-build.mjs";
+import {
+  agentCatalogProvenance,
+  allFiles,
+  buildInternalPackages,
+  recordOwnsAgentCatalog,
+} from "./staging-build.mjs";
 
 export const parseNpmJsonOutput = (text) => {
   const trimmed = text.trim();
@@ -195,6 +201,66 @@ export const assertStagedRuntimeClosure = (record, issues) => {
   }
 };
 
+export const relativeFileSet = (root) =>
+  new Set(allFiles(root).map((file) => path.relative(root, file).split(path.sep).join("/")));
+
+export const assertStagedAgentCatalog = (record, manifest, dryRunFiles, issues) => {
+  const { catalogRoot, sourcePackage } = agentCatalogProvenance();
+  const ownsCatalog = recordOwnsAgentCatalog(record);
+  const manifestFiles = Array.isArray(manifest.files) ? manifest.files : [];
+  const manifestIncludesCatalog = manifestFiles.includes("agent-catalog");
+  const stagedCatalogRoot = path.join(record.stageDir, catalogRoot);
+  const dryRunIncludesCatalog = dryRunFiles.some((file) => file.startsWith("agent-catalog/"));
+
+  if (!ownsCatalog) {
+    if (manifestIncludesCatalog) {
+      issues.push(`${record.packageJson.name}: package.json files must not include agent-catalog`);
+    }
+    if (fs.existsSync(stagedCatalogRoot)) {
+      issues.push(`${record.packageJson.name}: staged package must not contain agent-catalog`);
+    }
+    if (dryRunIncludesCatalog) {
+      issues.push(`${record.packageJson.name}: tarball dry-run must not include agent-catalog`);
+    }
+    return;
+  }
+
+  if (!manifestIncludesCatalog) {
+    issues.push(`${record.packageJson.name}: package.json files must include agent-catalog`);
+  }
+  if (!fs.existsSync(stagedCatalogRoot)) {
+    issues.push(`${record.packageJson.name}: staged package is missing ${catalogRoot}`);
+    return;
+  }
+  if (!dryRunIncludesCatalog) {
+    issues.push(`${record.packageJson.name}: tarball dry-run is missing agent-catalog`);
+  }
+
+  const sourceRoot = path.join(repoRoot, catalogRoot);
+  const sourceFiles = relativeFileSet(sourceRoot);
+  const stagedFiles = relativeFileSet(stagedCatalogRoot);
+  for (const file of sourceFiles) {
+    const source = path.join(sourceRoot, file);
+    const staged = path.join(stagedCatalogRoot, file);
+    if (!stagedFiles.has(file)) {
+      issues.push(`${record.packageJson.name}: staged catalog missing ${catalogRoot}/${file}`);
+      continue;
+    }
+    if (sha256File(source) !== sha256File(staged)) {
+      issues.push(`${record.packageJson.name}: staged catalog drifted ${catalogRoot}/${file}`);
+    }
+  }
+  for (const file of stagedFiles) {
+    if (!sourceFiles.has(file)) {
+      issues.push(`${record.packageJson.name}: staged catalog has extra ${catalogRoot}/${file}`);
+    }
+  }
+  const stagedProvenance = readJson(path.join(stagedCatalogRoot, "references", "provenance.json"));
+  if (stagedProvenance.package?.sourcePackage !== sourcePackage) {
+    issues.push(`${record.packageJson.name}: staged catalog provenance source package mismatch`);
+  }
+};
+
 export const assertStagingPackage = (record) => {
   const manifest = readJson(path.join(record.stageDir, "package.json"));
   const manifestText = JSON.stringify(manifest);
@@ -248,6 +314,7 @@ export const assertStagingPackage = (record) => {
       issues.push(`${record.packageJson.name}: tarball dry-run includes blocked file ${file}`);
     }
   }
+  assertStagedAgentCatalog(record, manifest, files, issues);
   assertStagedRuntimeClosure(record, issues);
   if (issues.length > 0) fail(`${record.packageJson.name}\n${issues.join("\n")}`);
 };

@@ -523,6 +523,51 @@ export const copyExportedAssets = (record) => {
   }
 };
 
+export const agentCatalogProvenancePath = () =>
+  path.join(repoRoot, "agent-catalog", "agentOS", "references", "provenance.json");
+
+export const agentCatalogProvenance = () => {
+  const file = agentCatalogProvenancePath();
+  if (!fs.existsSync(file)) {
+    fail(`${repoPath(file)} is missing; run agent-catalog:generate first`);
+  }
+  const provenance = JSON.parse(fs.readFileSync(file, "utf8"));
+  const catalogRoot = provenance.package?.catalogRoot;
+  const sourcePackage = provenance.package?.sourcePackage;
+  const publicPackage = provenance.package?.publicPackage;
+  if (catalogRoot !== "agent-catalog/agentOS") {
+    fail(`${repoPath(file)} must declare package.catalogRoot agent-catalog/agentOS`);
+  }
+  if (typeof sourcePackage !== "string" || sourcePackage.length === 0) {
+    fail(`${repoPath(file)} must declare package.sourcePackage`);
+  }
+  if (!publishedRecords().some((record) => record.packageJson.name === sourcePackage)) {
+    fail(`${repoPath(file)} declares non-published package.sourcePackage ${sourcePackage}`);
+  }
+  if (publicPackage !== publicPackageName(sourcePackage)) {
+    fail(`${repoPath(file)} package.publicPackage does not match publish scope`);
+  }
+  return { catalogRoot, sourcePackage };
+};
+
+export const recordOwnsAgentCatalog = (record) =>
+  record.packageJson.name === agentCatalogProvenance().sourcePackage;
+
+export const copyDirectory = (sourceRoot, targetRoot) => {
+  for (const source of allFiles(sourceRoot)) {
+    const rel = path.relative(sourceRoot, source);
+    const target = path.join(targetRoot, rel);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(source, target);
+  }
+};
+
+export const copyAgentCatalog = (record) => {
+  if (!recordOwnsAgentCatalog(record)) return;
+  const { catalogRoot } = agentCatalogProvenance();
+  copyDirectory(path.join(repoRoot, catalogRoot), path.join(record.stageDir, catalogRoot));
+};
+
 export const allFiles = (dir) => {
   if (!fs.existsSync(dir)) return [];
   const files = [];
@@ -598,6 +643,7 @@ export const generatedManifest = (record) => {
     entries.map(([exportPath, target]) => [exportPath, generatedExportEntry(target)]),
   );
   const exportedAssets = exportedJsonAssets(record).map((target) => target.slice("./".length));
+  const agentCatalogFiles = recordOwnsAgentCatalog(record) ? ["agent-catalog"] : [];
   const manifest = {
     name: publicPackageName(record.packageJson.name),
     version: packageVersion(),
@@ -612,6 +658,7 @@ export const generatedManifest = (record) => {
     exports: entries.length === 0 ? undefined : exportsValue,
     files: [
       "dist",
+      ...agentCatalogFiles,
       ...exportedAssets,
       ...(fs.existsSync(path.join(record.packageDir, "README.md")) ? ["README.md"] : []),
       ...(fs.existsSync(path.join(record.packageDir, "PUBLIC_API.md")) ? ["PUBLIC_API.md"] : []),
@@ -661,6 +708,7 @@ export const buildInternalPackages = () => {
     emitDeclarations(record);
     copyExportedAssets(record);
     copyPackageDocs(record);
+    copyAgentCatalog(record);
     writeJson(path.join(record.stageDir, "package.json"), generatedManifest(record));
   }
   assertStagedPackageDocsUsePublicScope();
