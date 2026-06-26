@@ -3,6 +3,7 @@ import { fail } from "./support.mjs";
 import { buildInternalPackages } from "./staging-build.mjs";
 import { checkDistribution, packInternal } from "./pack-check.mjs";
 import {
+  consumerCheck,
   consumerStatus,
   installConsumer,
   restoreConsumer,
@@ -40,6 +41,9 @@ switch (command) {
     break;
   case "consumer-status":
     consumerStatus(commandArgs);
+    break;
+  case "consumer-check":
+    consumerCheck(commandArgs);
     break;
   case "restore-consumer":
     restoreConsumer(commandArgs);

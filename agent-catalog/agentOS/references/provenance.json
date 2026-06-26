@@ -145,8 +145,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "a18f9824adc6fa5899c3e26d8fbbaafe5443397d814d7a165603fa4ff24b84c1",
-      "byteSize": 4135
+      "sha256": "b9714c4364c4dad34c656053f56a3913e275b0a14061b97f34e10734031d2b61",
+      "byteSize": 4170
     },
     {
       "path": "packages/cli/package.json",

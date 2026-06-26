@@ -241,6 +241,12 @@ const packageOverlayRows = (consumerRoot, marker) => {
   return Object.entries(marker.packages ?? {})
     .map(([packageName, record]) => {
       const target = packageTargetDir(nodeModules, packageName);
+      const targetExists = fs.existsSync(target);
+      const targetStatus = !targetExists
+        ? "missing"
+        : fs.lstatSync(target).isSymbolicLink()
+          ? "symlink"
+          : "installed";
       const tarball = typeof record.tarball === "string" ? record.tarball : "";
       const tarballExists = tarball.length > 0 && fs.existsSync(tarball);
       const expectedSha = typeof record.sha256 === "string" ? record.sha256 : undefined;
@@ -248,7 +254,8 @@ const packageOverlayRows = (consumerRoot, marker) => {
       return {
         packageName,
         target: record.target,
-        installed: fs.existsSync(target),
+        installed: targetStatus === "installed",
+        targetStatus,
         tarball,
         tarballStatus: tarballExists
           ? expectedSha === undefined || expectedSha === actualSha
@@ -294,11 +301,129 @@ const npmLatestFor = (packageNames, registry) => {
   return { status: "checked", packages };
 };
 
+const consumerGateIssue = (code, severity, message, detail = {}) => ({
+  code,
+  severity,
+  message,
+  ...detail,
+});
+
+const consumerOverlayGate = (status) => {
+  const hardFailures = [];
+  const signals = [];
+  if (status.localOverlay.status === "missing") {
+    hardFailures.push(
+      consumerGateIssue(
+        "local_overlay_missing",
+        "hard",
+        "local consumer overlay marker is missing",
+        { markerPath: status.markerPath },
+      ),
+    );
+  }
+  if (status.localOverlay.status === "partial") {
+    hardFailures.push(
+      consumerGateIssue("local_overlay_partial", "hard", "local consumer overlay is partial"),
+    );
+  }
+  if (
+    status.localOverlay.sourceStatus !== undefined &&
+    status.localOverlay.sourceStatus !== "current_source"
+  ) {
+    hardFailures.push(
+      consumerGateIssue(
+        "local_overlay_source_not_current",
+        "hard",
+        `local consumer overlay source is ${status.localOverlay.sourceStatus}`,
+        { sourceStatus: status.localOverlay.sourceStatus },
+      ),
+    );
+  }
+  if (
+    status.packageVersion.status !== undefined &&
+    status.packageVersion.status !== "release_version_match"
+  ) {
+    hardFailures.push(
+      consumerGateIssue(
+        "local_overlay_release_version_mismatch",
+        "hard",
+        `local consumer overlay version is ${status.packageVersion.status}`,
+        { packageVersionStatus: status.packageVersion.status },
+      ),
+    );
+  }
+  for (const pkg of status.localOverlay.packages ?? []) {
+    if (pkg.targetStatus === "missing") {
+      hardFailures.push(
+        consumerGateIssue(
+          "local_overlay_package_missing",
+          "hard",
+          `${pkg.packageName} is missing from the consumer overlay`,
+          { packageName: pkg.packageName },
+        ),
+      );
+    }
+    if (pkg.targetStatus === "symlink") {
+      hardFailures.push(
+        consumerGateIssue(
+          "local_overlay_package_symlink",
+          "hard",
+          `${pkg.packageName} is a symlink, not packed package content`,
+          { packageName: pkg.packageName },
+        ),
+      );
+    }
+    if (pkg.tarballStatus !== "verified") {
+      hardFailures.push(
+        consumerGateIssue(
+          "local_overlay_tarball_not_verified",
+          "hard",
+          `${pkg.packageName} tarball status is ${pkg.tarballStatus}`,
+          { packageName: pkg.packageName, tarballStatus: pkg.tarballStatus },
+        ),
+      );
+    }
+  }
+  if (status.npmLatest.status === "not_checked") {
+    signals.push(
+      consumerGateIssue(
+        "npm_latest_not_checked",
+        "signal",
+        "npm latest was not checked; pass --check-npm to include registry observation",
+      ),
+    );
+  }
+  if (status.npmLatest.status === "checked") {
+    for (const [packageName, row] of Object.entries(status.npmLatest.packages ?? {})) {
+      if (row.status !== "resolved") {
+        signals.push(
+          consumerGateIssue(
+            "npm_latest_unresolved",
+            "signal",
+            `${packageName} npm latest could not be resolved`,
+            { packageName, status: row.status },
+          ),
+        );
+      }
+    }
+  }
+  return {
+    status: hardFailures.length === 0 ? "pass" : "fail",
+    hardFailures,
+    signals,
+  };
+};
+
+const withConsumerGate = (status) => ({
+  ...status,
+  gate: consumerOverlayGate(status),
+});
+
 export const consumerStatusData = (consumerRoot, options = {}) => {
   const markerPath = localConsumerMarkerPath(consumerRoot);
   const currentSource = currentSourceIdentity();
   if (!fs.existsSync(markerPath)) {
-    return {
+    return withConsumerGate({
       schemaVersion: 1,
       consumerRoot,
       markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
@@ -307,12 +432,12 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
       packageVersion: { release: releaseVersion() },
       npmLatest:
         options.checkNpm === true ? npmLatestFor([], options.registry) : npmLatestNotChecked(),
-    };
+    });
   }
   const marker = readJson(markerPath);
   const packages = packageOverlayRows(consumerRoot, marker);
   const sourceStatus = overlaySourceStatus(marker, currentSource);
-  return {
+  return withConsumerGate({
     schemaVersion: 1,
     consumerRoot,
     markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
@@ -340,7 +465,7 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
             options.registry,
           )
         : npmLatestNotChecked(),
-  };
+  });
 };
 
 const printConsumerStatus = (status) => {
@@ -354,10 +479,17 @@ const printConsumerStatus = (status) => {
     `package version: overlay=${status.packageVersion.overlay ?? "none"} release=${status.packageVersion.release} status=${status.packageVersion.status ?? "none"}`,
   );
   console.log(`npm latest: ${status.npmLatest.status}`);
+  console.log(`gate: ${status.gate.status}`);
   for (const pkg of status.localOverlay.packages ?? []) {
     console.log(
-      `package ${pkg.packageName}: installed=${pkg.installed} tarball=${pkg.tarballStatus} sha256=${pkg.sha256}`,
+      `package ${pkg.packageName}: target=${pkg.targetStatus} tarball=${pkg.tarballStatus} sha256=${pkg.sha256}`,
     );
+  }
+  for (const failure of status.gate.hardFailures) {
+    console.log(`failure ${failure.code}: ${failure.message}`);
+  }
+  for (const signal of status.gate.signals) {
+    console.log(`signal ${signal.code}: ${signal.message}`);
   }
 };
 
@@ -373,6 +505,23 @@ export const consumerStatus = (rawArgs) => {
     return;
   }
   printConsumerStatus(status);
+};
+
+export const consumerCheck = (rawArgs) => {
+  const args = parseArgs(rawArgs);
+  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
+  const status = consumerStatusData(consumerRoot, {
+    checkNpm: boolArg(args, "check-npm"),
+    registry: args.registry,
+  });
+  if (boolArg(args, "json")) {
+    console.log(JSON.stringify(status, null, 2));
+  } else {
+    printConsumerStatus(status);
+  }
+  if (status.gate.status !== "pass") {
+    process.exitCode = 1;
+  }
 };
 
 export const installConsumer = (rawArgs) => {
@@ -395,7 +544,7 @@ export const installConsumer = (rawArgs) => {
   }
   writeJson(localConsumerMarkerPath(consumerRoot), {
     schemaVersion: 1,
-    generatedBy: "tooling/distribution/distribution.mjs install-consumer",
+    generatedBy: "agentos consumer install",
     installedAt: new Date().toISOString(),
     consumerRoot,
     source: currentSourceIdentity(),
@@ -404,13 +553,18 @@ export const installConsumer = (rawArgs) => {
     packages,
   });
   assertSnapshotUnchanged(snapshot, "install-consumer");
-  console.log(
-    `installed ${entries.length} local agentOS packages into ${path.relative(repoRoot, consumerRoot) || consumerRoot}`,
-  );
-  console.log(
-    `wrote ${path.relative(consumerRoot, localConsumerMarkerPath(consumerRoot)).split(path.sep).join("/")}`,
-  );
-  printConsumerStatus(consumerStatusData(consumerRoot));
+  const status = consumerStatusData(consumerRoot);
+  if (boolArg(args, "json")) {
+    console.log(JSON.stringify(status, null, 2));
+  } else {
+    console.log(
+      `installed ${entries.length} local agentOS packages into ${path.relative(repoRoot, consumerRoot) || consumerRoot}`,
+    );
+    console.log(
+      `wrote ${path.relative(consumerRoot, localConsumerMarkerPath(consumerRoot)).split(path.sep).join("/")}`,
+    );
+    printConsumerStatus(status);
+  }
 };
 
 export const restoreConsumer = (rawArgs) => {
@@ -435,7 +589,12 @@ export const restoreConsumer = (rawArgs) => {
     run("npm", ["install"], { cwd: consumerRoot });
   }
   assertSnapshotUnchanged(snapshot, "restore-consumer");
-  console.log(`restored ${packageNames.length} local agentOS package overlays`);
+  const result = { schemaVersion: 1, restoredPackages: packageNames };
+  if (boolArg(args, "json")) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`restored ${packageNames.length} local agentOS package overlays`);
+  }
 };
 
 export const writeConsumerApp = (dir, extraDeps = {}) => {
@@ -2031,6 +2190,9 @@ export const assertConsumerOverlayStatus = () => {
   installConsumer(["--skip-pack", dir]);
   const markerPath = localConsumerMarkerPath(dir);
   const marker = readJson(markerPath);
+  if (marker.generatedBy !== "agentos consumer install") {
+    fail(`install-consumer marker did not record public command identity: ${marker.generatedBy}`);
+  }
   if (marker.artifact?.kind !== "local-tarball-overlay") {
     fail("install-consumer marker did not record local-tarball-overlay artifact identity");
   }
@@ -2050,6 +2212,9 @@ export const assertConsumerOverlayStatus = () => {
   if (!status.localOverlay.packages.every((pkg) => pkg.tarballStatus === "verified")) {
     fail("consumer status did not verify every local tarball digest");
   }
+  if (status.gate.status !== "pass") {
+    fail(`consumer status gate did not pass for current overlay: ${status.gate.status}`);
+  }
   writeJson(markerPath, {
     ...marker,
     source: {
@@ -2062,6 +2227,14 @@ export const assertConsumerOverlayStatus = () => {
     fail(
       `consumer status did not expose stale source overlay: ${staleStatus.localOverlay.sourceStatus}`,
     );
+  }
+  if (
+    staleStatus.gate.status !== "fail" ||
+    !staleStatus.gate.hardFailures.some(
+      (failure) => failure.code === "local_overlay_source_not_current",
+    )
+  ) {
+    fail(`consumer status gate did not fail stale source: ${JSON.stringify(staleStatus.gate)}`);
   }
   fs.rmSync(path.join(dir, "node_modules"), { recursive: true, force: true });
   let missingNodeModulesFailed = false;

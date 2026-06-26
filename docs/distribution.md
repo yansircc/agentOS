@@ -78,34 +78,51 @@ publishing an npm version, install the generated package projection directly
 into the consumer `node_modules`:
 
 ```sh
-pnpm run install:consumer /path/to/consumer
+agentos consumer install /path/to/consumer
 ```
 
-`install:consumer` runs the same package projection and tarball pack path as a
-release, overlays the generated `@yansirplus/*` packages into the consumer
-`node_modules`, and writes `node_modules/.agentos-local.json` with the source
-revision, release package version, install-manifest digest, tarball hashes, and
-local artifact kind. The marker is proof of a local tarball overlay, not proof
-that the same version is published on npm. It must not edit the consumer
-`package.json` or lockfile. If `node_modules` is missing, the command runs the
-consumer package manager install in frozen/non-interactive mode before applying
-the overlay; pass `--no-install` to fail closed instead.
+`agentos consumer install` runs the same package projection and tarball pack
+path as a release, overlays the generated `@yansirplus/*` packages into the
+consumer `node_modules`, and writes `node_modules/.agentos-local.json` with the
+source revision, release package version, install-manifest digest, tarball
+hashes, and local artifact kind. The marker is proof of a local tarball overlay,
+not proof that the same version is published on npm. It must not edit the
+consumer `package.json` or lockfile. If `node_modules` is missing, the command
+runs the consumer package manager install in frozen/non-interactive mode before
+applying the overlay; pass `--no-install` to fail closed instead.
 
 Read the current consumer state with:
 
 ```sh
-pnpm run status:consumer /path/to/consumer
-pnpm run status:consumer -- /path/to/consumer --json
-pnpm run status:consumer -- /path/to/consumer --check-npm
+agentos consumer status /path/to/consumer
+agentos consumer status /path/to/consumer --json
+agentos consumer status /path/to/consumer --check-npm
 ```
 
 Without `--check-npm`, registry latest is reported as `not_checked`; this keeps
 normal local overlay work offline and makes the unknown registry state explicit.
+Use the gate form when a product repo needs a fail-closed overlay freshness
+check:
+
+```sh
+agentos consumer check /path/to/consumer --json
+```
+
+`agentos consumer status` and `agentos consumer check` read the same marker
+projection. `status` is observational and exits successfully when the projection
+can be built; `check` exits nonzero when the projection contains hard failures
+such as missing overlay, stale source, partial packages, symlinked package
+content, missing or digest-mismatched tarballs, or release-version mismatch.
 Restore the consumer to registry truth with:
 
 ```sh
-pnpm run restore:consumer /path/to/consumer
+agentos consumer restore /path/to/consumer
 ```
+
+The legacy root scripts `install:consumer`, `status:consumer`, `check:consumer`,
+and `restore:consumer` are thin aliases for the same `agentos consumer`
+commands. Use the `agentos` binary form for machine-readable `--json` output;
+package-manager script runners may print their own lifecycle text.
 
 Use the local registry channel only when the consumer must exercise package
 manager registry resolution, dist-tags, or npmrc behavior:

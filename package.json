@@ -28,9 +28,10 @@
     "publish:internal": "node tooling/distribution/distribution.mjs publish",
     "registry:local": "node tooling/distribution/distribution.mjs local-registry",
     "publish:local": "node tooling/distribution/distribution.mjs publish-local",
-    "install:consumer": "node tooling/distribution/distribution.mjs install-consumer",
-    "status:consumer": "node tooling/distribution/distribution.mjs consumer-status",
-    "restore:consumer": "node tooling/distribution/distribution.mjs restore-consumer",
+    "install:consumer": "node packages/cli/src/main.mjs consumer install",
+    "status:consumer": "node packages/cli/src/main.mjs consumer status",
+    "check:consumer": "node packages/cli/src/main.mjs consumer check",
+    "restore:consumer": "node packages/cli/src/main.mjs consumer restore",
     "check:structural": "pnpm run agentos check structural"
   },
   "devDependencies": {

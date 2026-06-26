@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { bundleModuleForNode } from "./lib/ts-module-loader.mjs";
 import {
@@ -45,6 +45,10 @@ Usage:
   agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos consumer install /path/to/consumer [--no-install] [--skip-pack] [--json]
+  agentos consumer status /path/to/consumer [--json] [--check-npm] [--registry <url>]
+  agentos consumer check /path/to/consumer [--json] [--check-npm] [--registry <url>]
+  agentos consumer restore /path/to/consumer [--no-install] [--json]
   agentos check all
   agentos check default
   agentos check structural
@@ -76,6 +80,7 @@ const fail = (message) => {
     message.startsWith("agentos serve:") ||
     message.startsWith("agentos dev:") ||
     message.startsWith("agentos eval:") ||
+    message.startsWith("agentos consumer:") ||
     message.startsWith("agentos check:") ||
     message.startsWith("agentos generate:")
   ) {
@@ -131,6 +136,38 @@ const runServe = async (args) => runBuildRunner("serve", args);
 const runDev = async (args) => runBuildRunner("dev", args);
 
 const runEval = async (args) => runBuildRunner("eval", args);
+
+const loadConsumerCommands = async () => {
+  const modulePath = path.join(repoRootFromMain(), "tooling/distribution/consumer.mjs");
+  if (!existsSync(modulePath)) {
+    throw new Error(
+      "agentos consumer: local consumer overlay commands require an agentOS source checkout with tooling/distribution",
+    );
+  }
+  return import(pathToFileURL(modulePath).href);
+};
+
+const runConsumer = async (args) => {
+  const [command, ...rest] = args;
+  const commandArgs = rest[0] === "--" ? rest.slice(1) : rest;
+  const commands = await loadConsumerCommands();
+  switch (command) {
+    case "install":
+      commands.installConsumer(commandArgs);
+      return;
+    case "status":
+      commands.consumerStatus(commandArgs);
+      return;
+    case "check":
+      commands.consumerCheck(commandArgs);
+      return;
+    case "restore":
+      commands.restoreConsumer(commandArgs);
+      return;
+    default:
+      throw new Error("agentos consumer: choose one of install, status, check, restore");
+  }
+};
 
 const runCheck = async (args) => {
   const [command, ...rest] = args;
@@ -274,6 +311,9 @@ const main = async () => {
     case "eval":
       await runEval(rest);
       return;
+    case "consumer":
+      await runConsumer(rest);
+      return;
     case "check":
       await runCheck(rest);
       return;
@@ -281,7 +321,9 @@ const main = async () => {
       await runGenerate(rest);
       return;
     default:
-      throw new Error("agentos: choose one of build, info, serve, dev, eval, check, generate");
+      throw new Error(
+        "agentos: choose one of build, info, serve, dev, eval, consumer, check, generate",
+      );
   }
 };
 

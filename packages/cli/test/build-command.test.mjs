@@ -201,6 +201,35 @@ void test("agentos --version derives from the release source fact", () => {
   assert.equal(result.stdout.trim(), rootPackage.agentOsRelease.version);
 });
 
+void test("agentos consumer status and check share one overlay gate projection", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-cli-"));
+  try {
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "agentos-consumer-cli", private: true, type: "module" }, null, 2),
+    );
+
+    const status = await runCli(["consumer", "status", root, "--json"]);
+    assert.equal(status.status, 0, status.stderr);
+    const statusProjection = JSON.parse(status.stdout);
+    assert.equal(statusProjection.localOverlay.status, "missing");
+    assert.equal(statusProjection.gate.status, "fail");
+    assert.deepEqual(
+      statusProjection.gate.hardFailures.map((failure) => failure.code),
+      ["local_overlay_missing"],
+    );
+
+    const check = await runCli(["consumer", "check", root, "--json"]);
+    assert.equal(check.status, 1);
+    assert.equal(check.stderr, "");
+    const checkProjection = JSON.parse(check.stdout);
+    assert.equal(checkProjection.localOverlay.status, statusProjection.localOverlay.status);
+    assert.deepEqual(checkProjection.gate, statusProjection.gate);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test("compileAgentTree keeps skills as authoring-only output", () => {
   const result = runTypeScript(
     [
