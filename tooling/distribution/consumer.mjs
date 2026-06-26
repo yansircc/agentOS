@@ -35,6 +35,8 @@ import {
   tarballsByPackage,
 } from "./pack-check.mjs";
 
+const packageProtocolStringPattern = /(["'])workspace:\*\1|(["'])catalog:[^"']*\2/u;
+
 export const consumerManifestFiles = (consumerRoot) =>
   ["package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"].map(
     (name) => path.join(consumerRoot, name),
@@ -937,7 +939,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   if (sourcePackageImportPattern.test(generatedText)) {
     fail(`generated target consumer leaked source package scope ${sourcePackageScope}`);
   }
-  if (/workspace:\*|catalog:/u.test(generatedText)) {
+  if (packageProtocolStringPattern.test(generatedText)) {
     fail("generated target consumer leaked workspace/catalog protocol");
   }
   for (const token of removedCloudflareLifecycleValueExports) {
@@ -1027,6 +1029,8 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
 
 export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "agent", "instructions"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "agent", "skills", "review"), { recursive: true });
   writeJson(path.join(dir, "package.json"), {
     name: "agentos-generated-local-target-consumer-fixture",
     private: true,
@@ -1041,6 +1045,40 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
     },
   });
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the local workspace.\n");
+  fs.writeFileSync(path.join(dir, "agent", "instructions", "tone.md"), "DYNAMIC_TONE_MARKER_108\n");
+  fs.writeFileSync(
+    path.join(dir, "agent", "skills", "review", "SKILL.md"),
+    [
+      "---",
+      "name: review",
+      "description: Review generated local dynamic output",
+      "---",
+      "REVIEW_LOCAL_DYNAMIC_MARKER_108",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(dir, "agent", "skills", "session.dynamic.ts"),
+    [
+      'export const declaration = { outputs: { skills: ["review"] } };',
+      "export default (context) =>",
+      '  context.event.sessionRef === "session:principal-a"',
+      '    ? { skills: { allow: ["review"] } }',
+      '    : { skills: { deny: ["review"] } };',
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(dir, "agent", "instructions", "session.dynamic.ts"),
+    [
+      'export const declaration = { outputs: { instructions: ["tone"] } };',
+      "export default (context) =>",
+      '  context.event.turnRef === "turn:principal-a:visible"',
+      '    ? { instructions: { allow: ["tone"] } }',
+      '    : { instructions: { deny: ["tone"] } };',
+      "",
+    ].join("\n"),
+  );
   writeChannelConsumerFixture(dir, "generated-local-target-consumer");
   writeScheduleConsumerFixture(dir);
   writeJson(path.join(dir, "agent", "agent.json"), {
@@ -1091,6 +1129,14 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
     ],
     { capture: true },
   );
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(dir, ".agentos", "generated", "manifest.json"), "utf8"),
+  );
+  for (const forbiddenManifestFact of ["dynamicResolvers", "instructionFragments", "skills"]) {
+    if (Object.hasOwn(manifest, forbiddenManifestFact)) {
+      fail(`generated local target consumer leaked ${forbiddenManifestFact} into manifest.json`);
+    }
+  }
   const generatedFiles = allFiles(path.join(dir, ".agentos", "generated")).filter((file) =>
     /\.(?:ts|json|jsonc)$/u.test(file),
   );
@@ -1110,6 +1156,27 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   for (const fragment of ["export const createLocalAgentApp", 'target: "node@1"']) {
     if (!generatedText.includes(fragment)) {
       fail(`generated local target consumer missing generated LocalAgentApp fragment ${fragment}`);
+    }
+  }
+  for (const fragment of [
+    "../../agent/skills/session.dynamic",
+    "../../agent/instructions/session.dynamic",
+    "runDynamicCapabilityResolvers",
+    "generatedDynamicCapabilityCatalog",
+    "generatedDynamicCapabilityResolvers",
+    "generatedDynamicSubmitBindingsFor",
+    "generatedFrameworkToolsFor(dynamicCapabilityProjection)",
+    "generatedSystemPrompt(input.system, dynamicCapabilityProjection)",
+    "dynamicCapabilityProjection",
+    "instructionFragments",
+    'name: "load_skill"',
+    'name: "read_skill_file"',
+    "Review generated local dynamic output",
+    "REVIEW_LOCAL_DYNAMIC_MARKER_108",
+    "DYNAMIC_TONE_MARKER_108",
+  ]) {
+    if (!generatedText.includes(fragment)) {
+      fail(`generated local target consumer missing dynamic capability fragment ${fragment}`);
     }
   }
   for (const fragment of [
@@ -1175,7 +1242,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   if (sourcePackageImportPattern.test(generatedText)) {
     fail(`generated local target consumer leaked source package scope ${sourcePackageScope}`);
   }
-  if (/workspace:\*|catalog:/u.test(generatedText)) {
+  if (packageProtocolStringPattern.test(generatedText)) {
     fail("generated local target consumer leaked workspace/catalog protocol");
   }
   fs.writeFileSync(
@@ -1203,41 +1270,61 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "  if (providerApp.runtime.diagnostics().length !== 0) {",
       "    throw new Error(`generated local provider app emitted diagnostics ${JSON.stringify(providerApp.runtime.diagnostics())}`);",
       "  }",
+      "  const llmRequests = [];",
+      "  const scriptedResponses = [{",
+      "    items: [{",
+      "      type: 'tool_call',",
+      "      call: {",
+      "        id: 'call-1',",
+      "        type: 'function',",
+      "        function: {",
+      "          name: 'write_file',",
+      "          arguments: JSON.stringify({",
+      "            path: 'generated-local.txt',",
+      "            content: 'generated local write',",
+      "          }),",
+      "        },",
+      "      },",
+      "    }],",
+      "    usage: { promptTokens: 3, completionTokens: 4, totalTokens: 7 },",
+      "  }, {",
+      "    items: [{ type: 'message', text: 'session second complete' }],",
+      "    usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },",
+      "  }, {",
+      "    items: [{",
+      "      type: 'tool_call',",
+      "      call: {",
+      "        id: 'call-hidden-load-skill',",
+      "        type: 'function',",
+      "        function: {",
+      "          name: 'load_skill',",
+      "          arguments: JSON.stringify({ name: 'review' }),",
+      "        },",
+      "      },",
+      "    }],",
+      "    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },",
+      "  }, {",
+      "    items: [{ type: 'message', text: 'workflow one complete' }],",
+      "    usage: { promptTokens: 4, completionTokens: 5, totalTokens: 9 },",
+      "  }, {",
+      "    items: [{ type: 'message', text: 'workflow two complete' }],",
+      "    usage: { promptTokens: 6, completionTokens: 7, totalTokens: 13 },",
+      "  }, {",
+      "    items: [{ type: 'message', text: 'scheduled session complete' }],",
+      "    usage: { promptTokens: 8, completionTokens: 9, totalTokens: 17 },",
+      "  }, {",
+      "    items: [{ type: 'message', text: 'scheduled workflow complete' }],",
+      "    usage: { promptTokens: 10, completionTokens: 11, totalTokens: 21 },",
+      "  }];",
       "  const app = await createLocalAgentApp({",
       "    cwd: root,",
       "    llm: {",
-      "      responses: [{",
-      "        items: [{",
-      "          type: 'tool_call',",
-      "          call: {",
-      "            id: 'call-1',",
-      "            type: 'function',",
-      "            function: {",
-      "              name: 'write_file',",
-      "              arguments: JSON.stringify({",
-      "                path: 'generated-local.txt',",
-      "                content: 'generated local write',",
-      "              }),",
-      "            },",
-      "          },",
-      "        }],",
-      "        usage: { promptTokens: 3, completionTokens: 4, totalTokens: 7 },",
-      "      }, {",
-      "        items: [{ type: 'message', text: 'session second complete' }],",
-      "        usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },",
-      "      }, {",
-      "        items: [{ type: 'message', text: 'workflow one complete' }],",
-      "        usage: { promptTokens: 4, completionTokens: 5, totalTokens: 9 },",
-      "      }, {",
-      "        items: [{ type: 'message', text: 'workflow two complete' }],",
-      "        usage: { promptTokens: 6, completionTokens: 7, totalTokens: 13 },",
-      "      }, {",
-      "        items: [{ type: 'message', text: 'scheduled session complete' }],",
-      "        usage: { promptTokens: 8, completionTokens: 9, totalTokens: 17 },",
-      "      }, {",
-      "        items: [{ type: 'message', text: 'scheduled workflow complete' }],",
-      "        usage: { promptTokens: 10, completionTokens: 11, totalTokens: 21 },",
-      "      }],",
+      "      handler: (request) => {",
+      "        llmRequests.push(request);",
+      "        const next = scriptedResponses.shift();",
+      "        if (next === undefined) throw new Error('generated local LLM fixture exhausted');",
+      "        return next;",
+      "      },",
       "    },",
       "  });",
       "  const initialInspection = app.runtime.inspect();",
@@ -1260,10 +1347,12 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "  if (writeFileBinding?.receiptBackedIntentKinds[0] !== WORKSPACE_OP_KIND.REQUESTED) {",
       "    throw new Error(`generated local inspect lost write_file authority ${JSON.stringify(writeFileBinding)}`);",
       "  }",
-      "  const sessionRef = 'session:generated-local';",
+      "  const toolNamesFor = (index) => (llmRequests[index]?.tools ?? []).map((tool) => tool.function.name).sort();",
+      "  const systemTextFor = (index) => llmRequests[index]?.messages?.[0]?.content ?? '';",
+      "  const sessionRef = 'session:principal-a';",
       "  const firstTurn = await app.sessions.submitTurn({",
       "    sessionRef,",
-      "    turnRef: 'turn:generated-local:1',",
+      "    turnRef: 'turn:principal-a:visible',",
       "    intent: 'write through generated local app',",
       "    toolPolicy: {",
       "      completeAfterToolsExecuted: {",
@@ -1279,18 +1368,53 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "  if (text !== 'generated local write') throw new Error(`unexpected generated local file ${text}`);",
       "  const secondTurn = await app.sessions.submitTurn({",
       "    sessionRef,",
-      "    turnRef: 'turn:generated-local:2',",
+      "    turnRef: 'turn:principal-a:hidden',",
       "    intent: 'continue generated local session',",
       "  });",
       "  if (!secondTurn.ok || secondTurn.final !== 'session second complete') {",
       "    throw new Error(`unexpected generated local second session turn ${JSON.stringify(secondTurn)}`);",
+      "  }",
+      "  const firstToolNames = toolNamesFor(0);",
+      "  if (!firstToolNames.includes('load_skill') || !firstToolNames.includes('read_skill_file') || !firstToolNames.includes('write_file')) {",
+      "    throw new Error(`principal-a visible turn lost dynamic tools ${JSON.stringify(firstToolNames)}`);",
+      "  }",
+      "  const firstSystem = systemTextFor(0);",
+      "  if (!firstSystem.includes('Review generated local dynamic output') || !firstSystem.includes('DYNAMIC_TONE_MARKER_108')) {",
+      "    throw new Error(`principal-a visible turn lost dynamic skill/instruction prompt ${JSON.stringify(firstSystem)}`);",
+      "  }",
+      "  const secondToolNames = toolNamesFor(1);",
+      "  if (!secondToolNames.includes('load_skill') || !secondToolNames.includes('read_skill_file') || !secondToolNames.includes('write_file')) {",
+      "    throw new Error(`principal-a hidden-context turn lost session-level dynamic tools ${JSON.stringify(secondToolNames)}`);",
+      "  }",
+      "  const secondSystem = systemTextFor(1);",
+      "  if (!secondSystem.includes('Review generated local dynamic output') || secondSystem.includes('DYNAMIC_TONE_MARKER_108')) {",
+      "    throw new Error(`turn-level dynamic instruction visibility did not change ${JSON.stringify(secondSystem)}`);",
+      "  }",
+      "  const hiddenTurn = await app.sessions.submitTurn({",
+      "    sessionRef: 'session:principal-b',",
+      "    turnRef: 'turn:principal-b:visible',",
+      "    intent: 'attempt hidden skill load',",
+      "  });",
+      "  if (hiddenTurn.ok || hiddenTurn.reason !== 'tool_error') {",
+      "    throw new Error(`hidden principal direct tool call was not rejected ${JSON.stringify(hiddenTurn)}`);",
+      "  }",
+      "  const hiddenToolNames = toolNamesFor(2);",
+      "  if (hiddenToolNames.includes('load_skill') || hiddenToolNames.includes('read_skill_file')) {",
+      "    throw new Error(`principal-b saw hidden dynamic tools ${JSON.stringify(hiddenToolNames)}`);",
+      "  }",
+      "  const hiddenSystem = systemTextFor(2);",
+      "  if (hiddenSystem.includes('Review generated local dynamic output') || hiddenSystem.includes('DYNAMIC_TONE_MARKER_108')) {",
+      "    throw new Error(`principal-b saw hidden dynamic skill/instruction prompt ${JSON.stringify(hiddenSystem)}`);",
+      "  }",
+      "  if (app.runtime.events().some((event) => event.kind === 'tool.executed' && event.payload?.toolCallId === 'call-hidden-load-skill')) {",
+      "    throw new Error('hidden load_skill call executed despite dynamic visibility denial');",
       "  }",
       "  const session = app.sessions.inspect(sessionRef);",
       "  if (session.status !== 'idle' || 'output' in session || 'outputKind' in session) {",
       "    throw new Error(`generated local session projection pretended to be terminal ${JSON.stringify(session)}`);",
       "  }",
       "  const [firstProjectedTurn, secondProjectedTurn] = session.turns;",
-      "  if (session.turns.length !== 2 || firstProjectedTurn?.turnRef !== 'turn:generated-local:1' || firstProjectedTurn.runtimeRunId !== firstTurn.runId || firstProjectedTurn.status.kind !== 'delivered' || secondProjectedTurn?.turnRef !== 'turn:generated-local:2' || secondProjectedTurn.runtimeRunId !== secondTurn.runId || secondProjectedTurn.status.kind !== 'delivered') {",
+      "  if (session.turns.length !== 2 || firstProjectedTurn?.turnRef !== 'turn:principal-a:visible' || firstProjectedTurn.runtimeRunId !== firstTurn.runId || firstProjectedTurn.status.kind !== 'delivered' || secondProjectedTurn?.turnRef !== 'turn:principal-a:hidden' || secondProjectedTurn.runtimeRunId !== secondTurn.runId || secondProjectedTurn.status.kind !== 'delivered') {",
       "    throw new Error(`generated local session did not keep ordered turn history ${JSON.stringify(session)}`);",
       "  }",
       "  const sessionList = app.sessions.list();",

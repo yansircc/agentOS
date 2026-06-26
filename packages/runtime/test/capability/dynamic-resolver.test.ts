@@ -139,6 +139,127 @@ describe("runDynamicCapabilityResolvers", () => {
     expect(JSON.stringify(result.projection.instructions)).not.toContain("prompt");
   });
 
+  it("explains source event, resolver ids, merged per-principal projection, and failure provenance", async () => {
+    const result = await runDynamicCapabilityResolvers({
+      event: {
+        name: DYNAMIC_CAPABILITY_EVENT.TURN_STARTED,
+        sourceEventId: 42,
+        sessionRef: "session:principal-a",
+        turnRef: "turn:principal-a:2",
+      },
+      catalog,
+      auth: { principal: "principal-a" },
+      projections: { entitlement: { write: false }, session: { instructionMode: "terse" } },
+      resolvers: [
+        resolver("principal-tools", DYNAMIC_CAPABILITY_SLOT.TOOLS, (context) =>
+          context.auth.principal === "principal-a"
+            ? { tools: { deny: ["write_file"] } }
+            : { tools: { deny: ["read_file", "write_file"] } },
+        ),
+        resolver("session-skills", DYNAMIC_CAPABILITY_SLOT.SKILLS, () => ({
+          skills: { allow: ["review"] },
+        })),
+        resolver("session-instructions", DYNAMIC_CAPABILITY_SLOT.INSTRUCTIONS, (context) =>
+          (context.projections.session as { readonly instructionMode?: string } | undefined)
+            ?.instructionMode === "terse"
+            ? { instructions: { allow: ["tone"] } }
+            : { instructions: { deny: ["tone"] } },
+        ),
+        resolver("invalid-skill-output", DYNAMIC_CAPABILITY_SLOT.SKILLS, () => ({
+          skills: { allow: ["review"], freeText: "not a compiled artifact" },
+        })),
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.projection.event).toEqual({
+      name: DYNAMIC_CAPABILITY_EVENT.TURN_STARTED,
+      sourceEventId: 42,
+      sessionRef: "session:principal-a",
+      turnRef: "turn:principal-a:2",
+    });
+    expect(result.projection.tools).toEqual([
+      {
+        id: "read_file",
+        visible: true,
+        decision: DYNAMIC_CAPABILITY_VISIBILITY.BASELINE,
+        provenance: [],
+      },
+      {
+        id: "write_file",
+        visible: false,
+        decision: DYNAMIC_CAPABILITY_VISIBILITY.DENIED,
+        provenance: [
+          {
+            resolverId: "principal-tools",
+            slot: "tools",
+            eventName: "turn.started",
+            status: "applied",
+          },
+        ],
+      },
+    ]);
+    expect(result.projection.skills).toEqual([
+      {
+        id: "review",
+        visible: true,
+        decision: DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED,
+        provenance: [
+          {
+            resolverId: "session-skills",
+            slot: "skills",
+            eventName: "turn.started",
+            status: "applied",
+          },
+        ],
+      },
+    ]);
+    expect(result.projection.instructions).toEqual([
+      {
+        id: "tone",
+        digest: "fnv1a32:tone",
+        visible: true,
+        decision: DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED,
+        provenance: [
+          {
+            resolverId: "session-instructions",
+            slot: "instructions",
+            eventName: "turn.started",
+            status: "applied",
+          },
+        ],
+      },
+    ]);
+    expect(result.projection.provenance).toEqual([
+      {
+        resolverId: "session-instructions",
+        slot: "instructions",
+        eventName: "turn.started",
+        status: "applied",
+      },
+      {
+        resolverId: "invalid-skill-output",
+        slot: "skills",
+        eventName: "turn.started",
+        status: DYNAMIC_CAPABILITY_RESOLVER_STATUS.FAILED,
+        reason: DYNAMIC_CAPABILITY_FAILURE_REASON.INVALID_OUTPUT,
+      },
+      {
+        resolverId: "session-skills",
+        slot: "skills",
+        eventName: "turn.started",
+        status: "applied",
+      },
+      {
+        resolverId: "principal-tools",
+        slot: "tools",
+        eventName: "turn.started",
+        status: "applied",
+      },
+    ]);
+  });
+
   it("fails closed when resolver output selects an unknown compiled id", async () => {
     const result = await runDynamicCapabilityResolvers({
       event: turnEvent,
