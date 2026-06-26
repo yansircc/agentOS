@@ -15,6 +15,7 @@ import {
   repoPath,
   rewritePublicScopePlaceholders,
   rewritePublicSpecifiers,
+  sha256File,
   sourcePackageScope,
   stagingRoot,
   writeJson,
@@ -526,28 +527,127 @@ export const copyExportedAssets = (record) => {
 export const agentCatalogProvenancePath = () =>
   path.join(repoRoot, "agent-catalog", "agentOS", "references", "provenance.json");
 
+const safeRepoRelativePath = (value) =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  !path.isAbsolute(value) &&
+  !value.split(/[\\/]/u).includes("..");
+
+const fileRecordIssues = ({ record, root, context }) => {
+  const issues = [];
+  if (record === null || typeof record !== "object") {
+    return [`${context}: file record must be an object`];
+  }
+  const file = record.path;
+  if (!safeRepoRelativePath(file)) {
+    return [`${context}: invalid file path ${String(file)}`];
+  }
+  const target = path.join(root, file);
+  if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+    return [`${context}: missing ${file}`];
+  }
+  const actualHash = sha256File(target);
+  const actualByteSize = fs.statSync(target).size;
+  if (record.sha256 !== actualHash) {
+    issues.push(`${context}: ${file} sha256 mismatch`);
+  }
+  if (record.byteSize !== actualByteSize) {
+    issues.push(`${context}: ${file} byteSize mismatch`);
+  }
+  return issues;
+};
+
+export const agentCatalogProjectionIssues = ({
+  provenance,
+  root = repoRoot,
+  releaseVersion = packageVersion(),
+  publishedSourcePackageNames = new Set(
+    publishedRecords().map((record) => record.packageJson.name),
+  ),
+  publicPackageNameFor = publicPackageName,
+  provenanceLabel = "agent-catalog/agentOS/references/provenance.json",
+} = {}) => {
+  const issues = [];
+  if (provenance === null || typeof provenance !== "object") {
+    return [`${provenanceLabel}: provenance must be an object`];
+  }
+  const catalogRoot = provenance.package?.catalogRoot;
+  const sourcePackage = provenance.package?.sourcePackage;
+  const publicPackage = provenance.package?.publicPackage;
+  if (catalogRoot !== "agent-catalog/agentOS") {
+    issues.push(`${provenanceLabel}: package.catalogRoot must be agent-catalog/agentOS`);
+  }
+  if (typeof sourcePackage !== "string" || sourcePackage.length === 0) {
+    issues.push(`${provenanceLabel}: package.sourcePackage is required`);
+  } else {
+    if (!publishedSourcePackageNames.has(sourcePackage)) {
+      issues.push(`${provenanceLabel}: package.sourcePackage is not a published package`);
+    }
+    if (publicPackage !== publicPackageNameFor(sourcePackage)) {
+      issues.push(`${provenanceLabel}: package.publicPackage does not match publish scope`);
+    }
+  }
+  if (provenance.package?.version !== releaseVersion) {
+    issues.push(`${provenanceLabel}: package.version does not match release version`);
+  }
+
+  const inputFiles = Array.isArray(provenance.inputFiles) ? provenance.inputFiles : [];
+  if (inputFiles.length === 0) {
+    issues.push(`${provenanceLabel}: inputFiles must not be empty`);
+  }
+  for (const record of inputFiles) {
+    issues.push(...fileRecordIssues({ record, root, context: `${provenanceLabel}: inputFiles` }));
+  }
+
+  const outputFiles = Array.isArray(provenance.outputFiles) ? provenance.outputFiles : [];
+  if (outputFiles.length === 0) {
+    issues.push(`${provenanceLabel}: outputFiles must not be empty`);
+  }
+  const expectedOutputs = new Set();
+  for (const record of outputFiles) {
+    if (record !== null && typeof record === "object" && typeof record.path === "string") {
+      expectedOutputs.add(record.path);
+      if (!record.path.startsWith("agent-catalog/agentOS/")) {
+        issues.push(`${provenanceLabel}: outputFiles path escapes catalog root ${record.path}`);
+        continue;
+      }
+    }
+    issues.push(...fileRecordIssues({ record, root, context: `${provenanceLabel}: outputFiles` }));
+  }
+
+  const catalogDir = path.join(root, "agent-catalog", "agentOS");
+  const provenancePath = "agent-catalog/agentOS/references/provenance.json";
+  const actualOutputs = allFiles(catalogDir)
+    .map((file) => path.relative(root, file).split(path.sep).join("/"))
+    .filter((file) => file !== provenancePath);
+  for (const file of actualOutputs) {
+    if (!expectedOutputs.has(file)) {
+      issues.push(`${provenanceLabel}: outputFiles missing actual catalog file ${file}`);
+    }
+  }
+  for (const file of expectedOutputs) {
+    if (file !== provenancePath && !actualOutputs.includes(file)) {
+      issues.push(`${provenanceLabel}: outputFiles references missing catalog file ${file}`);
+    }
+  }
+  return issues;
+};
+
 export const agentCatalogProvenance = () => {
   const file = agentCatalogProvenancePath();
   if (!fs.existsSync(file)) {
     fail(`${repoPath(file)} is missing; run agent-catalog:generate first`);
   }
   const provenance = JSON.parse(fs.readFileSync(file, "utf8"));
-  const catalogRoot = provenance.package?.catalogRoot;
-  const sourcePackage = provenance.package?.sourcePackage;
-  const publicPackage = provenance.package?.publicPackage;
-  if (catalogRoot !== "agent-catalog/agentOS") {
-    fail(`${repoPath(file)} must declare package.catalogRoot agent-catalog/agentOS`);
-  }
-  if (typeof sourcePackage !== "string" || sourcePackage.length === 0) {
-    fail(`${repoPath(file)} must declare package.sourcePackage`);
-  }
-  if (!publishedRecords().some((record) => record.packageJson.name === sourcePackage)) {
-    fail(`${repoPath(file)} declares non-published package.sourcePackage ${sourcePackage}`);
-  }
-  if (publicPackage !== publicPackageName(sourcePackage)) {
-    fail(`${repoPath(file)} package.publicPackage does not match publish scope`);
-  }
-  return { catalogRoot, sourcePackage };
+  const issues = agentCatalogProjectionIssues({
+    provenance,
+    provenanceLabel: repoPath(file),
+  });
+  if (issues.length > 0) fail(issues.join("\n"));
+  return {
+    catalogRoot: provenance.package.catalogRoot,
+    sourcePackage: provenance.package.sourcePackage,
+  };
 };
 
 export const recordOwnsAgentCatalog = (record) =>

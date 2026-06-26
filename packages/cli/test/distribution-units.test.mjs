@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -21,7 +22,10 @@ import {
   blueprintRecipeFindingsForSources,
   runtimePublicSurfaceFindings,
 } from "../src/check/algorithmic/convergence-smoke-checks.mjs";
-import { runtimeSourceFiles } from "../../../tooling/distribution/staging-build.mjs";
+import {
+  agentCatalogProjectionIssues,
+  runtimeSourceFiles,
+} from "../../../tooling/distribution/staging-build.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const record = {
@@ -38,6 +42,51 @@ const runtimeSurface = (entrypoints) => ({
 const runtimePackage = (subpaths) => ({
   exports: Object.fromEntries(subpaths.map((subpath) => [subpath, { default: "./src/index.ts" }])),
 });
+
+const sha256 = (text) => crypto.createHash("sha256").update(text).digest("hex");
+
+const writeFixtureFile = (root, file, text) => {
+  const target = path.join(root, file);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, text);
+  return { path: file, sha256: sha256(text), byteSize: Buffer.byteLength(text) };
+};
+
+const agentCatalogFixture = () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-agent-catalog-proof-"));
+  const input = writeFixtureFile(root, "docs/surface.json", '{"packages":[]}\n');
+  const skill = writeFixtureFile(root, "agent-catalog/agentOS/SKILL.md", "catalog skill\n");
+  const packageMap = writeFixtureFile(
+    root,
+    "agent-catalog/agentOS/references/package-map.md",
+    "package map\n",
+  );
+  writeFixtureFile(
+    root,
+    "agent-catalog/agentOS/references/provenance.json",
+    '{"generated":true}\n',
+  );
+  const provenance = {
+    package: {
+      catalogRoot: "agent-catalog/agentOS",
+      sourcePackage: "@agent-os/cli",
+      publicPackage: "@yansirplus/cli",
+      version: "0.5.17",
+    },
+    inputFiles: [input],
+    outputFiles: [skill, packageMap],
+  };
+  const options = {
+    provenance,
+    root,
+    releaseVersion: "0.5.17",
+    publishedSourcePackageNames: new Set(["@agent-os/cli"]),
+    publicPackageNameFor: (name) =>
+      name === "@agent-os/cli" ? "@yansirplus/cli" : name,
+    provenanceLabel: "fixture provenance",
+  };
+  return { root, options };
+};
 
 const runtimeApiMarkdown = (symbols) =>
   [
@@ -752,6 +801,40 @@ void test("distribution staging emits public export closure only", () => {
         "src/private.ts",
         "src/public.ts",
       ].sort((left, right) => left.localeCompare(right)),
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agent catalog provenance proves installed catalog source and output hashes", () => {
+  const { root, options } = agentCatalogFixture();
+  try {
+    assert.deepEqual(agentCatalogProjectionIssues(options), []);
+
+    const staleInput = { ...options, provenance: structuredClone(options.provenance) };
+    staleInput.provenance.inputFiles[0].sha256 = "0".repeat(64);
+    assert.match(
+      agentCatalogProjectionIssues(staleInput).join("\n"),
+      /inputFiles: docs\/surface\.json sha256 mismatch/,
+    );
+
+    const missingOutput = { ...options, provenance: structuredClone(options.provenance) };
+    missingOutput.provenance.outputFiles = missingOutput.provenance.outputFiles.slice(0, 1);
+    assert.match(
+      agentCatalogProjectionIssues(missingOutput).join("\n"),
+      /outputFiles missing actual catalog file agent-catalog\/agentOS\/references\/package-map\.md/,
+    );
+
+    const wrongVersion = { ...options, provenance: structuredClone(options.provenance) };
+    wrongVersion.provenance.package.version = "0.5.16";
+    assert.match(agentCatalogProjectionIssues(wrongVersion).join("\n"), /package\.version/);
+
+    const wrongOwner = { ...options, provenance: structuredClone(options.provenance) };
+    wrongOwner.provenance.package.sourcePackage = "@agent-os/runtime";
+    assert.match(
+      agentCatalogProjectionIssues(wrongOwner).join("\n"),
+      /package\.sourcePackage is not a published package/,
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
