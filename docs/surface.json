@@ -353,6 +353,27 @@
       ]
     },
     {
+      "slug": "evals",
+      "name": "@agent-os/evals",
+      "path": "packages/evals",
+      "status": "{releaseLine} public",
+      "role": "eval authoring DSL, symbolic eval configuration, deterministic assertion declarations, and runner-facing case/context types for generated app behavior checks",
+      "boundary": "DSL-only public authoring surface. It declares evals, datasets, symbolic provider needs, public-client context facades, and assertion intent; it must not assemble runtime graphs, construct model providers, serve generated apps, import runtime internals, or treat eval result artifacts as source facts.",
+      "need": "Generated app behavior eval authoring",
+      "apiSource": "docs/api/evals.md",
+      "readmeStatus": "{releaseLine} active development. The package is an authoring surface for eval definitions; execution, app serving, provider resolution, and artifact persistence remain owned by the CLI/runtime/client seams.",
+      "apiStatus": "{releaseLine} active development. Public exports are limited to eval authoring DSL, symbolic config, case/context types, and deterministic assertion declarations.",
+      "primary": true,
+      "published": true,
+      "entrypoints": [
+        {
+          "subpath": ".",
+          "audiences": ["default-direct"],
+          "capability": "generated app eval authoring DSL"
+        }
+      ]
+    },
+    {
       "slug": "cli",
       "name": "@agent-os/cli",
       "path": "packages/cli",

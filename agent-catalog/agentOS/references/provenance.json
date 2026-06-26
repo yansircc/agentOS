@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/surface.json",
-      "sha256": "d6595a9c22851153de7b5c0493605869419d1cafa2a1fb46495971120c28aadd",
-      "byteSize": 16452
+      "sha256": "0ff3ed82a2b7367482f895e898b0e74edd9830fe9983a39969235a8bea2282f2",
+      "byteSize": 17831
     },
     {
       "path": "package.json",
@@ -164,6 +164,11 @@
       "byteSize": 3570
     },
     {
+      "path": "packages/evals/package.json",
+      "sha256": "cc8f31bc0f84696a4221b25a92cfff1fec62015d4874474c9264be254a3d1f53",
+      "byteSize": 532
+    },
+    {
       "path": "packages/runtime/package.json",
       "sha256": "a536877b45b58641165ed0c55279e9e2c5812d1dd4fd92c0699744de2f9eaf9b",
       "byteSize": 3875
@@ -182,8 +187,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "0cfe027b85b7bea0896b971322b5a66fce3bc1bd0c7e8066c3f3145c765f2d61",
-      "byteSize": 13257
+      "sha256": "aeef78752080e244a05df44449b6f485154c3533d88667acbc53f67e11ecaa64",
+      "byteSize": 13792
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/core.md",

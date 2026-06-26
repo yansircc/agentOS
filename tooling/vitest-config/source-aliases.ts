@@ -58,6 +58,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/client/react", "packages/client/src/react/index.ts"],
   ["@agent-os/client/svelte", "packages/client/src/svelte/index.ts"],
   ["@agent-os/client/workspace-agent", "packages/client/src/workspace-agent.ts"],
+  ["@agent-os/evals", "packages/evals/src/index.ts"],
 ] as const satisfies readonly AgentOsSourceAliasSpec[];
 
 const repoRoot = new URL("../../", (import.meta as { readonly url: string }).url);

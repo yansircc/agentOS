@@ -2,6 +2,7 @@ packages:
   - packages/core
   - packages/runtime
   - packages/client
+  - packages/evals
   - packages/cli
   - tooling/docs-site
 

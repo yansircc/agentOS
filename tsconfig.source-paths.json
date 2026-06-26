@@ -48,6 +48,7 @@
       "@agent-os/client/react": ["./packages/client/src/react/index.ts"],
       "@agent-os/client/svelte": ["./packages/client/src/svelte/index.ts"],
       "@agent-os/client/workspace-agent": ["./packages/client/src/workspace-agent.ts"],
+      "@agent-os/evals": ["./packages/evals/src/index.ts"],
       "@agent-os/runtime/cloudflare": ["./packages/runtime/src/cloudflare/index.ts"],
       "@agent-os/runtime/cloudflare/do-rpc": ["./packages/runtime/src/cloudflare/do-rpc.ts"],
       "@agent-os/runtime/in-memory": ["./packages/runtime/src/in-memory/index.ts"],
