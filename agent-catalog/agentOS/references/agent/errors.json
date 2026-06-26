@@ -1,0 +1,497 @@
+{
+  "generatedBy": "packages/cli/src/generate/generate-agent-docs.mjs",
+  "source": ["packages/**/*.ts agent_os.* tags", "docs/agent/error-metadata.source.json"],
+  "errors": [
+    {
+      "tag": "agent_os.aead_sealed_codec_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/carriers-and-material.md",
+      "fix": "Seal live material through the owner AEAD codec, keep key material live, and reject malformed or mismatched sealed envelopes before opening.",
+      "sourceFiles": ["packages/core/src/internal/aead-sealed.ts"]
+    },
+    {
+      "tag": "agent_os.backend_protocol_parse_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/core.md",
+      "fix": "Decode backend protocol payloads at the protocol boundary and reject malformed external input before it reaches runtime logic.",
+      "sourceFiles": ["packages/core/src/backend-protocol/index.ts"]
+    },
+    {
+      "tag": "agent_os.boundary_commit_rejected",
+      "invariants": ["invariant.d10.namespace-integrity", "invariant.d10.truth-identity"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Commit through the owning BoundaryContract with matching event vocabulary, scopeRef, effectAuthorityRef, and claim identity.",
+      "sourceFiles": [
+        "packages/runtime/src/boundary-commit.ts",
+        "packages/runtime/test/cloudflare/do-rpc.test.ts",
+        "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.capability_rejected",
+      "invariants": ["invariant.d10.namespace-integrity"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Register the extension capability that owns the event prefix before committing or dispatching the fact.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts",
+        "packages/runtime/test/cloudflare/emit-event-contract.runtime.test.ts",
+        "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts",
+        "packages/runtime/test/cloudflare/facade-submit.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.cloudflare_ledger_schema_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Use the Cloudflare D10 ledger schema with structured scopeRef, effectAuthorityRef, factOwnerRef, and identity keys; old scope columns and malformed identity specs fail closed.",
+      "sourceFiles": ["packages/runtime/src/cloudflare/ledger/identity.ts"]
+    },
+    {
+      "tag": "agent_os.dispatch_binding_ref_malformed",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Use a valid binding MaterialRef for dispatch targets and reject malformed target refs at the backend boundary.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.dispatch_payload_parse_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/core.md",
+      "fix": "Decode dispatch payloads through the backend protocol parser before committing inbound or outbound dispatch facts.",
+      "sourceFiles": [
+        "packages/core/src/backend-protocol/index.ts",
+        "packages/core/test/backend-protocol/dispatch-payload.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.dispatch_scope_mismatch",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Dispatch only to the exact target scopeRef and effectAuthorityRef; do not reuse a scope-wide derived key as truth.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.dispatch_target_not_found",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Register or resolve the dispatch target binding before enqueueing delivery.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/src/in-memory/dispatch.ts",
+        "packages/runtime/src/node/index.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.driver_ledger_commit_shape_mismatch",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Keep driver append actions backed by ledger commits that return exactly the requested events; treat mismatched commit shape as a backend ledger failure.",
+      "sourceFiles": ["packages/runtime/src/driver.ts"]
+    },
+    {
+      "tag": "agent_os.durable_trigger_acquire_cancelled",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Keep trigger acquisition and cancellation in the durable trigger lifecycle contract so a claimed row always has a recoverable terminal path.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.durable_trigger_commit_returned_thenable",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Keep trigger commit callbacks synchronous inside the backend transaction and move asynchronous work after durable commit.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/trigger-facade.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.durable_trigger_drain_limit_exceeded",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Drain due work through the durable trigger scheduler with an explicit limit and retry the remaining due work later.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_aborted",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Propagate Effect AI aborts through LlmTransport and let submit own terminal runtime facts.",
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_json_encode_failed",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Encode structured provider payloads through the Effect AI transport adapter and fail before committing runtime evidence.",
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_missing_usage",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Keep provider usage accounting in the LlmTransport output schema and reject responses that cannot produce runtime usage evidence.",
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_prompt_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Build prompts at the provider adapter boundary and surface prompt construction failures before submit records terminal facts.",
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_provider_executed_tool_rejected",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Disable provider-executed tool paths for agentOS tools; tool execution must flow through runtime admission and ledger settlement.",
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_tool_handler_called",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Treat provider-side tool handler invocation as an adapter violation; runtime owns tool calls and settlements.",
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_unsupported_output_part",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Map provider output parts through the runtime output-item algebra and reject parts without a runtime representation.",
+      "sourceFiles": ["packages/runtime/src/llm-effect-ai/index.ts"]
+    },
+    {
+      "tag": "agent_os.effect_ai_unsupported_route",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Choose a route supported by the Effect AI transport adapter or add an explicit adapter branch for the provider.",
+      "sourceFiles": [
+        "packages/runtime/src/llm-effect-ai/index.ts",
+        "packages/runtime/src/structured-output.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.extension_capability_conflict",
+      "invariants": ["invariant.d10.namespace-integrity"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Declare one owner for each extension capability and event namespace; remove duplicate capability declarations.",
+      "sourceFiles": [
+        "packages/core/src/extensions.ts",
+        "packages/runtime/test/cloudflare/extension-declarations.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.invalid_resource_amount",
+      "invariants": ["invariant.algebra.type-or-boot-proof"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Reject non-positive or non-finite resource amounts before committing resource or quota facts.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.invalid_schedule_at",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Schedule durable work with a valid future timestamp and keep scheduling inside the durable process contract.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.invalid_trace_context",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Decode trace context at the runtime boundary and reject malformed trace metadata before provider or ledger projection consumes it.",
+      "sourceFiles": [
+        "packages/core/src/telemetry-protocol/index.ts",
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.json_stringify_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Encode final payloads before commit side effects consume them; reject unstringifiable payloads before projection application.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.llm_call_timed_out",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Propagate LLM call timeout through submit and commit a runtime-owned terminal abort fact.",
+      "sourceFiles": ["packages/runtime/src/submit-agent/llm-timeout.ts"]
+    },
+    {
+      "tag": "agent_os.llm_call_timeout",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Use the timeout marker only as abort metadata and let runtime terminal events expose the durable failure.",
+      "sourceFiles": ["packages/runtime/src/submit-agent/llm-timeout.ts"]
+    },
+    {
+      "tag": "agent_os.missing_submit_run_binding",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/core.md",
+      "fix": "Provide the framework-owned LLM route binding before lowering app-authored SubmitRunInput; adapters must not synthesize route defaults.",
+      "sourceFiles": ["packages/core/src/runtime-protocol/submit.ts"]
+    },
+    {
+      "tag": "agent_os.postgres_harness_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Start and clean up the runtime contract Postgres harness at the test boundary, mapping Docker, psql, and config failures into the harness error channel.",
+      "sourceFiles": ["packages/runtime/test/node/postgres-harness.ts"]
+    },
+    {
+      "tag": "agent_os.projection_application_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Keep projection reducers pure and make malformed facts explicit failures rather than alternate truth.",
+      "sourceFiles": ["packages/runtime/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.projection_definition_error",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Declare projection identity and source provenance at the owning spec before the projection engine derives any view.",
+      "sourceFiles": ["packages/core/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.projection_reducer_returned_thenable",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Move asynchronous work to the ledger writer or backend transaction hook; projection reducers must be synchronous.",
+      "sourceFiles": [
+        "packages/runtime/src/projection.ts",
+        "packages/runtime/test/projection.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.projection_registry_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Build a projection registry with unique projection kinds and valid projection definitions.",
+      "sourceFiles": ["packages/runtime/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.projection_run_failed",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Handle projection failures as fail-closed derivation failures instead of inventing fallback output.",
+      "sourceFiles": ["packages/core/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.projection_sink_failure",
+      "invariants": ["invariant.docs.agent-projection"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Keep sink read and write failures at the sink boundary; projection functions must stay pure source-to-view derivations.",
+      "sourceFiles": ["packages/core/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.projection_wait_timed_out",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Wait on the ledger-derived projection with a bounded Effect retry policy, or commit the missing ledger fact before reading the projection.",
+      "sourceFiles": [
+        "packages/runtime/src/projection.ts",
+        "packages/runtime/test/projection.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.provider_http_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/agent-schema.md",
+      "fix": "Handle provider transport failures at the LLM transport boundary and let submit record the runtime terminal fact.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/src/failure-classification.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.provider_output_decode_error",
+      "invariants": ["invariant.algebra.single-code-source"],
+      "docs": "docs/concepts/agent-schema.md",
+      "fix": "Decode provider output through the runtime output-item schema instead of product-side fallback parsing.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.ref_resolution_failed",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/carriers-and-material.md",
+      "fix": "Resolve symbolic material refs at the adapter boundary and fail closed when a required ref cannot be resolved.",
+      "sourceFiles": ["packages/core/src/ref-resolver.ts"]
+    },
+    {
+      "tag": "agent_os.resource_insufficient",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Grant or release resources through the resource ledger before attempting a reservation that would exceed available capacity.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts",
+        "packages/runtime/test/cloudflare/resources-in-memory-runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.resource_reservation_closed",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Do not consume or release a reservation after its terminal resource fact has already been committed.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.resource_reservation_not_found",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Commit or look up the resource reservation under the exact ledger identity before consuming or releasing it.",
+      "sourceFiles": ["packages/core/src/errors.ts"]
+    },
+    {
+      "tag": "agent_os.rpc_method_missing",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Invoke Durable Object methods through the supported agentOS RPC helper and keep generated client method names aligned with the Durable Object class.",
+      "sourceFiles": ["packages/runtime/src/cloudflare/do-rpc.ts"]
+    },
+    {
+      "tag": "agent_os.rpc_untyped_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Throw tagged domain errors at supported Durable Object RPC boundaries; untyped failures are serialized as RPC boundary errors without fabricated domain fields.",
+      "sourceFiles": [
+        "packages/runtime/src/cloudflare/do-rpc.ts",
+        "packages/runtime/test/cloudflare/do-rpc.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.runtime_ledger_transition_rejected",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Commit runtime events in an order that satisfies runtime transition laws; referenced runtime source events must already exist and match the expected kind and turn.",
+      "sourceFiles": ["packages/core/src/runtime-protocol/runtime-events.ts"]
+    },
+    {
+      "tag": "agent_os.runtime_storage_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Map backend storage failures into the runtime-owned storage error at the runtime service boundary; keep backend-specific storage errors inside backend adapters.",
+      "sourceFiles": [
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/src/ledger.ts",
+        "packages/runtime/test/cloudflare/admission/attempt-structured.runtime.test.ts",
+        "packages/runtime/test/cloudflare/materialized-projections.runtime.test.ts",
+        "packages/runtime/test/cloudflare/quota-contract.runtime.test.ts",
+        "packages/runtime/test/in-memory/runtime-tags.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.scope_missing",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Resolve the structured scopeRef before runtime or backend operations; do not fall back to an implicit scope.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/emit-event-contract.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.sql_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Keep SQL writes inside the backend-owned ledger commit primitive and return typed SqlError at the backend boundary.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/in-memory/runtime-tags.test.ts",
+        "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.stream_identity_error",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Stream only with an exact scopeRef and effectAuthorityRef identity and reject malformed stream identity input.",
+      "sourceFiles": ["packages/runtime/src/cloudflare/agent-do.ts"]
+    },
+    {
+      "tag": "agent_os.trigger_factory_error",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Keep durable trigger factory output synchronous, typed, and registered before scheduling or claiming trigger work.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/trigger-facade.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.unregistered_durable_trigger_kind",
+      "invariants": ["invariant.ledger.single-commit-source"],
+      "docs": "docs/concepts/durable-process-algebra.md",
+      "fix": "Register the durable trigger kind before scheduling, claiming, or dispatching due work.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/test/cloudflare/trigger-facade.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.unregistered_projection_kind",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/materialized-projections.md",
+      "fix": "Register the projection definition before reading, status-checking, or rebuilding that projection kind.",
+      "sourceFiles": ["packages/runtime/src/projection.ts"]
+    },
+    {
+      "tag": "agent_os.unsupported_scope_ref",
+      "invariants": ["invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Use a backend-supported scopeRef kind or add an explicit backend adapter branch for that scope kind.",
+      "sourceFiles": [
+        "packages/core/src/errors.ts",
+        "packages/runtime/src/cloudflare/agent-do.ts",
+        "packages/runtime/test/cloudflare/dispatch-contract.runtime.test.ts"
+      ]
+    },
+    {
+      "tag": "agent_os.witness_port_rejected",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/boundary-contract.md",
+      "fix": "Resolve provider witness state into a symbolic IndeterminateRef only; settle and commit it through the owning SettlementContract and BoundaryEvents path.",
+      "sourceFiles": ["packages/runtime/src/witness-port.ts"]
+    },
+    {
+      "tag": "agent_os.workspace_job_candidate_missing",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Treat a missing candidate as a workspace_job.failed terminal fact before finalization or verification can produce a deliverable.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
+    },
+    {
+      "tag": "agent_os.workspace_job_data_plane_failed",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Keep seed and terminal build/write/read failures inside the workspace job data-plane boundary; retryable witness gaps settle through workspace_job.reconcile_required while non-retryable finalization defects settle through workspace_job.failed.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
+    },
+    {
+      "tag": "agent_os.workspace_job_run_id_mismatch",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Reject terminal builder output whose run id does not match the requested workspace job before verifier checks can mark it deliverable.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
+    },
+    {
+      "tag": "agent_os.workspace_job_verifier_failed",
+      "invariants": ["invariant.workspace-job.verified-terminal"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Map verifier exceptions to workspace_job.reconcile_required; reserve verifier_rejected for successful product-domain verifier verdicts.",
+      "sourceFiles": ["packages/runtime/src/workspace-job.ts"]
+    }
+  ]
+}

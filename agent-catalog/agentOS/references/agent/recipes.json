@@ -1,0 +1,109 @@
+{
+  "generatedBy": "packages/cli/src/generate/generate-agent-docs.mjs",
+  "source": "docs/agent/recipes.source.json",
+  "recipes": [
+    {
+      "id": "recipe.natural-language-workspace-agent",
+      "title": "Build a natural-language workspace agent",
+      "intents": [
+        "compile an authored workspace agent into a static target",
+        "generate a typed client from agentos.config.jsonc"
+      ],
+      "tutorial": "docs/guides/build-natural-language-workspace-agent.md",
+      "primitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget"
+      ],
+      "commands": ["pnpm --filter @agent-os/cli test", "pnpm run check:distribution"],
+      "evidence": [
+        "packages/cli/test/build-command.test.mjs",
+        "packages/cli/src/check/algorithmic-checks.mjs"
+      ],
+      "next": ["recipe.tool-schema-authority", "recipe.projection-reader"]
+    },
+    {
+      "id": "recipe.hello-ledger-event",
+      "title": "Append and read a ledger event",
+      "intents": [
+        "Learn the D10 ledger truth identity",
+        "Emit one durable fact and read it through the backend protocol"
+      ],
+      "tutorial": "docs/tutorials/hello-ledger-event.md",
+      "noRouteReason": "tutorial-only ledger identity exercise; product workflows should route through a higher-level primitive",
+      "primitives": [
+        "primitive.kernel.LedgerEvent",
+        "primitive.kernel.ScopeRef",
+        "primitive.kernel.AuthorityRef",
+        "primitive.runtime.Ledger"
+      ],
+      "commands": ["pnpm --filter @agent-os/core test", "pnpm --filter @agent-os/core test"],
+      "evidence": [
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
+      ],
+      "next": ["recipe.projection-reader", "recipe.streaming-chatbot"]
+    },
+    {
+      "id": "recipe.projection-reader",
+      "title": "Build a materialized projection reader",
+      "intents": [
+        "Derive observable state from ledger facts",
+        "Keep projection state out of the source-of-truth role"
+      ],
+      "tutorial": "docs/tutorials/projection-reader.md",
+      "primitives": [
+        "primitive.runtime.MaterializedProjectionDefinition",
+        "primitive.runtime.defineProjection",
+        "primitive.runtime.ProjectionReduceResult"
+      ],
+      "commands": ["pnpm --filter @agent-os/runtime test"],
+      "evidence": [
+        "packages/runtime/test/projection.test.ts",
+        "packages/runtime/test/in-memory/materialized-projections.test.ts"
+      ],
+      "next": ["recipe.durable-trigger-cancel", "recipe.full-small-agent-app"]
+    },
+    {
+      "id": "recipe.streaming-chatbot",
+      "title": "Stream an agent run",
+      "intents": [
+        "Submit an LLM run through the runtime",
+        "Project runtime ledger facts into browser-safe frames"
+      ],
+      "tutorial": "docs/tutorials/streaming-chatbot.md",
+      "primitives": [
+        "primitive.runtime.SubmitSpec",
+        "primitive.runtime.SubmitResult",
+        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope"
+      ],
+      "commands": ["pnpm --filter @agent-os/runtime test"],
+      "evidence": [
+        "packages/runtime/test/submit-agent-runtime-events.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+      ],
+      "next": ["recipe.tool-schema-authority", "recipe.full-small-agent-app"]
+    },
+    {
+      "id": "recipe.tool-schema-authority",
+      "title": "Add a tool with schema, admission, and execution domain",
+      "intents": [
+        "Define the tool schema from Effect Schema",
+        "Route effectful execution through a declared execution domain"
+      ],
+      "tutorial": "docs/tutorials/tool-schema-authority.md",
+      "primitives": [
+        "primitive.kernel.AgentSchema",
+        "primitive.kernel.Tool",
+        "primitive.kernel.ExecutionDomain",
+        "primitive.kernel.BoundaryContract"
+      ],
+      "commands": ["pnpm --filter @agent-os/core test", "pnpm --filter @agent-os/runtime test"],
+      "evidence": [
+        "packages/core/test/kernel/agent-schema.test.ts",
+        "packages/core/test/kernel/tools.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+      ],
+      "next": ["recipe.provider-material-binding", "recipe.full-small-agent-app"]
+    }
+  ]
+}

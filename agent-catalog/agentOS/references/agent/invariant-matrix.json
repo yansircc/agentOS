@@ -1,0 +1,337 @@
+{
+  "generatedBy": "packages/cli/src/generate/generate-agent-docs.mjs",
+  "source": [
+    "docs/agent/invariants.source.json",
+    "exported TSDoc @agentosInvariant tags",
+    "docs/agent/error-metadata.source.json"
+  ],
+  "invariants": [
+    {
+      "invariant": "invariant.algebra.type-or-boot-proof",
+      "statement": "Already-clear algebra must become type-proof or boot-proof.",
+      "primitives": [
+        "primitive.kernel.defineProductTool",
+        "primitive.kernel.EffectClaim",
+        "primitive.kernel.ExecutionDomain",
+        "primitive.kernel.ExecutionDomainDeclaration",
+        "primitive.kernel.ExecutionDomainRegistry",
+        "primitive.kernel.ExecutionDomainReplayLaw",
+        "primitive.kernel.IndeterminateClaim",
+        "primitive.kernel.LivedClaim",
+        "primitive.kernel.PreClaim",
+        "primitive.kernel.RejectedClaim",
+        "primitive.kernel.Tool",
+        "primitive.kernel.ToolAdmitInput",
+        "primitive.kernel.ToolExecution",
+        "primitive.kernel.ToolExecutionContext"
+      ],
+      "errors": ["agent_os.invalid_resource_amount"],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/tool-execution-domain.md",
+        "docs/packages/runtime.md",
+        "docs/README.md"
+      ],
+      "tests": [
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/kernel/tools.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.ledger.single-commit-source",
+      "statement": "Every ledger fact has one commit primitive as its source generator.",
+      "primitives": ["primitive.runtime.Ledger", "primitive.runtime.LedgerCommitEventSpec"],
+      "errors": [
+        "agent_os.driver_ledger_commit_shape_mismatch",
+        "agent_os.durable_trigger_acquire_cancelled",
+        "agent_os.durable_trigger_commit_returned_thenable",
+        "agent_os.durable_trigger_drain_limit_exceeded",
+        "agent_os.invalid_schedule_at",
+        "agent_os.json_stringify_error",
+        "agent_os.resource_insufficient",
+        "agent_os.resource_reservation_closed",
+        "agent_os.resource_reservation_not_found",
+        "agent_os.runtime_ledger_transition_rejected",
+        "agent_os.runtime_storage_error",
+        "agent_os.sql_error",
+        "agent_os.trigger_factory_error",
+        "agent_os.unregistered_durable_trigger_kind"
+      ],
+      "docs": [
+        "docs/concepts/durable-process-algebra.md",
+        "docs/concepts/durable-truth.md",
+        "docs/packages/runtime.md"
+      ],
+      "tests": [
+        "packages/runtime/test/cloudflare/ledger-commit-contract.test.ts",
+        "packages/runtime/test/in-memory/commit-fanout-contract.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.algebra.single-code-source",
+      "statement": "Every algebra has one code source; projections and docs derive from that source.",
+      "primitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "primitive.kernel.AgentSchema",
+        "primitive.kernel.AgentSchemaProjections",
+        "primitive.kernel.projectAgentSchema"
+      ],
+      "errors": [
+        "agent_os.effect_ai_json_encode_failed",
+        "agent_os.effect_ai_missing_usage",
+        "agent_os.effect_ai_provider_executed_tool_rejected",
+        "agent_os.effect_ai_tool_handler_called",
+        "agent_os.effect_ai_unsupported_output_part",
+        "agent_os.projection_definition_error",
+        "agent_os.projection_run_failed",
+        "agent_os.provider_output_decode_error"
+      ],
+      "docs": [
+        "docs/concepts/agent-schema.md",
+        "docs/concepts/materialized-projections.md",
+        "docs/guides/build-natural-language-workspace-agent.md",
+        "docs/packages/runtime.md",
+        "docs/verification.md"
+      ],
+      "tests": [
+        "packages/core/test/runtime-protocol/runtime-events.test.ts",
+        "packages/cli/src/check/algorithmic-checks.mjs"
+      ]
+    },
+    {
+      "invariant": "invariant.boundary.runtime-validation-external-only",
+      "statement": "Runtime validation is only for unknown external input, not internally constructed states.",
+      "primitives": ["primitive.kernel.EffectClaim", "primitive.llm_protocol.LlmTransport"],
+      "errors": [
+        "agent_os.aead_sealed_codec_failure",
+        "agent_os.backend_protocol_parse_failure",
+        "agent_os.dispatch_payload_parse_failure",
+        "agent_os.effect_ai_aborted",
+        "agent_os.effect_ai_prompt_error",
+        "agent_os.effect_ai_unsupported_route",
+        "agent_os.invalid_trace_context",
+        "agent_os.llm_call_timed_out",
+        "agent_os.llm_call_timeout",
+        "agent_os.postgres_harness_error",
+        "agent_os.provider_http_failure",
+        "agent_os.ref_resolution_failed",
+        "agent_os.rpc_method_missing",
+        "agent_os.rpc_untyped_error",
+        "agent_os.witness_port_rejected"
+      ],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/agent-schema.md",
+        "docs/concepts/carriers-and-material.md",
+        "docs/packages/core.md",
+        "docs/packages/runtime.md",
+        "docs/README.md"
+      ],
+      "tests": [
+        "packages/core/test/kernel/effect-claim.test.ts",
+        "packages/core/test/runtime-protocol/runtime-events.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.boundary.owner-owned-safe-projection",
+      "statement": "Browser-safe ledger event views are projected by the fact owner before any wire adapter or product renderer consumes them.",
+      "primitives": [
+        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+        "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.kernel.SafeLedgerEvent"
+      ],
+      "errors": [],
+      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/concepts/durable-truth.md"],
+      "tests": [
+        "packages/core/test/runtime-protocol/runtime-events.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.capability.single-generator",
+      "statement": "CapabilityContract installation facts are validated by defineCapability(): capabilityId must equal carrier.ownerId, sourcePackageName is derived from the carrier, and install output is a description rather than backend state mutation.",
+      "primitives": ["primitive.runtime.defineCapability"],
+      "errors": [],
+      "docs": ["docs/advanced/capability-authoring/define-capability.md"],
+      "tests": ["packages/runtime/test/capability/capability-contract.test.ts"]
+    },
+    {
+      "invariant": "invariant.host.fact-owner",
+      "statement": "Host profiles are the single source of truth for environment-provided facts; capabilities may only require facts declared by host profiles, and materialized host facts enter capability code only through CapabilityInstallContext.host.",
+      "primitives": ["primitive.runtime.defineHost"],
+      "errors": [],
+      "docs": ["docs/advanced/capability-authoring/define-host.md"],
+      "tests": ["packages/runtime/test/capability/resolve.test.ts"]
+    },
+    {
+      "invariant": "invariant.resolve.single-assembly-point",
+      "statement": "For CapabilityContract inputs, resolveRuntime is the assembly point: requirement checks run before install, install outputs are globally validated before backend construction, and capability install functions do not receive backend state.",
+      "primitives": ["primitive.runtime.resolveRuntime"],
+      "errors": [],
+      "docs": ["docs/guides/capabilities/resolve-runtime.md"],
+      "tests": ["packages/runtime/test/capability/resolve.test.ts"]
+    },
+    {
+      "invariant": "invariant.d10.truth-identity",
+      "statement": "For each scopeRef and effectAuthorityRef, ledger facts are the only durable truth and observable state is recomputed from those facts.",
+      "primitives": [
+        "primitive.kernel.AuthorityRef",
+        "primitive.kernel.BoundaryContract",
+        "primitive.kernel.BoundaryProjectionContract",
+        "primitive.kernel.EffectAuthorityContract",
+        "primitive.kernel.LedgerEvent",
+        "primitive.kernel.MaterialRef",
+        "primitive.kernel.ScopeRef",
+        "primitive.kernel.ToolContract",
+        "primitive.runtime.defineProjection",
+        "primitive.runtime.Ledger",
+        "primitive.runtime.LedgerTruthIdentity",
+        "primitive.runtime.MaterializedProjectionDefinition",
+        "primitive.runtime.MaterializedProjections",
+        "primitive.runtime.projectFailureDiagnostics",
+        "primitive.runtime.ProjectionIdentifyResult",
+        "primitive.runtime.ProjectionReduceContext",
+        "primitive.runtime.ProjectionReduceResult",
+        "primitive.runtime.projectRunStatus",
+        "primitive.runtime.projectRunTrace",
+        "primitive.runtime.projectSubmitResult",
+        "primitive.runtime.SubmitResult",
+        "primitive.runtime.SubmitSpec",
+        "primitive.runtime.waitForProjection"
+      ],
+      "errors": [
+        "agent_os.boundary_commit_rejected",
+        "agent_os.cloudflare_ledger_schema_error",
+        "agent_os.dispatch_binding_ref_malformed",
+        "agent_os.dispatch_scope_mismatch",
+        "agent_os.dispatch_target_not_found",
+        "agent_os.missing_submit_run_binding",
+        "agent_os.projection_application_error",
+        "agent_os.projection_reducer_returned_thenable",
+        "agent_os.projection_registry_error",
+        "agent_os.projection_wait_timed_out",
+        "agent_os.scope_missing",
+        "agent_os.stream_identity_error",
+        "agent_os.unregistered_projection_kind",
+        "agent_os.unsupported_scope_ref"
+      ],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/carriers-and-material.md",
+        "docs/concepts/durable-truth.md",
+        "docs/concepts/materialized-projections.md",
+        "docs/concepts/tool-execution-domain.md",
+        "docs/packages/core.md",
+        "docs/packages/runtime.md",
+        "docs/tutorials/streaming-chatbot.md"
+      ],
+      "tests": [
+        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts",
+        "packages/runtime/test/in-memory/backend-protocol-contract.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.d10.namespace-integrity",
+      "statement": "For each factOwnerRef, event kind ownership is declared once; commit injects factOwnerRef and rejects owner/kind mismatch.",
+      "primitives": [
+        "primitive.kernel.BoundaryContract",
+        "primitive.kernel.FactOwnerRef",
+        "primitive.kernel.LedgerEvent"
+      ],
+      "errors": [
+        "agent_os.boundary_commit_rejected",
+        "agent_os.capability_rejected",
+        "agent_os.extension_capability_conflict"
+      ],
+      "docs": ["docs/boundary-contract.md", "docs/concepts/durable-truth.md"],
+      "tests": [
+        "packages/runtime/test/boundary-commit.test.ts",
+        "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.docs.agent-projection",
+      "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
+      "primitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget"
+      ],
+      "errors": ["agent_os.projection_sink_failure"],
+      "docs": [
+        "docs/concepts/materialized-projections.md",
+        "docs/guides/build-natural-language-workspace-agent.md",
+        "docs/verification.md"
+      ],
+      "tests": [
+        "packages/cli/src/generate/generate-docs.mjs",
+        "packages/cli/src/check/check-coverage.source.json",
+        "packages/cli/src/check/algorithmic-checks.mjs"
+      ]
+    },
+    {
+      "invariant": "invariant.ag-ui.sse-axis",
+      "statement": "AG-UI owns AG-UI frame/envelope projection, generic SSE owns only codec and Response wrapping, and host packages compose the two without reversing the dependency.",
+      "primitives": [
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse"
+      ],
+      "errors": [],
+      "docs": ["docs/concepts/ag-ui-wire-adapter.md", "docs/packages/runtime.md"],
+      "tests": [
+        "packages/cli/src/check/algorithmic-checks.mjs",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.workspace-op.carrier-single-writer",
+      "statement": "Only the workspace-op carrier constructs workspace_op.* terminal payloads; host providers execute requested facts and commit through the carrier boundary capability.",
+      "primitives": [],
+      "errors": [],
+      "docs": ["docs/packages/runtime.md"],
+      "tests": [
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
+        "packages/runtime/test/submit-agent-runtime-events.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.workspace-job.host-workspace-lifecycle",
+      "statement": "Cloudflare hosts resolve one provider-neutral WorkspaceEnv lease per scope/runId and keep Sandbox binding validation and cleanup outside product modules.",
+      "primitives": [],
+      "errors": [],
+      "docs": ["docs/packages/runtime.md"],
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+    },
+    {
+      "invariant": "invariant.workspace-job.verified-terminal",
+      "statement": "Workspace job deliverables are terminal projections joined through workspace_job.terminal_finalized; written, readback, hashed, verified, and delivered terminal bytes flow through one closed pipeline, and verifier repair attempts are aggregated by agentOS before a job terminal projection is delivered.",
+      "primitives": [
+        "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+        "primitive.runtime.runWorkspaceJobEffect"
+      ],
+      "errors": [
+        "agent_os.workspace_job_candidate_missing",
+        "agent_os.workspace_job_data_plane_failed",
+        "agent_os.workspace_job_run_id_mismatch",
+        "agent_os.workspace_job_verifier_failed"
+      ],
+      "docs": ["docs/packages/runtime.md"],
+      "tests": [
+        "packages/runtime/test/workspace-job.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+      ]
+    },
+    {
+      "invariant": "invariant.workspace-job.failure-observability-join",
+      "statement": "Workspace job failure explanation is derived by runtime composition from workspace-job terminal facts joined with runtime diagnostic projections; carrier facts remain terminal vocabulary and consumer projections do not expose runtime numeric run ids.",
+      "primitives": ["primitive.runtime.projectWorkspaceJobObservability"],
+      "errors": [],
+      "docs": ["docs/packages/runtime.md"],
+      "tests": [
+        "packages/runtime/test/workspace-job.test.ts",
+        "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
+      ]
+    }
+  ]
+}

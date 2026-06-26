@@ -1,0 +1,70 @@
+# agentOS Package Map
+
+Release version: `0.5.17`
+Published scope: `@yansirplus`
+
+## Packages
+
+| Source Package      | Published Package     | Path               | Status       | Role                                                                                                                                                                                                                                              |
+| ------------------- | --------------------- | ------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@agent-os/cli`     | `@yansirplus/cli`     | `packages/cli`     | 0.5.x public | developer command surface for generated projections, authored agent builds, structural checks, and distribution gates                                                                                                                             |
+| `@agent-os/client`  | `@yansirplus/client`  | `packages/client`  | 0.5.x public | transport-neutral agent client store, typed command surface, and optional framework subpath bridges                                                                                                                                               |
+| `@agent-os/core`    | `@yansirplus/core`    | `packages/core`    | 0.5.x public | neutral substrate axioms, owner identity helpers, value brands, protocol schemas, shared errors, material refs, AgentSchema, tool algebra, and backend/runtime/LLM/telemetry vocabulary                                                           |
+| `@agent-os/runtime` | `@yansirplus/runtime` | `packages/runtime` | 0.5.x public | Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry. |
+
+## Entrypoints
+
+| Import                                                | Audience                       | Capability                                                                                | Owner                 |
+| ----------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------- |
+| `@yansirplus/cli`                                     | default-direct                 | developer CLI command package                                                             | `@yansirplus/cli`     |
+| `@yansirplus/client`                                  | default-direct                 | transport-neutral client store                                                            | `@yansirplus/client`  |
+| `@yansirplus/client/react`                            | default-direct                 | React client adapter                                                                      | `@yansirplus/client`  |
+| `@yansirplus/client/svelte`                           | default-direct, generated-only | Svelte client adapter                                                                     | `@yansirplus/client`  |
+| `@yansirplus/client/workspace-agent`                  | generated-only                 | generated workspace agent client                                                          | `@yansirplus/client`  |
+| `@yansirplus/core`                                    | advanced                       | neutral substrate algebra and brands                                                      | `@yansirplus/core`    |
+| `@yansirplus/core/abort`                              | advanced                       | abort vocabulary                                                                          | `@yansirplus/core`    |
+| `@yansirplus/core/agent-schema`                       | advanced                       | agent schema authoring algebra                                                            | `@yansirplus/core`    |
+| `@yansirplus/core/authored-value`                     | advanced                       | authored value ownership                                                                  | `@yansirplus/core`    |
+| `@yansirplus/core/backend-protocol`                   | advanced                       | backend protocol DTOs                                                                     | `@yansirplus/core`    |
+| `@yansirplus/core/backend-protocol/reference`         | advanced                       | backend protocol reference helpers                                                        | `@yansirplus/core`    |
+| `@yansirplus/core/boundary-contract`                  | advanced                       | boundary contract declarations                                                            | `@yansirplus/core`    |
+| `@yansirplus/core/carrier`                            | advanced                       | carrier algebra                                                                           | `@yansirplus/core`    |
+| `@yansirplus/core/context`                            | advanced                       | context value helpers                                                                     | `@yansirplus/core`    |
+| `@yansirplus/core/effect-claim`                       | advanced                       | effect claim vocabulary                                                                   | `@yansirplus/core`    |
+| `@yansirplus/core/errors`                             | advanced                       | shared error classes                                                                      | `@yansirplus/core`    |
+| `@yansirplus/core/extensions`                         | advanced                       | extension declarations                                                                    | `@yansirplus/core`    |
+| `@yansirplus/core/live-edge`                          | advanced                       | live edge protocol                                                                        | `@yansirplus/core`    |
+| `@yansirplus/core/llm-protocol`                       | advanced                       | LLM protocol DTOs                                                                         | `@yansirplus/core`    |
+| `@yansirplus/core/material-ref`                       | advanced                       | material refs                                                                             | `@yansirplus/core`    |
+| `@yansirplus/core/projection`                         | advanced                       | projection algebra                                                                        | `@yansirplus/core`    |
+| `@yansirplus/core/quota`                              | advanced                       | quota declarations                                                                        | `@yansirplus/core`    |
+| `@yansirplus/core/recorded-value`                     | advanced                       | recorded value algebra                                                                    | `@yansirplus/core`    |
+| `@yansirplus/core/ref-resolver`                       | advanced                       | material ref resolution                                                                   | `@yansirplus/core`    |
+| `@yansirplus/core/runtime-protocol`                   | generated-only                 | runtime DTOs emitted by generated targets                                                 | `@yansirplus/core`    |
+| `@yansirplus/core/runtime-scope`                      | advanced                       | runtime scope helpers                                                                     | `@yansirplus/core`    |
+| `@yansirplus/core/settlement-contract`                | advanced                       | settlement contract algebra                                                               | `@yansirplus/core`    |
+| `@yansirplus/core/telemetry-protocol`                 | advanced                       | telemetry protocol DTOs                                                                   | `@yansirplus/core`    |
+| `@yansirplus/core/tools`                              | generated-only                 | tool definitions emitted by generated targets                                             | `@yansirplus/core`    |
+| `@yansirplus/core/types`                              | advanced                       | shared type helpers                                                                       | `@yansirplus/core`    |
+| `@yansirplus/core/workspace-agent`                    | advanced                       | workspace agent command/projection vocabulary                                             | `@yansirplus/core`    |
+| `@yansirplus/runtime`                                 | advanced                       | backend-neutral runtime service algebra                                                   | `@yansirplus/runtime` |
+| `@yansirplus/runtime/admission`                       | advanced                       | admission service contract                                                                | `@yansirplus/runtime` |
+| `@yansirplus/runtime/ag-ui`                           | advanced                       | AG-UI wire projection                                                                     | `@yansirplus/runtime` |
+| `@yansirplus/runtime/cloudflare`                      | generated-only, advanced       | Cloudflare Durable Object runtime adapter                                                 | `@yansirplus/runtime` |
+| `@yansirplus/runtime/cloudflare/do-rpc`               | advanced                       | Cloudflare DO RPC bridge                                                                  | `@yansirplus/runtime` |
+| `@yansirplus/runtime/cloudflare/ops-api`              | advanced                       | Cloudflare ops API bridge                                                                 | `@yansirplus/runtime` |
+| `@yansirplus/runtime/capability`                      | generated-only, advanced       | capability contract declarations and install graph resolver                               | `@yansirplus/runtime` |
+| `@yansirplus/runtime/channel`                         | generated-only, advanced       | pure verified inbound channel contract for generated targets                              | `@yansirplus/runtime` |
+| `@yansirplus/runtime/schedule`                        | generated-only, advanced       | pure UTC time ingress contract and schedule fire history projection for generated targets | `@yansirplus/runtime` |
+| `@yansirplus/runtime/in-memory`                       | advanced                       | in-memory runtime adapter                                                                 | `@yansirplus/runtime` |
+| `@yansirplus/runtime/local`                           | generated-only, advanced       | local node workspace runtime lowerer and dev/test facade                                  | `@yansirplus/runtime` |
+| `@yansirplus/runtime/llm-effect-ai`                   | advanced                       | provider-neutral Effect AI LLM transport adapter                                          | `@yansirplus/runtime` |
+| `@yansirplus/runtime/llm-effect-ai/openai-compatible` | generated-only, advanced       | OpenAI-compatible chat-completions transport adapter                                      | `@yansirplus/runtime` |
+| `@yansirplus/runtime/llm-effect-ai/anthropic`         | advanced                       | Anthropic Effect AI provider adapter                                                      | `@yansirplus/runtime` |
+| `@yansirplus/runtime/node`                            | advanced                       | Node runtime adapter                                                                      | `@yansirplus/runtime` |
+| `@yansirplus/runtime/run-projector`                   | advanced                       | runtime run projection helpers                                                            | `@yansirplus/runtime` |
+| `@yansirplus/runtime/sse-http`                        | generated-only, advanced       | SSE HTTP helpers                                                                          | `@yansirplus/runtime` |
+| `@yansirplus/runtime/telemetry-otlp`                  | advanced                       | OTLP telemetry projection                                                                 | `@yansirplus/runtime` |
+| `@yansirplus/runtime/testing`                         | advanced                       | deterministic in-memory WorkspaceEnv test fixture                                         | `@yansirplus/runtime` |
+| `@yansirplus/runtime/workspace-agent`                 | generated-only                 | generated workspace agent host types                                                      | `@yansirplus/runtime` |
+| `@yansirplus/runtime/workspace-binding`               | generated-only                 | generated workspace tool binding                                                          | `@yansirplus/runtime` |

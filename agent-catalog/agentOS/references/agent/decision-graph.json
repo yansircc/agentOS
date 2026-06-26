@@ -1,0 +1,530 @@
+{
+  "generatedBy": "packages/cli/src/generate/generate-agent-docs.mjs",
+  "source": [
+    "docs/agent/capability-rules.source.json",
+    "docs/agent/recipes.source.json",
+    "exported TSDoc @agentosPrimitive tags",
+    "BoundaryContract/event namespace declarations",
+    "docs/agent/boundary-rules.source.json"
+  ],
+  "routes": [
+    {
+      "primitive": "primitive.ag-ui.projectLedgerSseToAgUiSse",
+      "intents": [
+        "stream an agent run to a browser UI",
+        "convert runtime ledger SSE into AG-UI frames"
+      ],
+      "coordinationPackage": "@agent-os/runtime",
+      "coordinationCapabilityKind": "projection",
+      "sourceFactPrefixes": ["agent.", "chat.", "llm.", "tool."],
+      "sourceFactOwners": [
+        {
+          "prefix": "agent.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "agent.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "chat.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "chat.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "llm.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "llm.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "tool.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "tool.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        }
+      ],
+      "allowedPrimitives": [
+        "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+        "primitive.ag-ui.projectLedgerSseToAgUiSse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+        "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
+        "primitive.runtime.SubmitResult",
+        "primitive.runtime.SubmitSpec",
+        "primitive.runtime.projectRunStatus",
+        "primitive.runtime.projectRunTrace"
+      ],
+      "allowedPrimitivePackages": ["@agent-os/core", "@agent-os/runtime"],
+      "forbiddenWrites": [
+        {
+          "actor": "product",
+          "action": "read_raw_ledger_payload",
+          "target": {
+            "kind": "eventPrefix",
+            "value": "agent."
+          },
+          "invariant": "invariant.boundary.owner-owned-safe-projection"
+        },
+        {
+          "actor": "ui",
+          "action": "treat_stream_as_durable_truth",
+          "target": {
+            "kind": "surface",
+            "value": "ag-ui-sse"
+          },
+          "invariant": "invariant.d10.truth-identity"
+        }
+      ],
+      "gates": ["ag-ui-sse-axis", "ag-ui-egress-allowlist"],
+      "invariants": [
+        "invariant.ag-ui.sse-axis",
+        "invariant.boundary.owner-owned-safe-projection",
+        "invariant.d10.truth-identity"
+      ],
+      "docs": [
+        "docs/concepts/ag-ui-wire-adapter.md",
+        "docs/concepts/durable-truth.md",
+        "docs/packages/runtime.md",
+        "docs/tutorials/streaming-chatbot.md"
+      ],
+      "testEvidence": [
+        {
+          "primitive": "primitive.ag-ui.projectLedgerEventToAgUiEnvelope",
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+        },
+        {
+          "primitive": "primitive.ag-ui.projectLedgerSseToAgUiSse",
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+        },
+        {
+          "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+        },
+        {
+          "primitive": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+        },
+        {
+          "primitive": "primitive.runtime.SubmitResult",
+          "tests": [
+            "packages/core/test/runtime-protocol/runtime-events.test.ts",
+            "packages/runtime/test/submit-agent-runtime-events.test.ts"
+          ]
+        },
+        {
+          "primitive": "primitive.runtime.SubmitSpec",
+          "tests": [
+            "packages/runtime/test/submit-agent-runtime-events.test.ts",
+            "packages/runtime/test/submit-agent-timeout.test.ts"
+          ]
+        },
+        {
+          "primitive": "primitive.runtime.projectRunStatus",
+          "tests": ["packages/runtime/test/run-projector.test.ts"]
+        },
+        {
+          "primitive": "primitive.runtime.projectRunTrace",
+          "tests": ["packages/runtime/test/run-projector.test.ts"]
+        }
+      ]
+    },
+    {
+      "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "intents": [
+        "compile an authored workspace agent into a static target",
+        "generate a typed client from agentos.config.jsonc"
+      ],
+      "coordinationPackage": "@agent-os/cli",
+      "coordinationCapabilityKind": "composer",
+      "sourceFactPrefixes": ["agent.", "llm.", "tool.", "workspace_op."],
+      "sourceFactOwners": [
+        {
+          "prefix": "agent.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "agent.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "llm.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "llm.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "tool.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "tool.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        },
+        {
+          "prefix": "workspace_op.",
+          "owner": "@agent-os/workspace-op",
+          "declarations": [
+            {
+              "prefix": "workspace_op.",
+              "owner": "@agent-os/workspace-op",
+              "filePath": "packages/runtime/src/workspace-op-carrier/definition.ts"
+            }
+          ]
+        }
+      ],
+      "allowedPrimitives": [
+        "primitive.agent-authoring.compileAgentTree",
+        "primitive.agent-authoring.linkWorkspaceStaticTarget"
+      ],
+      "allowedPrimitivePackages": ["@agent-os/cli"],
+      "forbiddenWrites": [
+        {
+          "actor": "generated_target",
+          "action": "choose_implementation_from_manifest_json",
+          "target": {
+            "kind": "surface",
+            "value": "manifest.json"
+          },
+          "invariant": "invariant.algebra.single-code-source"
+        },
+        {
+          "actor": "product",
+          "action": "hand_write_generated_target_wiring",
+          "target": {
+            "kind": "surface",
+            "value": ".agentos/generated"
+          },
+          "invariant": "invariant.docs.agent-projection"
+        }
+      ],
+      "gates": ["convergence-boundary", "public-api", "spike-hygiene"],
+      "invariants": ["invariant.algebra.single-code-source", "invariant.docs.agent-projection"],
+      "docs": ["docs/guides/build-natural-language-workspace-agent.md", "docs/verification.md"],
+      "testEvidence": [
+        {
+          "primitive": "primitive.agent-authoring.compileAgentTree",
+          "tests": ["packages/cli/test/build-command.test.mjs"]
+        },
+        {
+          "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+          "tests": ["packages/cli/test/build-command.test.mjs"]
+        }
+      ]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+      "intents": [
+        "respond to a workspace job request from the workspace-job projection",
+        "materialize Cloudflare HTTP responses without reading raw workspace-job ledger payload"
+      ],
+      "coordinationPackage": "@agent-os/runtime",
+      "coordinationCapabilityKind": "facade",
+      "sourceFactPrefixes": ["workspace_job."],
+      "sourceFactOwners": [
+        {
+          "prefix": "workspace_job.",
+          "owner": "@agent-os/workspace-job",
+          "declarations": [
+            {
+              "prefix": "workspace_job.",
+              "owner": "@agent-os/workspace-job",
+              "filePath": "packages/runtime/src/workspace-job-carrier/definition.ts"
+            }
+          ]
+        }
+      ],
+      "allowedPrimitives": [
+        "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+        "primitive.runtime.projectWorkspaceJobObservability",
+        "primitive.runtime.runWorkspaceJobEffect"
+      ],
+      "allowedPrimitivePackages": ["@agent-os/runtime"],
+      "forbiddenWrites": [
+        {
+          "actor": "product",
+          "action": "write_terminal_fact",
+          "target": {
+            "kind": "eventPrefix",
+            "value": "workspace_job."
+          },
+          "invariant": "invariant.d10.namespace-integrity"
+        },
+        {
+          "actor": "public_submit",
+          "action": "carry_resolved_provider_material",
+          "target": {
+            "kind": "material",
+            "value": "resolved provider material"
+          },
+          "invariant": "invariant.d10.truth-identity"
+        }
+      ],
+      "gates": ["workspace-job", "observability", "public-api"],
+      "invariants": [
+        "invariant.d10.namespace-integrity",
+        "invariant.d10.truth-identity",
+        "invariant.workspace-job.failure-observability-join",
+        "invariant.workspace-job.verified-terminal"
+      ],
+      "docs": [
+        "docs/boundary-contract.md",
+        "docs/concepts/durable-truth.md",
+        "docs/packages/runtime.md"
+      ],
+      "testEvidence": [
+        {
+          "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+          "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+        },
+        {
+          "primitive": "primitive.runtime.projectWorkspaceJobObservability",
+          "tests": ["packages/runtime/test/workspace-job.test.ts"]
+        },
+        {
+          "primitive": "primitive.runtime.runWorkspaceJobEffect",
+          "tests": ["packages/runtime/test/workspace-job.test.ts"]
+        }
+      ]
+    },
+    {
+      "primitive": "primitive.kernel.defineProductTool",
+      "intents": [
+        "add a product tool with schema, admission, and execution domain",
+        "route effectful tool execution through declared tool authority"
+      ],
+      "coordinationPackage": "@agent-os/core",
+      "coordinationCapabilityKind": "kernel",
+      "sourceFactPrefixes": ["tool."],
+      "sourceFactOwners": [
+        {
+          "prefix": "tool.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "tool.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        }
+      ],
+      "allowedPrimitives": [
+        "primitive.kernel.AgentSchema",
+        "primitive.kernel.ExecutionDomain",
+        "primitive.kernel.Tool",
+        "primitive.kernel.ToolContract",
+        "primitive.kernel.defineProductTool"
+      ],
+      "allowedPrimitivePackages": ["@agent-os/core"],
+      "forbiddenWrites": [
+        {
+          "actor": "product",
+          "action": "execute_without_declared_tool_contract",
+          "target": {
+            "kind": "eventPrefix",
+            "value": "tool."
+          },
+          "invariant": "invariant.algebra.type-or-boot-proof"
+        },
+        {
+          "actor": "tool_handler",
+          "action": "store_provider_material_in_tool_payload",
+          "target": {
+            "kind": "material",
+            "value": "provider credentials"
+          },
+          "invariant": "invariant.boundary.runtime-validation-external-only"
+        }
+      ],
+      "gates": ["tool-execution-access-requirements", "tool-mutation-boundary"],
+      "invariants": [
+        "invariant.algebra.single-code-source",
+        "invariant.algebra.type-or-boot-proof",
+        "invariant.boundary.runtime-validation-external-only",
+        "invariant.d10.truth-identity"
+      ],
+      "docs": [
+        "docs/concepts/agent-schema.md",
+        "docs/concepts/durable-truth.md",
+        "docs/concepts/tool-execution-domain.md",
+        "docs/README.md",
+        "docs/verification.md"
+      ],
+      "testEvidence": [
+        {
+          "primitive": "primitive.kernel.AgentSchema",
+          "tests": ["packages/core/test/kernel/agent-schema.test.ts"]
+        },
+        {
+          "primitive": "primitive.kernel.ExecutionDomain",
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
+        },
+        {
+          "primitive": "primitive.kernel.Tool",
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
+        },
+        {
+          "primitive": "primitive.kernel.ToolContract",
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
+        },
+        {
+          "primitive": "primitive.kernel.defineProductTool",
+          "tests": ["packages/core/test/kernel/tools.test.ts"]
+        }
+      ]
+    },
+    {
+      "primitive": "primitive.runtime.defineProjection",
+      "intents": [
+        "build a materialized projection reader",
+        "derive observable state from ledger facts without making projection state truth"
+      ],
+      "coordinationPackage": "@agent-os/runtime",
+      "coordinationCapabilityKind": "projection",
+      "sourceFactPrefixes": ["agent."],
+      "sourceFactOwners": [
+        {
+          "prefix": "agent.",
+          "owner": "@agent-os/runtime-protocol",
+          "declarations": [
+            {
+              "prefix": "agent.",
+              "owner": "@agent-os/runtime-protocol",
+              "filePath": "packages/core/src/errors.ts"
+            }
+          ]
+        }
+      ],
+      "allowedPrimitives": [
+        "primitive.runtime.MaterializedProjectionDefinition",
+        "primitive.runtime.ProjectionReduceResult",
+        "primitive.runtime.defineProjection",
+        "primitive.runtime.waitForProjection"
+      ],
+      "allowedPrimitivePackages": ["@agent-os/runtime"],
+      "forbiddenWrites": [
+        {
+          "actor": "projection",
+          "action": "become_source_of_truth",
+          "target": {
+            "kind": "surface",
+            "value": "materialized projection state"
+          },
+          "invariant": "invariant.d10.truth-identity"
+        },
+        {
+          "actor": "consumer",
+          "action": "write_derived_state_back_to_ledger_fact",
+          "target": {
+            "kind": "eventPrefix",
+            "value": "agent."
+          },
+          "invariant": "invariant.ledger.single-commit-source"
+        }
+      ],
+      "gates": ["check"],
+      "invariants": ["invariant.d10.truth-identity", "invariant.ledger.single-commit-source"],
+      "docs": ["docs/concepts/durable-truth.md", "docs/concepts/materialized-projections.md"],
+      "testEvidence": [
+        {
+          "primitive": "primitive.runtime.MaterializedProjectionDefinition",
+          "tests": ["packages/runtime/test/projection.test.ts"]
+        },
+        {
+          "primitive": "primitive.runtime.ProjectionReduceResult",
+          "tests": ["packages/runtime/test/projection.test.ts"]
+        },
+        {
+          "primitive": "primitive.runtime.defineProjection",
+          "tests": ["packages/runtime/test/projection.test.ts"]
+        },
+        {
+          "primitive": "primitive.runtime.waitForProjection",
+          "tests": ["packages/runtime/test/projection.test.ts"]
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "recipes": [
+      {
+        "id": "recipe.natural-language-workspace-agent",
+        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+      },
+      {
+        "id": "recipe.hello-ledger-event",
+        "routePrimitives": [],
+        "noRouteReason": "tutorial-only ledger identity exercise; product workflows should route through a higher-level primitive"
+      },
+      {
+        "id": "recipe.projection-reader",
+        "routePrimitives": ["primitive.runtime.defineProjection"]
+      },
+      {
+        "id": "recipe.streaming-chatbot",
+        "routePrimitives": ["primitive.ag-ui.projectLedgerSseToAgUiSse"]
+      },
+      {
+        "id": "recipe.tool-schema-authority",
+        "routePrimitives": ["primitive.kernel.defineProductTool"]
+      }
+    ],
+    "primitives": [
+      {
+        "id": "primitive.agent-authoring.compileAgentTree",
+        "capabilityKind": "composer",
+        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+      },
+      {
+        "id": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "capabilityKind": "composer",
+        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+      },
+      {
+        "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",
+        "capabilityKind": "facade",
+        "routePrimitives": ["primitive.ag-ui.projectLedgerSseToAgUiSse"]
+      },
+      {
+        "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiSseResponse",
+        "capabilityKind": "facade",
+        "routePrimitives": ["primitive.ag-ui.projectLedgerSseToAgUiSse"]
+      },
+      {
+        "id": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
+        "capabilityKind": "facade",
+        "routePrimitives": ["primitive.cloudflare-do.createCloudflareWorkspaceJobResponse"]
+      }
+    ]
+  }
+}
