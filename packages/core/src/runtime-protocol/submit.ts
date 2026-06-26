@@ -17,6 +17,7 @@ import {
   type InputRequestResumePayload,
 } from "./input-request";
 import type { ExecutionIdentity } from "./execution-identity";
+import type { DynamicCapabilityProjection } from "./capability";
 
 export class MissingSubmitRunBinding extends Data.TaggedError(
   "agent_os.missing_submit_run_binding",
@@ -128,6 +129,8 @@ export interface SubmitRunInput {
 export interface SubmitRunBindings {
   readonly llmRoutes?: Readonly<Record<string, LlmRoute>>;
   readonly tools?: Readonly<Record<string, Tool>>;
+  readonly dynamicCapabilityProjection?: DynamicCapabilityProjection;
+  readonly instructionFragments?: ReadonlyArray<SubmitInstructionFragment>;
   readonly executionDomains?: ReadonlyArray<ExecutionDomainDeclaration>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
   readonly toolContext?: SubmitToolContext;
@@ -215,6 +218,12 @@ export const lowerSubmitRunInput = (spec: LowerSubmitRunInputSpec): SubmitSpec =
     ...(spec.input.system === undefined ? {} : { system: spec.input.system }),
     route,
     tools: { ...spec.bindings.tools },
+    ...(spec.bindings.dynamicCapabilityProjection === undefined
+      ? {}
+      : { dynamicCapabilityProjection: spec.bindings.dynamicCapabilityProjection }),
+    ...(spec.bindings.instructionFragments === undefined
+      ? {}
+      : { instructionFragments: spec.bindings.instructionFragments }),
     ...(spec.bindings.executionDomains === undefined
       ? {}
       : { executionDomains: spec.bindings.executionDomains }),
@@ -251,6 +260,8 @@ export interface SubmitSpec {
   readonly system?: string;
   readonly route: LlmRoute;
   readonly tools: Record<string, Tool>;
+  readonly dynamicCapabilityProjection?: DynamicCapabilityProjection;
+  readonly instructionFragments?: ReadonlyArray<SubmitInstructionFragment>;
   readonly executionDomains?: ReadonlyArray<ExecutionDomainDeclaration>;
   readonly budget?: {
     readonly tokens?: number;
@@ -277,6 +288,12 @@ export interface SubmitSpec {
   readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
   readonly resume?: SubmitResumeDecision;
   readonly executionIdentity?: ExecutionIdentity;
+}
+
+export interface SubmitInstructionFragment {
+  readonly id: string;
+  readonly digest: string;
+  readonly text: string;
 }
 
 export interface SubmitDecisionInterrupt {

@@ -149,6 +149,13 @@ import {
   toolBudgetTimeCause,
   toolBudgetTimePayload,
 } from "./submit-agent/tool-runtime";
+import {
+  DYNAMIC_TOOL_VISIBILITY_DENIED_REASON,
+  dynamicCapabilityToolVisibilityDenied,
+  instructionFragmentsForDynamicCapabilityProjection,
+  systemWithDynamicInstructionFragments,
+  toolsForDynamicCapabilityProjection,
+} from "./submit-agent/dynamic-capability";
 
 export const buildInitialMessages = (
   spec: Pick<InternalSubmitSpec, "system" | "intent" | "context">,
@@ -474,7 +481,20 @@ export const submitAgentEffect = (
       // Spec-24 standard path: multi-turn tool loop.
       // ====================================================================
 
-      const registry = validateToolRegistry(spec.tools);
+      const visibleTools = toolsForDynamicCapabilityProjection(
+        spec.tools,
+        spec.dynamicCapabilityProjection,
+      );
+      const dynamicInstructionFragments = instructionFragmentsForDynamicCapabilityProjection(
+        spec.instructionFragments,
+        spec.dynamicCapabilityProjection,
+      );
+      const dynamicSystem = systemWithDynamicInstructionFragments(
+        spec.system,
+        dynamicInstructionFragments,
+      );
+
+      const registry = validateToolRegistry(visibleTools);
       if (!registry.ok) {
         return yield* finalAbort(
           ABORT.TOOL_ERROR,
@@ -493,7 +513,7 @@ export const submitAgentEffect = (
       const orderedCompleteAfterTools =
         spec.toolPolicy?.completeAfterToolsExecuted?.ordered === true;
       const unknownPolicyToolName = requiredToolNames.find(
-        (toolName) => spec.tools[toolName] === undefined,
+        (toolName) => visibleTools[toolName] === undefined,
       );
       if (unknownPolicyToolName !== undefined) {
         return yield* finalAbort(
@@ -508,7 +528,7 @@ export const submitAgentEffect = (
           traceContext,
         );
       }
-      const domainRegistry = validateExecutionDomainRegistry(spec.tools, {
+      const domainRegistry = validateExecutionDomainRegistry(visibleTools, {
         domains: spec.executionDomains ?? [],
       });
       if (!domainRegistry.ok) {
@@ -525,7 +545,7 @@ export const submitAgentEffect = (
         );
       }
 
-      const initialMessages = yield* buildInitialMessages(spec);
+      const initialMessages = yield* buildInitialMessages({ ...spec, system: dynamicSystem });
 
       const loop: Effect.Effect<
         SubmitResult,
@@ -812,7 +832,7 @@ export const submitAgentEffect = (
             }
 
             const toolDefs = toolDefinitionsForRuntimePolicy(
-              spec.tools,
+              visibleTools,
               requiredToolNames,
               executedToolNames,
             );
@@ -963,8 +983,52 @@ export const submitAgentEffect = (
           }
 
           for (const call of responseToolCalls) {
-            const tool = spec.tools[call.function.name];
+            const tool = visibleTools[call.function.name];
             if (tool === undefined) {
+              const hiddenTool = dynamicCapabilityToolVisibilityDenied(
+                call.function.name,
+                spec.tools,
+                spec.dynamicCapabilityProjection,
+              )
+                ? spec.tools[call.function.name]
+                : undefined;
+              if (hiddenTool !== undefined) {
+                const hiddenContract = hiddenTool.contract;
+                const hiddenClaim = makePreClaim({
+                  operationRef: makeOperationRef("tool", [scope, started.id, turn, call.id]),
+                  scopeRef,
+                  effectAuthorityRef: hiddenContract.effectAuthorityRef,
+                  originRef: hiddenContract.originRef ?? {
+                    originId: `run:${started.id}`,
+                    originKind: "submit",
+                  },
+                });
+                yield* appendRuntimeDriverAction(ledger, {
+                  kind: "reject_tool",
+                  event: toolRejectedEvent({
+                    ...identity,
+                    runId: started.id,
+                    toolCallId: call.id,
+                    name: call.function.name,
+                    args: summarizeToolArguments(call.function.arguments),
+                    execution: hiddenTool.execution,
+                    claim: settleToolPolicyRejected(
+                      hiddenClaim,
+                      DYNAMIC_TOOL_VISIBILITY_DENIED_REASON,
+                    ),
+                    diagnostics: {
+                      phase: "policy",
+                      reason: DYNAMIC_TOOL_VISIBILITY_DENIED_REASON,
+                      argumentSummary: summarizeToolArguments(call.function.arguments),
+                    },
+                    traceContext,
+                  }),
+                });
+                return yield* new ToolError({
+                  toolName: call.function.name,
+                  cause: { reason: DYNAMIC_TOOL_VISIBILITY_DENIED_REASON },
+                });
+              }
               return yield* new ToolError({
                 toolName: call.function.name,
                 cause: { reason: "unknown_tool" },

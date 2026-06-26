@@ -7,6 +7,7 @@ import { registerSubmitAgentRuntimePolicyCompleteCases } from "./_submit-agent-r
 import { registerSubmitAgentRuntimeFactsCases } from "./_submit-agent-runtime-facts-cases";
 import { registerSubmitAgentMaterialCases } from "./_submit-agent-material-cases";
 import { registerSubmitAgentInterruptResumeCases } from "./_submit-agent-interrupt-resume-cases";
+import { registerSubmitAgentDynamicCapabilityCases } from "./_submit-agent-dynamic-capability-cases";
 
 describe("submit-agent runtime event writes", () => {
   registerSubmitAgentReplayCases();
@@ -17,4 +18,5 @@ describe("submit-agent runtime event writes", () => {
   registerSubmitAgentRuntimeFactsCases();
   registerSubmitAgentMaterialCases();
   registerSubmitAgentInterruptResumeCases();
+  registerSubmitAgentDynamicCapabilityCases();
 });

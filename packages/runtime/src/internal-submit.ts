@@ -36,6 +36,8 @@ export const internalSubmitSpec = (
     system: spec.system,
     route: spec.route,
     tools: spec.tools,
+    dynamicCapabilityProjection: spec.dynamicCapabilityProjection,
+    instructionFragments: spec.instructionFragments,
     executionDomains: spec.executionDomains,
     budget: internalSubmitBudget(spec.budget),
     outputSchema: spec.outputSchema,
