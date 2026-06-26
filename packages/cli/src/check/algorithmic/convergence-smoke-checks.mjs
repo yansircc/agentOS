@@ -283,7 +283,14 @@ export const runtimePublicSurfaceFindings = ({
 };
 
 const blueprintRecipeSchemaVersion = 1;
-const blueprintRecipeKinds = ["channel", "sandbox", "database", "provider", "observability"];
+const blueprintRecipeKinds = [
+  "channel",
+  "schedule",
+  "sandbox",
+  "database",
+  "provider",
+  "observability",
+];
 const blueprintRecipeKindSet = new Set(blueprintRecipeKinds);
 const blueprintRecipeActions = ["agentos add", "agentos update"];
 const blueprintLifecycleOwnershipKinds = new Set(["provider", "sandbox"]);
@@ -297,13 +304,14 @@ const blueprintLifecycleOwnership = {
 const blueprintLifecycleOwnershipAxes = Object.keys(blueprintLifecycleOwnership);
 const blueprintRecipePrimaryFiles = new Set([
   "agent/channels/<name>.ts",
+  "agent/schedules/<id>.ts",
   "agentos.config.jsonc",
   "agent/agent.json",
   "package.json",
 ]);
 const blueprintRecipeGuidePath = "blueprints/UPGRADE.md";
 const blueprintRecipeIdPattern =
-  /^(channel|sandbox|database|provider|observability)\.[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+  /^(channel|schedule|sandbox|database|provider|observability)\.[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const blueprintPrimaryFileMarkerPattern = /<!--\s*agentos:primary-file\s+path="([^"]+)"\s*-->/gu;
 const blueprintUpgradeMarkerPattern = /<!--\s*agentos:blueprint-upgrade\s+id="([^"]+)"\s*-->/gu;
 const blueprintForbiddenTokens = [
@@ -335,6 +343,15 @@ const blueprintChannelBoundary = {
   secretHandling: "redacted-before-submit-or-dispatch",
 };
 const blueprintChannelBoundaryAxes = Object.keys(blueprintChannelBoundary);
+const blueprintScheduleBoundary = {
+  identity: "agent/schedules/<id>.ts",
+  timeAuthority: "provider-scheduled-metadata",
+  fireIdentity: "stable-app-principal-schedule-id-utc-minute",
+  productIngress: "sessions-or-workflows",
+  externalSideEffects: "app-owned",
+  historyProjection: "schedule-fire-events-plus-linked-product-projections",
+};
+const blueprintScheduleBoundaryAxes = Object.keys(blueprintScheduleBoundary);
 
 const blueprintRecipeLabel = (source) => source.file ?? "blueprint recipe";
 
@@ -425,6 +442,34 @@ const validateBlueprintChannelBoundary = ({ label, kind, frontmatter, body, find
   }
 };
 
+const validateBlueprintScheduleBoundary = ({ label, kind, frontmatter, body, findings }) => {
+  if (kind !== "schedule") return;
+  const boundary = frontmatter.scheduleBoundary;
+  if (!isPlainRecord(boundary)) {
+    findings.push(`${label}: schedule recipe requires scheduleBoundary object`);
+    return;
+  }
+
+  const actualAxes = Object.keys(boundary).sort((left, right) => left.localeCompare(right));
+  const expectedAxes = [...blueprintScheduleBoundaryAxes].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  if (actualAxes.join(",") !== expectedAxes.join(",")) {
+    findings.push(`${label}: scheduleBoundary axes must be exactly ${expectedAxes.join(", ")}`);
+  }
+
+  for (const axis of blueprintScheduleBoundaryAxes) {
+    const expectedValue = blueprintScheduleBoundary[axis];
+    if (boundary[axis] !== expectedValue) {
+      findings.push(`${label}: scheduleBoundary.${axis} must be ${expectedValue}`);
+    }
+  }
+
+  if (!body.includes("## Schedule Boundary")) {
+    findings.push(`${label}: schedule recipe body must contain ## Schedule Boundary`);
+  }
+};
+
 const validateBlueprintRecipe = (recipe, findings) => {
   const { file, frontmatter, body } = recipe;
   const id = frontmatter.id;
@@ -477,6 +522,7 @@ const validateBlueprintRecipe = (recipe, findings) => {
   }
   validateBlueprintLifecycleOwnership({ label, kind, frontmatter, body, findings });
   validateBlueprintChannelBoundary({ label, kind, frontmatter, body, findings });
+  validateBlueprintScheduleBoundary({ label, kind, frontmatter, body, findings });
 
   if (typeof title === "string" && !body.includes(`# ${title}`)) {
     findings.push(`${label}: body must contain # ${title}`);

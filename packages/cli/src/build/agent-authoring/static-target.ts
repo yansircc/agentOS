@@ -426,7 +426,13 @@ const renderScheduleRegistry = (
   return `${scheduleImports}
 ${renderNamedImport(["dispatchScheduleFire"], modules.runtimeSchedule)}
 ${renderTypeImport(
-  ["DefinedSchedule", "ScheduleFireDispatchResult", "SchedulePrincipal", "ScheduleRuntime"],
+  [
+    "DefinedSchedule",
+    "ScheduleDefinitionProjection",
+    "ScheduleFireDispatchResult",
+    "SchedulePrincipal",
+    "ScheduleRuntime",
+  ],
   modules.runtimeSchedule,
 )}
 ${renderTypeImport(["LedgerTruthIdentity"], modules.runtimeProtocol)}
@@ -450,7 +456,10 @@ export type GeneratedScheduleDispatchInput = GeneratedScheduleTriggerInput & {
 };
 
 export const generatedSchedules = ${entries} as const satisfies ReadonlyArray<GeneratedScheduleDefinition>;
-export const generatedScheduleIds = generatedSchedules.map((entry) => entry.scheduleId);
+export const generatedScheduleDefinitions = generatedSchedules.map(
+  ({ scheduleId, path, cron }) => ({ scheduleId, path, cron }),
+) satisfies ReadonlyArray<ScheduleDefinitionProjection>;
+export const generatedScheduleIds = generatedScheduleDefinitions.map((entry) => entry.scheduleId);
 export const generatedScheduleRegistry = new Map(
   generatedSchedules.map((entry) => [entry.scheduleId, entry]),
 );
@@ -1573,10 +1582,18 @@ const renderLocalAgentApp = (
     ...(hasChannels ? [renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")] : []),
     ...(hasChannels ? [renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)] : []),
     ...(hasSchedules
-      ? [renderNamedImport(["dispatchGeneratedSchedule", "generatedScheduleIds"], "./schedules")]
+      ? [
+          renderNamedImport(
+            ["dispatchGeneratedSchedule", "generatedScheduleDefinitions", "generatedScheduleIds"],
+            "./schedules",
+          ),
+        ]
       : []),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
+    ...(hasSchedules
+      ? [renderNamedImport(["projectScheduleFireHistory"], modules.runtimeSchedule)]
+      : []),
     renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
@@ -1587,6 +1604,18 @@ const renderLocalAgentApp = (
       modules.runtimeRunProjector,
     ),
     renderTypeImport(["AgentManifest", "SubmitResult", "SubmitRunInput"], modules.runtimeProtocol),
+    ...(hasSchedules
+      ? [
+          renderTypeImport(
+            [
+              "ScheduleDefinitionProjection",
+              "ScheduleFireHistoryProjection",
+              "ScheduleFireProjection",
+            ],
+            modules.runtimeSchedule,
+          ),
+        ]
+      : []),
     renderTypeImport(
       [
         "AgentSessionListProjection",
@@ -1684,7 +1713,9 @@ export interface LocalAgentApp {
     hasSchedules
       ? `readonly schedules: {
     readonly ids: ReadonlyArray<string>;
-    readonly dispatch: (input: GeneratedScheduleTriggerInput) => Promise<unknown>;
+    readonly list: () => ReadonlyArray<ScheduleDefinitionProjection>;
+    readonly trigger: (input: GeneratedScheduleTriggerInput) => Promise<ScheduleFireProjection>;
+    readonly history: (input?: { readonly scheduleId?: string }) => ScheduleFireHistoryProjection;
   };`
       : ""
   }
@@ -1743,6 +1774,30 @@ export const createLocalAgentApp = async (
       projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
     listRuns: (workflowId: string) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
   };
+  ${
+    hasSchedules
+      ? `const scheduleHistory = (
+    input: { readonly scheduleId?: string } = {},
+  ): ScheduleFireHistoryProjection => projectScheduleFireHistory(lowered.runtime.events(), input);
+  const triggerSchedule = async (
+    input: GeneratedScheduleTriggerInput,
+  ): Promise<ScheduleFireProjection> => {
+    const result = await dispatchGeneratedSchedule({
+      ...input,
+      identity: semanticTruthIdentity,
+      runtime: { sessions, workflows },
+    });
+    await lowered.commitScheduleFireDispatch(result);
+    const projected = scheduleHistory({ scheduleId: input.scheduleId }).fires.find(
+      (fire) => fire.fireId === result.fireId,
+    );
+    if (projected === undefined) {
+      throw new Error(\`schedule fire projection missing after commit: \${result.fireId}\`);
+    }
+    return projected;
+  };`
+      : ""
+  }
   return {
     runtime: lowered.runtime,
     sessions,
@@ -1751,12 +1806,9 @@ export const createLocalAgentApp = async (
       hasSchedules
         ? `schedules: {
       ids: generatedScheduleIds,
-      dispatch: (input: GeneratedScheduleTriggerInput) =>
-        dispatchGeneratedSchedule({
-          ...input,
-          identity: semanticTruthIdentity,
-          runtime: { sessions, workflows },
-        }).then((result) => lowered.commitScheduleFireDispatch(result)),
+      list: () => generatedScheduleDefinitions,
+      trigger: triggerSchedule,
+      history: scheduleHistory,
     },`
         : ""
     }
@@ -1814,8 +1866,13 @@ const renderCloudflareWorkerEntry = (
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
   const hasChannels = normalized.channels.length > 0;
+  const hasSchedules = normalized.schedules.length > 0;
+  const cloudflareScopeImports = [
+    ...(hasChannels || hasSchedules ? ["agentOSRpcClient"] : []),
+    ...(hasSchedules ? ["agentOSScopeId"] : []),
+  ];
   return `${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n` : ""}${renderNamedImport([target.durableObject.className], "./target")}
-${hasChannels ? `${renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")}\n${renderNamedImport(["agentOSRpcClient"], "./cloudflare-scope")}\n${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}\n${renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)}\n` : ""}${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
+${hasChannels ? `${renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")}\n${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}\n${renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)}\n` : ""}${hasSchedules ? `${renderNamedImport(["generatedSchedules"], "./schedules")}\n${renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")}\n` : ""}${cloudflareScopeImports.length === 0 ? "" : `${renderNamedImport(cloudflareScopeImports, "./cloudflare-scope")}\n`}${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
 export { ${target.durableObject.className}${normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""} };
 
@@ -1836,6 +1893,27 @@ const generatedChannelRuntimeFor = (env: AgentOSTargetEnv): ChannelRuntime => {
 `
     : ""
 }
+${hasSchedules ? `type AgentOSScheduleRpc = {
+  readonly dispatchSchedule: (input: GeneratedScheduleTriggerInput) => Promise<unknown>;
+};
+
+const generatedScheduleAppPrincipal: GeneratedScheduleTriggerInput["appPrincipal"] = {
+  authority: "agentos.app",
+  subject: agentOSScopeId,
+};
+
+const generatedScheduleInputsFor = (
+  controller: ScheduledController,
+): ReadonlyArray<GeneratedScheduleTriggerInput> =>
+  generatedSchedules
+    .filter((entry) => entry.cron === controller.cron)
+    .map((entry) => ({
+      scheduleId: entry.scheduleId,
+      scheduledAt: controller.scheduledTime,
+      appPrincipal: generatedScheduleAppPrincipal,
+    }));
+`
+    : ""}
 
 export default {
   async fetch(request: Request, env: AgentOSTargetEnv): Promise<Response> {
@@ -1847,6 +1925,16 @@ export default {
     }
     return new Response("agentOS Cloudflare target", { status: 404 });
   },
+  ${
+    hasSchedules
+      ? `scheduled(controller: ScheduledController, env: AgentOSTargetEnv, ctx: ExecutionContext): void {
+    const runtime = agentOSRpcClient<AgentOSScheduleRpc>(env);
+    for (const input of generatedScheduleInputsFor(controller)) {
+      ctx.waitUntil(runtime.dispatchSchedule(input));
+    }
+  },`
+      : ""
+  }
 } satisfies ExportedHandler<AgentOSTargetEnv>;
 `;
 };
@@ -3171,7 +3259,11 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             {
               kind: "schedule-registry" as const,
               source: "./schedules",
-              imports: ["dispatchGeneratedSchedule", "generatedSchedules"],
+              imports: [
+                "dispatchGeneratedSchedule",
+                "generatedScheduleDefinitions",
+                "generatedSchedules",
+              ],
             },
           ]
         : []),
@@ -3303,7 +3395,11 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           {
             kind: "schedule-registry" as const,
             source: "./schedules",
-            imports: ["dispatchGeneratedSchedule", "generatedSchedules"],
+            imports: [
+              "dispatchGeneratedSchedule",
+              "generatedScheduleDefinitions",
+              "generatedSchedules",
+            ],
           },
         ]
       : []),

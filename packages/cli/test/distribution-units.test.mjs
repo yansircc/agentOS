@@ -70,6 +70,14 @@ const channelBoundary = {
   deduplication: "app-owned",
   secretHandling: "redacted-before-submit-or-dispatch",
 };
+const scheduleBoundary = {
+  identity: "agent/schedules/<id>.ts",
+  timeAuthority: "provider-scheduled-metadata",
+  fireIdentity: "stable-app-principal-schedule-id-utc-minute",
+  productIngress: "sessions-or-workflows",
+  externalSideEffects: "app-owned",
+  historyProjection: "schedule-fire-events-plus-linked-product-projections",
+};
 
 const blueprintRecipeMarkdown = ({
   id = "provider.material-binding",
@@ -79,6 +87,7 @@ const blueprintRecipeMarkdown = ({
   markerPath = primaryFile,
   ownership = lifecycleOwnership,
   channel = undefined,
+  schedule = undefined,
   bodySuffix = "",
 } = {}) => {
   const frontmatter = {
@@ -93,6 +102,7 @@ const blueprintRecipeMarkdown = ({
   };
   if (ownership !== undefined) frontmatter.lifecycleOwnership = ownership;
   if (channel !== undefined) frontmatter.channelBoundary = channel;
+  if (schedule !== undefined) frontmatter.scheduleBoundary = schedule;
   return [
     "---json",
     JSON.stringify(frontmatter, null, 2),
@@ -115,6 +125,14 @@ const blueprintRecipeMarkdown = ({
           "## Channel Boundary",
           "",
           "Inbound channels keep provider-native Request bodies in the handler and use verifier-derived principals for authority.",
+          "",
+        ]),
+    ...(schedule === undefined
+      ? []
+      : [
+          "## Schedule Boundary",
+          "",
+          "Schedules keep provider scheduled metadata at the generated target and derive history from schedule fire events plus linked product projections.",
           "",
         ]),
     "## Steps",
@@ -381,6 +399,29 @@ void test("blueprint recipe contract accepts channel ingress boundary facts", ()
   );
 });
 
+void test("blueprint recipe contract accepts schedule time-ingress boundary facts", () => {
+  assert.deepEqual(
+    blueprintRecipeFindingsForSources({
+      recipeSources: [
+        {
+          file: "blueprints/recipes/schedule/time-ingress.md",
+          content: blueprintRecipeMarkdown({
+            id: "schedule.time-ingress",
+            kind: "schedule",
+            title: "Schedule Time Ingress",
+            primaryFile: "agent/schedules/<id>.ts",
+            ownership: undefined,
+            schedule: scheduleBoundary,
+          }),
+        },
+      ],
+      upgradeGuideContent:
+        '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="schedule.time-ingress" -->\n',
+    }),
+    [],
+  );
+});
+
 void test("blueprint recipe contract rejects target replacement and marker drift", () => {
   const findings = blueprintRecipeFindingsForSources({
     recipeSources: [
@@ -418,7 +459,7 @@ void test("blueprint recipe contract rejects target replacement and marker drift
   );
   assert.equal(
     findings.includes(
-      "blueprints/recipes/target/node.md: kind must be one of channel, sandbox, database, provider, observability",
+      "blueprints/recipes/target/node.md: kind must be one of channel, schedule, sandbox, database, provider, observability",
     ),
     true,
   );
@@ -487,6 +528,59 @@ void test("blueprint recipe contract rejects channel runtime lifecycle drift", (
   assert.equal(
     findings.includes(
       "blueprints/recipes/channel/missing-boundary.md: channel recipe requires channelBoundary object",
+    ),
+    true,
+  );
+});
+
+void test("blueprint recipe contract rejects schedule boundary drift", () => {
+  const findings = blueprintRecipeFindingsForSources({
+    recipeSources: [
+      {
+        file: "blueprints/recipes/schedule/time-ingress.md",
+        content: blueprintRecipeMarkdown({
+          id: "schedule.time-ingress",
+          kind: "schedule",
+          title: "Schedule Time Ingress",
+          primaryFile: "agent/schedules/<id>.ts",
+          ownership: undefined,
+          schedule: {
+            ...scheduleBoundary,
+            fireIdentity: "wall-clock-fire-time",
+            externalSideEffects: "runtime-owned",
+          },
+        }),
+      },
+      {
+        file: "blueprints/recipes/schedule/missing-boundary.md",
+        content: blueprintRecipeMarkdown({
+          id: "schedule.missing-boundary",
+          kind: "schedule",
+          title: "Missing Schedule Boundary",
+          primaryFile: "agent/schedules/<id>.ts",
+          ownership: undefined,
+        }),
+      },
+    ],
+    upgradeGuideContent:
+      '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="schedule.time-ingress" -->\n<!-- agentos:blueprint-upgrade id="schedule.missing-boundary" -->\n',
+  });
+
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/schedule/time-ingress.md: scheduleBoundary.fireIdentity must be stable-app-principal-schedule-id-utc-minute",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/schedule/time-ingress.md: scheduleBoundary.externalSideEffects must be app-owned",
+    ),
+    true,
+  );
+  assert.equal(
+    findings.includes(
+      "blueprints/recipes/schedule/missing-boundary.md: schedule recipe requires scheduleBoundary object",
     ),
     true,
   );

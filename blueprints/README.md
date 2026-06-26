@@ -8,5 +8,6 @@ frontmatter delimited by `---json` and `---`, and are validated by `agentos chec
 blueprint-recipes`.
 
 Provider and sandbox recipes must declare `lifecycleOwnership` for create, reuse,
-delete, credentials, and network policy. Those axes belong to app-owned or
-generated target code; runtime exposes stable contracts and pure adapters only.
+delete, credentials, and network policy. Channel and schedule recipes must
+declare their ingress boundary axes. Those axes belong to app-owned or generated
+target code; runtime exposes stable contracts and pure adapters only.

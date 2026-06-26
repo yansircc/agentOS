@@ -1,17 +1,28 @@
 import type { AuthorityRef, ScopeRef } from "@agent-os/core/effect-claim";
 import type { TraceContext } from "@agent-os/core/telemetry-protocol";
+import type { LedgerEvent } from "@agent-os/core/types";
 import {
+  decodeRuntimeLedgerEvent,
   decodeSubmitResult,
   RUNTIME_EVENT_KIND,
   scheduleFireDispatchedEvent,
   scheduleFireFailedEvent,
   scheduleFireRequestedEvent,
   type RuntimeEventCommitSpecByKind,
+  type RuntimeLedgerEvent,
+  type RuntimeLedgerEventByKind,
   type ScheduleFireFailedPayload,
   type ScheduleFireProductLink,
   type SubmitResult,
   type SubmitRunInput,
 } from "@agent-os/core/runtime-protocol";
+import {
+  projectAgentSession,
+  projectWorkflowRun,
+  type AgentSessionProjection,
+  type AgentSessionTurnProjection,
+  type WorkflowRunProjection,
+} from "../run-projector";
 
 const CRON_FIELD_PATTERN = /^[0-9*,/-]+$/u;
 const SCHEDULED_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/u;
@@ -132,6 +143,68 @@ export type ScheduleFireDispatchResult =
       phase: ScheduleFireFailedPayload["phase"];
       reason: string;
     }>;
+
+export type ScheduleDefinitionProjection = Readonly<{
+  scheduleId: string;
+  path: string;
+  cron: CronMinuteExpression | string;
+}>;
+
+export type ScheduleFireStatus = "requested" | "dispatched" | "failed";
+
+export type ScheduleFireSessionProductProjection = Readonly<{
+  kind: "session_turn";
+  link: Extract<ScheduleFireProductLink, { readonly kind: "session_turn" }>;
+  session: AgentSessionProjection;
+  turn: AgentSessionTurnProjection | null;
+}>;
+
+export type ScheduleFireWorkflowProductProjection = Readonly<{
+  kind: "workflow_run";
+  link: Extract<ScheduleFireProductLink, { readonly kind: "workflow_run" }>;
+  workflowRun: WorkflowRunProjection | null;
+}>;
+
+export type ScheduleFireProductProjection =
+  | ScheduleFireSessionProductProjection
+  | ScheduleFireWorkflowProductProjection;
+
+export type ScheduleFireBaseProjection = Readonly<{
+  scheduleId: string;
+  fireId: string;
+  scheduledAt: ScheduledMinute | string;
+  requestedEventId: number;
+  requestedAt: number;
+  appPrincipal: SchedulePrincipal;
+}>;
+
+export type ScheduleFireProjection =
+  | (ScheduleFireBaseProjection & {
+      readonly status: "requested";
+    })
+  | (ScheduleFireBaseProjection & {
+      readonly status: "dispatched";
+      readonly outcomeEventId: number;
+      readonly outcomeAt: number;
+      readonly productLink: ScheduleFireProductLink;
+      readonly product: ScheduleFireProductProjection;
+    })
+  | (ScheduleFireBaseProjection & {
+      readonly status: "failed";
+      readonly outcomeEventId: number;
+      readonly outcomeAt: number;
+      readonly phase: ScheduleFireFailedPayload["phase"];
+      readonly reason: string;
+    });
+
+export type ScheduleFireHistorySpec = Readonly<{
+  scheduleId?: string;
+}>;
+
+export type ScheduleFireHistoryProjection = Readonly<{
+  scheduleId?: string;
+  fires: ReadonlyArray<ScheduleFireProjection>;
+}>;
 
 export const cronMinuteExpression = (value: string): CronMinuteExpression => {
   if (typeof value !== "string") {
@@ -369,6 +442,34 @@ export const dispatchScheduleFire = async <TResult = unknown>(
   };
 };
 
+export const projectScheduleFireHistory = (
+  events: ReadonlyArray<LedgerEvent>,
+  spec: ScheduleFireHistorySpec = {},
+): ScheduleFireHistoryProjection => {
+  const runtimeEvents = [...scheduleRuntimeEventsOf(events)].sort(
+    (left, right) => left.id - right.id,
+  );
+  const outcomes = new Map<number, ScheduleFireOutcomeEvent>();
+  for (const event of runtimeEvents) {
+    if (isScheduleFireOutcomeEvent(event)) {
+      outcomes.set(event.payload.requestedEventId, event);
+    }
+  }
+  const fires = runtimeEvents
+    .filter(
+      (event): event is ScheduleFireRequestedEvent =>
+        event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED &&
+        (spec.scheduleId === undefined || event.payload.scheduleId === spec.scheduleId),
+    )
+    .map((event) => scheduleFireProjectionFromEvent(events, event, outcomes.get(event.id)))
+    .sort((left, right) => right.requestedEventId - left.requestedEventId);
+
+  return {
+    ...(spec.scheduleId === undefined ? {} : { scheduleId: spec.scheduleId }),
+    fires,
+  };
+};
+
 const parseScheduledMinuteString = (value: string): Date => {
   if (typeof value !== "string" || value.length === 0) {
     return failScheduleContract("Schedule scheduledAt must be a valid timestamp");
@@ -456,4 +557,94 @@ const nonEmptyString = (value: unknown): value is string =>
 
 const failScheduleContract = (message: string): never => {
   throw new TypeError(message);
+};
+
+type ScheduleFireRequestedEvent = RuntimeLedgerEventByKind<
+  typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED
+>;
+
+type ScheduleFireOutcomeEvent =
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED>;
+
+const scheduleRuntimeEventsOf = (
+  events: ReadonlyArray<LedgerEvent>,
+): ReadonlyArray<RuntimeLedgerEvent> => {
+  const decoded: RuntimeLedgerEvent[] = [];
+  for (const event of events) {
+    const result = decodeRuntimeLedgerEvent(event);
+    if (result._tag === "runtime") decoded.push(result.event);
+  }
+  return decoded;
+};
+
+const isScheduleFireOutcomeEvent = (event: RuntimeLedgerEvent): event is ScheduleFireOutcomeEvent =>
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED ||
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED;
+
+const scheduleProductProjection = (
+  events: ReadonlyArray<LedgerEvent>,
+  productLink: ScheduleFireProductLink,
+): ScheduleFireProductProjection => {
+  if (productLink.kind === "session_turn") {
+    const session = projectAgentSession(events, productLink.sessionRef);
+    return {
+      kind: "session_turn",
+      link: productLink,
+      session,
+      turn:
+        session.turns.find(
+          (turn) =>
+            turn.runtimeRunId === productLink.runtimeRunId &&
+            turn.turnRef === productLink.turnRef,
+        ) ?? null,
+    };
+  }
+  return {
+    kind: "workflow_run",
+    link: productLink,
+    workflowRun: projectWorkflowRun(events, productLink.workflowId, productLink.workflowRunId),
+  };
+};
+
+const scheduleFireProjectionFromEvent = (
+  events: ReadonlyArray<LedgerEvent>,
+  requested: ScheduleFireRequestedEvent,
+  outcome: ScheduleFireOutcomeEvent | undefined,
+): ScheduleFireProjection => {
+  const base: ScheduleFireBaseProjection = {
+    scheduleId: requested.payload.scheduleId,
+    fireId: requested.payload.fireId,
+    scheduledAt: requested.payload.scheduledAt,
+    requestedEventId: requested.id,
+    requestedAt: requested.ts,
+    appPrincipal: requested.payload.appPrincipal,
+  };
+
+  if (outcome === undefined) {
+    return {
+      ...base,
+      status: "requested",
+    };
+  }
+
+  if (outcome.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED) {
+    return {
+      ...base,
+      status: "failed",
+      outcomeEventId: outcome.id,
+      outcomeAt: outcome.ts,
+      phase: outcome.payload.phase,
+      reason: outcome.payload.reason,
+    };
+  }
+
+  return {
+    ...base,
+    status: "dispatched",
+    outcomeEventId: outcome.id,
+    outcomeAt: outcome.ts,
+    productLink: outcome.payload.productLink,
+    product: scheduleProductProjection(events, outcome.payload.productLink),
+  };
 };

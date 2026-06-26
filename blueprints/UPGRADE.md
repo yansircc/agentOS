@@ -3,6 +3,7 @@
 <!-- agentos:blueprint-upgrade id="provider.material-binding" -->
 <!-- agentos:blueprint-upgrade id="sandbox.lifecycle-boundary" -->
 <!-- agentos:blueprint-upgrade id="channel.inbound" -->
+<!-- agentos:blueprint-upgrade id="schedule.time-ingress" -->
 
 ## provider.material-binding
 
@@ -22,3 +23,11 @@ Keep provider ingress in `agent/channels/<name>.ts`. The generated target owns
 mounting and the pure channel context; app-owned channel code owns request
 verification, provider SDK use, deduplication, outbound calls, and secret
 redaction before submit or dispatch.
+
+## schedule.time-ingress
+
+Keep time ingress in `agent/schedules/<id>.ts`. The generated target owns
+provider scheduled metadata routing; schedule declarations use UTC five-field
+cron, stable fire identity, and one product ingress call. Apps own external side
+effects. Schedule history is projected from schedule fire events plus linked
+session/workflow/run projections.

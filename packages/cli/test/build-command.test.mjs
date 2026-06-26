@@ -1344,6 +1344,7 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
     assert.match(cloudflareSchedules, /from "\.\.\/\.\.\/agent\/schedules\/daily"/);
     assert.match(cloudflareSchedules, /from "@agent-os\/runtime\/schedule"/);
     assert.match(cloudflareSchedules, /generatedSchedules/);
+    assert.match(cloudflareSchedules, /generatedScheduleDefinitions/);
     assert.match(cloudflareSchedules, /generatedScheduleRegistry/);
     assert.match(cloudflareSchedules, /dispatchScheduleFire/);
     assert.doesNotMatch(cloudflareSchedules, /scheduleFireId/);
@@ -1358,6 +1359,16 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
     assert.match(cloudflareTarget, /generatedScheduleRuntimeFor\(this\)/);
     assert.match(cloudflareTarget, /commitScheduleFireDispatchFull/);
     assert.doesNotMatch(cloudflareTarget, /agent\/schedules|readdir|collectFiles/);
+    const cloudflareWorker = readFileSync(
+      path.join(cloudflareRoot, ".agentos/generated/worker.ts"),
+      "utf8",
+    );
+    assert.match(cloudflareWorker, /generatedSchedules/);
+    assert.match(cloudflareWorker, /scheduled\(controller: ScheduledController/);
+    assert.match(cloudflareWorker, /entry\.cron === controller\.cron/);
+    assert.match(cloudflareWorker, /scheduledAt: controller\.scheduledTime/);
+    assert.match(cloudflareWorker, /ctx\.waitUntil\(runtime\.dispatchSchedule\(input\)\)/);
+    assert.doesNotMatch(cloudflareWorker, /cron-parser|setInterval|setTimeout/);
 
     writeBaseAgent(nodeRoot, ['  "target": { "kind": "node@1" },']);
     const nodeResult = spawnSync(process.execPath, [cli, "build", "--cwd", nodeRoot], {
@@ -1369,15 +1380,19 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
     assert.match(nodeLocal, /from "\.\/schedules"/);
     assert.match(nodeLocal, /readonly schedules:/);
     assert.match(nodeLocal, /ids: generatedScheduleIds/);
-    assert.match(nodeLocal, /dispatchGeneratedSchedule/);
+    assert.match(nodeLocal, /list: \(\) => generatedScheduleDefinitions/);
+    assert.match(nodeLocal, /trigger: triggerSchedule/);
+    assert.match(nodeLocal, /history: scheduleHistory/);
+    assert.match(nodeLocal, /projectScheduleFireHistory/);
     assert.match(nodeLocal, /commitScheduleFireDispatch/);
+    assert.doesNotMatch(nodeLocal, /readonly dispatch/);
     assert.doesNotMatch(nodeLocal, /agent\/schedules|readdir|collectFiles/);
     assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/schedules.ts")), true);
 
     linkGeneratedTargetSmokeDependencies(nodeRoot);
     const dispatchResult = runTypeScript(
       [
-        'import { dispatchGeneratedSchedule, generatedScheduleIds } from "./.agentos/generated/schedules.ts";',
+        'import { dispatchGeneratedSchedule, generatedScheduleDefinitions, generatedScheduleIds } from "./.agentos/generated/schedules.ts";',
         "const calls = [];",
         "const runtime = Object.freeze({",
         "  sessions: Object.freeze({",
@@ -1401,12 +1416,15 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         "  runtime,",
         "});",
         "const outcome = result.outcome(500);",
-        "console.log(JSON.stringify({ ids: generatedScheduleIds, result: { ok: result.ok, fireId: result.fireId, requested: result.requested, productLink: result.ok ? result.productLink : null, outcome }, calls }));",
+        "console.log(JSON.stringify({ definitions: generatedScheduleDefinitions, ids: generatedScheduleIds, result: { ok: result.ok, fireId: result.fireId, requested: result.requested, productLink: result.ok ? result.productLink : null, outcome }, calls }));",
       ].join("\n"),
       { cwd: nodeRoot, resolveDir: nodeRoot },
     );
     assert.equal(dispatchResult.status, 0, dispatchResult.stderr);
     const output = JSON.parse(dispatchResult.stdout);
+    assert.deepEqual(output.definitions, [
+      { scheduleId: "daily", path: "agent/schedules/daily.ts", cron: "0 9 * * *" },
+    ]);
     assert.deepEqual(output.ids, ["daily"]);
     assert.equal(output.result.ok, true);
     assert.equal(output.result.requested.kind, "schedule.fire_requested");

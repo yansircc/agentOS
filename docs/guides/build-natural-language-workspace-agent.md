@@ -20,6 +20,8 @@ agent/
     review/scripts/review.sh
   channels/
     github.ts            # optional inbound provider request handler
+  schedules/
+    daily.ts             # optional UTC time ingress handler
   tools/                # optional custom execute code only
   workspace/reconcile.ts
 workflows/
@@ -102,6 +104,28 @@ response URLs must be redacted before data is sent to `submit`, `dispatch`,
 model context, or durable events. Runtime does not provide generic webhook
 helpers, provider lifecycle helpers, provider-normalized universal events, or
 deduplication substrate for channels.
+
+`agent/schedules/<id>.ts` is an optional time ingress slot. The path stem is the
+schedule identity; there is no second schedule list in `agent.json` or
+`agentos.config.jsonc`. Each file exports a `defineSchedule` declaration with a
+five-field UTC cron expression. The generated target owns provider scheduled
+metadata routing; node/local targets expose explicit `schedules.list`,
+`schedules.trigger`, and `schedules.history` dev/test APIs by schedule id and do
+not start an implicit background cron engine.
+
+Schedule handlers receive only `appPrincipal`, stable `fireId`, normalized
+`scheduledAt`, and product `sessions`/`workflows` ingress. A fire identity is
+derived from stable app principal plus schedule id plus the cron-scheduled UTC
+minute, not deployment instance identity or wall-clock arrival time. A handler
+may submit one session turn or one workflow run. Product ingress owns
+idempotency with the fire identity. Schedule fire events record handoff request
+and handoff outcome only; running or terminal status is projected from the
+linked session, workflow, and runtime run facts.
+
+Provider lifecycle, external side effects, outbound calls, and durable
+deduplication stay in app-owned code reached by the submitted session or
+workflow. Runtime does not provide cron evaluation, provider SDK lifecycle,
+external side-effect helpers, or schedule-specific deduplication substrate.
 
 `workflows/<name>.ts` is an optional finite workflow authoring slot. The path
 stem is the workflow identity; there is no second workflow name in `agent.json`,
