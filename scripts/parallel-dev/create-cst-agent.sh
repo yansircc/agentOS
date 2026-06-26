@@ -63,7 +63,7 @@ cleanup_on_error() {
   status=$?
   if [[ "$setup_complete" -ne 1 && "$claim_taken" -eq 1 ]]; then
     echo "setup failed; releasing CST task $task_id" >&2
-    (cd "$repo_root" && cst release "$task_id" >/dev/null) || true
+    (cd "$repo_root" && cst --store "$repo_root" release "$task_id" >/dev/null) || true
   fi
   if [[ "$setup_complete" -ne 1 && -n "$worktree" && -d "$worktree" ]]; then
     echo "setup failed; removing worker worktree $worktree" >&2
@@ -89,14 +89,34 @@ if [[ -z "$agent_dir" || -z "$worktree" || -z "$branch" ]]; then
   exit 1
 fi
 
-claim_json="$(cst take "$task_id" --exec-cwd "$worktree" --private-exec-cwd)"
+claim_json="$(cst --store "$repo_root" take "$task_id" --exec-cwd "$worktree" --private-exec-cwd)"
 claim_taken=1
 
-claim_node_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(String(j.node_id));' <<<"$claim_json")"
-attempt_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.attempt_id);' <<<"$claim_json")"
-claim_event_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.event_id);' <<<"$claim_json")"
-lease_id="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.lease_id);' <<<"$claim_json")"
-lease_expires_at="$(node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.lease_expires_at);' <<<"$claim_json")"
+claim_fields="$(
+  node -e '
+const fs = require("fs");
+const view = JSON.parse(fs.readFileSync(0, "utf8"));
+const claim = view.claim ?? view;
+const requiredString = (name) => {
+  const value = claim[name];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`cst take output missing claim.${name}`);
+  }
+  return value;
+};
+if (!Number.isInteger(claim.node_id)) {
+  throw new Error("cst take output missing claim.node_id");
+}
+process.stdout.write([
+  String(claim.node_id),
+  requiredString("attempt_id"),
+  requiredString("event_id"),
+  requiredString("lease_id"),
+  requiredString("lease_expires_at"),
+].join("\t"));
+' <<<"$claim_json"
+)"
+IFS=$'\t' read -r claim_node_id attempt_id claim_event_id lease_id lease_expires_at <<<"$claim_fields"
 
 if [[ "$claim_node_id" != "$task_id" ]]; then
   echo "cst take returned task $claim_node_id, expected $task_id" >&2
