@@ -36,11 +36,42 @@ import {
 } from "./pack-check.mjs";
 
 const packageProtocolStringPattern = /(["'])workspace:\*\1|(["'])catalog:[^"']*\2/u;
+const agentosCliPath = () => path.join(repoRoot, "packages", "cli", "src", "main.mjs");
 
 export const consumerManifestFiles = (consumerRoot) =>
   ["package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"].map(
     (name) => path.join(consumerRoot, name),
   );
+
+const runAgentosCli = (args, options = {}) =>
+  spawnSync(process.execPath, [agentosCliPath(), ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: options.env ?? process.env,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+const runAgentosJson = (args, expectedStatus = 0, options = {}) => {
+  const result = runAgentosCli([...args, "--json"], options);
+  if (result.status !== expectedStatus) {
+    fail(
+      `agentos ${args.join(" ")} --json exited ${result.status}, expected ${expectedStatus}\n${result.stdout ?? ""}${result.stderr ?? ""}`,
+    );
+  }
+  if ((result.stderr ?? "").length > 0) {
+    fail(`agentos ${args.join(" ")} --json wrote stderr:\n${result.stderr}`);
+  }
+  try {
+    return {
+      result,
+      json: JSON.parse(result.stdout),
+    };
+  } catch (error) {
+    fail(
+      `agentos ${args.join(" ")} --json did not emit parseable JSON: ${error instanceof Error ? error.message : String(error)}\n${result.stdout}`,
+    );
+  }
+};
 
 export const snapshotFiles = (files) =>
   new Map(files.map((file) => [file, fs.existsSync(file) ? fs.readFileSync(file) : undefined]));
@@ -1381,6 +1412,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
     "cron-runner",
     "cronRunner",
     "submitAgentEffect",
+    "tooling/distribution",
   ];
   for (const token of forbiddenText) {
     if (generatedText.includes(token)) {
@@ -1663,6 +1695,19 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "  if (app.runtime.diagnostics().length !== 0) {",
       "    throw new Error(`generated local runtime emitted diagnostics ${JSON.stringify(app.runtime.diagnostics())}`);",
       "  }",
+      "  const productControlPlaneFacts = {",
+      "    Change: { id: 'change:zeroY3-fixture', runtimeRunId: firstTurn.runId },",
+      "    Candidate: { id: 'candidate:zeroY3-fixture', runtimeRunId: firstWorkflow.runId },",
+      "    Grant: { id: 'grant:zeroY3-fixture', runtimeRunId: secondWorkflow.runId },",
+      "    Intent: { id: 'intent:zeroY3-fixture', sessionRef },",
+      "    Receipt: { id: 'receipt:zeroY3-fixture', runtimeRunId: scheduledWorkflow.product.link.runtimeRunId },",
+      "  };",
+      "  const runtimeEventText = JSON.stringify(app.runtime.events());",
+      "  for (const fact of Object.values(productControlPlaneFacts)) {",
+      "    if (runtimeEventText.includes(fact.id)) {",
+      "      throw new Error(`runtime ledger captured product-owned fact ${fact.id}`);",
+      "    }",
+      "  }",
       "  const postInspection = app.runtime.inspect();",
       "  if (postInspection.runtime.status !== 'available') {",
       "    throw new Error(`generated local inspect lost runtime facts ${JSON.stringify(postInspection.runtime)}`);",
@@ -1898,6 +1943,45 @@ export const assertGeneratedLocalTargetConsumer = () => {
   assertNoAgentOsSymlinkPackages(dir);
   assertPackageNotInstalled(dir, "@effect/ai-anthropic");
   assertPackageNotInstalled(dir, "@cloudflare/sandbox");
+  const preflightSecret = "sk-generated-local-consumer-secret";
+  const preflightEndpoint = "https://openrouter.generated-local.example/v1";
+  const preflightModel = "openai/generated-local-test";
+  fs.writeFileSync(
+    path.join(dir, ".dev.vars"),
+    [
+      `AGENTOS_ENDPOINT_OPENROUTER=${preflightEndpoint}`,
+      `AGENTOS_CREDENTIAL_OPENROUTER_KEY=${preflightSecret}`,
+      `AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL=${preflightModel}`,
+      "",
+    ].join("\n"),
+  );
+  const preflightEnv = { PATH: process.env.PATH ?? "" };
+  const preflightOk = runAgentosJson(["preflight", "llm", "--cwd", dir], 0, {
+    env: preflightEnv,
+  });
+  if (preflightOk.json.ok !== true || preflightOk.json.route.bindingRef !== "default") {
+    fail(`generated local consumer preflight did not pass: ${preflightOk.result.stdout}`);
+  }
+  for (const value of [preflightSecret, preflightEndpoint, preflightModel]) {
+    if (preflightOk.result.stdout.includes(value)) {
+      fail(`generated local consumer preflight leaked provider value ${value}`);
+    }
+  }
+  const preflightFailure = runAgentosJson(
+    ["preflight", "llm", "--cwd", dir, "--route", "product_loop"],
+    1,
+    { env: preflightEnv },
+  );
+  if (preflightFailure.json.ok !== false || preflightFailure.json.route.status !== "missing") {
+    fail(
+      `generated local consumer preflight failure did not fail closed: ${preflightFailure.result.stdout}`,
+    );
+  }
+  for (const value of [preflightSecret, preflightEndpoint, preflightModel]) {
+    if (preflightFailure.result.stdout.includes(value)) {
+      fail(`generated local consumer preflight failure leaked provider value ${value}`);
+    }
+  }
   const localGeneratedSmokeText = fs.readFileSync(
     path.join(dir, "local-generated-smoke.ts"),
     "utf8",
@@ -1965,6 +2049,7 @@ export const assertGeneratedLocalTargetConsumer = () => {
     "SandboxLifecycle",
     "just-bash",
     "wrangler",
+    "tooling/distribution",
   ];
   for (const token of forbiddenBundleText) {
     if (bundleText.includes(token)) {
@@ -2187,7 +2272,12 @@ export const assertConsumerOverlayStatus = () => {
     "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
   });
   npmInstall(dir);
-  installConsumer(["--skip-pack", dir]);
+  const installProjection = runAgentosJson(["consumer", "install", dir, "--skip-pack"]).json;
+  if (installProjection.gate.status !== "pass") {
+    fail(
+      `agentos consumer install did not return a passing projection: ${JSON.stringify(installProjection.gate)}`,
+    );
+  }
   const markerPath = localConsumerMarkerPath(dir);
   const marker = readJson(markerPath);
   if (marker.generatedBy !== "agentos consumer install") {
@@ -2199,7 +2289,7 @@ export const assertConsumerOverlayStatus = () => {
   if (marker.artifact.installManifest?.sha256 !== sha256File(installManifestPath)) {
     fail("install-consumer marker did not record install manifest digest");
   }
-  const status = consumerStatusData(dir);
+  const status = runAgentosJson(["consumer", "status", dir]).json;
   if (status.localOverlay.status !== "installed") {
     fail(`consumer status did not report installed overlay: ${status.localOverlay.status}`);
   }
@@ -2215,6 +2305,10 @@ export const assertConsumerOverlayStatus = () => {
   if (status.gate.status !== "pass") {
     fail(`consumer status gate did not pass for current overlay: ${status.gate.status}`);
   }
+  const checked = runAgentosJson(["consumer", "check", dir], 0).json;
+  if (JSON.stringify(checked.gate) !== JSON.stringify(status.gate)) {
+    fail("consumer check and status did not share one overlay gate projection");
+  }
   writeJson(markerPath, {
     ...marker,
     source: {
@@ -2222,7 +2316,7 @@ export const assertConsumerOverlayStatus = () => {
       head: "0000000000000000000000000000000000000000",
     },
   });
-  const staleStatus = consumerStatusData(dir);
+  const staleStatus = runAgentosJson(["consumer", "check", dir], 1).json;
   if (staleStatus.localOverlay.sourceStatus !== "stale_source") {
     fail(
       `consumer status did not expose stale source overlay: ${staleStatus.localOverlay.sourceStatus}`,
@@ -2236,10 +2330,79 @@ export const assertConsumerOverlayStatus = () => {
   ) {
     fail(`consumer status gate did not fail stale source: ${JSON.stringify(staleStatus.gate)}`);
   }
+  const packageNames = Object.keys(marker.packages ?? {}).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  const firstPackage = packageNames[0];
+  if (firstPackage === undefined) fail("consumer overlay marker did not include packages");
+  const currentSource = currentSourceIdentity();
+  writeJson(markerPath, {
+    ...marker,
+    source: currentSource,
+    packages: {
+      ...marker.packages,
+      [firstPackage]: {
+        ...marker.packages[firstPackage],
+        tarball: path.join(dir, "missing-agentos-package.tgz"),
+      },
+    },
+  });
+  const missingTarballStatus = runAgentosJson(["consumer", "check", dir], 1).json;
+  if (
+    !missingTarballStatus.gate.hardFailures.some(
+      (failure) =>
+        failure.code === "local_overlay_tarball_not_verified" &&
+        failure.packageName === firstPackage &&
+        failure.tarballStatus === "missing",
+    )
+  ) {
+    fail(
+      `consumer check did not fail missing tarball through the shared projection: ${JSON.stringify(missingTarballStatus.gate)}`,
+    );
+  }
+  writeJson(markerPath, {
+    ...marker,
+    source: currentSource,
+    packages: {
+      ...marker.packages,
+      [firstPackage]: {
+        ...marker.packages[firstPackage],
+        sha256: "0".repeat(64),
+      },
+    },
+  });
+  const digestMismatchStatus = runAgentosJson(["consumer", "check", dir], 1).json;
+  if (
+    !digestMismatchStatus.gate.hardFailures.some(
+      (failure) =>
+        failure.code === "local_overlay_tarball_not_verified" &&
+        failure.packageName === firstPackage &&
+        failure.tarballStatus === "sha_mismatch",
+    )
+  ) {
+    fail(
+      `consumer check did not fail digest-broken tarball through the shared projection: ${JSON.stringify(digestMismatchStatus.gate)}`,
+    );
+  }
   fs.rmSync(path.join(dir, "node_modules"), { recursive: true, force: true });
   let missingNodeModulesFailed = false;
   try {
-    installConsumer(["--skip-pack", "--no-install", dir]);
+    const failedInstall = runAgentosCli([
+      "consumer",
+      "install",
+      dir,
+      "--skip-pack",
+      "--no-install",
+    ]);
+    if (failedInstall.status === 0) {
+      fail("install-consumer --no-install did not fail on missing node_modules");
+    }
+    if (!`${failedInstall.stdout}\n${failedInstall.stderr}`.includes("missing node_modules")) {
+      fail(
+        `unexpected consumer install --no-install failure:\n${failedInstall.stdout}${failedInstall.stderr}`,
+      );
+    }
+    missingNodeModulesFailed = true;
   } catch (error) {
     if (!String(error?.message ?? error).includes("missing node_modules")) {
       throw error;
