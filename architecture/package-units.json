@@ -346,6 +346,29 @@
       ]
     },
     {
+      "id": "evals",
+      "targetSourcePackageName": "@agent-os/evals",
+      "publicPackageName": "@yansirplus/evals",
+      "status": "target",
+      "hardInstallEnvelope": {
+        "dependencies": [],
+        "installScripts": [],
+        "nativeArtifacts": [],
+        "packageWideMetadata": [],
+        "requiredPeers": []
+      },
+      "runtimeConditions": ["node"],
+      "targetProfiles": ["node"],
+      "publicSubpaths": [
+        {
+          "subpath": ".",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["node"],
+          "optionalPeers": []
+        }
+      ]
+    },
+    {
       "id": "cli",
       "targetSourcePackageName": "@agent-os/cli",
       "publicPackageName": "@yansirplus/cli",

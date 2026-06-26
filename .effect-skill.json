@@ -51,6 +51,12 @@
       "rules": ["EFF020", "EFF021", "EFF024", "EFF025", "EFF026", "EFF404"]
     },
     {
+      "path": "packages/evals/src/index.ts",
+      "owner": "@agent-os/evals/authoring-dsl",
+      "reason": "pure synchronous eval authoring DSL owns fail-fast validation for malformed authored eval definitions before the CLI public driver executes; no Effect runtime boundary exists here",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "packages/runtime/src/attached-stream-protocol.ts",
       "owner": "@agent-os/runtime/attached-stream-protocol",
       "reason": "attached-stream JSON and SSE codecs own malformed frame decode classification without depending on Effect",

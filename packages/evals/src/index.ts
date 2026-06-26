@@ -35,9 +35,7 @@ export interface EvalObservation {
   readonly usage?: EvalJsonObject;
 }
 
-export type EvalAssertionCheck = (
-  observation: EvalObservation,
-) => boolean | Promise<boolean>;
+export type EvalAssertionCheck = (observation: EvalObservation) => boolean | Promise<boolean>;
 
 export type EvalAssertion =
   | { readonly kind: "completed" }
@@ -215,10 +213,15 @@ export const defineEvalDataset = <Input>(
   cases: readonly EvalCaseSpec<Input>[],
 ): readonly EvalCase<Input>[] => freezeArray(cases.map(normalizeCase));
 
-export const evalIdFromPath = (filePath: string, options: { readonly root?: string } = {}): string => {
-  const normalizePath = (value: string): string => value.replaceAll("\\", "/").replace(/\/+/gu, "/");
+export const evalIdFromPath = (
+  filePath: string,
+  options: { readonly root?: string } = {},
+): string => {
+  const normalizePath = (value: string): string =>
+    value.replaceAll("\\", "/").replace(/\/+/gu, "/");
   let normalized = normalizePath(requireNonEmpty(filePath, "eval path"));
-  const root = options.root === undefined ? undefined : normalizePath(options.root).replace(/\/$/u, "");
+  const root =
+    options.root === undefined ? undefined : normalizePath(options.root).replace(/\/$/u, "");
   if (root !== undefined && normalized.startsWith(`${root}/`)) {
     normalized = normalized.slice(root.length + 1);
   }
@@ -297,7 +300,10 @@ export const evalAssertion = Object.freeze({
       ...(reason === undefined ? {} : { reason }),
     }),
   calledTool: (toolName: string): EvalAssertion =>
-    Object.freeze({ kind: "called_tool" as const, toolName: requireNonEmpty(toolName, "tool name") }),
+    Object.freeze({
+      kind: "called_tool" as const,
+      toolName: requireNonEmpty(toolName, "tool name"),
+    }),
   notCalledTool: (toolName: string): EvalAssertion =>
     Object.freeze({
       kind: "not_called_tool" as const,

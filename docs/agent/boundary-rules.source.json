@@ -230,6 +230,10 @@
       },
       {
         "type": "rule",
+        "id": "eval-result-artifact-boundary"
+      },
+      {
+        "type": "rule",
         "id": "gate-tier-governance"
       },
       {
@@ -407,6 +411,34 @@
         "engine": "algorithmic",
         "checker": "repo-tooling-surface",
         "reason": "repo tooling surface spans package.json, scripts/, CLI imports, and docs references as one projection verdict"
+      }
+    },
+    {
+      "id": "eval-result-artifact-boundary",
+      "owner": "packages/cli/src/build/build-cli.ts",
+      "invariantId": "invariant.algebra.single-code-source",
+      "kind": "repo-boundary",
+      "diagnostics": [
+        "eval result artifacts are ignored derived observations",
+        "only the eval runner writes .agentos/eval-results",
+        "build, compile, catalog, runtime, and eval DSL sources must not read eval-results as input"
+      ],
+      "paths": [
+        ".gitignore",
+        "packages/cli/src/build/build-cli.ts",
+        "packages/cli/src/build/agent-authoring/**",
+        "packages/cli/src/generate/**",
+        "packages/cli/src/check/algorithmic/repo-surface-checks.mjs",
+        "packages/runtime/src/**",
+        "packages/core/src/**",
+        "packages/evals/src/**",
+        "agent-catalog/agentOS/**"
+      ],
+      "commandGroup": "all",
+      "acceptance": {
+        "engine": "algorithmic",
+        "checker": "eval-result-artifact-boundary",
+        "reason": "eval artifact write-only status spans git ignore state, the CLI writer, generated build/catalog code, runtime sources, and the DSL package"
       }
     },
     {

@@ -133,7 +133,9 @@ const waitForJsonLine = (child) =>
     let stdout = "";
     let stderr = "";
     const timeout = setTimeout(() => {
-      reject(new Error(`timed out waiting for server stdout\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+      reject(
+        new Error(`timed out waiting for server stdout\nstdout:\n${stdout}\nstderr:\n${stderr}`),
+      );
     }, 20_000);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -153,7 +155,9 @@ const waitForJsonLine = (child) =>
     });
     child.on("exit", (code, signal) => {
       clearTimeout(timeout);
-      reject(new Error(`server exited before ready: code=${code} signal=${signal}\nstderr:\n${stderr}`));
+      reject(
+        new Error(`server exited before ready: code=${code} signal=${signal}\nstderr:\n${stderr}`),
+      );
     });
   });
 
@@ -1422,10 +1426,16 @@ void test("agentos eval discovers eval files and runs local target through publi
     writeFileSync(
       path.join(root, "evals/session/basic.eval.ts"),
       [
-        'import { defineEval } from "@agent-os/evals";',
+        'import { defineEval, evalAssertion } from "@agent-os/evals";',
         "export default defineEval({",
         "  path: import.meta.url,",
         '  cases: [{ id: "turn", input: { sessionRef: "session-1", turnRef: "turn-1" } }],',
+        "  assertions: [",
+        "    evalAssertion.completed(),",
+        '    evalAssertion.notCalledTool("write_file"),',
+        "    evalAssertion.usedNoTools(),",
+        '    evalAssertion.check("observed-events", (observation) => observation.events.length > 0),',
+        "  ],",
         "  run: async (t) => {",
         "    const input = t.case.input;",
         "    const result = await t.sessions.submitTurn({",
@@ -1446,16 +1456,7 @@ void test("agentos eval discovers eval files and runs local target through publi
     );
 
     const result = await runCli(
-      [
-        "eval",
-        "--cwd",
-        root,
-        "--llm",
-        "test",
-        "--llm-response",
-        "eval done",
-        "--json",
-      ],
+      ["eval", "--cwd", root, "--llm", "test", "--llm-response", "eval done", "--json"],
       { cwd: root },
     );
     assert.equal(result.status, 0, result.stderr);
@@ -1466,6 +1467,12 @@ void test("agentos eval discovers eval files and runs local target through publi
     assert.deepEqual(report.evals, ["session.basic"]);
     assert.equal(report.total, 1);
     assert.equal(report.passed, 1);
+    assert.match(report.artifact, /^\.agentos\/eval-results\/.+\.json$/);
+    assert.equal(existsSync(path.join(root, report.artifact)), true);
+    assert.deepEqual(
+      report.results[0].assertions.map((assertion) => assertion.status),
+      ["passed", "passed", "passed", "passed"],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -1481,10 +1488,16 @@ void test("agentos eval remote target uses the same public command driver with h
     writeFileSync(
       path.join(root, "evals/workflow/remote.eval.ts"),
       [
-        'import { defineEval } from "@agent-os/evals";',
+        'import { defineEval, evalAssertion } from "@agent-os/evals";',
         "export default defineEval({",
         "  path: import.meta.url,",
         '  cases: [{ id: "run", input: { workflowId: "wf", workflowRunId: "run-1" } }],',
+        "  assertions: [",
+        "    evalAssertion.completed(),",
+        '    evalAssertion.calledTool("lookup"),',
+        '    evalAssertion.notCalledTool("delete_everything"),',
+        '    evalAssertion.projection("inspectWorkflowRun"),',
+        "  ],",
         "  run: async (t) => {",
         "    const result = await t.workflows.run({",
         '      intent: "run workflow",',
@@ -1509,10 +1522,30 @@ void test("agentos eval remote target uses the same public command driver with h
         });
         request.on("end", () => {
           const parsed = JSON.parse(body);
-          assert.equal(parsed.name, "runWorkflow");
           response.writeHead(200, { "content-type": "application/json" });
-          response.end(JSON.stringify({ ok: true, value: { ok: true, final: "remote done" } }));
+          if (parsed.name === "runWorkflow") {
+            response.end(JSON.stringify({ ok: true, value: { ok: true, final: "remote done" } }));
+            return;
+          }
+          if (parsed.name === "inspectWorkflowRun") {
+            response.end(
+              JSON.stringify({ ok: true, value: { workflowRunId: "run-1", status: "done" } }),
+            );
+            return;
+          }
+          response.end(JSON.stringify({ ok: false, value: null }));
         });
+        return;
+      }
+      if (request.url === "/agentos/events" && request.method === "GET") {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(
+          [
+            'event: ledger\ndata: {"kind":"tool.executed","payload":{"name":"lookup"}}',
+            'event: ledger\ndata: {"kind":"agent.run.completed","payload":{"tokensUsed":2}}',
+            "",
+          ].join("\n\n"),
+        );
         return;
       }
       response.writeHead(404, { "content-type": "application/json" });
@@ -1544,13 +1577,162 @@ void test("agentos eval remote target uses the same public command driver with h
     assert.equal(report.ok, true);
     assert.equal(report.target.kind, "remote");
     assert.equal(report.passed, 1);
-    assert.deepEqual(requests.map((request) => request.auth), ["Bearer eval"]);
+    assert.match(report.artifact, /^\.agentos\/eval-results\/.+\.json$/);
+    assert.equal(existsSync(path.join(root, report.artifact)), true);
+    assert.deepEqual(
+      report.results[0].assertions.map((assertion) => assertion.status),
+      ["passed", "passed", "passed", "passed"],
+    );
+    assert.deepEqual(
+      requests.map((request) => request.url),
+      ["/agentos/command", "/agentos/events", "/agentos/command"],
+    );
+    assert.deepEqual(
+      requests.map((request) => request.auth),
+      ["Bearer eval", "Bearer eval", "Bearer eval"],
+    );
   } finally {
     if (server !== undefined) {
       await new Promise((resolve) => server.close(resolve));
     }
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+void test("agentos eval fails cases when public-boundary assertions fail", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-assertion-fail-"));
+  let server;
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    linkGeneratedTargetSmokeDependencies(root);
+    mkdirSync(path.join(root, "evals/session"), { recursive: true });
+    writeFileSync(
+      path.join(root, "evals/session/tool.eval.ts"),
+      [
+        'import { defineEval, evalAssertion } from "@agent-os/evals";',
+        "export default defineEval({",
+        "  path: import.meta.url,",
+        '  cases: [{ id: "assertion" , input: {} }],',
+        '  assertions: [evalAssertion.calledTool("missing_tool")],',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    server = http.createServer((request, response) => {
+      if (request.url === "/agentos/events" && request.method === "GET") {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(
+          'event: ledger\ndata: {"kind":"agent.run.completed","payload":{"tokensUsed":1}}\n\n',
+        );
+        return;
+      }
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: false }));
+    });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+    const result = await runCli(
+      [
+        "eval",
+        "--cwd",
+        root,
+        "--target",
+        "remote",
+        "--base-url",
+        `http://127.0.0.1:${port}`,
+        "--json",
+      ],
+      { cwd: root },
+    );
+    assert.equal(result.status, 1);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, false);
+    assert.equal(report.failed, 1);
+    assert.equal(report.results[0].assertions[0].status, "failed");
+    assert.match(report.results[0].error, /missing tool call missing_tool/u);
+    assert.equal(existsSync(path.join(root, report.artifact)), true);
+  } finally {
+    if (server !== undefined) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos eval derives waiting and failed assertions from public event status", async () => {
+  const runStatusFixture = async ({ name, assertion, event }) => {
+    const root = mkdtempSync(path.join(os.tmpdir(), `agentos-eval-${name}-`));
+    let server;
+    try {
+      writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+      linkGeneratedTargetSmokeDependencies(root);
+      mkdirSync(path.join(root, "evals/status"), { recursive: true });
+      writeFileSync(
+        path.join(root, "evals/status/status.eval.ts"),
+        [
+          'import { defineEval, evalAssertion } from "@agent-os/evals";',
+          "export default defineEval({",
+          "  path: import.meta.url,",
+          '  cases: [{ id: "status", input: {} }],',
+          `  assertions: [${assertion}],`,
+          "});",
+          "",
+        ].join("\n"),
+      );
+      server = http.createServer((request, response) => {
+        if (request.url === "/agentos/events" && request.method === "GET") {
+          response.writeHead(200, { "content-type": "text/event-stream" });
+          response.end(`event: ledger\ndata: ${event}\n\n`);
+          return;
+        }
+        response.writeHead(404, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: false }));
+      });
+      await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", resolve);
+      });
+      const address = server.address();
+      const port = typeof address === "object" && address !== null ? address.port : 0;
+      const result = await runCli(
+        [
+          "eval",
+          "--cwd",
+          root,
+          "--target",
+          "remote",
+          "--base-url",
+          `http://127.0.0.1:${port}`,
+          "--json",
+        ],
+        { cwd: root },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      const report = JSON.parse(result.stdout);
+      assert.equal(report.ok, true);
+      assert.equal(report.results[0].assertions[0].status, "passed");
+    } finally {
+      if (server !== undefined) {
+        await new Promise((resolve) => server.close(resolve));
+      }
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  await runStatusFixture({
+    name: "waiting",
+    assertion: "evalAssertion.waiting()",
+    event: '{"kind":"agent.run.interrupted","payload":{"reason":"decision_required"}}',
+  });
+  await runStatusFixture({
+    name: "failed",
+    assertion: 'evalAssertion.failed("agent.aborted.upstream_failure")',
+    event: '{"kind":"agent.aborted.upstream_failure","payload":{"tokensUsed":1}}',
+  });
 });
 
 void test("agentos build emits one channel registry for cloudflare and node targets", () => {

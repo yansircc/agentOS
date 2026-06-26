@@ -1,0 +1,41 @@
+# @agent-os/evals
+
+## Purpose
+
+Authoring DSL for generated app behavior evals. The package lets product
+repos declare `evals/**/*.eval.ts` cases, symbolic provider needs, public
+driver facades, and deterministic assertions over generated app behavior.
+
+## Invariant
+
+`@agent-os/evals` is declaration-only. It owns eval definitions, datasets,
+symbolic config, assertion declarations, and public facade types. It does not
+assemble runtime graphs, construct model providers, serve generated apps,
+import runtime internals, or read eval result artifacts as source facts.
+
+## Minimal Usage
+
+```ts
+import { defineEval, evalAssertion } from "@agent-os/evals";
+
+export default defineEval({
+  path: import.meta.url,
+  cases: [{ id: "turn", input: { sessionRef: "session-1", turnRef: "turn-1" } }],
+  assertions: [evalAssertion.completed()],
+  run: async ({ case: testCase, sessions }) => {
+    await sessions.submitTurn({
+      intent: "answer",
+      context: {},
+      sessionRef: testCase.input.sessionRef,
+      turnRef: testCase.input.turnRef,
+    });
+  },
+});
+```
+
+## Verification
+
+```sh
+pnpm --filter @agent-os/evals test
+pnpm run agentos eval --cwd /path/to/generated-app --target local
+```

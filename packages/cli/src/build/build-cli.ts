@@ -1091,10 +1091,7 @@ const parseAfterId = (url: URL): number | undefined => {
   return parsed;
 };
 
-const writeSseEvents = (
-  response: http.ServerResponse,
-  events: ReadonlyArray<unknown>,
-): void => {
+const writeSseEvents = (response: http.ServerResponse, events: ReadonlyArray<unknown>): void => {
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache",
@@ -1157,7 +1154,9 @@ const startGeneratedAppServer = async (
         if (app.channels === undefined) {
           throw new HttpFailure(501, "channels are unavailable");
         }
-        const channelResponse = await app.channels.handle(await webRequestFromIncoming(request, url));
+        const channelResponse = await app.channels.handle(
+          await webRequestFromIncoming(request, url),
+        );
         if (channelResponse === null) {
           notFound(response);
           return;
@@ -1229,11 +1228,18 @@ interface EvalDefinitionLike {
   readonly id: string;
   readonly path?: string;
   readonly cases: readonly EvalCaseLike[];
+  readonly assertions?: readonly EvalAssertionLike[];
   readonly run?: (context: unknown) => Promise<unknown> | unknown;
 }
 
 interface EvalConfigLike {
-  readonly target?: { readonly kind: "local" } | { readonly kind: "remote"; readonly baseUrl: string; readonly headers?: Readonly<Record<string, string>> };
+  readonly target?:
+    | { readonly kind: "local" }
+    | {
+        readonly kind: "remote";
+        readonly baseUrl: string;
+        readonly headers?: Readonly<Record<string, string>>;
+      };
   readonly timeoutMs?: number;
 }
 
@@ -1248,6 +1254,57 @@ interface EvalCaseResult {
   readonly caseId: string;
   readonly status: "passed" | "failed";
   readonly error?: string;
+  readonly assertions: readonly EvalAssertionResult[];
+  readonly observation: EvalObservationArtifact;
+}
+
+type EvalObservationStatus = "completed" | "waiting" | "failed";
+
+type EvalAssertionLike =
+  | { readonly kind: "completed" }
+  | { readonly kind: "waiting" }
+  | { readonly kind: "failed"; readonly reason?: string }
+  | { readonly kind: "called_tool"; readonly toolName: string }
+  | { readonly kind: "not_called_tool"; readonly toolName: string }
+  | { readonly kind: "used_no_tools" }
+  | { readonly kind: "projection"; readonly name: string }
+  | {
+      readonly kind: "check";
+      readonly name: string;
+      readonly check: (observation: EvalObservationForCheck) => boolean | Promise<boolean>;
+    };
+
+interface EvalProjectionObservation {
+  readonly ok: boolean;
+  readonly value?: unknown;
+  readonly error?: string;
+}
+
+interface EvalObservationForCheck {
+  readonly status?: EvalObservationStatus;
+  readonly events: readonly EvalEventRecordLike[];
+  readonly projections: ReadonlyMap<string, unknown>;
+  readonly usage: Readonly<Record<string, unknown>>;
+}
+
+interface EvalObservationArtifact {
+  readonly status?: EvalObservationStatus;
+  readonly events: readonly EvalEventRecordLike[];
+  readonly projections: Readonly<Record<string, EvalProjectionObservation>>;
+  readonly usage: Readonly<Record<string, unknown>>;
+}
+
+interface EvalAssertionResult {
+  readonly kind: string;
+  readonly name?: string;
+  readonly status: "passed" | "failed";
+  readonly message?: string;
+}
+
+interface EvalEventRecordLike {
+  readonly kind: string;
+  readonly payload?: unknown;
+  readonly timestamp?: string;
 }
 
 const collectEvalFiles = async (directory: string): Promise<readonly string[]> => {
@@ -1329,11 +1386,11 @@ const targetFromArgs = (
   localUrl?: string,
 ): EvalHttpTarget => {
   const configuredTarget = config.target;
-  const mode = args.target ?? (args.baseUrl !== undefined ? "remote" : configuredTarget?.kind) ?? "local";
+  const mode =
+    args.target ?? (args.baseUrl !== undefined ? "remote" : configuredTarget?.kind) ?? "local";
   if (mode === "remote") {
     const baseUrl =
-      args.baseUrl ??
-      (configuredTarget?.kind === "remote" ? configuredTarget.baseUrl : undefined);
+      args.baseUrl ?? (configuredTarget?.kind === "remote" ? configuredTarget.baseUrl : undefined);
     if (baseUrl === undefined) {
       throw new Error("agentos eval: remote target requires --base-url or evals.config.ts target");
     }
@@ -1341,7 +1398,7 @@ const targetFromArgs = (
       kind: "remote",
       baseUrl,
       headers: Object.freeze({
-        ...(configuredTarget?.kind === "remote" ? configuredTarget.headers ?? {} : {}),
+        ...(configuredTarget?.kind === "remote" ? (configuredTarget.headers ?? {}) : {}),
         ...args.headers,
       }),
     };
@@ -1365,14 +1422,12 @@ const parseJsonOrText = async (response: Response): Promise<unknown> => {
 };
 
 const parseSseJsonEvents = (text: string): readonly unknown[] =>
-  text
-    .split(/\n\n/u)
-    .flatMap((chunk) =>
-      chunk
-        .split("\n")
-        .filter((line) => line.startsWith("data: "))
-        .map((line) => JSON.parse(line.slice("data: ".length))),
-    );
+  text.split(/\n\n/u).flatMap((chunk) =>
+    chunk
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice("data: ".length))),
+  );
 
 const responseHeaders = (headers: Headers): Readonly<Record<string, string>> => {
   const output: Record<string, string> = {};
@@ -1448,8 +1503,12 @@ const createEvalFacades = (target: EvalHttpTarget) => {
       commandValue(target, "inspectWorkflowRun", { workflowId, workflowRunId }),
     listRuns: (workflowId: string) => commandValue(target, "listWorkflowRuns", { workflowId }),
     start: (name: string, input?: unknown) =>
-      commandValue(target, "runWorkflow", { workflowId: name, ...(isPlainRecord(input) ? input : { input }) }),
-    inspect: (workflowRef: string) => commandValue(target, "inspectWorkflowRun", { workflowRunId: workflowRef }),
+      commandValue(target, "runWorkflow", {
+        workflowId: name,
+        ...(isPlainRecord(input) ? input : { input }),
+      }),
+    inspect: (workflowRef: string) =>
+      commandValue(target, "inspectWorkflowRun", { workflowRunId: workflowRef }),
   };
   const channels = {
     request: async (input: {
@@ -1492,35 +1551,340 @@ const createEvalFacades = (target: EvalHttpTarget) => {
   });
 };
 
+const evalEventRecordFromUnknown = (value: unknown): EvalEventRecordLike | null => {
+  if (!isPlainRecord(value) || typeof value.kind !== "string") return null;
+  return Object.freeze({
+    kind: value.kind,
+    ...(Object.hasOwn(value, "payload") ? { payload: value.payload } : {}),
+    ...(typeof value.timestamp === "string" ? { timestamp: value.timestamp } : {}),
+  });
+};
+
+const assertionProjectionNames = (assertions: readonly EvalAssertionLike[]): readonly string[] =>
+  [
+    ...new Set(
+      assertions
+        .filter(
+          (assertion): assertion is Extract<EvalAssertionLike, { readonly kind: "projection" }> =>
+            assertion.kind === "projection",
+        )
+        .map((assertion) => assertion.name),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+
+const projectionObservationsForAssertions = async (
+  target: EvalHttpTarget,
+  assertions: readonly EvalAssertionLike[],
+): Promise<Readonly<Record<string, EvalProjectionObservation>>> => {
+  const projections: Record<string, EvalProjectionObservation> = {};
+  for (const name of assertionProjectionNames(assertions)) {
+    try {
+      projections[name] = Object.freeze({ ok: true, value: await commandValue(target, name) });
+    } catch (error) {
+      projections[name] = Object.freeze({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return Object.freeze(projections);
+};
+
+const completedEventKinds = new Set(["agent.run.completed", "runtime.completed_after_tools"]);
+const waitingEventKinds = new Set(["agent.run.interrupted", "agent.run.input_request"]);
+const toolEventKinds = new Set(["tool.executed", "tool.rejected"]);
+
+const eventPayload = (event: EvalEventRecordLike): Readonly<Record<string, unknown>> =>
+  isPlainRecord(event.payload) ? event.payload : {};
+
+const statusFromEvents = (
+  events: readonly EvalEventRecordLike[],
+): EvalObservationStatus | undefined => {
+  let status: EvalObservationStatus | undefined;
+  for (const event of events) {
+    if (completedEventKinds.has(event.kind)) {
+      status = "completed";
+      continue;
+    }
+    if (waitingEventKinds.has(event.kind)) {
+      status = "waiting";
+      continue;
+    }
+    if (event.kind.startsWith("agent.aborted.") || event.kind.endsWith(".failed")) {
+      status = "failed";
+    }
+  }
+  return status;
+};
+
+const usageFromEvents = (
+  events: readonly EvalEventRecordLike[],
+): Readonly<Record<string, unknown>> => {
+  let tokensUsed = 0;
+  let hasTokensUsed = false;
+  let llmUsage: unknown;
+  for (const event of events) {
+    const payload = eventPayload(event);
+    if (typeof payload.tokensUsed === "number") {
+      tokensUsed += payload.tokensUsed;
+      hasTokensUsed = true;
+    }
+    if (isPlainRecord(payload.usage)) {
+      llmUsage = payload.usage;
+    }
+  }
+  return Object.freeze({
+    ...(hasTokensUsed ? { tokensUsed } : {}),
+    ...(llmUsage === undefined ? {} : { llmUsage }),
+  });
+};
+
+const calledToolNames = (events: readonly EvalEventRecordLike[]): ReadonlySet<string> => {
+  const names = new Set<string>();
+  for (const event of events) {
+    if (!toolEventKinds.has(event.kind)) continue;
+    const payload = eventPayload(event);
+    const name = payload.name ?? payload.toolName;
+    if (typeof name === "string") names.add(name);
+  }
+  return names;
+};
+
+const failureReasonTokens = (
+  events: readonly EvalEventRecordLike[],
+  runError: unknown,
+): ReadonlySet<string> => {
+  const reasons = new Set<string>();
+  if (runError instanceof Error) reasons.add(runError.message);
+  for (const event of events) {
+    if (!(event.kind.startsWith("agent.aborted.") || event.kind.endsWith(".failed"))) continue;
+    reasons.add(event.kind);
+    const payload = eventPayload(event);
+    for (const key of ["reason", "code", "publicMessage"]) {
+      const value = payload[key];
+      if (typeof value === "string") reasons.add(value);
+    }
+  }
+  return reasons;
+};
+
+const checkObservationFromArtifact = (
+  observation: EvalObservationArtifact,
+): EvalObservationForCheck => {
+  const projections = new Map<string, unknown>();
+  for (const [name, result] of Object.entries(observation.projections)) {
+    if (result.ok) projections.set(name, result.value);
+  }
+  return Object.freeze({
+    status: observation.status,
+    events: observation.events,
+    projections,
+    usage: observation.usage,
+  });
+};
+
+const assertionResult = (
+  assertion: EvalAssertionLike,
+  status: "passed" | "failed",
+  message?: string,
+): EvalAssertionResult => {
+  const name =
+    assertion.kind === "called_tool" || assertion.kind === "not_called_tool"
+      ? assertion.toolName
+      : assertion.kind === "projection" || assertion.kind === "check"
+        ? assertion.name
+        : assertion.kind === "failed"
+          ? assertion.reason
+          : undefined;
+  return Object.freeze({
+    kind: assertion.kind,
+    ...(name === undefined ? {} : { name }),
+    status,
+    ...(message === undefined ? {} : { message }),
+  });
+};
+
+const evaluateEvalAssertion = async (
+  assertion: EvalAssertionLike,
+  observation: EvalObservationArtifact,
+  runError: unknown,
+): Promise<EvalAssertionResult> => {
+  switch (assertion.kind) {
+    case "completed":
+      return observation.status === "completed"
+        ? assertionResult(assertion, "passed")
+        : assertionResult(
+            assertion,
+            "failed",
+            `expected completed, observed ${observation.status ?? "unknown"}`,
+          );
+    case "waiting":
+      return observation.status === "waiting"
+        ? assertionResult(assertion, "passed")
+        : assertionResult(
+            assertion,
+            "failed",
+            `expected waiting, observed ${observation.status ?? "unknown"}`,
+          );
+    case "failed": {
+      if (observation.status !== "failed") {
+        return assertionResult(
+          assertion,
+          "failed",
+          `expected failed, observed ${observation.status ?? "unknown"}`,
+        );
+      }
+      if (
+        assertion.reason !== undefined &&
+        !failureReasonTokens(observation.events, runError).has(assertion.reason)
+      ) {
+        return assertionResult(assertion, "failed", `missing failure reason ${assertion.reason}`);
+      }
+      return assertionResult(assertion, "passed");
+    }
+    case "called_tool": {
+      const tools = calledToolNames(observation.events);
+      return tools.has(assertion.toolName)
+        ? assertionResult(assertion, "passed")
+        : assertionResult(assertion, "failed", `missing tool call ${assertion.toolName}`);
+    }
+    case "not_called_tool": {
+      const tools = calledToolNames(observation.events);
+      return tools.has(assertion.toolName)
+        ? assertionResult(assertion, "failed", `unexpected tool call ${assertion.toolName}`)
+        : assertionResult(assertion, "passed");
+    }
+    case "used_no_tools": {
+      const tools = calledToolNames(observation.events);
+      return tools.size === 0
+        ? assertionResult(assertion, "passed")
+        : assertionResult(
+            assertion,
+            "failed",
+            `observed tool calls: ${[...tools].sort().join(", ")}`,
+          );
+    }
+    case "projection": {
+      const projection = observation.projections[assertion.name];
+      if (projection?.ok === true) return assertionResult(assertion, "passed");
+      return assertionResult(
+        assertion,
+        "failed",
+        projection?.error ?? `missing projection ${assertion.name}`,
+      );
+    }
+    case "check": {
+      try {
+        const passed = await assertion.check(checkObservationFromArtifact(observation));
+        return passed
+          ? assertionResult(assertion, "passed")
+          : assertionResult(assertion, "failed", "custom check returned false");
+      } catch (error) {
+        return assertionResult(
+          assertion,
+          "failed",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+  }
+};
+
+const collectEvalObservation = async (
+  facades: ReturnType<typeof createEvalFacades>,
+  target: EvalHttpTarget,
+  assertions: readonly EvalAssertionLike[],
+  runError: unknown,
+): Promise<EvalObservationArtifact> => {
+  const [rawEvents, projections] = await Promise.all([
+    facades.sessions.events(),
+    projectionObservationsForAssertions(target, assertions),
+  ]);
+  const events = rawEvents.flatMap((value) => {
+    const event = evalEventRecordFromUnknown(value);
+    return event === null ? [] : [event];
+  });
+  const observedStatus = statusFromEvents(events);
+  return Object.freeze({
+    status: observedStatus ?? (runError === undefined ? "completed" : "failed"),
+    events: Object.freeze(events),
+    projections,
+    usage: usageFromEvents(events),
+  });
+};
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 const runEvalDefinition = async (
   definition: EvalDefinitionLike,
   target: EvalHttpTarget,
 ): Promise<readonly EvalCaseResult[]> => {
   const facades = createEvalFacades(target);
   const results: EvalCaseResult[] = [];
+  const assertions = definition.assertions ?? [];
   for (const testCase of definition.cases) {
+    let runError: unknown;
     try {
       if (definition.run !== undefined) {
         await definition.run({
           case: testCase,
-          target: { kind: target.kind, ...(target.kind === "remote" ? { baseUrl: target.baseUrl, headers: target.headers } : {}) },
+          target: {
+            kind: target.kind,
+            ...(target.kind === "remote"
+              ? { baseUrl: target.baseUrl, headers: target.headers }
+              : {}),
+          },
           t: facades,
           sessions: facades.sessions,
           workflows: facades.workflows,
           channels: facades.channels,
         });
       }
-      results.push({ evalId: definition.id, caseId: testCase.id, status: "passed" });
     } catch (error) {
-      results.push({
-        evalId: definition.id,
-        caseId: testCase.id,
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-      });
+      runError = error;
     }
+    const observation = await collectEvalObservation(facades, target, assertions, runError);
+    const assertionResults = await Promise.all(
+      assertions.map((assertion) => evaluateEvalAssertion(assertion, observation, runError)),
+    );
+    const failedAssertions = assertionResults.filter((result) => result.status === "failed");
+    const failedStatusExpected = assertions.some((assertion) => assertion.kind === "failed");
+    const passed =
+      failedAssertions.length === 0 && (runError === undefined || failedStatusExpected);
+    const messages = [
+      ...(runError !== undefined && !failedStatusExpected ? [errorMessage(runError)] : []),
+      ...failedAssertions.flatMap((result) =>
+        result.message === undefined
+          ? []
+          : [
+              `${result.kind}${result.name === undefined ? "" : `:${result.name}`}: ${result.message}`,
+            ],
+      ),
+    ];
+    results.push({
+      evalId: definition.id,
+      caseId: testCase.id,
+      status: passed ? "passed" : "failed",
+      ...(messages.length === 0 ? {} : { error: messages.join("; ") }),
+      assertions: Object.freeze(assertionResults),
+      observation,
+    });
   }
   return results;
+};
+
+const writeEvalReportArtifact = async (
+  cwd: string,
+  report: Readonly<Record<string, unknown>>,
+): Promise<string> => {
+  const directory = path.join(cwd, ".agentos", "eval-results");
+  await mkdir(directory, { recursive: true });
+  const timestamp = new Date().toISOString().replaceAll(/[:.]/gu, "-");
+  const file = path.join(directory, `${timestamp}.json`);
+  const relative = path.relative(cwd, file).split(path.sep).join("/");
+  await writeFile(file, `${JSON.stringify({ ...report, artifact: relative }, null, 2)}\n`);
+  return relative;
 };
 
 const runEval = async (args: EvalArgs): Promise<void> => {
@@ -1535,7 +1899,8 @@ const runEval = async (args: EvalArgs): Promise<void> => {
   ]);
   let started: StartedGeneratedAppServer | undefined;
   try {
-    const configuredMode = args.target ?? (args.baseUrl !== undefined ? "remote" : config.target?.kind);
+    const configuredMode =
+      args.target ?? (args.baseUrl !== undefined ? "remote" : config.target?.kind);
     if (configuredMode !== "remote") {
       started = await startGeneratedAppServer("serve", {
         cwd,
@@ -1555,7 +1920,10 @@ const runEval = async (args: EvalArgs): Promise<void> => {
     const failed = results.filter((result) => result.status === "failed");
     const report = {
       ok: failed.length === 0,
-      target: { kind: target.kind, ...(target.kind === "remote" ? { baseUrl: target.baseUrl } : {}) },
+      target: {
+        kind: target.kind,
+        ...(target.kind === "remote" ? { baseUrl: target.baseUrl } : {}),
+      },
       files: evalFiles.map((file) => path.relative(cwd, file)),
       evals: definitions.map((definition) => definition.id),
       total: results.length,
@@ -1563,10 +1931,12 @@ const runEval = async (args: EvalArgs): Promise<void> => {
       failed: failed.length,
       results,
     };
+    const artifact = await writeEvalReportArtifact(cwd, report);
+    const reportWithArtifact = { ...report, artifact };
     process.stdout.write(
       args.json
-        ? `${JSON.stringify(report, null, 2)}\n`
-        : `agentOS eval ${report.ok ? "passed" : "failed"}: ${report.passed}/${report.total}\n`,
+        ? `${JSON.stringify(reportWithArtifact, null, 2)}\n`
+        : `agentOS eval ${report.ok ? "passed" : "failed"}: ${report.passed}/${report.total} (${artifact})\n`,
     );
     if (!report.ok) process.exitCode = 1;
   } finally {

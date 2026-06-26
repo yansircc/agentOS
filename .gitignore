@@ -10,4 +10,5 @@ dist/
 .claude/
 .cst/
 .agentos-audits/
+.agentos/eval-results/
 spikes/**

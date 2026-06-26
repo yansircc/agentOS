@@ -95,6 +95,7 @@ const manifestNames = repoSurfaceChecks.manifestNames;
 const ruleConstraints = repoSurfaceChecks.ruleConstraints;
 const checkPublicApi = repoSurfaceChecks.checkPublicApi;
 const checkEventNamespaces = repoSurfaceChecks.checkEventNamespaces;
+const checkEvalResultArtifactBoundary = repoSurfaceChecks.checkEvalResultArtifactBoundary;
 const checkRepoToolingSurface = repoSurfaceChecks.checkRepoToolingSurface;
 
 const clientBoundaryChecks = createClientBoundaryChecks({
@@ -423,6 +424,7 @@ const checkerById = new Map([
   ["docs-link-integrity", checkDocsLinkIntegrity],
   ["docs-site-build", checkDocsSiteBuild],
   ["event-namespaces", checkEventNamespaces],
+  ["eval-result-artifact-boundary", checkEvalResultArtifactBoundary],
   ["limit-registry", checkLimitRegistry],
   ["generated-static-target-linking", checkGeneratedStaticTargetLinking],
   ["gate-tier-governance", checkGateTierGovernance],

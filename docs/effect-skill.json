@@ -13,6 +13,10 @@
       "packages/core": {
         "dependencyOwner": "package-local",
         "dependencyOwnerReason": "core owns neutral substrate algebra and protocol dependency declarations"
+      },
+      "packages/evals": {
+        "scan": false,
+        "scanExclusionReason": "evals is a synchronous authoring DSL package with no Effect dependency; CLI/runtime own execution, public observation collection, and Effect boundaries"
       }
     },
     "hostTooling": [
@@ -33,6 +37,12 @@
         "owner": "@agent-os/cli/build-host",
         "reason": "terminal authoring build host owns filesystem projection IO, JSONC config reads, TypeScript authored tool module loading, build-time cache-busting import URLs, and process-facing argument failure mapping before runtime starts",
         "rules": ["EFF020", "EFF021", "EFF024", "EFF025", "EFF026", "EFF404"]
+      },
+      {
+        "path": "packages/evals/src/index.ts",
+        "owner": "@agent-os/evals/authoring-dsl",
+        "reason": "pure synchronous eval authoring DSL owns fail-fast validation for malformed authored eval definitions before the CLI public driver executes; no Effect runtime boundary exists here",
+        "rules": ["EFF025"]
       },
       {
         "path": "packages/runtime/src/attached-stream-protocol.ts",

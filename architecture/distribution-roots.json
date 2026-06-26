@@ -33,6 +33,13 @@
       "packageUnit": "cli",
       "publicPackageName": "@yansirplus/cli",
       "consumerRoot": "repo and developer command surface"
+    },
+    {
+      "id": "public-evals",
+      "kind": "public-package",
+      "packageUnit": "evals",
+      "publicPackageName": "@yansirplus/evals",
+      "consumerRoot": "generated app behavior eval authoring"
     }
   ],
   "targetProfiles": [
@@ -78,12 +85,13 @@
     {
       "id": "node",
       "ambient": "node",
-      "packageUnits": ["runtime", "cli"],
+      "packageUnits": ["runtime", "cli", "evals"],
       "selectedSubpaths": [
         "@yansirplus/runtime/capability",
         "@yansirplus/runtime/local",
         "@yansirplus/runtime/node",
-        "@yansirplus/cli"
+        "@yansirplus/cli",
+        "@yansirplus/evals"
       ],
       "forbiddenSpecifiers": ["cloudflare:"]
     },

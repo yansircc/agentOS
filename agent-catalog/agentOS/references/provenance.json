@@ -20,8 +20,8 @@
   "inputFiles": [
     {
       "path": "docs/agent/boundary-rules.source.json",
-      "sha256": "fc42aa5b3b727afe18b4148a57354ded06daf6aff44e41101870770f1f3ea452",
-      "byteSize": 40893
+      "sha256": "27d81dff3a4158bed444fed7e618021479fa77dc289ea80b1a0ca37185f42e63",
+      "byteSize": 42140
     },
     {
       "path": "docs/agent/capability-rules.source.json",
@@ -130,8 +130,8 @@
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "3ff84f1eb2f08a8d231c5087e5c928fc585f5495f2891d769d8abfc994741c71",
-      "byteSize": 22157
+      "sha256": "df8979074f68643bf23d6ba4e32e043298068bff0c7e6a8980b9e908626f69fb",
+      "byteSize": 23706
     },
     {
       "path": "docs/start-here.md",

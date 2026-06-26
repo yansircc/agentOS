@@ -112,8 +112,7 @@ const runBuildRunner = async (command, args) => {
           return;
         }
         if (code !== 0) {
-          reject(new Error(`agentos ${command}: build runner failed with exit code ${code ?? 1}`));
-          return;
+          process.exitCode = code ?? 1;
         }
         resolve();
       });

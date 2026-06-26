@@ -275,6 +275,38 @@ export const createRepoSurfaceChecks = ({
     failIfAny("repo tooling surface", failures);
   };
 
+  const checkEvalResultArtifactBoundary = () => {
+    const failures = [];
+    if (!read(".gitignore").split(/\r?\n/u).includes(".agentos/eval-results/")) {
+      failures.push(".gitignore: missing .agentos/eval-results/ ignore entry");
+    }
+
+    const writerPath = "packages/cli/src/build/build-cli.ts";
+    const writer = read(writerPath);
+    if (!writer.includes('path.join(cwd, ".agentos", "eval-results")')) {
+      failures.push(`${writerPath}: eval runner must own the eval-results output path`);
+    }
+    if (!writer.includes("writeEvalReportArtifact")) {
+      failures.push(`${writerPath}: eval runner must write a derived eval report artifact`);
+    }
+
+    const forbiddenReaders = [
+      "packages/cli/src/build/agent-authoring",
+      "packages/cli/src/generate",
+      "packages/runtime/src",
+      "packages/core/src",
+      "packages/evals/src",
+      "agent-catalog/agentOS",
+    ];
+    for (const file of forbiddenReaders.flatMap((root) => walk(root))) {
+      if (!/\.(?:mjs|js|ts|tsx|md|json)$/u.test(file)) continue;
+      if (read(file).includes("eval-results")) {
+        failures.push(`${file}: eval-results must remain write-only derived output`);
+      }
+    }
+    failIfAny("eval result artifact boundary", failures);
+  };
+
   return {
     manifestEntries,
     manifestNames,
@@ -283,6 +315,7 @@ export const createRepoSurfaceChecks = ({
     ruleConstraints,
     checkPublicApi,
     checkEventNamespaces,
+    checkEvalResultArtifactBoundary,
     checkRepoToolingSurface,
   };
 };
