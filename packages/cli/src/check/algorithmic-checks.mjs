@@ -53,7 +53,9 @@ const walk = (relativePath, options = {}) => {
   if (!fs.existsSync(absolutePath)) return [];
   const stat = fs.statSync(absolutePath);
   if (stat.isFile()) return [relativePath];
-  const ignored = options.ignored ?? new Set(["node_modules", "dist", ".wrangler", ".turbo"]);
+  const ignored =
+    options.ignored ??
+    new Set(["node_modules", "dist", ".wrangler", ".turbo", ".parallel", ".cst", ".git"]);
   const files = [];
   for (const entry of fs.readdirSync(absolutePath, { withFileTypes: true })) {
     if (entry.isDirectory() && ignored.has(entry.name)) continue;
