@@ -17,8 +17,18 @@ import {
   type NormalizedAgentOsConfig,
   type StaticTargetLink,
 } from "./agent-authoring";
+import {
+  llmMaterialEnvBindings,
+  type LlmMaterialEnvBinding,
+  type LlmMaterialEnvKind,
+} from "./agent-authoring/config";
 import { importBundledModule } from "../lib/ts-module-loader.mjs";
 import { WORKSPACE_AGENT_COMMAND } from "@agent-os/core/workspace-agent";
+import type { MaterialRef } from "@agent-os/core/material-ref";
+import {
+  preflightOpenAiCompatibleProviderMaterial,
+  type ProviderMaterialPreflightDiagnostic,
+} from "@agent-os/runtime/llm-effect-ai/openai-compatible";
 import {
   parseEvalConfig,
   parseEvalDefinition,
@@ -67,12 +77,20 @@ interface EvalArgs {
   readonly json: boolean;
 }
 
+interface PreflightLlmArgs {
+  readonly cwd: string;
+  readonly config: string;
+  readonly routeBindingRef: string;
+  readonly json: boolean;
+}
+
 type CliArgs =
   | { readonly command: "help" }
   | { readonly command: "build"; readonly args: BuildArgs }
   | { readonly command: "info"; readonly args: InfoArgs }
   | { readonly command: "serve" | "dev"; readonly args: ServeArgs }
-  | { readonly command: "eval"; readonly args: EvalArgs };
+  | { readonly command: "eval"; readonly args: EvalArgs }
+  | { readonly command: "preflight"; readonly args: PreflightLlmArgs };
 
 const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
   const args: {
@@ -314,6 +332,45 @@ const parseEvalArgs = (rawArgs: ReadonlyArray<string>): EvalArgs => {
   });
 };
 
+const parsePreflightLlmArgs = (rawArgs: ReadonlyArray<string>): PreflightLlmArgs => {
+  const args = {
+    cwd: process.cwd(),
+    config: "agentos.config.jsonc",
+    routeBindingRef: "default",
+    json: false,
+  };
+  const [subcommand, ...rest] = rawArgs;
+  if (subcommand !== "llm") {
+    throw new Error("preflight: choose llm");
+  }
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    switch (arg) {
+      case "--cwd":
+        if (rest[index + 1] === undefined) throw new Error("--cwd requires a value");
+        args.cwd = rest[index + 1];
+        index += 1;
+        break;
+      case "--config":
+        if (rest[index + 1] === undefined) throw new Error("--config requires a value");
+        args.config = rest[index + 1];
+        index += 1;
+        break;
+      case "--route":
+        if (rest[index + 1] === undefined) throw new Error("--route requires a value");
+        args.routeBindingRef = rest[index + 1];
+        index += 1;
+        break;
+      case "--json":
+        args.json = true;
+        break;
+      default:
+        throw new Error(`unexpected argument ${arg}`);
+    }
+  }
+  return args;
+};
+
 const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
   const [command, ...rest] = rawArgs;
   if (command === undefined || command === "--help" || command === "-h") return { command: "help" };
@@ -324,7 +381,8 @@ const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
     return { command, args: parseServeArgs(rest) };
   }
   if (command === "eval") return { command: "eval", args: parseEvalArgs(rest) };
-  throw new Error("choose one of build, info, serve, dev, eval");
+  if (command === "preflight") return { command: "preflight", args: parsePreflightLlmArgs(rest) };
+  throw new Error("choose one of build, info, serve, dev, eval, preflight");
 };
 
 const help = `Usage:
@@ -333,11 +391,13 @@ const help = `Usage:
   agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos preflight llm [--cwd <path>] [--config <path>] [--route <binding-ref>] [--json]
 
 Compiles agent/ + workflows/ + agent/schedules/ + agentos.config.jsonc into .agentos/generated/.
 Prints compile-only agent inspection without starting a runtime.
 Serves the generated local node app through the CLI-owned public command/event protocol.
 Runs evals/**/*.eval.ts against the generated app public command/event/channel protocol.
+Checks configured LLM route material before submit without printing material values.
 `;
 
 const stripJsonc = (text: string): string => {
@@ -813,6 +873,286 @@ const projectInfo = (facts: CompileFacts) => ({
   resolve: unavailable("agentos info is compile-only; resolved install graph is unavailable"),
   runtime: unavailable("agentos info does not start a local or Cloudflare runtime"),
 });
+
+type PreflightMaterialStatus = "present" | "missing" | "invalid" | "resolver_threw";
+
+interface PreflightDiagnostic {
+  readonly pass: string;
+  readonly reason: string;
+  readonly detail?: string;
+}
+
+interface DevVarsIssue {
+  readonly file: ".dev.vars";
+  readonly line: number;
+  readonly reason: "missing_separator" | "invalid_name" | "unterminated_quote";
+  readonly key?: string;
+}
+
+interface PreflightEnvProjection {
+  readonly sources: ReadonlyArray<".dev.vars" | "process.env">;
+  readonly values: Readonly<Record<string, string>>;
+  readonly valueSources: Readonly<Record<string, ".dev.vars" | "process.env">>;
+  readonly issues: ReadonlyArray<DevVarsIssue>;
+}
+
+interface ProviderMaterialDetail {
+  readonly routeStatus?: string;
+  readonly materials?: ReadonlyArray<{
+    readonly kind?: string;
+    readonly ref?: string;
+    readonly status?: string;
+  }>;
+}
+
+const envNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+
+const unwrapDevVarsValue = (
+  rawValue: string,
+  line: number,
+): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly issue: DevVarsIssue } => {
+  if (rawValue.length < 2) return { ok: true, value: rawValue };
+  const quote = rawValue[0];
+  if (quote !== "'" && quote !== "\"") return { ok: true, value: rawValue };
+  if (!rawValue.endsWith(quote)) {
+    return {
+      ok: false,
+      issue: { file: ".dev.vars", line, reason: "unterminated_quote" },
+    };
+  }
+  const inner = rawValue.slice(1, -1);
+  if (quote === "'") return { ok: true, value: inner };
+  return {
+    ok: true,
+    value: inner.replace(/\\([nrt"\\])/gu, (_match, escaped: string) => {
+      if (escaped === "n") return "\n";
+      if (escaped === "r") return "\r";
+      if (escaped === "t") return "\t";
+      return escaped;
+    }),
+  };
+};
+
+const parseDevVars = (
+  text: string,
+): { readonly values: Readonly<Record<string, string>>; readonly issues: ReadonlyArray<DevVarsIssue> } => {
+  const values: Record<string, string> = {};
+  const issues: DevVarsIssue[] = [];
+  const lines = text.split(/\r?\n/u);
+  for (let index = 0; index < lines.length; index += 1) {
+    const lineNumber = index + 1;
+    const trimmed = lines[index].trim();
+    if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
+    const separator = trimmed.indexOf("=");
+    if (separator <= 0) {
+      issues.push({ file: ".dev.vars", line: lineNumber, reason: "missing_separator" });
+      continue;
+    }
+    const key = trimmed.slice(0, separator).trim();
+    if (!envNamePattern.test(key)) {
+      issues.push({ file: ".dev.vars", line: lineNumber, reason: "invalid_name", key });
+      continue;
+    }
+    const value = unwrapDevVarsValue(trimmed.slice(separator + 1).trim(), lineNumber);
+    if (!value.ok) {
+      issues.push({ ...value.issue, key });
+      continue;
+    }
+    values[key] = value.value;
+  }
+  return { values, issues };
+};
+
+const isNotFoundError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  (error as { readonly code?: unknown }).code === "ENOENT";
+
+const readPreflightEnv = async (cwd: string): Promise<PreflightEnvProjection> => {
+  const values: Record<string, string> = {};
+  const valueSources: Record<string, ".dev.vars" | "process.env"> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value !== "string") continue;
+    values[key] = value;
+    valueSources[key] = "process.env";
+  }
+  const sources = new Set<".dev.vars" | "process.env">(["process.env"]);
+  const devVarsPath = path.join(cwd, ".dev.vars");
+  try {
+    const parsed = parseDevVars(await readFile(devVarsPath, "utf8"));
+    sources.add(".dev.vars");
+    for (const [key, value] of Object.entries(parsed.values)) {
+      values[key] = value;
+      valueSources[key] = ".dev.vars";
+    }
+    return { sources: [...sources], values, valueSources, issues: parsed.issues };
+  } catch (error) {
+    if (isNotFoundError(error)) return { sources: [...sources], values, valueSources, issues: [] };
+    throw error;
+  }
+};
+
+const providerMaterialDetailFrom = (
+  diagnostics: ReadonlyArray<ProviderMaterialPreflightDiagnostic>,
+): ProviderMaterialDetail | undefined => {
+  const diagnostic = diagnostics.find((item) => item.pass === "provider_material");
+  if (diagnostic === undefined) return undefined;
+  const parsed: unknown = JSON.parse(diagnostic.detail);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+  return parsed as ProviderMaterialDetail;
+};
+
+const materialStatusFromDetail = (
+  detail: ProviderMaterialDetail | undefined,
+  kind: LlmMaterialEnvKind,
+  fallback: PreflightMaterialStatus,
+): PreflightMaterialStatus => {
+  const row = detail?.materials?.find((item) => item.kind === kind);
+  const status = row?.status;
+  return status === "present" ||
+    status === "missing" ||
+    status === "invalid" ||
+    status === "resolver_threw"
+    ? status
+    : fallback;
+};
+
+const materialValueFor = (
+  binding: LlmMaterialEnvBinding,
+  env: PreflightEnvProjection,
+): string | null => env.values[binding.envName] ?? null;
+
+const preflightDiagnostic = (
+  pass: string,
+  reason: string,
+  detail: object,
+): PreflightDiagnostic => ({ pass, reason, detail: JSON.stringify(detail) });
+
+const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
+  const facts = await loadCompileFacts({ cwd: args.cwd, config: args.config });
+  const routeBindingRef = args.routeBindingRef;
+  const availableRoutes = ["default"] as const;
+  const env = await readPreflightEnv(facts.cwd);
+  const envDiagnostics: PreflightDiagnostic[] = env.issues.map((issue) =>
+    preflightDiagnostic("env_file", ".dev.vars is invalid", issue),
+  );
+  if (!availableRoutes.includes(routeBindingRef as "default")) {
+    const output = {
+      protocol: "agentos-preflight-llm@1",
+      ok: false,
+      cwd: facts.cwd,
+      config: args.config,
+      route: {
+        bindingRef: routeBindingRef,
+        status: "missing",
+        available: availableRoutes,
+      },
+      materials: [],
+      diagnostics: [
+        ...envDiagnostics,
+        preflightDiagnostic("llm_route", "LLM route binding not found", {
+          requested: routeBindingRef,
+          available: availableRoutes,
+        }),
+      ],
+    };
+    printPreflightLlm(output, args.json);
+    process.exitCode = 1;
+    return;
+  }
+
+  const bindings = llmMaterialEnvBindings(facts.normalized.llm);
+  const bindingByKind = Object.fromEntries(bindings.map((binding) => [binding.kind, binding])) as
+    Record<LlmMaterialEnvKind, LlmMaterialEnvBinding>;
+  const modelValue = materialValueFor(bindingByKind.model, env);
+  const refResolver = {
+    material: (ref: MaterialRef): NonNullable<unknown> | null => {
+      const binding = bindings.find((candidate) => candidate.kind === ref.kind && candidate.ref === ref.ref);
+      return binding === undefined ? null : materialValueFor(binding, env);
+    },
+  };
+  const providerDiagnostics =
+    envDiagnostics.length > 0
+      ? []
+      : preflightOpenAiCompatibleProviderMaterial({
+          route: {
+            kind: facts.normalized.llm.route,
+            endpointRef: facts.normalized.llm.endpointRef,
+            credentialRef: facts.normalized.llm.credentialRef,
+            modelId: typeof modelValue === "string" ? modelValue : "",
+          },
+          refResolver,
+          routeBindingRef,
+          modelMaterial: {
+            ref: facts.normalized.llm.modelRef,
+            value: modelValue,
+          },
+        });
+  const providerDetail = providerMaterialDetailFrom(providerDiagnostics);
+  const diagnostics: ReadonlyArray<PreflightDiagnostic | ProviderMaterialPreflightDiagnostic> = [
+    ...envDiagnostics,
+    ...providerDiagnostics,
+  ];
+  const ok = diagnostics.length === 0;
+  const materials = bindings.map((binding) => ({
+    kind: binding.kind,
+    ref: binding.ref,
+    envName: binding.envName,
+    source: env.valueSources[binding.envName] ?? "none",
+    status: materialStatusFromDetail(providerDetail, binding.kind, ok ? "present" : "invalid"),
+  }));
+  const output = {
+    protocol: "agentos-preflight-llm@1",
+    ok,
+    cwd: facts.cwd,
+    config: args.config,
+    route: {
+      bindingRef: routeBindingRef,
+      status: providerDetail?.routeStatus ?? (ok ? "present" : "invalid"),
+      kind: facts.normalized.llm.route,
+    },
+    env: {
+      sources: env.sources,
+    },
+    materials,
+    diagnostics,
+  };
+  printPreflightLlm(output, args.json);
+  if (!ok) process.exitCode = 1;
+};
+
+const printPreflightLlm = (
+  output: Readonly<{
+    readonly ok: boolean;
+    readonly route: Readonly<{ readonly bindingRef: string; readonly status: string; readonly kind?: string }>;
+    readonly materials: ReadonlyArray<
+      Readonly<{
+        readonly kind: string;
+        readonly ref: string;
+        readonly envName: string;
+        readonly source: string;
+        readonly status: string;
+      }>
+    >;
+    readonly diagnostics: ReadonlyArray<Readonly<{ readonly pass: string; readonly reason: string }>>;
+  }>,
+  json: boolean,
+): void => {
+  if (json) {
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    return;
+  }
+  const lines = [
+    `agentOS LLM preflight ${output.ok ? "passed" : "failed"}`,
+    `route: ${output.route.bindingRef} (${output.route.kind ?? "unknown"}) ${output.route.status}`,
+    ...output.materials.map(
+      (row) => `${row.kind}: ${row.status} ${row.envName} (${row.source})`,
+    ),
+    ...output.diagnostics.map((diagnostic) => `diagnostic: ${diagnostic.pass} - ${diagnostic.reason}`),
+  ];
+  process.stdout.write(`${lines.join("\n")}\n`);
+};
 
 interface LocalAgentApp {
   readonly runtime: {
@@ -1992,6 +2332,10 @@ const main = async (): Promise<void> => {
     await runEval(parsed.args);
     return;
   }
+  if (parsed.command === "preflight") {
+    await runPreflightLlm(parsed.args);
+    return;
+  }
   const facts = await loadCompileFacts({ ...parsed.args, packageScope: undefined });
   const info = projectInfo(facts);
   if (parsed.args.json) {
@@ -2014,7 +2358,11 @@ try {
           ? "agentos serve"
           : command === "dev"
             ? "agentos dev"
-            : "agentos";
+            : command === "eval"
+              ? "agentos eval"
+              : command === "preflight"
+                ? "agentos preflight"
+                : "agentos";
   process.stderr.write(`${prefix}: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 }

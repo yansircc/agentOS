@@ -45,6 +45,7 @@ Usage:
   agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos preflight llm [--cwd <path>] [--config <path>] [--route <binding-ref>] [--json]
   agentos consumer install /path/to/consumer [--no-install] [--skip-pack] [--json]
   agentos consumer status /path/to/consumer [--json] [--check-npm] [--registry <url>]
   agentos consumer check /path/to/consumer [--json] [--check-npm] [--registry <url>]
@@ -80,6 +81,7 @@ const fail = (message) => {
     message.startsWith("agentos serve:") ||
     message.startsWith("agentos dev:") ||
     message.startsWith("agentos eval:") ||
+    message.startsWith("agentos preflight:") ||
     message.startsWith("agentos consumer:") ||
     message.startsWith("agentos check:") ||
     message.startsWith("agentos generate:")
@@ -136,6 +138,8 @@ const runServe = async (args) => runBuildRunner("serve", args);
 const runDev = async (args) => runBuildRunner("dev", args);
 
 const runEval = async (args) => runBuildRunner("eval", args);
+
+const runPreflight = async (args) => runBuildRunner("preflight", args);
 
 const loadConsumerCommands = async () => {
   const modulePath = path.join(repoRootFromMain(), "tooling/distribution/consumer.mjs");
@@ -311,6 +315,9 @@ const main = async () => {
     case "eval":
       await runEval(rest);
       return;
+    case "preflight":
+      await runPreflight(rest);
+      return;
     case "consumer":
       await runConsumer(rest);
       return;
@@ -322,7 +329,7 @@ const main = async () => {
       return;
     default:
       throw new Error(
-        "agentos: choose one of build, info, serve, dev, eval, consumer, check, generate",
+        "agentos: choose one of build, info, serve, dev, eval, preflight, consumer, check, generate",
       );
   }
 };

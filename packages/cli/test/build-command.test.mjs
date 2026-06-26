@@ -165,6 +165,7 @@ const runCli = (args, options = {}) =>
   new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...args], {
       cwd: options.cwd ?? repoRoot,
+      env: options.env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -225,6 +226,107 @@ void test("agentos consumer status and check share one overlay gate projection",
     const checkProjection = JSON.parse(check.stdout);
     assert.equal(checkProjection.localOverlay.status, statusProjection.localOverlay.status);
     assert.deepEqual(checkProjection.gate, statusProjection.gate);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos preflight llm uses normalized material env bindings without leaking values", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-preflight-llm-"));
+  const secret = "sk-agentos-preflight-secret";
+  const endpoint = "https://llm.example.test/v1";
+  const model = "agentos-test-model";
+  const childEnv = { PATH: process.env.PATH ?? "" };
+  try {
+    writeNodeWorkspaceAgentFixture(root);
+    writeFileSync(
+      path.join(root, ".dev.vars"),
+      [
+        `AGENTOS_ENDPOINT_OPENROUTER=${endpoint}`,
+        `AGENTOS_CREDENTIAL_OPENROUTER_KEY=${secret}`,
+        `AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL=${model}`,
+        "",
+      ].join("\n"),
+    );
+
+    const passing = await runCli(["preflight", "llm", "--cwd", root, "--json"], {
+      env: childEnv,
+    });
+    assert.equal(passing.status, 0, passing.stderr);
+    assert.doesNotMatch(passing.stdout, new RegExp(secret));
+    assert.doesNotMatch(passing.stdout, new RegExp(endpoint.replaceAll(".", "\\.")));
+    assert.doesNotMatch(passing.stdout, new RegExp(model));
+    const projection = JSON.parse(passing.stdout);
+    assert.equal(projection.protocol, "agentos-preflight-llm@1");
+    assert.equal(projection.ok, true);
+    assert.deepEqual(projection.route, {
+      bindingRef: "default",
+      status: "present",
+      kind: "openai-chat-compatible",
+    });
+    assert.deepEqual(
+      projection.materials.map((row) => ({
+        kind: row.kind,
+        ref: row.ref,
+        envName: row.envName,
+        source: row.source,
+        status: row.status,
+      })),
+      [
+        {
+          kind: "endpoint",
+          ref: "openrouter",
+          envName: "AGENTOS_ENDPOINT_OPENROUTER",
+          source: ".dev.vars",
+          status: "present",
+        },
+        {
+          kind: "credential",
+          ref: "openrouter-key",
+          envName: "AGENTOS_CREDENTIAL_OPENROUTER_KEY",
+          source: ".dev.vars",
+          status: "present",
+        },
+        {
+          kind: "model",
+          ref: "openrouter-default-text-model",
+          envName: "AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL",
+          source: ".dev.vars",
+          status: "present",
+        },
+      ],
+    );
+
+    writeFileSync(
+      path.join(root, ".dev.vars"),
+      [
+        `AGENTOS_ENDPOINT_OPENROUTER=${endpoint}`,
+        `AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL=${model}`,
+        "",
+      ].join("\n"),
+    );
+    const missingCredential = await runCli(["preflight", "llm", "--cwd", root, "--json"], {
+      env: childEnv,
+    });
+    assert.equal(missingCredential.status, 1);
+    assert.equal(missingCredential.stderr, "");
+    assert.doesNotMatch(missingCredential.stdout, new RegExp(endpoint.replaceAll(".", "\\.")));
+    assert.doesNotMatch(missingCredential.stdout, new RegExp(model));
+    const failedProjection = JSON.parse(missingCredential.stdout);
+    assert.equal(failedProjection.ok, false);
+    assert.equal(
+      failedProjection.materials.find((row) => row.kind === "credential")?.status,
+      "missing",
+    );
+
+    const wrongRoute = await runCli(
+      ["preflight", "llm", "--cwd", root, "--route", "product_loop", "--json"],
+      { env: childEnv },
+    );
+    assert.equal(wrongRoute.status, 1);
+    const wrongRouteProjection = JSON.parse(wrongRoute.stdout);
+    assert.equal(wrongRouteProjection.route.status, "missing");
+    assert.deepEqual(wrongRouteProjection.route.available, ["default"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
