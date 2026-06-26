@@ -5,6 +5,7 @@ import {
   cronMinuteExpression,
   defineSchedule,
   dispatchScheduleFire,
+  projectScheduleFireHistory,
   scheduleFireId,
   scheduledMinute,
   type ScheduleHandler,
@@ -179,6 +180,53 @@ describe("@agent-os/runtime/schedule", () => {
     });
     expect(JSON.stringify(result.outcome(100))).not.toContain("delivered");
     expect(JSON.stringify(result.outcome(100))).not.toContain("final");
+  });
+
+  it("lets product ingress own duplicate fire suppression by fireId", async () => {
+    const submittedByIdempotencyKey = new Map<string, typeof delivered & { readonly runId: number }>();
+    const submittedInputs: ScheduleSessionSubmitTurnInput[] = [];
+    const schedule = defineSchedule({
+      cron: "* * * * *",
+      handler: (context) =>
+        context.sessions.submitTurn({
+          sessionRef: "session:s1",
+          turnRef: context.fireId,
+          intent: "daily summary",
+          context: { from: "schedule" },
+        }),
+    });
+    const dispatchRuntime: ScheduleRuntime = {
+      sessions: {
+        submitTurn: async (input) => {
+          const existing = submittedByIdempotencyKey.get(input.idempotencyKey ?? "");
+          if (existing !== undefined) return existing;
+          submittedInputs.push(input);
+          const result = { ...delivered, runId: submittedInputs.length };
+          submittedByIdempotencyKey.set(input.idempotencyKey ?? "", result);
+          return result;
+        },
+      },
+      workflows: runtime.workflows,
+    };
+    const input = {
+      ...runtimeIdentity,
+      runtime: dispatchRuntime,
+      schedule,
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:42.000Z",
+      appPrincipal,
+    } as const;
+
+    const first = await dispatchScheduleFire(input);
+    const second = await dispatchScheduleFire(input);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) expect.fail("expected duplicate fire dispatches");
+    expect(first.fireId).toBe(second.fireId);
+    expect(submittedInputs).toHaveLength(1);
+    expect(submittedInputs[0]?.idempotencyKey).toBe(first.fireId);
+    expect(first.productLink.runtimeRunId).toBe(second.productLink.runtimeRunId);
   });
 
   it("dispatches a schedule fire through workflow product ingress", async () => {
@@ -405,6 +453,85 @@ describe("@agent-os/runtime/schedule", () => {
       "schedule.fire_requested",
       "schedule.fire_dispatched",
     ]);
+  });
+
+  it("projects generated local schedule fires through the manifest truth identity", async () => {
+    const truthIdentity = {
+      scopeRef: { kind: "session" as const, scopeId: "generated-local-schedule" },
+      effectAuthorityRef: { authorityClass: "effect", authorityId: "generated-local-schedule" },
+    };
+    const lowered = await lowerLocalAgentRuntime({
+      target: "node@1",
+      identity: "generated-local-schedule",
+      truthIdentity,
+      cwd: process.cwd(),
+      llm: {
+        kind: "test",
+        responses: [
+          {
+            items: [{ type: "message", text: "scheduled session complete" }],
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          },
+        ],
+      },
+    });
+    const schedule = defineSchedule({
+      cron: "* * * * *",
+      handler: (context) =>
+        context.sessions.submitTurn({
+          sessionRef: "session:scheduled",
+          turnRef: context.fireId,
+          intent: "scheduled session",
+          context: { scheduledAt: context.scheduledAt },
+        }),
+    });
+
+    const dispatch = await dispatchScheduleFire({
+      ...truthIdentity,
+      runtime: {
+        sessions: {
+          submitTurn: (input) =>
+            lowered.submitWithProductLink(input, {
+              kind: "session_turn",
+              sessionRef: input.sessionRef,
+              turnRef: input.turnRef,
+              ...(input.idempotencyKey === undefined
+                ? {}
+                : { idempotencyKey: input.idempotencyKey }),
+            }),
+        },
+        workflows: runtime.workflows,
+      },
+      schedule,
+      scheduleId: "daily-session",
+      scheduledAt: "2026-06-26T09:00:42.000Z",
+      appPrincipal,
+    });
+    if (!dispatch.ok) expect.fail("expected generated local schedule dispatch");
+
+    await lowered.commitScheduleFireDispatch(dispatch);
+
+    const history = projectScheduleFireHistory(lowered.runtime.events(), {
+      scheduleId: "daily-session",
+    });
+
+    expect(history.fires).toHaveLength(1);
+    expect(history.fires[0]).toMatchObject({
+      status: "dispatched",
+      fireId: dispatch.fireId,
+      product: {
+        kind: "session_turn",
+        link: {
+          sessionRef: "session:scheduled",
+          turnRef: dispatch.fireId,
+          runtimeRunId: dispatch.productLink.runtimeRunId,
+          idempotencyKey: dispatch.fireId,
+        },
+        turn: {
+          status: { kind: "delivered" },
+        },
+      },
+    });
   });
 
   it("fails closed when context inputs are not positive contracts", () => {

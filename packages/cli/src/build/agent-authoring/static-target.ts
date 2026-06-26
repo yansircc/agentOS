@@ -1744,6 +1744,7 @@ export const createLocalAgentApp = async (
   const lowered = await lowerLocalAgentRuntime({
     target: "node@1",
     identity: semanticManifest.agentId,
+    truthIdentity: semanticTruthIdentity,
     cwd: options.cwd ?? process.cwd(),
     ...(options.env === undefined ? {} : { env: options.env }),
     ...(options.inheritEnv === undefined ? {} : { inheritEnv: options.inheritEnv }),

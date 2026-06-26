@@ -651,6 +651,45 @@ const writeChannelConsumerFixture = (dir, scopeId) => {
   );
 };
 
+const writeScheduleConsumerFixture = (dir) => {
+  fs.mkdirSync(path.join(dir, "agent", "schedules"), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "agent", "schedules", "daily-session.ts"),
+    [
+      `import { defineSchedule } from "${publicSpecifier("@agent-os/runtime/schedule")}";`,
+      "",
+      "export default defineSchedule({",
+      '  cron: "0 9 * * *",',
+      "  handler: (context) => context.sessions.submitTurn({",
+      '    sessionRef: "session:scheduled",',
+      "    turnRef: context.fireId,",
+      '    intent: "scheduled session",',
+      "    context: { scheduledAt: context.scheduledAt },",
+      "  }),",
+      "});",
+      "",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(dir, "agent", "schedules", "daily-workflow.ts"),
+    [
+      `import { defineSchedule } from "${publicSpecifier("@agent-os/runtime/schedule")}";`,
+      "",
+      "export default defineSchedule({",
+      '  cron: "15 9 * * *",',
+      "  handler: (context) => context.workflows.run({",
+      '    workflowId: "scheduled-workflow",',
+      "    workflowRunId: context.fireId,",
+      '    intent: "scheduled workflow",',
+      "    inputDigest: context.scheduledAt,",
+      "    context: { scheduledAt: context.scheduledAt },",
+      "  }),",
+      "});",
+      "",
+    ].join("\n"),
+  );
+};
+
 const channelDispatchSmokeSource = ({ importLine, dispatchExpression, scopeId }) =>
   [
     importLine,
@@ -724,6 +763,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   fs.writeFileSync(path.join(dir, "Dockerfile"), 'FROM alpine:3.20\nCMD ["sleep", "infinity"]\n');
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the workspace.\n");
   writeChannelConsumerFixture(dir, "generated-target-consumer");
+  writeScheduleConsumerFixture(dir);
   fs.writeFileSync(
     path.join(dir, "agent", "skills", "review", "SKILL.md"),
     [
@@ -789,6 +829,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
       "",
     ].join("\n"),
   );
+  npmInstall(dir);
   run(
     "node",
     [
@@ -824,6 +865,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     `${publishScope()}/runtime/workspace-agent`,
     `${publishScope()}/runtime/sse-http`,
     `${publishScope()}/runtime/channel`,
+    `${publishScope()}/runtime/schedule`,
     `${publishScope()}/core/runtime-protocol`,
     `${publishScope()}/core/tools`,
     `${publishScope()}/client`,
@@ -868,6 +910,30 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   ]) {
     if (!generatedText.includes(fragment)) {
       fail(`generated target consumer missing channel fragment ${fragment}`);
+    }
+  }
+  for (const fragment of [
+    "../../agent/schedules/daily-session",
+    "../../agent/schedules/daily-workflow",
+    "generatedSchedules",
+    "dispatchGeneratedSchedule",
+    "generatedScheduleRuntimeFor(this)",
+    "scheduled(controller: ScheduledController",
+    "entry.cron === controller.cron",
+    "ctx.waitUntil(runtime.dispatchSchedule(input))",
+  ]) {
+    if (!generatedText.includes(fragment)) {
+      fail(`generated target consumer missing schedule fragment ${fragment}`);
+    }
+  }
+  for (const forbiddenFragment of [
+    "installScheduleProvider",
+    "cron-runner",
+    "cronRunner",
+    "submitAgentEffect",
+  ]) {
+    if (generatedText.includes(forbiddenFragment)) {
+      fail(`generated target consumer leaked schedule helper ${forbiddenFragment}`);
     }
   }
   const requiredSkillFragments = [
@@ -929,6 +995,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   });
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the local workspace.\n");
   writeChannelConsumerFixture(dir, "generated-local-target-consumer");
+  writeScheduleConsumerFixture(dir);
   writeJson(path.join(dir, "agent", "agent.json"), {
     agentId: "generated-local-target-consumer",
     scope: {
@@ -964,6 +1031,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "",
     ].join("\n"),
   );
+  npmInstall(dir);
   run(
     "node",
     [
@@ -983,6 +1051,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   const requiredGeneratedSpecifiers = [
     `${publishScope()}/runtime/local`,
     `${publishScope()}/runtime/channel`,
+    `${publishScope()}/runtime/schedule`,
     `${publishScope()}/runtime/llm-effect-ai/openai-compatible`,
     `${publishScope()}/core/runtime-protocol`,
   ];
@@ -1005,6 +1074,20 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       fail(`generated local target consumer missing channel fragment ${fragment}`);
     }
   }
+  for (const fragment of [
+    "../../agent/schedules/daily-session",
+    "../../agent/schedules/daily-workflow",
+    "generatedScheduleDefinitions",
+    "generatedScheduleIds",
+    "dispatchGeneratedSchedule",
+    "projectScheduleFireHistory",
+    "trigger: triggerSchedule",
+    "history: scheduleHistory",
+  ]) {
+    if (!generatedText.includes(fragment)) {
+      fail(`generated local target consumer missing schedule fragment ${fragment}`);
+    }
+  }
   const forbiddenText = [
     "cloudflare:workers",
     "@effect/ai-anthropic",
@@ -1021,6 +1104,10 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
     "SandboxLifecycle",
     "just-bash",
     "wrangler",
+    "installScheduleProvider",
+    "cron-runner",
+    "cronRunner",
+    "submitAgentEffect",
   ];
   for (const token of forbiddenText) {
     if (generatedText.includes(token)) {
@@ -1097,6 +1184,12 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "      }, {",
       "        items: [{ type: 'message', text: 'workflow two complete' }],",
       "        usage: { promptTokens: 6, completionTokens: 7, totalTokens: 13 },",
+      "      }, {",
+      "        items: [{ type: 'message', text: 'scheduled session complete' }],",
+      "        usage: { promptTokens: 8, completionTokens: 9, totalTokens: 17 },",
+      "      }, {",
+      "        items: [{ type: 'message', text: 'scheduled workflow complete' }],",
+      "        usage: { promptTokens: 10, completionTokens: 11, totalTokens: 21 },",
       "      }],",
       "    },",
       "  });",
@@ -1189,6 +1282,42 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "  const workflowList = app.workflows.listRuns('summarize');",
       "  if (workflowList.runs.length !== 2 || workflowList.runs[0]?.workflowRunId !== 'workflow-run:generated-local:1' || workflowList.runs[1]?.workflowRunId !== 'workflow-run:generated-local:2') {",
       "    throw new Error(`generated local workflow list lost independent runs ${JSON.stringify(workflowList)}`);",
+      "  }",
+      "  if (JSON.stringify(app.schedules.ids) !== JSON.stringify(['daily-session', 'daily-workflow'])) {",
+      "    throw new Error(`generated local schedules lost ids ${JSON.stringify(app.schedules.ids)}`);",
+      "  }",
+      "  const listedSchedules = app.schedules.list();",
+      "  if (JSON.stringify(listedSchedules.map((row) => [row.scheduleId, row.path, row.cron])) !== JSON.stringify([['daily-session', 'agent/schedules/daily-session.ts', '0 9 * * *'], ['daily-workflow', 'agent/schedules/daily-workflow.ts', '15 9 * * *']])) {",
+      "    throw new Error(`generated local schedules list lost definitions ${JSON.stringify(listedSchedules)}`);",
+      "  }",
+      "  const schedulePrincipal = { authority: 'consumer.app', subject: 'generated-local-target-consumer' };",
+      "  const scheduledSession = await app.schedules.trigger({",
+      "    scheduleId: 'daily-session',",
+      "    scheduledAt: '2026-06-26T09:00:42.000Z',",
+      "    appPrincipal: schedulePrincipal,",
+      "  });",
+      "  if (scheduledSession.status !== 'dispatched' || scheduledSession.product.kind !== 'session_turn' || scheduledSession.product.link.sessionRef !== 'session:scheduled' || scheduledSession.product.link.idempotencyKey !== scheduledSession.fireId || scheduledSession.product.turn?.status.kind !== 'delivered') {",
+      "    throw new Error(`generated local scheduled session did not project linked turn ${JSON.stringify(scheduledSession)}`);",
+      "  }",
+      "  const scheduledWorkflow = await app.schedules.trigger({",
+      "    scheduleId: 'daily-workflow',",
+      "    scheduledAt: '2026-06-26T09:15:42.000Z',",
+      "    appPrincipal: schedulePrincipal,",
+      "  });",
+      "  if (scheduledWorkflow.status !== 'dispatched' || scheduledWorkflow.product.kind !== 'workflow_run' || scheduledWorkflow.product.link.workflowId !== 'scheduled-workflow' || scheduledWorkflow.product.link.idempotencyKey !== scheduledWorkflow.fireId || scheduledWorkflow.product.workflowRun?.status !== 'succeeded' || scheduledWorkflow.product.workflowRun.output !== 'scheduled workflow complete') {",
+      "    throw new Error(`generated local scheduled workflow did not project linked workflow ${JSON.stringify(scheduledWorkflow)}`);",
+      "  }",
+      "  const sessionScheduleHistory = app.schedules.history({ scheduleId: 'daily-session' });",
+      "  if (sessionScheduleHistory.fires.length !== 1 || sessionScheduleHistory.fires[0]?.fireId !== scheduledSession.fireId || sessionScheduleHistory.fires[0].status !== 'dispatched') {",
+      "    throw new Error(`generated local schedule history lost session fire ${JSON.stringify(sessionScheduleHistory)}`);",
+      "  }",
+      "  const allScheduleHistory = app.schedules.history();",
+      "  if (allScheduleHistory.fires.length !== 2 || !allScheduleHistory.fires.some((fire) => fire.fireId === scheduledSession.fireId) || !allScheduleHistory.fires.some((fire) => fire.fireId === scheduledWorkflow.fireId)) {",
+      "    throw new Error(`generated local schedule history lost fires ${JSON.stringify(allScheduleHistory)}`);",
+      "  }",
+      "  const scheduleEvents = app.runtime.events().filter((event) => event.kind.startsWith('schedule.fire_'));",
+      "  if (JSON.stringify(scheduleEvents.map((event) => event.kind)) !== JSON.stringify(['schedule.fire_requested', 'schedule.fire_dispatched', 'schedule.fire_requested', 'schedule.fire_dispatched'])) {",
+      "    throw new Error(`generated local schedule trigger wrote wrong handoff facts ${JSON.stringify(scheduleEvents)}`);",
       "  }",
       "  const toolEvent = app.runtime.events().find((event) => event.kind === 'tool.executed');",
       "  if (toolEvent?.payload?.result?.kind !== 'write_file') {",
@@ -1395,7 +1524,6 @@ export const negativeContractTests = () => {
 export const assertGeneratedTargetConsumer = () => {
   const dir = mkdtempFixture("agentos-generated-target-consumer-");
   writeGeneratedTargetConsumerApp(dir);
-  npmInstall(dir);
   assertNoAgentOsSymlinkPackages(dir);
   assertPackageNotInstalled(dir, "@effect/ai-anthropic");
   run(
@@ -1438,7 +1566,6 @@ export const assertGeneratedTargetConsumer = () => {
 export const assertGeneratedLocalTargetConsumer = () => {
   const dir = mkdtempFixture("agentos-generated-local-target-consumer-");
   writeGeneratedLocalTargetConsumerApp(dir);
-  npmInstall(dir);
   assertNoAgentOsSymlinkPackages(dir);
   assertPackageNotInstalled(dir, "@effect/ai-anthropic");
   assertPackageNotInstalled(dir, "@cloudflare/sandbox");
@@ -1453,6 +1580,10 @@ export const assertGeneratedLocalTargetConsumer = () => {
     "app.workflows.run",
     "app.workflows.inspectRun",
     "app.workflows.listRuns",
+    "app.schedules.ids",
+    "app.schedules.list",
+    "app.schedules.trigger",
+    "app.schedules.history",
   ]) {
     if (!localGeneratedSmokeText.includes(fragment)) {
       fail(`generated local target consumer smoke missing product API fragment ${fragment}`);

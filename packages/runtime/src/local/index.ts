@@ -9,6 +9,7 @@ import type { LlmResponse, LlmRoute, LlmTransport } from "@agent-os/core/llm-pro
 import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
 import type {
   AgentSubmitBindings,
+  LedgerTruthIdentity,
   SubmitSpec,
   SubmitResult,
   SubmitToolContext,
@@ -82,6 +83,7 @@ export type LocalAgentRuntimeLlmPreflight = (
 
 export interface CreateLocalAgentRuntimeOptions {
   readonly identity: string;
+  readonly truthIdentity?: LedgerTruthIdentity;
   readonly cwd: string;
   readonly env?: CreateLocalWorkspaceEnvOptions["env"];
   readonly inheritEnv?: CreateLocalWorkspaceEnvOptions["inheritEnv"];
@@ -585,7 +587,7 @@ export const lowerLocalAgentRuntime = async (
   options: LowerLocalAgentRuntimeOptions,
 ): Promise<LoweredLocalAgentRuntime> => {
   const target = localAgentRuntimeTarget(options.target);
-  const identity = inMemoryConversationTruthIdentity(options.identity);
+  const identity = options.truthIdentity ?? inMemoryConversationTruthIdentity(options.identity);
   const llm = localLlmAssembly(options.llm);
   const llmPreflightDiagnostics = localLlmPreflightDiagnostics(llm, llm.defaultRoute, "default");
   if (llmPreflightDiagnostics.length > 0) {
