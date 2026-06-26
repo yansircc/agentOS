@@ -1527,6 +1527,10 @@ const recordScheduleFile = (
     invalidAuthoredValue(state, path, "/cron", "cron_string_required");
     return;
   }
+  if (typeof declaration.handler !== "function") {
+    invalidAuthoredValue(state, path, "/handler", "schedule_handler_function_required");
+    return;
+  }
   let cron: string;
   try {
     cron = cronMinuteExpression(declaration.cron);

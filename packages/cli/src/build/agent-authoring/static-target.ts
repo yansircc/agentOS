@@ -10,6 +10,7 @@ import {
 import type {
   AuthoredAgentManifest,
   CompiledAgentChannel,
+  CompiledAgentSchedule,
   CompiledAgentSkill,
 } from "./manifest-compiler";
 import {
@@ -37,6 +38,7 @@ export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
   | ".agentos/generated/channels.ts"
+  | ".agentos/generated/schedules.ts"
   | ".agentos/generated/target.ts"
   | ".agentos/generated/local.ts"
   | ".agentos/generated/cloudflare-scope.ts"
@@ -62,8 +64,11 @@ export type StaticTargetModuleImportKind =
   | "workspace-host"
   | "workspace-binding"
   | "channel-runtime"
+  | "schedule-runtime"
   | "authored-channel"
+  | "authored-schedule"
   | "channel-registry"
+  | "schedule-registry"
   | "platform-runtime"
   | "workspace-client"
   | "client-core"
@@ -162,6 +167,8 @@ const importToolPath = (toolName: string): string => `../../agent/tools/${toolNa
 
 const importChannelPath = (path: string): string => `../../${path.replace(/\.ts$/u, "")}`;
 
+const importSchedulePath = (path: string): string => `../../${path.replace(/\.ts$/u, "")}`;
+
 const workspaceMutationToolNames = new Set<WorkspaceToolName>(
   WORKSPACE_TOOL_EXPOSURE_PROFILES.mutation,
 );
@@ -194,6 +201,7 @@ const staticTargetModules = (scope: string) => ({
   workspaceBinding: publicPackageSpecifier(scope, "runtime/workspace-binding"),
   workspaceEnvCloudflare: publicPackageSpecifier(scope, "runtime/cloudflare"),
   runtimeChannel: publicPackageSpecifier(scope, "runtime/channel"),
+  runtimeSchedule: publicPackageSpecifier(scope, "runtime/schedule"),
   runtimeRunProjector: publicPackageSpecifier(scope, "runtime/run-projector"),
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
@@ -232,6 +240,11 @@ const sortedChannels = (
 ): ReadonlyArray<CompiledAgentChannel> =>
   [...channels].sort((left, right) => left.name.localeCompare(right.name));
 
+const sortedSchedules = (
+  schedules: ReadonlyArray<CompiledAgentSchedule>,
+): ReadonlyArray<CompiledAgentSchedule> =>
+  [...schedules].sort((left, right) => left.scheduleId.localeCompare(right.scheduleId));
+
 const generatedChannelImports = (
   channels: ReadonlyArray<CompiledAgentChannel>,
 ): ReadonlyArray<StaticTargetModuleImport> =>
@@ -239,6 +252,15 @@ const generatedChannelImports = (
     kind: "authored-channel",
     source: importChannelPath(channel.path),
     imports: [`default as channel_${index}`],
+  }));
+
+const generatedScheduleImports = (
+  schedules: ReadonlyArray<CompiledAgentSchedule>,
+): ReadonlyArray<StaticTargetModuleImport> =>
+  sortedSchedules(schedules).map((schedule, index) => ({
+    kind: "authored-schedule",
+    source: importSchedulePath(schedule.path),
+    imports: [`default as schedule_${index}`],
   }));
 
 const renderChannelRegistry = (
@@ -375,6 +397,80 @@ export const dispatchGeneratedChannelRequest = async (
     return route.handler(channelRequest, context);
   }
   return null;
+};
+`;
+};
+
+const renderScheduleRegistry = (
+  schedules: ReadonlyArray<CompiledAgentSchedule>,
+  modules: ReturnType<typeof staticTargetModules>,
+): string => {
+  const ordered = sortedSchedules(schedules);
+  const scheduleImports = ordered
+    .map(
+      (schedule, index) =>
+        `import schedule_${index} from ${jsString(importSchedulePath(schedule.path))};`,
+    )
+    .join("\n");
+  const entries =
+    ordered.length === 0
+      ? "[]"
+      : `[\n${ordered
+          .map(
+            (schedule, index) =>
+              `  { scheduleId: ${jsString(schedule.scheduleId)}, path: ${jsString(
+                schedule.path,
+              )}, cron: ${jsString(schedule.cron)}, schedule: schedule_${index} as DefinedSchedule },`,
+          )
+          .join("\n")}\n]`;
+  return `${scheduleImports}
+${renderNamedImport(["createScheduleContext", "scheduleFireId"], modules.runtimeSchedule)}
+${renderTypeImport(
+  ["DefinedSchedule", "SchedulePrincipal", "ScheduleRuntime"],
+  modules.runtimeSchedule,
+)}
+
+type GeneratedScheduleDefinition = {
+  readonly scheduleId: string;
+  readonly path: string;
+  readonly cron: string;
+  readonly schedule: DefinedSchedule;
+};
+
+export type GeneratedScheduleTriggerInput = {
+  readonly scheduleId: string;
+  readonly scheduledAt: string | number | Date;
+  readonly appPrincipal: SchedulePrincipal;
+};
+
+export type GeneratedScheduleDispatchInput = GeneratedScheduleTriggerInput & {
+  readonly runtime: ScheduleRuntime;
+};
+
+export const generatedSchedules = ${entries} as const satisfies ReadonlyArray<GeneratedScheduleDefinition>;
+export const generatedScheduleIds = generatedSchedules.map((entry) => entry.scheduleId);
+export const generatedScheduleRegistry = new Map(
+  generatedSchedules.map((entry) => [entry.scheduleId, entry]),
+);
+
+export const dispatchGeneratedSchedule = async (
+  input: GeneratedScheduleDispatchInput,
+): Promise<unknown> => {
+  const entry = generatedScheduleRegistry.get(input.scheduleId);
+  if (entry === undefined) {
+    throw new Error(\`unknown generated schedule: \${input.scheduleId}\`);
+  }
+  const fireId = scheduleFireId({
+    appPrincipal: input.appPrincipal,
+    scheduleId: entry.scheduleId,
+    scheduledAt: input.scheduledAt,
+  });
+  const context = createScheduleContext(input.runtime, {
+    appPrincipal: input.appPrincipal,
+    fireId,
+    scheduledAt: input.scheduledAt,
+  });
+  return entry.schedule.handler(context);
 };
 `;
 };
@@ -523,6 +619,7 @@ const renderSubmitSpecFromRunInput = (
 const renderProductApiHelpers = (): string => `export interface AgentSessionSubmitTurnInput extends SubmitRunInput {
   readonly sessionRef: string;
   readonly turnRef: string;
+  readonly idempotencyKey?: string;
 }
 
 export interface AgentWorkflowRunInput extends SubmitRunInput {
@@ -570,6 +667,7 @@ const renderProductApiDurableObjectMethods = (): string => `
             kind: "session_turn",
             sessionRef: input.sessionRef,
             turnRef: input.turnRef,
+            ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
           },
         )
       : rejectTargetFailure(bindings);
@@ -614,6 +712,29 @@ const renderProductApiDurableObjectMethods = (): string => `
     );
   }`;
 
+const renderScheduleDurableObjectHelpers = (): string => `
+const generatedScheduleRuntimeFor = (target: {
+  readonly submitSessionTurn: (input: AgentSessionSubmitTurnInput) => Promise<SubmitResult>;
+  readonly runWorkflow: (input: AgentWorkflowRunInput) => Promise<SubmitResult>;
+}) =>
+  Object.freeze({
+    sessions: Object.freeze({
+      submitTurn: (input: AgentSessionSubmitTurnInput) => target.submitSessionTurn(input),
+    }),
+    workflows: Object.freeze({
+      run: (input: AgentWorkflowRunInput) => target.runWorkflow(input),
+    }),
+  });`;
+
+const renderScheduleDurableObjectMethod = (): string => `
+  dispatchSchedule(input: GeneratedScheduleTriggerInput): Promise<unknown> {
+    return dispatchGeneratedSchedule({
+      ...input,
+      runtime: generatedScheduleRuntimeFor(this),
+    });
+  }
+`;
+
 const renderGeneratedWorkspaceOperations = (
   workspaceToolArray: string,
   usesMutationTools: boolean,
@@ -646,6 +767,7 @@ const renderWorkspaceStaticTarget = (
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
   const hasSkills = normalized.skills.length > 0;
+  const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
     (toolName): toolName is WorkspaceToolName =>
@@ -680,6 +802,7 @@ const renderWorkspaceStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
+    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedSchedule"], "./schedules")] : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(
       [
@@ -728,6 +851,7 @@ const renderWorkspaceStaticTarget = (
       modules.runtimeRunProjector,
     ),
     renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
+    ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderTypeImport(
       [
         "WorkspaceAgentDecideInputRequestCommandInput",
@@ -1000,6 +1124,7 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
 ${renderSubmitSpecFromRunInput(hasSkills)}
 
 ${renderProductApiHelpers()}
+${hasSchedules ? renderScheduleDurableObjectHelpers() : ""}
 
 export const workspaceMount = defineWorkspaceAgentMount({
   driver: { kind: "driver_mount", client: undefined as never },
@@ -1052,6 +1177,7 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
   }
 
 ${renderProductApiDurableObjectMethods()}
+${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
     const bindings = generatedSubmitBindingsFor(this.targetEnv);
@@ -1139,6 +1265,7 @@ const renderChatStaticTarget = (
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
   const hasSkills = normalized.skills.length > 0;
+  const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
   const toolImports = customToolNames
@@ -1162,6 +1289,7 @@ const renderChatStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
+    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedSchedule"], "./schedules")] : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
@@ -1195,6 +1323,7 @@ const renderChatStaticTarget = (
       modules.runtimeRunProjector,
     ),
     renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
+    ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderTypeImport(
       [
         "WorkspaceAgentCustomCommandInput",
@@ -1349,6 +1478,7 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
 ${renderSubmitSpecFromRunInput(hasSkills)}
 
 ${renderProductApiHelpers()}
+${hasSchedules ? renderScheduleDurableObjectHelpers() : ""}
 
 const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTargetEnv>({
   manifest: semanticManifest,
@@ -1384,6 +1514,7 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
   }
 
 ${renderProductApiDurableObjectMethods()}
+${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
     const bindings = generatedSubmitBindingsFor(this.targetEnv);
@@ -1420,6 +1551,7 @@ const renderLocalAgentApp = (
     throw new TypeError(`local agent app renderer received ${normalized.target.kind}`);
   }
   const hasChannels = normalized.channels.length > 0;
+  const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
     (toolName): toolName is WorkspaceToolName =>
@@ -1439,6 +1571,10 @@ const renderLocalAgentApp = (
     `import semanticDeclarations from "./manifest.json";`,
     ...(hasChannels ? [renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")] : []),
     ...(hasChannels ? [renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)] : []),
+    ...(hasSchedules
+      ? [renderNamedImport(["dispatchGeneratedSchedule", "generatedScheduleIds"], "./schedules")]
+      : []),
+    ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
@@ -1541,6 +1677,14 @@ export interface LocalAgentApp {
     ) => WorkflowRunProjection | null;
     readonly listRuns: (workflowId: string) => WorkflowRunListProjection;
   };
+  ${
+    hasSchedules
+      ? `readonly schedules: {
+    readonly ids: ReadonlyArray<string>;
+    readonly dispatch: (input: GeneratedScheduleTriggerInput) => Promise<unknown>;
+  };`
+      : ""
+  }
 }
 
 ${
@@ -1572,31 +1716,46 @@ export const createLocalAgentApp = async (
     llm: options.llm ?? generatedLocalLlmFor(targetEnv),
     workspaceOperations: generatedWorkspaceOperations,
   });
+  const sessions = {
+    submitTurn: (input: AgentSessionSubmitTurnInput) =>
+      lowered.submitWithProductLink(submitRunInputFromSessionTurn(input), {
+        kind: "session_turn",
+        sessionRef: input.sessionRef,
+        turnRef: input.turnRef,
+        ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+      }),
+    inspect: (sessionRef: string) => projectAgentSession(lowered.runtime.events(), sessionRef),
+    list: () => projectAgentSessions(lowered.runtime.events()),
+  };
+  const workflows = {
+    run: (input: AgentWorkflowRunInput) =>
+      lowered.submitWithProductLink(submitRunInputFromWorkflowRun(input), {
+        kind: "workflow_run",
+        workflowId: input.workflowId,
+        workflowRunId: input.workflowRunId,
+        ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+        ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
+      }),
+    inspectRun: (workflowId: string, workflowRunId: string) =>
+      projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
+    listRuns: (workflowId: string) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
+  };
   return {
     runtime: lowered.runtime,
-    sessions: {
-      submitTurn: (input) =>
-        lowered.submitWithProductLink(submitRunInputFromSessionTurn(input), {
-          kind: "session_turn",
-          sessionRef: input.sessionRef,
-          turnRef: input.turnRef,
+    sessions,
+    workflows,
+    ${
+      hasSchedules
+        ? `schedules: {
+      ids: generatedScheduleIds,
+      dispatch: (input: GeneratedScheduleTriggerInput) =>
+        dispatchGeneratedSchedule({
+          ...input,
+          runtime: { sessions, workflows },
         }),
-      inspect: (sessionRef) => projectAgentSession(lowered.runtime.events(), sessionRef),
-      list: () => projectAgentSessions(lowered.runtime.events()),
-    },
-    workflows: {
-      run: (input) =>
-        lowered.submitWithProductLink(submitRunInputFromWorkflowRun(input), {
-          kind: "workflow_run",
-          workflowId: input.workflowId,
-          workflowRunId: input.workflowRunId,
-          ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
-          ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
-        }),
-      inspectRun: (workflowId, workflowRunId) =>
-        projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
-      listRuns: (workflowId) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
-    },
+    },`
+        : ""
+    }
   };
 };
 `;
@@ -2950,6 +3109,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
   }
   const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
   const hasChannels = normalized.channels.length > 0;
+  const hasSchedules = normalized.schedules.length > 0;
   if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
     if (normalized.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1) {
       return {
@@ -2996,6 +3156,21 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             },
           ]
         : []),
+      ...(hasSchedules
+        ? [
+            {
+              kind: "schedule-runtime" as const,
+              source: modules.runtimeSchedule,
+              imports: ["DefinedSchedule"],
+            },
+            ...generatedScheduleImports(normalized.schedules),
+            {
+              kind: "schedule-registry" as const,
+              source: "./schedules",
+              imports: ["dispatchGeneratedSchedule", "generatedSchedules"],
+            },
+          ]
+        : []),
     ];
     return {
       ok: true,
@@ -3020,6 +3195,14 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
                 generatedPath(
                   ".agentos/generated/channels.ts",
                   renderChannelRegistry(normalized.channels, modules),
+                ),
+              ]
+            : []),
+          ...(hasSchedules
+            ? [
+                generatedPath(
+                  ".agentos/generated/schedules.ts",
+                  renderScheduleRegistry(normalized.schedules, modules),
                 ),
               ]
             : []),
@@ -3102,6 +3285,21 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             kind: "channel-registry" as const,
             source: "./channels",
             imports: ["dispatchGeneratedChannelRequest", "generatedChannels"],
+          },
+        ]
+      : []),
+    ...(hasSchedules
+      ? [
+          {
+            kind: "schedule-runtime" as const,
+            source: modules.runtimeSchedule,
+            imports: ["DefinedSchedule"],
+          },
+          ...generatedScheduleImports(normalized.schedules),
+          {
+            kind: "schedule-registry" as const,
+            source: "./schedules",
+            imports: ["dispatchGeneratedSchedule", "generatedSchedules"],
           },
         ]
       : []),
@@ -3198,6 +3396,14 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
               generatedPath(
                 ".agentos/generated/channels.ts",
                 renderChannelRegistry(normalized.channels, modules),
+              ),
+            ]
+          : []),
+        ...(hasSchedules
+          ? [
+              generatedPath(
+                ".agentos/generated/schedules.ts",
+                renderScheduleRegistry(normalized.schedules, modules),
               ),
             ]
           : []),

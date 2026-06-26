@@ -716,6 +716,7 @@ void test("compileAgentTree keeps schedules as authoring-only nested path facts"
       'const invalidSlug = compile(schedule("agent/schedules/Daily.ts"));',
       'const subagentSchedule = compile(schedule("agent/schedules/subagents/daily.ts"));',
       'const malformedCron = compile(schedule("agent/schedules/daily.ts", "@daily"));',
+      'const missingHandler = compile({ path: "agent/schedules/daily.ts", kind: "schedule", declaration: { cron: "0 9 * * *" } });',
       'const identityFields = compile(schedule("agent/schedules/daily.ts", "0 9 * * *", { id: "daily", name: "Daily", kind: "schedule" }));',
       'const symlink = compile({ ...schedule("agent/schedules/daily.ts"), sourceKind: "symlink" });',
       'const missingDeclaration = compile({ path: "agent/schedules/daily.ts", kind: "schedule" });',
@@ -736,6 +737,7 @@ void test("compileAgentTree keeps schedules as authoring-only nested path facts"
       '  invalidSlug,',
       '  subagentSchedule,',
       '  malformedCron,',
+      '  missingHandler,',
       '  identityFields,',
       '  symlink,',
       '  missingDeclaration,',
@@ -804,6 +806,15 @@ void test("compileAgentTree keeps schedules as authoring-only nested path facts"
       path: "schedules/daily.ts",
       field: "/cron",
       reason: "cron_minute_expression_invalid",
+    },
+  ]);
+  assert.equal(output.missingHandler.ok, false);
+  assert.deepEqual(output.missingHandler.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "schedules/daily.ts",
+      field: "/handler",
+      reason: "schedule_handler_function_required",
     },
   ]);
   assert.equal(output.identityFields.ok, false);
@@ -1227,6 +1238,219 @@ void test("agentos build emits one channel registry for cloudflare and node targ
     assert.match(nodeLocal, /handleLocalAgentChannelRequest/);
     assert.match(nodeLocal, /dispatchGeneratedChannelRequest\(request, runtime\)/);
     assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/channels.ts")), true);
+  } finally {
+    rmSync(cloudflareRoot, { recursive: true, force: true });
+    rmSync(nodeRoot, { recursive: true, force: true });
+  }
+});
+
+void test("agentos build emits one schedule registry for cloudflare and node targets", () => {
+  const writeScheduleFixture = (root) => {
+    mkdirSync(path.join(root, "agent/schedules"), { recursive: true });
+    writeFileSync(
+      path.join(root, "agent/schedules/daily.ts"),
+      [
+        "export default {",
+        '  cron: "0 9 * * *",',
+        "  handler: async (context) => {",
+        "    const session = await context.sessions.submitTurn({",
+        '      sessionRef: "daily-session",',
+        "      turnRef: context.fireId,",
+        "      idempotencyKey: context.fireId,",
+        '      intent: "scheduled session",',
+        "      context: { scheduledAt: context.scheduledAt },",
+        "    });",
+        "    const workflow = await context.workflows.run({",
+        '      workflowId: "daily-report",',
+        "      workflowRunId: context.fireId,",
+        "      idempotencyKey: context.fireId,",
+        "      inputDigest: context.scheduledAt,",
+        '      intent: "scheduled workflow",',
+        "      context: { subject: context.appPrincipal.subject },",
+        "    });",
+        "    return {",
+        "      contextKeys: Object.keys(context).sort(),",
+        "      fireId: context.fireId,",
+        "      scheduledAt: context.scheduledAt,",
+        "      principal: context.appPrincipal,",
+        "      sessionStatus: session.status,",
+        "      workflowStatus: workflow.status,",
+        "    };",
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+    );
+  };
+
+  const writeBaseAgent = (root, targetLines) => {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Run scheduled ingress.");
+    writeFileSync(
+      path.join(root, "agent/agent.json"),
+      JSON.stringify(
+        {
+          agentId: "schedule-registry-fixture",
+          scope: {
+            kind: "session",
+            idSource: "manifest",
+            stableScopeId: "schedule-registry-scope",
+          },
+          effectAuthorityRef: {
+            authorityClass: "effect",
+            authorityId: "schedule-registry-fixture",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeScheduleFixture(root);
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "schedule-registry-fixture", "version": "0.1.0" },',
+        ...targetLines,
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+  };
+
+  const cloudflareRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-schedule-cloudflare-"));
+  const nodeRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-schedule-node-"));
+  try {
+    writeBaseAgent(cloudflareRoot, [
+      '  "target": {',
+      '    "kind": "cloudflare-do@1",',
+      '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+      "  },",
+    ]);
+    const cloudflareResult = spawnSync(process.execPath, [cli, "build", "--cwd", cloudflareRoot], {
+      encoding: "utf8",
+    });
+    assert.equal(cloudflareResult.status, 0, cloudflareResult.stderr);
+    assert.match(cloudflareResult.stdout, /generated 11 agentOS files/);
+    const cloudflareManifest = JSON.parse(
+      readFileSync(path.join(cloudflareRoot, ".agentos/generated/manifest.json"), "utf8"),
+    );
+    assert.equal(Object.hasOwn(cloudflareManifest, "schedules"), false);
+    const cloudflareSchedules = readFileSync(
+      path.join(cloudflareRoot, ".agentos/generated/schedules.ts"),
+      "utf8",
+    );
+    assert.match(cloudflareSchedules, /from "\.\.\/\.\.\/agent\/schedules\/daily"/);
+    assert.match(cloudflareSchedules, /from "@agent-os\/runtime\/schedule"/);
+    assert.match(cloudflareSchedules, /generatedSchedules/);
+    assert.match(cloudflareSchedules, /generatedScheduleRegistry/);
+    assert.match(cloudflareSchedules, /scheduleFireId/);
+    assert.match(cloudflareSchedules, /createScheduleContext/);
+    assert.doesNotMatch(cloudflareSchedules, /readdir|collectFiles/);
+    const cloudflareTarget = readFileSync(
+      path.join(cloudflareRoot, ".agentos/generated/target.ts"),
+      "utf8",
+    );
+    assert.match(cloudflareTarget, /from "\.\/schedules"/);
+    assert.match(cloudflareTarget, /dispatchSchedule\(input: GeneratedScheduleTriggerInput\)/);
+    assert.match(cloudflareTarget, /generatedScheduleRuntimeFor\(this\)/);
+    assert.doesNotMatch(cloudflareTarget, /agent\/schedules|readdir|collectFiles/);
+
+    writeBaseAgent(nodeRoot, ['  "target": { "kind": "node@1" },']);
+    const nodeResult = spawnSync(process.execPath, [cli, "build", "--cwd", nodeRoot], {
+      encoding: "utf8",
+    });
+    assert.equal(nodeResult.status, 0, nodeResult.stderr);
+    assert.match(nodeResult.stdout, /generated 6 agentOS files/);
+    const nodeLocal = readFileSync(path.join(nodeRoot, ".agentos/generated/local.ts"), "utf8");
+    assert.match(nodeLocal, /from "\.\/schedules"/);
+    assert.match(nodeLocal, /readonly schedules:/);
+    assert.match(nodeLocal, /ids: generatedScheduleIds/);
+    assert.match(nodeLocal, /dispatchGeneratedSchedule/);
+    assert.doesNotMatch(nodeLocal, /agent\/schedules|readdir|collectFiles/);
+    assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/schedules.ts")), true);
+
+    linkGeneratedTargetSmokeDependencies(nodeRoot);
+    const dispatchResult = runTypeScript(
+      [
+        'import { dispatchGeneratedSchedule, generatedScheduleIds } from "./.agentos/generated/schedules.ts";',
+        "const calls = [];",
+        "const runtime = Object.freeze({",
+        "  sessions: Object.freeze({",
+        "    submitTurn: async (input) => {",
+        '      calls.push(["session", input]);',
+        '      return { status: "session-submitted" };',
+        "    },",
+        "  }),",
+        "  workflows: Object.freeze({",
+        "    run: async (input) => {",
+        '      calls.push(["workflow", input]);',
+        '      return { status: "workflow-submitted" };',
+        "    },",
+        "  }),",
+        "});",
+        "const result = await dispatchGeneratedSchedule({",
+        '  scheduleId: "daily",',
+        '  scheduledAt: "2026-06-26T10:20:42.000Z",',
+        '  appPrincipal: { authority: "app", subject: "tenant" },',
+        "  runtime,",
+        "});",
+        "console.log(JSON.stringify({ ids: generatedScheduleIds, result, calls }));",
+      ].join("\n"),
+      { cwd: nodeRoot, resolveDir: nodeRoot },
+    );
+    assert.equal(dispatchResult.status, 0, dispatchResult.stderr);
+    const output = JSON.parse(dispatchResult.stdout);
+    assert.deepEqual(output.ids, ["daily"]);
+    assert.deepEqual(output.result.contextKeys, [
+      "appPrincipal",
+      "fireId",
+      "scheduledAt",
+      "sessions",
+      "workflows",
+    ]);
+    assert.deepEqual(output.result.principal, { authority: "app", subject: "tenant" });
+    assert.equal(output.result.scheduledAt, "2026-06-26T10:20:00.000Z");
+    assert.equal(output.result.sessionStatus, "session-submitted");
+    assert.equal(output.result.workflowStatus, "workflow-submitted");
+    assert.match(
+      output.result.fireId,
+      /^schedule-fire:app:tenant:daily:2026-06-26T10%3A20%3A00\.000Z$/,
+    );
+    assert.deepEqual(output.calls, [
+      [
+        "session",
+        {
+          sessionRef: "daily-session",
+          turnRef: output.result.fireId,
+          idempotencyKey: output.result.fireId,
+          intent: "scheduled session",
+          context: { scheduledAt: "2026-06-26T10:20:00.000Z" },
+        },
+      ],
+      [
+        "workflow",
+        {
+          workflowId: "daily-report",
+          workflowRunId: output.result.fireId,
+          idempotencyKey: output.result.fireId,
+          inputDigest: "2026-06-26T10:20:00.000Z",
+          intent: "scheduled workflow",
+          context: { subject: "tenant" },
+        },
+      ],
+    ]);
   } finally {
     rmSync(cloudflareRoot, { recursive: true, force: true });
     rmSync(nodeRoot, { recursive: true, force: true });
