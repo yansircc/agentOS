@@ -88,7 +88,9 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
         ...(event.payload.idempotencyKey === undefined
           ? {}
           : { idempotencyKey: event.payload.idempotencyKey }),
-        ...(event.payload.inputDigest === undefined ? {} : { inputDigest: event.payload.inputDigest }),
+        ...(event.payload.inputDigest === undefined
+          ? {}
+          : { inputDigest: event.payload.inputDigest }),
       });
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
       return safeLedgerEvent(event, {

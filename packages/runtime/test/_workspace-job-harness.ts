@@ -155,11 +155,13 @@ const makeServices = (
         };
         const id = (eventRef: { readonly key: string }) => {
           const eventId = ids.get(eventRef.key);
-          if (eventId === undefined) throw new TypeError(`unknown ledger event ref: ${eventRef.key}`);
+          if (eventId === undefined)
+            throw new TypeError(`unknown ledger event ref: ${eventRef.key}`);
           return eventId;
         };
         const append = (refOrRecipe: any, maybeRecipe?: any) => {
-          const eventRef = maybeRecipe === undefined ? ref(`event:${nextAnonymousRef++}`) : refOrRecipe;
+          const eventRef =
+            maybeRecipe === undefined ? ref(`event:${nextAnonymousRef++}`) : refOrRecipe;
           const recipe = maybeRecipe === undefined ? refOrRecipe : maybeRecipe;
           ids.set(eventRef.key, nextId++);
           recipes.push({ ref: eventRef, recipe });
@@ -176,9 +178,7 @@ const makeServices = (
             effectAuthorityRef: recipe.effectAuthorityRef,
             factOwnerRef: RUNTIME_FACT_OWNER,
             payload:
-              recipe.buildPayload === undefined
-                ? recipe.payload
-                : recipe.buildPayload({ id }),
+              recipe.buildPayload === undefined ? recipe.payload : recipe.buildPayload({ id }),
           } satisfies LedgerEvent;
         });
         events.push(...committed);

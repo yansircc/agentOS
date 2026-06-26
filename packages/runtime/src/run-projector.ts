@@ -316,7 +316,9 @@ const runStatusFromRuntimeEvents = (
     return { kind: "open_without_terminal", startedAt: start.ts };
   }
 
-  const evidence = runtimeEvents.find((event) => !isScheduleFireEvent(event) && runtimeRunId(event) === runId);
+  const evidence = runtimeEvents.find(
+    (event) => !isScheduleFireEvent(event) && runtimeRunId(event) === runId,
+  );
   return {
     kind: "orphaned",
     startedAt: evidence?.ts ?? 0,
@@ -701,8 +703,7 @@ const sessionStatus = (
   const active = [...turns]
     .reverse()
     .find(
-      (turn) =>
-        turn.status.kind === "open_without_terminal" || turn.status.kind === "interrupted",
+      (turn) => turn.status.kind === "open_without_terminal" || turn.status.kind === "interrupted",
     );
 
   if (active !== undefined) {

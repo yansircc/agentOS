@@ -1471,10 +1471,7 @@ const recordWorkflowFile = (
 
 const scheduleAllowedFields = new Set(["cron", "handler", "id", "name", "kind"]);
 
-const scheduleIdFromPath = (
-  state: CompilerState,
-  path: string,
-): string | null => {
+const scheduleIdFromPath = (state: CompilerState, path: string): string | null => {
   const parts = path.split("/");
   if (parts.length < 2 || parts[0] !== "schedules" || !parts[parts.length - 1]?.endsWith(".ts")) {
     state.issues.push({ kind: "unsupported_path", path, reason: "schedule_path_not_in_grammar" });

@@ -81,7 +81,8 @@ const schedulePrincipal = {
   claims: { deployment: "prod" },
 };
 const scheduledAt = "2026-06-26T01:02:00.000Z";
-const scheduleFireId = "schedule-fire:agentos.app:agent%3Adaily:daily-summary:2026-06-26T01%3A02%3A00.000Z";
+const scheduleFireId =
+  "schedule-fire:agentos.app:agent%3Adaily:daily-summary:2026-06-26T01%3A02%3A00.000Z";
 
 const resolvedToolExecution = (
   execution: ToolExecution,
@@ -920,7 +921,9 @@ describe("runtime event vocabulary", () => {
       }),
     );
 
-    expect(validateRuntimeLedgerTransitions({ history: [], events: [requested, dispatched] })).toEqual({
+    expect(
+      validateRuntimeLedgerTransitions({ history: [], events: [requested, dispatched] }),
+    ).toEqual({
       ok: true,
     });
     expect(validateRuntimeLedgerTransitions({ history: [requested], events: [failed] })).toEqual({
@@ -943,12 +946,14 @@ describe("runtime event vocabulary", () => {
       2,
       agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }),
     );
-    const dispatched = (overrides: {
-      readonly id?: number;
-      readonly requestedEventId?: number;
-      readonly fireId?: string;
-      readonly idempotencyKey?: string;
-    } = {}) =>
+    const dispatched = (
+      overrides: {
+        readonly id?: number;
+        readonly requestedEventId?: number;
+        readonly fireId?: string;
+        readonly idempotencyKey?: string;
+      } = {},
+    ) =>
       ledgerEvent(
         overrides.id ?? 3,
         scheduleFireDispatchedEvent({
@@ -992,7 +997,9 @@ describe("runtime event vocabulary", () => {
 
     const mismatch = validateRuntimeLedgerTransitions({
       history: [requested],
-      events: [dispatched({ fireId: "schedule-fire:other", idempotencyKey: "schedule-fire:other" })],
+      events: [
+        dispatched({ fireId: "schedule-fire:other", idempotencyKey: "schedule-fire:other" }),
+      ],
     });
     expect(mismatch.ok).toBe(false);
     if (!mismatch.ok) {

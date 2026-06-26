@@ -99,7 +99,10 @@ describe("@agent-os/runtime/channel", () => {
   it("fails closed when channel context inputs are not positive contracts", () => {
     expect(() => createChannelContext(null as never, verifier())).toThrow(/must be an object/);
     expect(() =>
-      createChannelContext({ submit: undefined as never, dispatch: channelRuntime.dispatch }, verifier()),
+      createChannelContext(
+        { submit: undefined as never, dispatch: channelRuntime.dispatch },
+        verifier(),
+      ),
     ).toThrow(/requires submit/);
     expect(() =>
       createChannelContext(channelRuntime, { authority: "", subject: "provider-user:123" }),

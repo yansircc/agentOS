@@ -507,10 +507,7 @@ const assertDefinedSchedule = (schedule: DefinedSchedule): void => {
 const requiredFireIdempotencyKey = (
   idempotencyKey: string | undefined,
   fireId: string,
-  fail: (
-    phase: ScheduleFireFailedPayload["phase"],
-    reason: string,
-  ) => ScheduleFireDispatchFailure,
+  fail: (phase: ScheduleFireFailedPayload["phase"], reason: string) => ScheduleFireDispatchFailure,
 ): string => {
   if (idempotencyKey === undefined) return fireId;
   if (idempotencyKey === fireId) return idempotencyKey;
@@ -519,10 +516,7 @@ const requiredFireIdempotencyKey = (
 
 const assertSingleProductIngress = (
   productLink: ScheduleFireProductLink | undefined,
-  fail: (
-    phase: ScheduleFireFailedPayload["phase"],
-    reason: string,
-  ) => ScheduleFireDispatchFailure,
+  fail: (phase: ScheduleFireFailedPayload["phase"], reason: string) => ScheduleFireDispatchFailure,
 ): void => {
   if (productLink !== undefined) {
     throw fail("contract", "schedule_fire_multiple_product_ingress_calls");
@@ -595,8 +589,7 @@ const scheduleProductProjection = (
       turn:
         session.turns.find(
           (turn) =>
-            turn.runtimeRunId === productLink.runtimeRunId &&
-            turn.turnRef === productLink.turnRef,
+            turn.runtimeRunId === productLink.runtimeRunId && turn.turnRef === productLink.turnRef,
         ) ?? null,
     };
   }

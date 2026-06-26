@@ -269,7 +269,10 @@ const renderChannelRegistry = (
 ): string => {
   const ordered = sortedChannels(channels);
   const channelImports = ordered
-    .map((channel, index) => `import channel_${index} from ${jsString(importChannelPath(channel.path))};`)
+    .map(
+      (channel, index) =>
+        `import channel_${index} from ${jsString(importChannelPath(channel.path))};`,
+    )
     .join("\n");
   const entries =
     ordered.length === 0
@@ -625,7 +628,8 @@ const renderSubmitSpecFromRunInput = (
   ...(input.resume === undefined ? {} : { resume: input.resume }),
 });`;
 
-const renderProductApiHelpers = (): string => `export interface AgentSessionSubmitTurnInput extends SubmitRunInput {
+const renderProductApiHelpers =
+  (): string => `export interface AgentSessionSubmitTurnInput extends SubmitRunInput {
   readonly sessionRef: string;
   readonly turnRef: string;
   readonly idempotencyKey?: string;
@@ -1894,7 +1898,9 @@ const generatedChannelRuntimeFor = (env: AgentOSTargetEnv): ChannelRuntime => {
 `
     : ""
 }
-${hasSchedules ? `type AgentOSScheduleRpc = {
+${
+  hasSchedules
+    ? `type AgentOSScheduleRpc = {
   readonly dispatchSchedule: (input: GeneratedScheduleTriggerInput) => Promise<unknown>;
 };
 
@@ -1914,7 +1920,8 @@ const generatedScheduleInputsFor = (
       appPrincipal: generatedScheduleAppPrincipal,
     }));
 `
-    : ""}
+    : ""
+}
 
 export default {
   async fetch(request: Request, env: AgentOSTargetEnv): Promise<Response> {

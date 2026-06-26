@@ -47,9 +47,7 @@ const runtimeIdentity = {
   effectAuthorityRef: { authorityClass: "test", authorityId: "schedule-contract-test" },
 };
 
-type ScheduleSessionSubmitResult = Awaited<
-  ReturnType<ScheduleRuntime["sessions"]["submitTurn"]>
->;
+type ScheduleSessionSubmitResult = Awaited<ReturnType<ScheduleRuntime["sessions"]["submitTurn"]>>;
 type DeliveredScheduleSessionSubmitResult = Extract<
   ScheduleSessionSubmitResult,
   { readonly ok: true; readonly status: "delivered" }
@@ -82,9 +80,7 @@ describe("@agent-os/runtime/schedule", () => {
 
   it("normalizes scheduledAt to the UTC scheduled minute", () => {
     expect(scheduledMinute("2026-06-26T01:02:59.999Z")).toBe("2026-06-26T01:02:00.000Z");
-    expect(scheduledMinute(new Date("2026-06-26T01:02:42.123Z"))).toBe(
-      "2026-06-26T01:02:00.000Z",
-    );
+    expect(scheduledMinute(new Date("2026-06-26T01:02:42.123Z"))).toBe("2026-06-26T01:02:00.000Z");
     expect(() => scheduledMinute("not-a-date")).toThrow(/valid timestamp/);
   });
 
@@ -543,11 +539,13 @@ describe("@agent-os/runtime/schedule", () => {
   });
 
   it("fails closed when context inputs are not positive contracts", () => {
-    expect(() => createScheduleContext(null as never, {
-      appPrincipal,
-      fireId: "fire:1",
-      scheduledAt: "2026-06-26T01:02:00.000Z",
-    })).toThrow(/runtime must be an object/);
+    expect(() =>
+      createScheduleContext(null as never, {
+        appPrincipal,
+        fireId: "fire:1",
+        scheduledAt: "2026-06-26T01:02:00.000Z",
+      }),
+    ).toThrow(/runtime must be an object/);
     expect(() =>
       createScheduleContext(
         { sessions: { submitTurn: undefined as never }, workflows: runtime.workflows },

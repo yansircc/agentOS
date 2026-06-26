@@ -6,8 +6,8 @@ Agent-facing docs are generated projections. Source facts live in `*.source.json
 
 ## Navigation
 
-| Surface          | Generated File                                              |
-| ---------------- | ----------------------------------------------------------- |
+| Surface          | Generated File                                   |
+| ---------------- | ------------------------------------------------ |
 | Recipes          | [recipes.json](agent/recipes.json)               |
 | Primitives       | [primitives.md](agent/primitives.md)             |
 | Decision Graph   | [decision-graph.md](agent/decision-graph.md)     |

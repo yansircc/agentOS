@@ -80,7 +80,8 @@ describe("runtime driver value-domain boundary", () => {
                 ref: () => startRef,
                 id: (ref: { readonly key: string }) => ids.get(ref.key) ?? 0,
                 append: (refOrRecipe: any, maybeRecipe?: any) => {
-                  const ref = maybeRecipe === undefined ? { key: `event:${recipes.length}` } : refOrRecipe;
+                  const ref =
+                    maybeRecipe === undefined ? { key: `event:${recipes.length}` } : refOrRecipe;
                   const recipe = maybeRecipe === undefined ? refOrRecipe : maybeRecipe;
                   ids.set(ref.key, recipes.length + 1);
                   recipes.push({ ref, recipe });

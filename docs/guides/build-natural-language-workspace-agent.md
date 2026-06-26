@@ -275,10 +275,7 @@ await agent.workflows.run({
   intent: "write the weekly report",
   context: { week: "2026-W26" },
 });
-const reportRun = await agent.workflows.inspectRun(
-  "weekly-report",
-  "weekly-report:2026-06-26",
-);
+const reportRun = await agent.workflows.inspectRun("weekly-report", "weekly-report:2026-06-26");
 ```
 
 Slack, GitHub, support, and other continuing conversation surfaces submit

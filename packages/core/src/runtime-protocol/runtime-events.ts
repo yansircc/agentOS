@@ -512,24 +512,23 @@ export const ScheduleFireRequestedPayloadSchema: Schema.Decoder<ScheduleFireRequ
     traceContext: Schema.optional(TraceContextSchema),
   });
 
-export const ScheduleFireProductLinkSchema: Schema.Decoder<ScheduleFireProductLink> =
-  Schema.Union([
-    Schema.Struct({
-      kind: Schema.Literal("session_turn"),
-      sessionRef: nonEmptyString,
-      turnRef: nonEmptyString,
-      runtimeRunId: positiveInt,
-      idempotencyKey: nonEmptyString,
-    }),
-    Schema.Struct({
-      kind: Schema.Literal("workflow_run"),
-      workflowId: nonEmptyString,
-      workflowRunId: nonEmptyString,
-      runtimeRunId: positiveInt,
-      idempotencyKey: nonEmptyString,
-      inputDigest: Schema.optional(nonEmptyString),
-    }),
-  ]);
+export const ScheduleFireProductLinkSchema: Schema.Decoder<ScheduleFireProductLink> = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("session_turn"),
+    sessionRef: nonEmptyString,
+    turnRef: nonEmptyString,
+    runtimeRunId: positiveInt,
+    idempotencyKey: nonEmptyString,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("workflow_run"),
+    workflowId: nonEmptyString,
+    workflowRunId: nonEmptyString,
+    runtimeRunId: positiveInt,
+    idempotencyKey: nonEmptyString,
+    inputDigest: Schema.optional(nonEmptyString),
+  }),
+]);
 
 export const ScheduleFireDispatchedPayloadSchema: Schema.Decoder<ScheduleFireDispatchedPayload> =
   Schema.Struct({
@@ -894,9 +893,9 @@ const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
         payload,
       ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
-      return Schema.decodeUnknownOption(ScheduleFireRequestedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
+      return Schema.decodeUnknownOption(ScheduleFireRequestedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
       return Schema.decodeUnknownOption(ScheduleFireDispatchedPayloadSchema)(
         payload,
@@ -1744,11 +1743,7 @@ export const validateRuntimeLedgerTransitions = (input: {
       }
       case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED: {
         const key = sessionTurnLinkKey(event.payload);
-        const activeRunId = activeSessionRunId(
-          productLinks,
-          runStates,
-          event.payload.sessionRef,
-        );
+        const activeRunId = activeSessionRunId(productLinks, runStates, event.payload.sessionRef);
         const productLinkConflict = runtimeProductLinkConflict(productLinks, event);
         if (productLinks.sessionTurns.has(key)) {
           issues.push(

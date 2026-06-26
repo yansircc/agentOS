@@ -683,34 +683,33 @@ void test("compileAgentTree splits workflow lifecycle identity from agent profil
   ]);
 });
 
-
 void test("compileAgentTree keeps schedules as authoring-only nested path facts", () => {
   const result = runTypeScript(
     [
       'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
       'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
       'const agentJson = { path: "agent/agent.json", kind: "json", value: { agentId: "schedule-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "schedule-fixture" } } };',
-      'const handler = () => undefined;',
+      "const handler = () => undefined;",
       'const schedule = (path, cron = "0 9 * * 1-5", extra = {}) => ({ path, kind: "schedule", declaration: { cron, handler, ...extra } });',
-      'const compile = (file) => compileAgentTree({ files: [instructions, file] });',
-      'const valid = compileAgentTree({ files: [',
-      '  instructions,',
-      '  agentJson,',
+      "const compile = (file) => compileAgentTree({ files: [instructions, file] });",
+      "const valid = compileAgentTree({ files: [",
+      "  instructions,",
+      "  agentJson,",
       '  schedule("agent/schedules/daily.ts", "0   9 * * 1-5"),',
       '  schedule("agent/schedules/reports/weekly.ts", "30 8 * * 1"),',
-      '] });',
-      'if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }',
-      'const baseConfig = {',
+      "] });",
+      "if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }",
+      "const baseConfig = {",
       '  agent: "./agent",',
       '  deployment: { id: "schedule-fixture" },',
       '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
       '  client: { kind: "browser-direct@1" },',
       '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-      '};',
+      "};",
       'const chat = normalizeAgentOsConfig({ ...baseConfig, profile: "chat@1" }, valid.value);',
       'const workspace = normalizeAgentOsConfig({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } }, valid.value);',
-      'if (!chat.ok) { console.error(JSON.stringify(chat.issues)); process.exit(1); }',
-      'if (!workspace.ok) { console.error(JSON.stringify(workspace.issues)); process.exit(1); }',
+      "if (!chat.ok) { console.error(JSON.stringify(chat.issues)); process.exit(1); }",
+      "if (!workspace.ok) { console.error(JSON.stringify(workspace.issues)); process.exit(1); }",
       'const notInGrammar = compile(schedule("agent/schedules.ts"));',
       'const emptySlug = compile(schedule("agent/schedules/reports/.ts"));',
       'const invalidSlug = compile(schedule("agent/schedules/Daily.ts"));',
@@ -720,29 +719,29 @@ void test("compileAgentTree keeps schedules as authoring-only nested path facts"
       'const identityFields = compile(schedule("agent/schedules/daily.ts", "0 9 * * *", { id: "daily", name: "Daily", kind: "schedule" }));',
       'const symlink = compile({ ...schedule("agent/schedules/daily.ts"), sourceKind: "symlink" });',
       'const missingDeclaration = compile({ path: "agent/schedules/daily.ts", kind: "schedule" });',
-      'const duplicate = compileAgentTree({ files: [',
-      '  instructions,',
+      "const duplicate = compileAgentTree({ files: [",
+      "  instructions,",
       '  schedule("agent/schedules/daily.ts"),',
       '  schedule("schedules/daily.ts"),',
-      '] });',
-      'console.log(JSON.stringify({',
-      '  valid: {',
-      '    schedules: valid.value.schedules,',
+      "] });",
+      "console.log(JSON.stringify({",
+      "  valid: {",
+      "    schedules: valid.value.schedules,",
       '    manifestHasSchedules: Object.hasOwn(valid.value.manifest, "schedules"),',
       '    provenanceScheduleKeys: Object.keys(valid.value.provenance).filter((key) => key.includes("schedule")),',
-      '  },',
-      '  normalized: { chat: chat.value.schedules, workspace: workspace.value.schedules },',
-      '  notInGrammar,',
-      '  emptySlug,',
-      '  invalidSlug,',
-      '  subagentSchedule,',
-      '  malformedCron,',
-      '  missingHandler,',
-      '  identityFields,',
-      '  symlink,',
-      '  missingDeclaration,',
-      '  duplicate,',
-      '}));',
+      "  },",
+      "  normalized: { chat: chat.value.schedules, workspace: workspace.value.schedules },",
+      "  notInGrammar,",
+      "  emptySlug,",
+      "  invalidSlug,",
+      "  subagentSchedule,",
+      "  malformedCron,",
+      "  missingHandler,",
+      "  identityFields,",
+      "  symlink,",
+      "  missingDeclaration,",
+      "  duplicate,",
+      "}));",
     ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
@@ -1543,7 +1542,10 @@ void test("generated channel dispatch preserves raw request and restricts handle
   try {
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     mkdirSync(path.join(root, "agent/channels"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Handle provider-native channel input.");
+    writeFileSync(
+      path.join(root, "agent/instructions.md"),
+      "Handle provider-native channel input.",
+    );
     writeFileSync(
       path.join(root, "agent/agent.json"),
       JSON.stringify(
@@ -1658,7 +1660,12 @@ void test("generated channel dispatch preserves raw request and restricts handle
         "dispatch",
         {
           target: {
-            bindingRef: { kind: "binding", provider: "test", bindingKind: "queue", ref: "outbound" },
+            bindingRef: {
+              kind: "binding",
+              provider: "test",
+              bindingKind: "queue",
+              ref: "outbound",
+            },
             scopeRef: { kind: "session", scopeId: "channel-dispatch-scope" },
             effectAuthorityRef: { authorityClass: "channel", authorityId: "github.signature" },
           },
@@ -1764,9 +1771,7 @@ void test("agentos info emits compile-only inspection without generated writes",
     writeFileSync(path.join(root, "workflows/deploy.ts"), "export default {};");
     writeFileSync(
       path.join(root, "agent/schedules/daily.ts"),
-      [
-        'export default { cron: "0 9 * * *", handler: () => undefined };',
-      ].join("\n"),
+      ['export default { cron: "0 9 * * *", handler: () => undefined };'].join("\n"),
     );
     writeFileSync(
       path.join(root, "agent/agent.json"),

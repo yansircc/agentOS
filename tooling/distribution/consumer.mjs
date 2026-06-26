@@ -1397,8 +1397,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   fs.writeFileSync(
     path.join(dir, "local-channel-smoke.ts"),
     channelDispatchSmokeSource({
-      importLine:
-        'import { handleLocalAgentChannelRequest } from "./.agentos/generated/local";',
+      importLine: 'import { handleLocalAgentChannelRequest } from "./.agentos/generated/local";',
       dispatchExpression: "handleLocalAgentChannelRequest(request, runtime)",
       scopeId: "generated-local-target-consumer",
     }),
@@ -1691,7 +1690,9 @@ export const assertGeneratedLocalTargetConsumer = () => {
   }
   run("node", ["local-generated-smoke.mjs"], { cwd: dir, capture: true });
   run("node", ["local-channel-smoke.mjs"], { cwd: dir, capture: true });
-  console.log("verified generated local target consumer executes workspace operations and channel dispatch");
+  console.log(
+    "verified generated local target consumer executes workspace operations and channel dispatch",
+  );
 };
 
 export const assertPackedRootInternalSymbolsAbsent = (dir) => {

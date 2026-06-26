@@ -53,7 +53,8 @@ const releaseVersion = () => {
 };
 
 const publishScope = () => {
-  const scope = process.env.AGENTOS_NPM_SCOPE ?? rootPackage.agentOsRelease?.npmScope ?? sourcePackageScope;
+  const scope =
+    process.env.AGENTOS_NPM_SCOPE ?? rootPackage.agentOsRelease?.npmScope ?? sourcePackageScope;
   if (typeof scope !== "string" || !/^@[a-z0-9][a-z0-9._-]*$/u.test(scope)) {
     fail("package.json agentOsRelease.npmScope or AGENTOS_NPM_SCOPE must be a valid npm scope");
   }
@@ -73,7 +74,8 @@ const publicSpecifier = (specifier) => {
 
 const rewritePublicSpecifiers = (text) => text.replaceAll(sourcePackageScope, publishScope());
 
-const uniqueSorted = (values) => [...new Set(values)].sort((left, right) => left.localeCompare(right));
+const uniqueSorted = (values) =>
+  [...new Set(values)].sort((left, right) => left.localeCompare(right));
 
 const walk = (dir, predicate, skip = new Set()) => {
   if (!fs.existsSync(dir)) return [];
@@ -266,7 +268,9 @@ const baseInputPaths = () => [
   "docs/agent/errors.json",
   "docs/agent/invariant-matrix.json",
   ...surface.packages.map((pkg) => `${pkg.path}/package.json`),
-  ...walk(abs("docs/agent"), (file) => /\.source\.json$|schemas\/.+\.schema\.json$/u.test(repoPath(file))).map(repoPath),
+  ...walk(abs("docs/agent"), (file) =>
+    /\.source\.json$|schemas\/.+\.schema\.json$/u.test(repoPath(file)),
+  ).map(repoPath),
 ];
 
 const inputRecords = () =>
@@ -330,8 +334,14 @@ const buildOutputs = () => {
     git: gitIdentity(),
     inputFiles: inputRecords(),
     outputFiles: outputRecords,
-    outputHashScope: "all generated files except references/provenance.json to avoid a self-referential hash",
-    prohibitedSources: ["catalog.source.json", "archived CST events", "network/npm registry reads", "runtime imports"],
+    outputHashScope:
+      "all generated files except references/provenance.json to avoid a self-referential hash",
+    prohibitedSources: [
+      "catalog.source.json",
+      "archived CST events",
+      "network/npm registry reads",
+      "runtime imports",
+    ],
   };
   outputs.set("references/provenance.json", jsonOutput(provenance));
   return outputs;

@@ -157,9 +157,7 @@ const runWithHungLlm = (
             effectAuthorityRef: recipe.effectAuthorityRef,
             factOwnerRef: RUNTIME_FACT_OWNER,
             payload:
-              recipe.buildPayload === undefined
-                ? recipe.payload
-                : recipe.buildPayload({ id }),
+              recipe.buildPayload === undefined ? recipe.payload : recipe.buildPayload({ id }),
           }));
           events.push(...committed);
           return committed.map(decodeRecordedLedgerEvent);

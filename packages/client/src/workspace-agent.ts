@@ -1,4 +1,8 @@
-import type { RuntimeLedgerEvent, SubmitResult, SubmitRunInput } from "@agent-os/core/runtime-protocol";
+import type {
+  RuntimeLedgerEvent,
+  SubmitResult,
+  SubmitRunInput,
+} from "@agent-os/core/runtime-protocol";
 import {
   WORKSPACE_AGENT_COMMAND,
   type WorkspaceAgentCommandInputByName,
@@ -110,7 +114,9 @@ export type WorkspaceAgentProductCommandOutputByName<
   readonly [WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_SESSION]: Projections["session"];
   readonly [WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_SESSIONS]: Projections["sessionList"];
   readonly [WORKSPACE_AGENT_PRODUCT_COMMAND.RUN_WORKFLOW]: SubmitResult;
-  readonly [WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_WORKFLOW_RUN]: Projections["workflowRun"] | null;
+  readonly [WORKSPACE_AGENT_PRODUCT_COMMAND.INSPECT_WORKFLOW_RUN]:
+    | Projections["workflowRun"]
+    | null;
   readonly [WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_WORKFLOW_RUNS]: Projections["workflowRunList"];
 };
 
@@ -156,7 +162,10 @@ export interface WorkspaceAgentSessionsClient<
 export interface WorkspaceAgentWorkflowsClient<
   Projections extends WorkspaceAgentProductProjectionTypes = WorkspaceAgentProductProjectionTypes,
 > {
-  run(input: WorkspaceAgentWorkflowRunInput, options?: AgentClientCommandOptions): Promise<SubmitResult>;
+  run(
+    input: WorkspaceAgentWorkflowRunInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<SubmitResult>;
   inspectRun(
     workflowId: string,
     workflowRunId: string,
