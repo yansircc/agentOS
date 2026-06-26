@@ -1256,17 +1256,8 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         "    const session = await context.sessions.submitTurn({",
         '      sessionRef: "daily-session",',
         "      turnRef: context.fireId,",
-        "      idempotencyKey: context.fireId,",
         '      intent: "scheduled session",',
         "      context: { scheduledAt: context.scheduledAt },",
-        "    });",
-        "    const workflow = await context.workflows.run({",
-        '      workflowId: "daily-report",',
-        "      workflowRunId: context.fireId,",
-        "      idempotencyKey: context.fireId,",
-        "      inputDigest: context.scheduledAt,",
-        '      intent: "scheduled workflow",',
-        "      context: { subject: context.appPrincipal.subject },",
         "    });",
         "    return {",
         "      contextKeys: Object.keys(context).sort(),",
@@ -1274,7 +1265,6 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         "      scheduledAt: context.scheduledAt,",
         "      principal: context.appPrincipal,",
         "      sessionStatus: session.status,",
-        "      workflowStatus: workflow.status,",
         "    };",
         "  },",
         "};",
@@ -1355,8 +1345,9 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
     assert.match(cloudflareSchedules, /from "@agent-os\/runtime\/schedule"/);
     assert.match(cloudflareSchedules, /generatedSchedules/);
     assert.match(cloudflareSchedules, /generatedScheduleRegistry/);
-    assert.match(cloudflareSchedules, /scheduleFireId/);
-    assert.match(cloudflareSchedules, /createScheduleContext/);
+    assert.match(cloudflareSchedules, /dispatchScheduleFire/);
+    assert.doesNotMatch(cloudflareSchedules, /scheduleFireId/);
+    assert.doesNotMatch(cloudflareSchedules, /createScheduleContext/);
     assert.doesNotMatch(cloudflareSchedules, /readdir|collectFiles/);
     const cloudflareTarget = readFileSync(
       path.join(cloudflareRoot, ".agentos/generated/target.ts"),
@@ -1365,6 +1356,7 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
     assert.match(cloudflareTarget, /from "\.\/schedules"/);
     assert.match(cloudflareTarget, /dispatchSchedule\(input: GeneratedScheduleTriggerInput\)/);
     assert.match(cloudflareTarget, /generatedScheduleRuntimeFor\(this\)/);
+    assert.match(cloudflareTarget, /commitScheduleFireDispatchFull/);
     assert.doesNotMatch(cloudflareTarget, /agent\/schedules|readdir|collectFiles/);
 
     writeBaseAgent(nodeRoot, ['  "target": { "kind": "node@1" },']);
@@ -1378,6 +1370,7 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
     assert.match(nodeLocal, /readonly schedules:/);
     assert.match(nodeLocal, /ids: generatedScheduleIds/);
     assert.match(nodeLocal, /dispatchGeneratedSchedule/);
+    assert.match(nodeLocal, /commitScheduleFireDispatch/);
     assert.doesNotMatch(nodeLocal, /agent\/schedules|readdir|collectFiles/);
     assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/schedules.ts")), true);
 
@@ -1390,13 +1383,13 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         "  sessions: Object.freeze({",
         "    submitTurn: async (input) => {",
         '      calls.push(["session", input]);',
-        '      return { status: "session-submitted" };',
+        '      return { ok: true, status: "delivered", runId: 101, final: "done", eventCount: 4, tokensUsed: 0 };',
         "    },",
         "  }),",
         "  workflows: Object.freeze({",
         "    run: async (input) => {",
         '      calls.push(["workflow", input]);',
-        '      return { status: "workflow-submitted" };',
+        '      return { ok: true, status: "delivered", runId: 202, final: "done", eventCount: 4, tokensUsed: 0 };',
         "    },",
         "  }),",
         "});",
@@ -1404,30 +1397,36 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         '  scheduleId: "daily",',
         '  scheduledAt: "2026-06-26T10:20:42.000Z",',
         '  appPrincipal: { authority: "app", subject: "tenant" },',
+        '  identity: { scopeRef: { kind: "conversation", scopeId: "schedule-registry-scope" }, effectAuthorityRef: { authorityClass: "effect", authorityId: "schedule-registry-fixture" } },',
         "  runtime,",
         "});",
-        "console.log(JSON.stringify({ ids: generatedScheduleIds, result, calls }));",
+        "const outcome = result.outcome(500);",
+        "console.log(JSON.stringify({ ids: generatedScheduleIds, result: { ok: result.ok, fireId: result.fireId, requested: result.requested, productLink: result.ok ? result.productLink : null, outcome }, calls }));",
       ].join("\n"),
       { cwd: nodeRoot, resolveDir: nodeRoot },
     );
     assert.equal(dispatchResult.status, 0, dispatchResult.stderr);
     const output = JSON.parse(dispatchResult.stdout);
     assert.deepEqual(output.ids, ["daily"]);
-    assert.deepEqual(output.result.contextKeys, [
-      "appPrincipal",
-      "fireId",
-      "scheduledAt",
-      "sessions",
-      "workflows",
-    ]);
-    assert.deepEqual(output.result.principal, { authority: "app", subject: "tenant" });
-    assert.equal(output.result.scheduledAt, "2026-06-26T10:20:00.000Z");
-    assert.equal(output.result.sessionStatus, "session-submitted");
-    assert.equal(output.result.workflowStatus, "workflow-submitted");
+    assert.equal(output.result.ok, true);
+    assert.equal(output.result.requested.kind, "schedule.fire_requested");
+    assert.equal(output.result.outcome.kind, "schedule.fire_dispatched");
+    assert.equal(output.result.outcome.payload.requestedEventId, 500);
+    assert.deepEqual(output.result.requested.payload.appPrincipal, {
+      authority: "app",
+      subject: "tenant",
+    });
     assert.match(
       output.result.fireId,
       /^schedule-fire:app:tenant:daily:2026-06-26T10%3A20%3A00\.000Z$/,
     );
+    assert.deepEqual(output.result.productLink, {
+      kind: "session_turn",
+      sessionRef: "daily-session",
+      turnRef: output.result.fireId,
+      runtimeRunId: 101,
+      idempotencyKey: output.result.fireId,
+    });
     assert.deepEqual(output.calls, [
       [
         "session",
@@ -1437,17 +1436,6 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
           idempotencyKey: output.result.fireId,
           intent: "scheduled session",
           context: { scheduledAt: "2026-06-26T10:20:00.000Z" },
-        },
-      ],
-      [
-        "workflow",
-        {
-          workflowId: "daily-report",
-          workflowRunId: output.result.fireId,
-          idempotencyKey: output.result.fireId,
-          inputDigest: "2026-06-26T10:20:00.000Z",
-          intent: "scheduled workflow",
-          context: { subject: "tenant" },
         },
       ],
     ]);

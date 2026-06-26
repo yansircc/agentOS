@@ -424,11 +424,12 @@ const renderScheduleRegistry = (
           )
           .join("\n")}\n]`;
   return `${scheduleImports}
-${renderNamedImport(["createScheduleContext", "scheduleFireId"], modules.runtimeSchedule)}
+${renderNamedImport(["dispatchScheduleFire"], modules.runtimeSchedule)}
 ${renderTypeImport(
-  ["DefinedSchedule", "SchedulePrincipal", "ScheduleRuntime"],
+  ["DefinedSchedule", "ScheduleFireDispatchResult", "SchedulePrincipal", "ScheduleRuntime"],
   modules.runtimeSchedule,
 )}
+${renderTypeImport(["LedgerTruthIdentity"], modules.runtimeProtocol)}
 
 type GeneratedScheduleDefinition = {
   readonly scheduleId: string;
@@ -445,6 +446,7 @@ export type GeneratedScheduleTriggerInput = {
 
 export type GeneratedScheduleDispatchInput = GeneratedScheduleTriggerInput & {
   readonly runtime: ScheduleRuntime;
+  readonly identity: LedgerTruthIdentity;
 };
 
 export const generatedSchedules = ${entries} as const satisfies ReadonlyArray<GeneratedScheduleDefinition>;
@@ -455,22 +457,20 @@ export const generatedScheduleRegistry = new Map(
 
 export const dispatchGeneratedSchedule = async (
   input: GeneratedScheduleDispatchInput,
-): Promise<unknown> => {
+): Promise<ScheduleFireDispatchResult> => {
   const entry = generatedScheduleRegistry.get(input.scheduleId);
   if (entry === undefined) {
     throw new Error(\`unknown generated schedule: \${input.scheduleId}\`);
   }
-  const fireId = scheduleFireId({
-    appPrincipal: input.appPrincipal,
+  return dispatchScheduleFire({
+    runtime: input.runtime,
+    schedule: entry.schedule,
     scheduleId: entry.scheduleId,
-    scheduledAt: input.scheduledAt,
-  });
-  const context = createScheduleContext(input.runtime, {
     appPrincipal: input.appPrincipal,
-    fireId,
     scheduledAt: input.scheduledAt,
+    scopeRef: input.identity.scopeRef,
+    effectAuthorityRef: input.identity.effectAuthorityRef,
   });
-  return entry.schedule.handler(context);
 };
 `;
 };
@@ -730,8 +730,9 @@ const renderScheduleDurableObjectMethod = (): string => `
   dispatchSchedule(input: GeneratedScheduleTriggerInput): Promise<unknown> {
     return dispatchGeneratedSchedule({
       ...input,
+      identity: semanticTruthIdentity,
       runtime: generatedScheduleRuntimeFor(this),
-    });
+    }).then((result) => this.commitScheduleFireDispatchFull(result));
   }
 `;
 
@@ -1576,6 +1577,7 @@ const renderLocalAgentApp = (
       : []),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
+    renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
       modules.openAiCompatibleTransport,
@@ -1599,6 +1601,7 @@ const renderLocalAgentApp = (
   return `${imports}
 
 const semanticManifest = semanticDeclarations as AgentManifest;
+const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
 
 type AgentOSTargetEnv = Readonly<Record<string, string | undefined>>;
 
@@ -1751,8 +1754,9 @@ export const createLocalAgentApp = async (
       dispatch: (input: GeneratedScheduleTriggerInput) =>
         dispatchGeneratedSchedule({
           ...input,
+          identity: semanticTruthIdentity,
           runtime: { sessions, workflows },
-        }),
+        }).then((result) => lowered.commitScheduleFireDispatch(result)),
     },`
         : ""
     }

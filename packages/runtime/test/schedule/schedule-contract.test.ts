@@ -12,6 +12,8 @@ import {
   type ScheduleRuntime,
   type ScheduleWorkflowRunInput,
 } from "../../src/schedule";
+import { inMemoryConversationTruthIdentity } from "../../src/in-memory/state-helpers";
+import { lowerLocalAgentRuntime } from "../../src/local";
 import * as runtimeRoot from "../../src/index";
 
 const delivered = {
@@ -352,6 +354,57 @@ describe("@agent-os/runtime/schedule", () => {
       phase: "contract",
       reason: "schedule_fire_multiple_product_ingress_calls",
     });
+  });
+
+  it("commits schedule fire requested and outcome through the local host ledger", async () => {
+    const identity = "schedule-contract-test";
+    const truthIdentity = inMemoryConversationTruthIdentity(identity);
+    const lowered = await lowerLocalAgentRuntime({
+      target: "node@1",
+      identity,
+      cwd: process.cwd(),
+    });
+    const dispatch = await dispatchScheduleFire({
+      ...truthIdentity,
+      runtime: {
+        sessions: {
+          submitTurn: async () => ({ ...delivered, runId: 42 }),
+        },
+        workflows: runtime.workflows,
+      },
+      schedule: defineSchedule({
+        cron: "* * * * *",
+        handler: (context) =>
+          context.sessions.submitTurn({
+            sessionRef: "session:s1",
+            turnRef: "turn:s1:1",
+            intent: "daily summary",
+            context: {},
+          }),
+      }),
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      appPrincipal,
+    });
+
+    const committed = await lowered.commitScheduleFireDispatch(dispatch);
+
+    expect(committed.map((event) => event.kind)).toEqual([
+      "schedule.fire_requested",
+      "schedule.fire_dispatched",
+    ]);
+    expect(committed[1]?.payload).toMatchObject({
+      requestedEventId: committed[0]?.id,
+      productLink: {
+        kind: "session_turn",
+        runtimeRunId: 42,
+        idempotencyKey: dispatch.fireId,
+      },
+    });
+    expect(lowered.runtime.events().map((event) => event.kind)).toEqual([
+      "schedule.fire_requested",
+      "schedule.fire_dispatched",
+    ]);
   });
 
   it("fails closed when context inputs are not positive contracts", () => {

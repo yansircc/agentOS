@@ -30,6 +30,7 @@ import { projectInspectionSnapshot, type InspectionSnapshot } from "../inspectio
 import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
 import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "../in-memory/llm";
 import { internalSubmitSpec } from "../internal-submit";
+import type { ScheduleFireDispatchResult } from "../schedule";
 import { submitAgentEffect } from "../submit-agent";
 import type { SubmitAgentProductLink } from "../submit-agent";
 import {
@@ -119,6 +120,9 @@ export interface LoweredLocalAgentRuntime {
     input: LocalAgentSubmitInput,
     productLink: SubmitAgentProductLink,
   ) => Promise<SubmitResult>;
+  readonly commitScheduleFireDispatch: (
+    result: ScheduleFireDispatchResult,
+  ) => Promise<ReadonlyArray<LedgerEvent>>;
 }
 
 export class LocalWorkspaceEnvError extends Error {
@@ -621,6 +625,13 @@ export const lowerLocalAgentRuntime = async (
     runtime,
     submitWithProductLink: (submitInput, productLink) =>
       submitLocalAgent(facadeInput, submitInput, productLink),
+    commitScheduleFireDispatch: (result) =>
+      Effect.runPromise(
+        resolved.resolved.state.commitPrepared((requestedEventId) => [
+          result.requested,
+          result.outcome(requestedEventId),
+        ]),
+      ),
   };
 };
 

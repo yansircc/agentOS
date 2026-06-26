@@ -100,6 +100,7 @@ import {
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import { submitAgentEffect, type SubmitAgentProductLink } from "../submit-agent";
+import type { ScheduleFireDispatchResult } from "../schedule";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   agentRunAbortedEvent,
@@ -1112,6 +1113,27 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
           );
         }
         return { id: event.id };
+      }),
+    );
+  }
+
+  protected commitScheduleFireDispatchFull(
+    result: ScheduleFireDispatchResult,
+  ): Promise<ReadonlyArray<LedgerEventRpc>> {
+    return this.runScoped((_scope) =>
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const events = yield* ledger.commitPrepared((tx) => {
+          const requested = tx.append(result.requested);
+          const outcomeShape = result.outcome(1);
+          tx.append({
+            kind: outcomeShape.kind,
+            scopeRef: outcomeShape.scopeRef,
+            effectAuthorityRef: outcomeShape.effectAuthorityRef,
+            buildPayload: (context) => result.outcome(context.id(requested)).payload,
+          });
+        });
+        return events as ReadonlyArray<LedgerEventRpc>;
       }),
     );
   }
