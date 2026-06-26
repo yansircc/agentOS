@@ -47,6 +47,14 @@ const runtimeIdentity = {
   effectAuthorityRef: { authorityClass: "test", authorityId: "schedule-contract-test" },
 };
 
+type ScheduleSessionSubmitResult = Awaited<
+  ReturnType<ScheduleRuntime["sessions"]["submitTurn"]>
+>;
+type DeliveredScheduleSessionSubmitResult = Extract<
+  ScheduleSessionSubmitResult,
+  { readonly ok: true; readonly status: "delivered" }
+>;
+
 const runtimePackageJson = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
 ) as { exports: Record<string, unknown> };
@@ -183,7 +191,7 @@ describe("@agent-os/runtime/schedule", () => {
   });
 
   it("lets product ingress own duplicate fire suppression by fireId", async () => {
-    const submittedByIdempotencyKey = new Map<string, typeof delivered & { readonly runId: number }>();
+    const submittedByIdempotencyKey = new Map<string, DeliveredScheduleSessionSubmitResult>();
     const submittedInputs: ScheduleSessionSubmitTurnInput[] = [];
     const schedule = defineSchedule({
       cron: "* * * * *",
