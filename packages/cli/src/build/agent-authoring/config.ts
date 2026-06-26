@@ -30,6 +30,7 @@ import type {
   AgentManifestOrigin,
   AuthoredAgentManifest,
   CompiledAgentChannel,
+  CompiledAgentSchedule,
   CompiledAgentSkill,
   CompiledAgentWorkflow,
   CompiledAgentManifest,
@@ -196,6 +197,7 @@ export interface NormalizedAgentOsConfigBase<M extends AgentManifest = AgentMani
   readonly authoredToolNames: ReadonlyArray<string>;
   readonly channels: ReadonlyArray<CompiledAgentChannel>;
   readonly workflows: ReadonlyArray<CompiledAgentWorkflow>;
+  readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
   readonly target: AgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
@@ -979,6 +981,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         authoredToolNames: Object.keys(compiled.toolFilePaths).sort(),
         channels: compiled.channels,
         workflows: compiled.workflows,
+        schedules: compiled.schedules,
         skills: compiled.skills,
         target: value.target,
         client: value.client,
@@ -1065,6 +1068,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       authoredToolNames: Object.keys(compiled.toolFilePaths).sort(),
       channels: compiled.channels,
       workflows: compiled.workflows,
+      schedules: compiled.schedules,
       skills: compiled.skills,
       target: value.target,
       client: value.client,

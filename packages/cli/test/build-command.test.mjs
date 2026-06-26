@@ -683,6 +683,162 @@ void test("compileAgentTree splits workflow lifecycle identity from agent profil
   ]);
 });
 
+
+void test("compileAgentTree keeps schedules as authoring-only nested path facts", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
+      'const agentJson = { path: "agent/agent.json", kind: "json", value: { agentId: "schedule-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "schedule-fixture" } } };',
+      'const handler = () => undefined;',
+      'const schedule = (path, cron = "0 9 * * 1-5", extra = {}) => ({ path, kind: "schedule", declaration: { cron, handler, ...extra } });',
+      'const compile = (file) => compileAgentTree({ files: [instructions, file] });',
+      'const valid = compileAgentTree({ files: [',
+      '  instructions,',
+      '  agentJson,',
+      '  schedule("agent/schedules/daily.ts", "0   9 * * 1-5"),',
+      '  schedule("agent/schedules/reports/weekly.ts", "30 8 * * 1"),',
+      '] });',
+      'if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }',
+      'const baseConfig = {',
+      '  agent: "./agent",',
+      '  deployment: { id: "schedule-fixture" },',
+      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
+      '  client: { kind: "browser-direct@1" },',
+      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      '};',
+      'const chat = normalizeAgentOsConfig({ ...baseConfig, profile: "chat@1" }, valid.value);',
+      'const workspace = normalizeAgentOsConfig({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } }, valid.value);',
+      'if (!chat.ok) { console.error(JSON.stringify(chat.issues)); process.exit(1); }',
+      'if (!workspace.ok) { console.error(JSON.stringify(workspace.issues)); process.exit(1); }',
+      'const notInGrammar = compile(schedule("agent/schedules.ts"));',
+      'const emptySlug = compile(schedule("agent/schedules/reports/.ts"));',
+      'const invalidSlug = compile(schedule("agent/schedules/Daily.ts"));',
+      'const subagentSchedule = compile(schedule("agent/schedules/subagents/daily.ts"));',
+      'const malformedCron = compile(schedule("agent/schedules/daily.ts", "@daily"));',
+      'const identityFields = compile(schedule("agent/schedules/daily.ts", "0 9 * * *", { id: "daily", name: "Daily", kind: "schedule" }));',
+      'const symlink = compile({ ...schedule("agent/schedules/daily.ts"), sourceKind: "symlink" });',
+      'const missingDeclaration = compile({ path: "agent/schedules/daily.ts", kind: "schedule" });',
+      'const duplicate = compileAgentTree({ files: [',
+      '  instructions,',
+      '  schedule("agent/schedules/daily.ts"),',
+      '  schedule("schedules/daily.ts"),',
+      '] });',
+      'console.log(JSON.stringify({',
+      '  valid: {',
+      '    schedules: valid.value.schedules,',
+      '    manifestHasSchedules: Object.hasOwn(valid.value.manifest, "schedules"),',
+      '    provenanceScheduleKeys: Object.keys(valid.value.provenance).filter((key) => key.includes("schedule")),',
+      '  },',
+      '  normalized: { chat: chat.value.schedules, workspace: workspace.value.schedules },',
+      '  notInGrammar,',
+      '  emptySlug,',
+      '  invalidSlug,',
+      '  subagentSchedule,',
+      '  malformedCron,',
+      '  identityFields,',
+      '  symlink,',
+      '  missingDeclaration,',
+      '  duplicate,',
+      '}));',
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  const schedules = [
+    {
+      scheduleId: "daily",
+      cron: "0 9 * * 1-5",
+      path: "agent/schedules/daily.ts",
+      origin: "path:agent/schedules/daily.ts",
+    },
+    {
+      scheduleId: "reports/weekly",
+      cron: "30 8 * * 1",
+      path: "agent/schedules/reports/weekly.ts",
+      origin: "path:agent/schedules/reports/weekly.ts",
+    },
+  ];
+  assert.deepEqual(output.valid, {
+    schedules,
+    manifestHasSchedules: false,
+    provenanceScheduleKeys: [],
+  });
+  assert.deepEqual(output.normalized, { chat: schedules, workspace: schedules });
+  assert.equal(output.notInGrammar.ok, false);
+  assert.deepEqual(output.notInGrammar.issues, [
+    {
+      kind: "unsupported_path",
+      path: "agent/schedules.ts",
+      reason: "schedule_path_not_in_grammar",
+    },
+  ]);
+  assert.equal(output.emptySlug.ok, false);
+  assert.deepEqual(output.emptySlug.issues, [
+    {
+      kind: "unsupported_path",
+      path: "schedules/reports/.ts",
+      reason: "empty_path_identity",
+    },
+  ]);
+  assert.equal(output.invalidSlug.ok, false);
+  assert.deepEqual(output.invalidSlug.issues, [
+    {
+      kind: "unsupported_path",
+      path: "schedules/Daily.ts",
+      reason: "schedule_slug_invalid",
+    },
+  ]);
+  assert.equal(output.subagentSchedule.ok, false);
+  assert.deepEqual(output.subagentSchedule.issues, [
+    {
+      kind: "unsupported_path",
+      path: "schedules/subagents/daily.ts",
+      reason: "subagent_schedule_directory_forbidden",
+    },
+  ]);
+  assert.equal(output.malformedCron.ok, false);
+  assert.deepEqual(output.malformedCron.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "schedules/daily.ts",
+      field: "/cron",
+      reason: "cron_minute_expression_invalid",
+    },
+  ]);
+  assert.equal(output.identityFields.ok, false);
+  assert.deepEqual(output.identityFields.issues, [
+    { kind: "identity_field_forbidden", path: "schedules/daily.ts", field: "id" },
+    { kind: "identity_field_forbidden", path: "schedules/daily.ts", field: "name" },
+    { kind: "identity_field_forbidden", path: "schedules/daily.ts", field: "kind" },
+  ]);
+  assert.equal(output.symlink.ok, false);
+  assert.deepEqual(output.symlink.issues, [
+    {
+      kind: "unsupported_path",
+      path: "schedules/daily.ts",
+      reason: "symlink_forbidden",
+    },
+  ]);
+  assert.equal(output.missingDeclaration.ok, false);
+  assert.deepEqual(output.missingDeclaration.issues, [
+    {
+      kind: "invalid_authored_value",
+      path: "schedules/daily.ts",
+      field: "/",
+      reason: "schedule_declaration_object_required",
+    },
+  ]);
+  assert.equal(output.duplicate.ok, false);
+  assert.deepEqual(output.duplicate.issues, [
+    {
+      kind: "duplicate_path",
+      path: "schedules/daily.ts",
+      existingPath: "schedules/daily.ts",
+    },
+  ]);
+});
+
 void test("agentos build compiles an authored workspace tree into generated files", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-build-"));
   try {
@@ -1372,9 +1528,16 @@ void test("agentos info emits compile-only inspection without generated writes",
   try {
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     mkdirSync(path.join(root, "agent"), { recursive: true });
+    mkdirSync(path.join(root, "agent/schedules"), { recursive: true });
     mkdirSync(path.join(root, "workflows"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Operate.");
     writeFileSync(path.join(root, "workflows/deploy.ts"), "export default {};");
+    writeFileSync(
+      path.join(root, "agent/schedules/daily.ts"),
+      [
+        'export default { cron: "0 9 * * *", handler: () => undefined };',
+      ].join("\n"),
+    );
     writeFileSync(
       path.join(root, "agent/agent.json"),
       JSON.stringify(
@@ -1433,6 +1596,7 @@ void test("agentos info emits compile-only inspection without generated writes",
     assert.deepEqual(info.compile.manifest.capabilities, ["@agent-os/workspace-op"]);
     assert.deepEqual(info.compile.manifest.tools, workspaceDefaultToolNames);
     assert.deepEqual(info.compile.manifest.workflows, ["deploy"]);
+    assert.deepEqual(info.compile.manifest.schedules, ["daily"]);
     assert.deepEqual(info.resolve, {
       status: "unavailable",
       reason: "agentos info is compile-only; resolved install graph is unavailable",

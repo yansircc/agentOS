@@ -198,6 +198,12 @@
           "optionalPeers": []
         },
         {
+          "subpath": "./schedule",
+          "moduleBuckets": ["axioms"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
           "subpath": "./ag-ui",
           "moduleBuckets": ["projection"],
           "targetProfiles": ["neutral"],

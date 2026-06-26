@@ -21,6 +21,7 @@ import {
   type WorkspaceToolInteractionFloor,
   type WorkspaceToolName,
 } from "@agent-os/runtime";
+import { cronMinuteExpression } from "@agent-os/runtime/schedule";
 import {
   AUTHORING_DEFAULTS_VERSION,
   digestText,
@@ -53,7 +54,8 @@ export type AuthoredAgentTreeFile =
   | AuthoredJsonFile
   | AuthoredToolFile
   | AuthoredChannelFile
-  | AuthoredWorkflowFile;
+  | AuthoredWorkflowFile
+  | AuthoredScheduleFile;
 
 export type AuthoredFileSourceKind = "regular" | "symlink" | "non_regular";
 
@@ -112,6 +114,21 @@ export interface AuthoredWorkflowFile {
   readonly sourceKind?: AuthoredFileSourceKind;
 }
 
+export interface AuthoredScheduleDeclaration {
+  readonly cron?: unknown;
+  readonly handler?: unknown;
+  readonly id?: unknown;
+  readonly name?: unknown;
+  readonly kind?: unknown;
+}
+
+export interface AuthoredScheduleFile {
+  readonly path: string;
+  readonly kind: "schedule";
+  readonly declaration?: AuthoredScheduleDeclaration;
+  readonly sourceKind?: AuthoredFileSourceKind;
+}
+
 export interface CompiledAgentChannel {
   readonly name: string;
   readonly path: string;
@@ -120,6 +137,13 @@ export interface CompiledAgentChannel {
 
 export interface CompiledAgentWorkflow {
   readonly name: string;
+  readonly path: string;
+  readonly origin: AgentManifestOrigin;
+}
+
+export interface CompiledAgentSchedule {
+  readonly scheduleId: string;
+  readonly cron: string;
   readonly path: string;
   readonly origin: AgentManifestOrigin;
 }
@@ -173,6 +197,7 @@ export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
   readonly toolFilePaths: Readonly<Record<string, string>>;
   readonly channels: ReadonlyArray<CompiledAgentChannel>;
   readonly workflows: ReadonlyArray<CompiledAgentWorkflow>;
+  readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
 }
 
@@ -268,6 +293,7 @@ interface CompilerState {
   readonly toolFilePaths: Map<string, string>;
   readonly channels: Map<string, CompiledAgentChannel>;
   readonly workflows: Map<string, CompiledAgentWorkflow>;
+  readonly schedules: Map<string, CompiledAgentSchedule>;
   readonly skills: Map<string, CompiledAgentSkill>;
   readonly skillSupportFiles: Map<string, CompiledAgentSkillFile[]>;
   readonly skillSupportByteTotals: Map<string, number>;
@@ -282,6 +308,7 @@ const SKILL_SUPPORT_PACKAGE_MAX_BYTES = 262_144;
 const skillNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const channelNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const workflowNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
+const scheduleSlugPattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -351,6 +378,8 @@ const isSkillName = (value: string): boolean => skillNamePattern.test(value);
 const isChannelName = (value: string): boolean => channelNamePattern.test(value);
 
 const isWorkflowName = (value: string): boolean => workflowNamePattern.test(value);
+
+const isScheduleSlug = (value: string): boolean => scheduleSlugPattern.test(value);
 
 const decodeUtf8Bytes = (
   state: CompilerState,
@@ -588,6 +617,7 @@ const agentGrammarRoots = new Set([
   "interactions",
   "materials",
   "skills",
+  "schedules",
   "tools",
 ]);
 
@@ -1439,6 +1469,88 @@ const recordWorkflowFile = (
   });
 };
 
+const scheduleAllowedFields = new Set(["cron", "handler", "id", "name", "kind"]);
+
+const scheduleIdFromPath = (
+  state: CompilerState,
+  path: string,
+): string | null => {
+  const parts = path.split("/");
+  if (parts.length < 2 || parts[0] !== "schedules" || !parts[parts.length - 1]?.endsWith(".ts")) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "schedule_path_not_in_grammar" });
+    return null;
+  }
+  const slugs = [...parts.slice(1, -1), parts[parts.length - 1].slice(0, -".ts".length)];
+  if (slugs.some((slug) => slug.length === 0)) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
+    return null;
+  }
+  if (slugs.includes("subagents")) {
+    state.issues.push({
+      kind: "unsupported_path",
+      path,
+      reason: "subagent_schedule_directory_forbidden",
+    });
+    return null;
+  }
+  const invalid = slugs.find((slug) => !isScheduleSlug(slug));
+  if (invalid !== undefined) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "schedule_slug_invalid" });
+    return null;
+  }
+  return slugs.join("/");
+};
+
+const recordScheduleFile = (
+  state: CompilerState,
+  path: string,
+  declaration: AuthoredScheduleDeclaration | undefined,
+  sourceKind: AuthoredFileSourceKind | undefined,
+): void => {
+  const scheduleId = scheduleIdFromPath(state, path);
+  if (scheduleId === null) return;
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
+  if (!isRecord(declaration)) {
+    invalidAuthoredValue(state, path, "/", "schedule_declaration_object_required");
+    return;
+  }
+  const declarationRecord = declaration as JsonRecord;
+  const localIssueCount = state.issues.length;
+  assertNoPathIdentityFields(state, path, declarationRecord);
+  if (Object.prototype.hasOwnProperty.call(declarationRecord, "kind")) {
+    state.issues.push({ kind: "identity_field_forbidden", path, field: "kind" });
+  }
+  assertAllowedFields(state, path, declarationRecord, scheduleAllowedFields);
+  assertNoRuntimeFactFields(state, path, declarationRecord);
+  if (state.issues.length > localIssueCount) return;
+  if (typeof declaration.cron !== "string") {
+    invalidAuthoredValue(state, path, "/cron", "cron_string_required");
+    return;
+  }
+  let cron: string;
+  try {
+    cron = cronMinuteExpression(declaration.cron);
+  } catch {
+    invalidAuthoredValue(state, path, "/cron", "cron_minute_expression_invalid");
+    return;
+  }
+  if (state.schedules.has(scheduleId)) {
+    const existing = state.schedules.get(scheduleId);
+    state.issues.push({
+      kind: "duplicate_path",
+      path: authoredPath(path),
+      existingPath: existing?.path ?? authoredPath(path),
+    });
+    return;
+  }
+  state.schedules.set(scheduleId, {
+    scheduleId,
+    cron,
+    path: authoredPath(path),
+    origin: pathOrigin(path),
+  });
+};
+
 const applyDefaults = (state: CompilerState): void => {
   putDefault(state, "/agentId", "agent");
   const agentId = state.facts.get("/agentId")?.value;
@@ -1641,6 +1753,11 @@ const buildChannels = (state: CompilerState): ReadonlyArray<CompiledAgentChannel
 const buildWorkflows = (state: CompilerState): ReadonlyArray<CompiledAgentWorkflow> =>
   [...state.workflows.values()].sort((left, right) => left.name.localeCompare(right.name));
 
+const buildSchedules = (state: CompilerState): ReadonlyArray<CompiledAgentSchedule> =>
+  [...state.schedules.values()].sort((left, right) =>
+    left.scheduleId.localeCompare(right.scheduleId),
+  );
+
 const validateSkillSupportFiles = (state: CompilerState): void => {
   for (const [skillName, files] of state.skillSupportFiles.entries()) {
     const skill = state.skills.get(skillName);
@@ -1687,6 +1804,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     toolFilePaths: new Map(),
     channels: new Map(),
     workflows: new Map(),
+    schedules: new Map(),
     skills: new Map(),
     skillSupportFiles: new Map(),
     skillSupportByteTotals: new Map(),
@@ -1715,6 +1833,9 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       case "workflow":
         recordWorkflowFile(state, path, file.sourceKind);
         break;
+      case "schedule":
+        recordScheduleFile(state, path, file.declaration, file.sourceKind);
+        break;
     }
   }
 
@@ -1741,6 +1862,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       toolFilePaths: buildToolFilePaths(state),
       channels: buildChannels(state),
       workflows: buildWorkflows(state),
+      schedules: buildSchedules(state),
       skills: buildSkills(state),
     },
   };

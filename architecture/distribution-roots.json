@@ -53,6 +53,7 @@
         "@yansirplus/runtime/llm-effect-ai/anthropic",
         "@yansirplus/runtime/llm-effect-ai/openai-compatible",
         "@yansirplus/runtime/run-projector",
+        "@yansirplus/runtime/schedule",
         "@yansirplus/runtime/sse-http",
         "@yansirplus/runtime/telemetry-otlp",
         "@yansirplus/runtime/testing"

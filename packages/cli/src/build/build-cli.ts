@@ -9,6 +9,7 @@ import {
   linkWorkspaceStaticTarget,
   normalizeAgentOsConfig,
   type AuthoredAgentTree,
+  type AuthoredScheduleDeclaration,
   type AuthoredToolDeclaration,
   type NormalizedAgentOsConfig,
   type StaticTargetLink,
@@ -108,7 +109,7 @@ const help = `Usage:
   agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
   agentos info [--cwd <path>] [--config <path>] [--json]
 
-Compiles agent/ + workflows/ + agentos.config.jsonc into .agentos/generated/.
+Compiles agent/ + workflows/ + agent/schedules/ + agentos.config.jsonc into .agentos/generated/.
 Prints compile-only agent inspection without starting a runtime.
 `;
 
@@ -249,6 +250,16 @@ const loadToolDeclaration = async (file: string): Promise<AuthoredToolDeclaratio
   return mod.declaration as AuthoredToolDeclaration;
 };
 
+const loadScheduleDeclaration = async (
+  file: string,
+): Promise<AuthoredScheduleDeclaration | undefined> => {
+  const mod = await importBundledModule(file, { prefix: "agentos-schedule-declaration-" });
+  if (!Object.hasOwn(mod, "default")) {
+    throw new Error(`${file}: missing default schedule export`);
+  }
+  return mod.default as AuthoredScheduleDeclaration;
+};
+
 type CollectedSourceKind = "regular" | "symlink" | "non_regular";
 
 interface CollectedFile {
@@ -338,6 +349,19 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
       files.push({
         path: toAuthoredPath(cwd, file.path),
         kind: "workflow",
+        sourceKind: file.sourceKind,
+      });
+    }
+  }
+
+  const schedulesDir = path.join(agentDir, "schedules");
+  if (await pathExists(schedulesDir)) {
+    for (const file of await collectFiles(schedulesDir)) {
+      files.push({
+        path: toAuthoredPath(cwd, file.path),
+        kind: "schedule",
+        declaration:
+          file.sourceKind === "regular" ? await loadScheduleDeclaration(file.path) : undefined,
         sourceKind: file.sourceKind,
       });
     }
@@ -460,6 +484,7 @@ const projectInfo = (facts: CompileFacts) => ({
         left.localeCompare(right),
       ),
       workflows: facts.normalized.workflows.map((workflow) => workflow.name),
+      schedules: facts.normalized.schedules.map((schedule) => schedule.scheduleId),
     },
     generated: {
       files: facts.linked.files.map((file) => file.path),
