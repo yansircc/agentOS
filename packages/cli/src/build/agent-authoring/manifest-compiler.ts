@@ -53,6 +53,7 @@ export type AuthoredAgentTreeFile =
   | AuthoredTextFile
   | AuthoredJsonFile
   | AuthoredToolFile
+  | AuthoredDynamicResolverFile
   | AuthoredChannelFile
   | AuthoredWorkflowFile
   | AuthoredScheduleFile;
@@ -100,6 +101,21 @@ export interface AuthoredToolFile {
   readonly path: string;
   readonly kind: "tool";
   readonly declaration?: AuthoredToolDeclaration;
+}
+
+export type DynamicCapabilitySlot = "tools" | "skills" | "instructions";
+
+export interface AuthoredDynamicResolverDeclaration {
+  readonly outputs?: unknown;
+  readonly id?: unknown;
+  readonly name?: unknown;
+}
+
+export interface AuthoredDynamicResolverFile {
+  readonly path: string;
+  readonly kind: "dynamic";
+  readonly declaration?: AuthoredDynamicResolverDeclaration;
+  readonly sourceKind?: AuthoredFileSourceKind;
 }
 
 export interface AuthoredChannelFile {
@@ -164,6 +180,22 @@ export interface CompiledAgentSkillFile {
   readonly text: string;
 }
 
+export interface CompiledAgentInstructionFragment {
+  readonly fragmentId: string;
+  readonly path: string;
+  readonly digest: string;
+  readonly text: string;
+  readonly origin: AgentManifestOrigin;
+}
+
+export interface CompiledAgentDynamicResolver {
+  readonly resolverId: string;
+  readonly slot: DynamicCapabilitySlot;
+  readonly path: string;
+  readonly outputs: ReadonlyArray<string>;
+  readonly origin: AgentManifestOrigin;
+}
+
 export interface AuthoredWorkspaceDefaultToolOverride {
   readonly interaction?: WorkspaceToolInteractionFloor;
 }
@@ -199,6 +231,8 @@ export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
   readonly workflows: ReadonlyArray<CompiledAgentWorkflow>;
   readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
+  readonly instructionFragments: ReadonlyArray<CompiledAgentInstructionFragment>;
+  readonly dynamicResolvers: ReadonlyArray<CompiledAgentDynamicResolver>;
 }
 
 export type CompileAgentTreeIssue =
@@ -268,6 +302,31 @@ export type CompileAgentTreeIssue =
       readonly path: string;
       readonly existingPath: string;
     }
+  | {
+      readonly kind: "duplicate_instruction_fragment";
+      readonly fragmentId: string;
+      readonly path: string;
+      readonly existingPath: string;
+    }
+  | {
+      readonly kind: "duplicate_dynamic_resolver";
+      readonly slot: DynamicCapabilitySlot;
+      readonly resolverId: string;
+      readonly path: string;
+      readonly existingPath: string;
+    }
+  | {
+      readonly kind: "dynamic_resolver_cross_slot_output";
+      readonly path: string;
+      readonly slot: DynamicCapabilitySlot;
+      readonly outputSlot: DynamicCapabilitySlot;
+    }
+  | {
+      readonly kind: "dynamic_resolver_unknown_target";
+      readonly path: string;
+      readonly slot: DynamicCapabilitySlot;
+      readonly targetId: string;
+    }
   | { readonly kind: "reserved_tool_name"; readonly path: string; readonly toolId: string }
   | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string }
   | { readonly kind: "function_in_manifest"; readonly path: string };
@@ -297,6 +356,8 @@ interface CompilerState {
   readonly skills: Map<string, CompiledAgentSkill>;
   readonly skillSupportFiles: Map<string, CompiledAgentSkillFile[]>;
   readonly skillSupportByteTotals: Map<string, number>;
+  readonly instructionFragments: Map<string, CompiledAgentInstructionFragment>;
+  readonly dynamicResolvers: Map<string, CompiledAgentDynamicResolver>;
   readonly workspaceToolControls: Map<WorkspaceToolName, WorkspaceDefaultToolControl>;
 }
 
@@ -309,6 +370,8 @@ const skillNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const channelNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const workflowNamePattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const scheduleSlugPattern = /^[a-z][a-z0-9_-]{0,63}$/u;
+const instructionFragmentIdPattern = /^[a-z][a-z0-9_-]{0,63}$/u;
+const dynamicResolverIdPattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -380,6 +443,11 @@ const isChannelName = (value: string): boolean => channelNamePattern.test(value)
 const isWorkflowName = (value: string): boolean => workflowNamePattern.test(value);
 
 const isScheduleSlug = (value: string): boolean => scheduleSlugPattern.test(value);
+
+const isInstructionFragmentId = (value: string): boolean =>
+  instructionFragmentIdPattern.test(value);
+
+const isDynamicResolverId = (value: string): boolean => dynamicResolverIdPattern.test(value);
 
 const decodeUtf8Bytes = (
   state: CompilerState,
@@ -613,6 +681,7 @@ const agentGrammarRoots = new Set([
   "agent.json",
   "channels",
   "domains",
+  "instructions",
   "instructions.md",
   "interactions",
   "materials",
@@ -752,6 +821,13 @@ const toolAllowedFields = new Set([
   "effects",
   "receiptPolicy",
 ]);
+
+const dynamicResolverAllowedFields = new Set(["outputs", "id", "name"]);
+const dynamicOutputSlots: ReadonlyArray<DynamicCapabilitySlot> = [
+  "tools",
+  "skills",
+  "instructions",
+];
 
 const domainAllowedFields = new Set(["bindingRef"]);
 const interactionAllowedFields = new Set(["bindingRef"]);
@@ -1206,6 +1282,27 @@ const skillSupportPathForPath = (
   };
 };
 
+const instructionFragmentIdForPath = (path: string): string | null => {
+  const parts = path.split("/");
+  if (parts.length !== 2 || parts[0] !== "instructions" || !parts[1]?.endsWith(".md")) {
+    return null;
+  }
+  const fragmentId = parts[1].slice(0, -".md".length);
+  return isInstructionFragmentId(fragmentId) ? fragmentId : null;
+};
+
+const dynamicResolverIdentityForPath = (
+  path: string,
+): { readonly slot: DynamicCapabilitySlot; readonly resolverId: string } | null => {
+  const parts = path.split("/");
+  if (parts.length !== 2 || !parts[1]?.endsWith(".dynamic.ts")) return null;
+  const slot = parts[0];
+  if (slot !== "tools" && slot !== "skills" && slot !== "instructions") return null;
+  const resolverId = parts[1].slice(0, -".dynamic.ts".length);
+  if (!isDynamicResolverId(resolverId)) return null;
+  return { slot, resolverId };
+};
+
 const stripYamlQuotes = (value: string): string => {
   if (
     ((value.startsWith('"') && value.endsWith('"')) ||
@@ -1263,6 +1360,38 @@ const parseSkillFrontmatter = (
       .replace(/^\n/u, "")
       .replace(/\s+$/u, ""),
   };
+};
+
+const recordInstructionFragmentFile = (
+  state: CompilerState,
+  path: string,
+  fragmentId: string,
+  text: string,
+  sourceKind: AuthoredFileSourceKind | undefined,
+): void => {
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
+  if (text.trim().length === 0) {
+    invalidAuthoredValue(state, path, "/body", "instruction_fragment_empty");
+    return;
+  }
+  if (!assertNoNulText(state, path, "/body", text)) return;
+  const existing = state.instructionFragments.get(fragmentId);
+  if (existing !== undefined) {
+    state.issues.push({
+      kind: "duplicate_instruction_fragment",
+      fragmentId,
+      path,
+      existingPath: existing.path,
+    });
+    return;
+  }
+  state.instructionFragments.set(fragmentId, {
+    fragmentId,
+    path: authoredPath(path),
+    digest: digestText(text),
+    text,
+    origin: pathOrigin(path),
+  });
 };
 
 const recordSkillFile = (
@@ -1366,6 +1495,19 @@ const recordMarkdownFile = (
     recordSkillFile(state, path, skillName, text, sourceKind);
     return;
   }
+  if (path.startsWith("instructions/")) {
+    const fragmentId = instructionFragmentIdForPath(path);
+    if (fragmentId === null) {
+      state.issues.push({
+        kind: "unsupported_path",
+        path,
+        reason: "instruction_fragment_path_not_in_grammar",
+      });
+      return;
+    }
+    recordInstructionFragmentFile(state, path, fragmentId, text, sourceKind);
+    return;
+  }
   if (path !== "instructions.md") {
     state.issues.push({ kind: "unsupported_path", path, reason: "markdown_path_not_in_grammar" });
     return;
@@ -1402,6 +1544,10 @@ const recordToolFile = (
     state.issues.push({ kind: "unsupported_path", path, reason: "tool_path_not_in_grammar" });
     return;
   }
+  if (parts[1].endsWith(".dynamic.ts")) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "dynamic_path_not_in_grammar" });
+    return;
+  }
   const toolId = parts[1].slice(0, -".ts".length);
   if (toolId.length === 0) {
     state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
@@ -1413,6 +1559,80 @@ const recordToolFile = (
   }
   state.toolFilePaths.set(toolId, path);
   recordToolFacts(state, toolId, path, declaration ?? {}, (field) => authorOrigin(path, field));
+};
+
+const parseDynamicOutputs = (
+  state: CompilerState,
+  path: string,
+  slot: DynamicCapabilitySlot,
+  value: unknown,
+): ReadonlyArray<string> | null => {
+  if (!isRecord(value)) {
+    invalidAuthoredValue(state, path, "/outputs", "object_required");
+    return null;
+  }
+  for (const outputSlot of Object.keys(value)) {
+    if (!dynamicOutputSlots.includes(outputSlot as DynamicCapabilitySlot)) {
+      state.issues.push({ kind: "unknown_field", path, field: `/outputs/${outputSlot}` });
+      continue;
+    }
+    if (outputSlot !== slot) {
+      state.issues.push({
+        kind: "dynamic_resolver_cross_slot_output",
+        path,
+        slot,
+        outputSlot: outputSlot as DynamicCapabilitySlot,
+      });
+    }
+  }
+  if (!Object.prototype.hasOwnProperty.call(value, slot)) {
+    invalidAuthoredValue(state, path, `/outputs/${slot}`, "dynamic_resolver_output_required");
+    return null;
+  }
+  return parseStringArrayField(state, path, `/outputs/${slot}`, value[slot]);
+};
+
+const recordDynamicResolverFile = (
+  state: CompilerState,
+  path: string,
+  declaration: AuthoredDynamicResolverDeclaration | undefined,
+  sourceKind: AuthoredFileSourceKind | undefined,
+): void => {
+  const identity = dynamicResolverIdentityForPath(path);
+  if (identity === null) {
+    state.issues.push({ kind: "unsupported_path", path, reason: "dynamic_path_not_in_grammar" });
+    return;
+  }
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
+  if (!isRecord(declaration)) {
+    invalidAuthoredValue(state, path, "/", "dynamic_resolver_declaration_object_required");
+    return;
+  }
+  const localIssueCount = state.issues.length;
+  assertNoPathIdentityFields(state, path, declaration);
+  assertAllowedFields(state, path, declaration, dynamicResolverAllowedFields);
+  assertNoRuntimeFactFields(state, path, declaration);
+  const outputs = parseDynamicOutputs(state, path, identity.slot, declaration.outputs);
+  if (outputs === null || state.issues.length > localIssueCount) return;
+  const key = `${identity.slot}/${identity.resolverId}`;
+  const existing = state.dynamicResolvers.get(key);
+  if (existing !== undefined) {
+    state.issues.push({
+      kind: "duplicate_dynamic_resolver",
+      slot: identity.slot,
+      resolverId: identity.resolverId,
+      path,
+      existingPath: existing.path,
+    });
+    return;
+  }
+  state.dynamicResolvers.set(key, {
+    resolverId: identity.resolverId,
+    slot: identity.slot,
+    path: authoredPath(path),
+    outputs,
+    origin: pathOrigin(path),
+  });
 };
 
 const recordChannelFile = (
@@ -1759,6 +1979,19 @@ const buildSchedules = (state: CompilerState): ReadonlyArray<CompiledAgentSchedu
     left.scheduleId.localeCompare(right.scheduleId),
   );
 
+const buildInstructionFragments = (
+  state: CompilerState,
+): ReadonlyArray<CompiledAgentInstructionFragment> =>
+  [...state.instructionFragments.values()].sort((left, right) =>
+    left.fragmentId.localeCompare(right.fragmentId),
+  );
+
+const buildDynamicResolvers = (state: CompilerState): ReadonlyArray<CompiledAgentDynamicResolver> =>
+  [...state.dynamicResolvers.values()].sort(
+    (left, right) =>
+      left.slot.localeCompare(right.slot) || left.resolverId.localeCompare(right.resolverId),
+  );
+
 const validateSkillSupportFiles = (state: CompilerState): void => {
   for (const [skillName, files] of state.skillSupportFiles.entries()) {
     const skill = state.skills.get(skillName);
@@ -1768,6 +2001,35 @@ const validateSkillSupportFiles = (state: CompilerState): void => {
         kind: "unsupported_path",
         path: `skills/${skillName}/${file.path}`,
         reason: "skill_support_requires_packaged_skill",
+      });
+    }
+  }
+};
+
+const dynamicResolverTargets = (
+  state: CompilerState,
+  slot: DynamicCapabilitySlot,
+): ReadonlySet<string> => {
+  switch (slot) {
+    case "tools":
+      return state.toolIds;
+    case "skills":
+      return new Set(state.skills.keys());
+    case "instructions":
+      return new Set(state.instructionFragments.keys());
+  }
+};
+
+const validateDynamicResolvers = (state: CompilerState): void => {
+  for (const resolver of state.dynamicResolvers.values()) {
+    const targetIds = dynamicResolverTargets(state, resolver.slot);
+    for (const targetId of resolver.outputs) {
+      if (targetIds.has(targetId)) continue;
+      state.issues.push({
+        kind: "dynamic_resolver_unknown_target",
+        path: resolver.path,
+        slot: resolver.slot,
+        targetId,
       });
     }
   }
@@ -1809,6 +2071,8 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     skills: new Map(),
     skillSupportFiles: new Map(),
     skillSupportByteTotals: new Map(),
+    instructionFragments: new Map(),
+    dynamicResolvers: new Map(),
     workspaceToolControls: new Map(),
   };
 
@@ -1828,6 +2092,9 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       case "tool":
         recordToolFile(state, path, file.declaration);
         break;
+      case "dynamic":
+        recordDynamicResolverFile(state, path, file.declaration, file.sourceKind);
+        break;
       case "channel":
         recordChannelFile(state, path, file.sourceKind);
         break;
@@ -1841,6 +2108,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
   }
 
   validateSkillSupportFiles(state);
+  validateDynamicResolvers(state);
   applyDefaults(state);
   enforceL0(state);
   if (state.issues.length > 0) return { ok: false, issues: state.issues };
@@ -1865,6 +2133,8 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       workflows: buildWorkflows(state),
       schedules: buildSchedules(state),
       skills: buildSkills(state),
+      instructionFragments: buildInstructionFragments(state),
+      dynamicResolvers: buildDynamicResolvers(state),
     },
   };
 };

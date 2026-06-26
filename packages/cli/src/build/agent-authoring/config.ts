@@ -199,6 +199,8 @@ export interface NormalizedAgentOsConfigBase<M extends AgentManifest = AgentMani
   readonly workflows: ReadonlyArray<CompiledAgentWorkflow>;
   readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
+  readonly instructionFragments: CompiledAgentManifest["instructionFragments"];
+  readonly dynamicResolvers: CompiledAgentManifest["dynamicResolvers"];
   readonly target: AgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
   readonly llm: AgentOsConfigLlm;
@@ -983,6 +985,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         workflows: compiled.workflows,
         schedules: compiled.schedules,
         skills: compiled.skills,
+        instructionFragments: compiled.instructionFragments,
+        dynamicResolvers: compiled.dynamicResolvers,
         target: value.target,
         client: value.client,
         llm: value.llm,
@@ -1070,6 +1074,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       workflows: compiled.workflows,
       schedules: compiled.schedules,
       skills: compiled.skills,
+      instructionFragments: compiled.instructionFragments,
+      dynamicResolvers: compiled.dynamicResolvers,
       target: value.target,
       client: value.client,
       llm: value.llm,

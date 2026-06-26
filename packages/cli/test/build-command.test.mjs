@@ -168,6 +168,155 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
   assert.deepEqual(output.manifestToolNames, []);
 });
 
+void test("compileAgentTree keeps dynamic resolvers as slot-local authoring output", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const compiled = compileAgentTree({",
+      "  files: [",
+      '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '    { path: "agent/instructions/tone.md", kind: "markdown", text: "Use a terse tone." },',
+      '    { path: "agent/tools/echo.ts", kind: "tool", declaration: {} },',
+      '    { path: "agent/skills/review.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview." },',
+      '    { path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
+      '    { path: "agent/skills/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } },',
+      '    { path: "agent/instructions/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { instructions: ["tone"] } } },',
+      "  ],",
+      "});",
+      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+      "console.log(JSON.stringify({",
+      "  dynamicResolvers: compiled.value.dynamicResolvers,",
+      "  instructionFragments: compiled.value.instructionFragments,",
+      '  manifestHasDynamicResolvers: Object.hasOwn(compiled.value.manifest, "dynamicResolvers"),',
+      '  manifestHasInstructionFragments: Object.hasOwn(compiled.value.manifest, "instructionFragments"),',
+      "}));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.dynamicResolvers, [
+    {
+      resolverId: "session",
+      slot: "instructions",
+      path: "agent/instructions/session.dynamic.ts",
+      outputs: ["tone"],
+      origin: "path:agent/instructions/session.dynamic.ts",
+    },
+    {
+      resolverId: "session",
+      slot: "skills",
+      path: "agent/skills/session.dynamic.ts",
+      outputs: ["review"],
+      origin: "path:agent/skills/session.dynamic.ts",
+    },
+    {
+      resolverId: "session",
+      slot: "tools",
+      path: "agent/tools/session.dynamic.ts",
+      outputs: ["echo"],
+      origin: "path:agent/tools/session.dynamic.ts",
+    },
+  ]);
+  assert.deepEqual(output.instructionFragments, [
+    {
+      fragmentId: "tone",
+      path: "agent/instructions/tone.md",
+      digest: digestText("Use a terse tone."),
+      text: "Use a terse tone.",
+      origin: "path:agent/instructions/tone.md",
+    },
+  ]);
+  assert.equal(output.manifestHasDynamicResolvers, false);
+  assert.equal(output.manifestHasInstructionFragments, false);
+});
+
+void test("compileAgentTree rejects invalid dynamic resolver grammar", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
+      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
+      'const tone = { path: "agent/instructions/tone.md", kind: "markdown", text: "Use a terse tone." };',
+      'const echo = { path: "agent/tools/echo.ts", kind: "tool", declaration: {} };',
+      'const review = { path: "agent/skills/review.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview." };',
+      "const compile = (file) => compileAgentTree({ files: [instructions, tone, echo, review, file] });",
+      'const forbiddenRoot = compile({ path: "agent/dynamic/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } });',
+      'const identity = compile({ path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { id: "manual", name: "manual", outputs: { tools: ["echo"] } } });',
+      'const nested = compile({ path: "agent/skills/review/scripts/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } });',
+      "const duplicate = compileAgentTree({ files: [",
+      "  instructions,",
+      "  echo,",
+      '  { path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
+      '  { path: "tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
+      "] });",
+      'const misclassifiedTool = compileAgentTree({ files: [instructions, { path: "agent/tools/session.dynamic.ts", kind: "tool", declaration: {} }] });',
+      'const crossSlot = compile({ path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } });',
+      'const unknownTool = compile({ path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["missing"] } } });',
+      'const unknownSkill = compile({ path: "agent/skills/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["missing"] } } });',
+      'const unknownInstruction = compile({ path: "agent/instructions/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { instructions: ["missing"] } } });',
+      "console.log(JSON.stringify({ forbiddenRoot, identity, nested, duplicate, misclassifiedTool, crossSlot, unknownTool, unknownSkill, unknownInstruction }));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.forbiddenRoot.issues, [
+    {
+      kind: "unsupported_path",
+      path: "agent/dynamic/session.dynamic.ts",
+      reason: "dynamic_path_not_in_grammar",
+    },
+  ]);
+  assert.equal(output.identity.ok, false);
+  assert.deepEqual(output.identity.issues, [
+    { kind: "identity_field_forbidden", path: "tools/session.dynamic.ts", field: "id" },
+    { kind: "identity_field_forbidden", path: "tools/session.dynamic.ts", field: "name" },
+  ]);
+  assert.deepEqual(output.nested.issues, [
+    {
+      kind: "unsupported_path",
+      path: "skills/review/scripts/session.dynamic.ts",
+      reason: "dynamic_path_not_in_grammar",
+    },
+  ]);
+  assert.deepEqual(output.duplicate.issues, [
+    {
+      kind: "duplicate_path",
+      path: "tools/session.dynamic.ts",
+      existingPath: "tools/session.dynamic.ts",
+    },
+  ]);
+  assert.deepEqual(output.misclassifiedTool.issues, [
+    {
+      kind: "unsupported_path",
+      path: "tools/session.dynamic.ts",
+      reason: "dynamic_path_not_in_grammar",
+    },
+  ]);
+  assert.ok(
+    output.crossSlot.issues.some(
+      (issue) =>
+        issue.kind === "dynamic_resolver_cross_slot_output" &&
+        issue.path === "tools/session.dynamic.ts" &&
+        issue.slot === "tools" &&
+        issue.outputSlot === "skills",
+    ),
+  );
+  for (const [name, slot] of [
+    ["unknownTool", "tools"],
+    ["unknownSkill", "skills"],
+    ["unknownInstruction", "instructions"],
+  ]) {
+    assert.ok(
+      output[name].issues.some(
+        (issue) =>
+          issue.kind === "dynamic_resolver_unknown_target" &&
+          issue.slot === slot &&
+          issue.targetId === "missing",
+      ),
+      `${name} did not reject an unknown ${slot} target`,
+    );
+  }
+});
+
 void test("agentos.config normalizes node@1 as the local convention target", () => {
   const result = runTypeScript(
     [
@@ -1757,6 +1906,77 @@ void test("agentos build rejects nested workflow files from the filesystem", () 
     assert.match(result.stderr, /workflows\/deploy\/index\.ts/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos build rejects dynamic resolver filesystem grammar violations", () => {
+  const makeFixture = (name) => {
+    const root = mkdtempSync(path.join(os.tmpdir(), `agentos-dynamic-${name}-`));
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    mkdirSync(path.join(root, "agent/tools"), { recursive: true });
+    mkdirSync(path.join(root, "agent/skills"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Reject invalid dynamic.");
+    writeFileSync(path.join(root, "agent/tools/echo.ts"), "export const declaration = {};");
+    writeFileSync(
+      path.join(root, "agent/skills/review.md"),
+      "---\nname: review\ndescription: Review facts\n---\nReview.",
+    );
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      [
+        "{",
+        '  "profile": "workspace@1",',
+        '  "agent": "./agent",',
+        '  "deployment": { "id": "dynamic-invalid" },',
+        '  "target": { "kind": "node@1" },',
+        '  "client": { "kind": "browser-direct@1" },',
+        '  "llm": {',
+        '    "route": "openai-chat-compatible",',
+        '    "endpointRef": "openrouter",',
+        '    "credentialRef": "openrouter-key",',
+        '    "modelRef": "openrouter-default-text-model"',
+        "  },",
+        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+        "}",
+        "",
+      ].join("\n"),
+    );
+    return root;
+  };
+
+  const cases = [
+    {
+      name: "forbidden-root",
+      write: (root) => {
+        mkdirSync(path.join(root, "agent/dynamic"), { recursive: true });
+        writeFileSync(path.join(root, "agent/dynamic/session.dynamic.ts"), "");
+      },
+      path: "agent/dynamic/session.dynamic.ts",
+    },
+    {
+      name: "nested-skill",
+      write: (root) => {
+        mkdirSync(path.join(root, "agent/skills/review/scripts"), { recursive: true });
+        writeFileSync(path.join(root, "agent/skills/review/scripts/session.dynamic.ts"), "");
+      },
+      path: "skills/review/scripts/session.dynamic.ts",
+    },
+  ];
+
+  for (const testCase of cases) {
+    const root = makeFixture(testCase.name);
+    try {
+      testCase.write(root);
+      const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+        encoding: "utf8",
+      });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /dynamic_path_not_in_grammar/);
+      assert.match(result.stderr, new RegExp(testCase.path.replace(/[/.]/gu, "\\$&")));
+      assert.doesNotMatch(result.stderr, /missing exported declaration/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 

@@ -9,6 +9,7 @@ import {
   linkWorkspaceStaticTarget,
   normalizeAgentOsConfig,
   type AuthoredAgentTree,
+  type AuthoredDynamicResolverDeclaration,
   type AuthoredScheduleDeclaration,
   type AuthoredToolDeclaration,
   type NormalizedAgentOsConfig,
@@ -260,6 +261,16 @@ const loadScheduleDeclaration = async (
   return mod.default as AuthoredScheduleDeclaration;
 };
 
+const loadDynamicResolverDeclaration = async (
+  file: string,
+): Promise<AuthoredDynamicResolverDeclaration | undefined> => {
+  const mod = await importBundledModule(file, { prefix: "agentos-dynamic-resolver-" });
+  if (!Object.hasOwn(mod, "declaration")) {
+    throw new Error(`${file}: missing exported declaration`);
+  }
+  return mod.declaration as AuthoredDynamicResolverDeclaration;
+};
+
 type CollectedSourceKind = "regular" | "symlink" | "non_regular";
 
 interface CollectedFile {
@@ -299,6 +310,14 @@ const isMainSkillRelativePath = (relativePath: string): boolean => {
   );
 };
 
+const isDynamicResolverRelativePath = (relativePath: string): boolean =>
+  relativePath.split(path.sep).at(-1)?.endsWith(".dynamic.ts") ?? false;
+
+const shouldLoadDynamicResolverDeclaration = (
+  relativePath: string,
+  sourceKind: CollectedSourceKind,
+): boolean => sourceKind === "regular" && relativePath.split(path.sep).length === 1;
+
 const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<AuthoredAgentTree> => {
   const files: AuthoredAgentTree["files"][number][] = [
     {
@@ -317,17 +336,42 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
     });
   }
 
+  const forbiddenDynamicDir = path.join(agentDir, "dynamic");
+  if (await pathExists(forbiddenDynamicDir)) {
+    for (const file of await collectFiles(forbiddenDynamicDir)) {
+      const relativeDynamicPath = path.relative(forbiddenDynamicDir, file.path);
+      if (!isDynamicResolverRelativePath(relativeDynamicPath)) continue;
+      files.push({
+        path: toAuthoredPath(cwd, file.path),
+        kind: "dynamic",
+        sourceKind: file.sourceKind,
+      });
+    }
+  }
+
   const toolsDir = path.join(agentDir, "tools");
   if (await pathExists(toolsDir)) {
-    const toolFiles = (await readdir(toolsDir, { withFileTypes: true }))
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
-      .map((entry) => path.join(toolsDir, entry.name))
-      .sort((left, right) => left.localeCompare(right));
-    for (const file of toolFiles) {
+    for (const file of await collectFiles(toolsDir)) {
+      const relativeToolPath = path.relative(toolsDir, file.path);
+      if (isDynamicResolverRelativePath(relativeToolPath)) {
+        files.push({
+          path: toAuthoredPath(cwd, file.path),
+          kind: "dynamic",
+          declaration:
+            shouldLoadDynamicResolverDeclaration(relativeToolPath, file.sourceKind)
+              ? await loadDynamicResolverDeclaration(file.path)
+              : undefined,
+          sourceKind: file.sourceKind,
+        });
+        continue;
+      }
+      const parts = relativeToolPath.split(path.sep);
+      if (parts.length !== 1 || !parts[0]?.endsWith(".ts")) continue;
+      if (file.sourceKind !== "regular") continue;
       files.push({
-        path: toAuthoredPath(cwd, file),
+        path: toAuthoredPath(cwd, file.path),
         kind: "tool",
-        declaration: await loadToolDeclaration(file),
+        declaration: await loadToolDeclaration(file.path),
       });
     }
   }
@@ -372,7 +416,54 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
     for (const file of await collectFiles(skillsDir)) {
       const authoredPath = toAuthoredPath(cwd, file.path);
       const relativeSkillPath = path.relative(skillsDir, file.path);
+      if (isDynamicResolverRelativePath(relativeSkillPath)) {
+        files.push({
+          path: authoredPath,
+          kind: "dynamic",
+          declaration:
+            shouldLoadDynamicResolverDeclaration(relativeSkillPath, file.sourceKind)
+              ? await loadDynamicResolverDeclaration(file.path)
+              : undefined,
+          sourceKind: file.sourceKind,
+        });
+        continue;
+      }
       if (isMainSkillRelativePath(relativeSkillPath)) {
+        files.push({
+          path: authoredPath,
+          kind: "markdown",
+          text: file.sourceKind === "regular" ? await readFile(file.path, "utf8") : "",
+          sourceKind: file.sourceKind,
+        });
+        continue;
+      }
+      files.push({
+        path: authoredPath,
+        kind: "text",
+        bytes: file.sourceKind === "regular" ? await readFile(file.path) : new Uint8Array(),
+        sourceKind: file.sourceKind,
+      });
+    }
+  }
+
+  const instructionFragmentsDir = path.join(agentDir, "instructions");
+  if (await pathExists(instructionFragmentsDir)) {
+    for (const file of await collectFiles(instructionFragmentsDir)) {
+      const authoredPath = toAuthoredPath(cwd, file.path);
+      const relativeInstructionPath = path.relative(instructionFragmentsDir, file.path);
+      if (isDynamicResolverRelativePath(relativeInstructionPath)) {
+        files.push({
+          path: authoredPath,
+          kind: "dynamic",
+          declaration:
+            shouldLoadDynamicResolverDeclaration(relativeInstructionPath, file.sourceKind)
+              ? await loadDynamicResolverDeclaration(file.path)
+              : undefined,
+          sourceKind: file.sourceKind,
+        });
+        continue;
+      }
+      if (file.path.endsWith(".md")) {
         files.push({
           path: authoredPath,
           kind: "markdown",
