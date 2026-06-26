@@ -10,7 +10,13 @@ import {
 } from "effect/unstable/http/HttpClient";
 import type { HttpClientRequest } from "effect/unstable/http/HttpClientRequest";
 import type { HttpClientResponse } from "effect/unstable/http/HttpClientResponse";
-import { RUNTIME_EVENT_KIND } from "@agent-os/core/runtime-protocol";
+import {
+  DYNAMIC_CAPABILITY_EVENT,
+  DYNAMIC_CAPABILITY_PROJECTION_VERSION,
+  DYNAMIC_CAPABILITY_VISIBILITY,
+  RUNTIME_EVENT_KIND,
+} from "@agent-os/core/runtime-protocol";
+import type { LlmRequest } from "@agent-os/core/llm-protocol";
 import {
   createLocalAgentRuntime,
   createLocalWorkspaceEnv,
@@ -216,6 +222,62 @@ describe("createLocalWorkspaceEnv", () => {
           RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
         ]),
       );
+    });
+  });
+
+  it("carries dynamic projection and instruction fragments through local submit assembly", async () => {
+    await withTempWorkspace(async (root) => {
+      let observedRequest: LlmRequest | undefined;
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-dynamic-assembly",
+        cwd: root,
+        llm: {
+          kind: "test",
+          handler: (request) => {
+            observedRequest = request;
+            return {
+              items: [{ type: "message", text: "dynamic done" }],
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            };
+          },
+        },
+      });
+
+      const result = await runtime.submit({
+        intent: "finish with dynamic prompt",
+        dynamicCapabilityProjection: {
+          version: DYNAMIC_CAPABILITY_PROJECTION_VERSION,
+          event: { name: DYNAMIC_CAPABILITY_EVENT.TURN_STARTED },
+          tools: [],
+          skills: [],
+          instructions: [
+            {
+              id: "tone",
+              digest: "fnv1a32:tone",
+              visible: true,
+              decision: DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED,
+              provenance: [],
+            },
+            {
+              id: "hidden",
+              digest: "fnv1a32:hidden",
+              visible: false,
+              decision: DYNAMIC_CAPABILITY_VISIBILITY.DENIED,
+              provenance: [],
+            },
+          ],
+          provenance: [],
+        },
+        instructionFragments: [
+          { id: "hidden", digest: "fnv1a32:hidden", text: "Hidden fragment." },
+          { id: "tone", digest: "fnv1a32:tone", text: "Use a dynamic tone." },
+        ],
+      });
+
+      expect(result).toMatchObject({ ok: true, final: "dynamic done" });
+      const systemMessage = observedRequest?.messages[0]?.content ?? "";
+      expect(systemMessage).toContain("Use a dynamic tone.");
+      expect(systemMessage).not.toContain("Hidden fragment.");
     });
   });
 

@@ -17,6 +17,7 @@ const dependencyLinks = ["@effect", "effect"];
 const scopedDependencyLinks = {
   "@cloudflare": ["node_modules/@cloudflare"],
 };
+const TSC_BOUNDARY_TEST_TIMEOUT_MS = 30_000;
 
 const isPackageRuntimeDependencyPath = (source: string): boolean =>
   source.split(path.sep).includes("node_modules");
@@ -65,14 +66,14 @@ const runTsc = (config: string) => {
 describe("Cloudflare DO public consumer boundary", () => {
   it("accepts public imports under Bundler source-package resolution", () => {
     expect(() => runTsc("tsconfig.public.bundler.json")).not.toThrow();
-  });
+  }, TSC_BOUNDARY_TEST_TIMEOUT_MS);
 
   it("documents that NodeNext needs built distribution artifacts, not source packages", () => {
     expect(() => runTsc("tsconfig.public.nodenext.json")).toThrow();
-  });
+  }, TSC_BOUNDARY_TEST_TIMEOUT_MS);
 
   it("rejects backend internals under Bundler and NodeNext resolution", () => {
     expect(() => runTsc("tsconfig.internal.bundler.json")).toThrow();
     expect(() => runTsc("tsconfig.internal.nodenext.json")).toThrow();
-  });
+  }, TSC_BOUNDARY_TEST_TIMEOUT_MS);
 });

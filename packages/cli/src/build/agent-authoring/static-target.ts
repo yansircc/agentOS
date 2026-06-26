@@ -10,6 +10,8 @@ import {
 import type {
   AuthoredAgentManifest,
   CompiledAgentChannel,
+  CompiledAgentDynamicResolver,
+  CompiledAgentInstructionFragment,
   CompiledAgentSchedule,
   CompiledAgentSkill,
 } from "./manifest-compiler";
@@ -67,6 +69,7 @@ export type StaticTargetModuleImportKind =
   | "schedule-runtime"
   | "authored-channel"
   | "authored-schedule"
+  | "authored-dynamic-resolver"
   | "channel-registry"
   | "schedule-registry"
   | "platform-runtime"
@@ -169,6 +172,9 @@ const importChannelPath = (path: string): string => `../../${path.replace(/\.ts$
 
 const importSchedulePath = (path: string): string => `../../${path.replace(/\.ts$/u, "")}`;
 
+const importDynamicResolverPath = (resolverPath: string): string =>
+  `../../${resolverPath.replace(/\.ts$/u, "")}`;
+
 const workspaceMutationToolNames = new Set<WorkspaceToolName>(
   WORKSPACE_TOOL_EXPOSURE_PROFILES.mutation,
 );
@@ -261,6 +267,23 @@ const generatedScheduleImports = (
     kind: "authored-schedule",
     source: importSchedulePath(schedule.path),
     imports: [`default as schedule_${index}`],
+  }));
+
+const sortedDynamicResolvers = (
+  resolvers: ReadonlyArray<CompiledAgentDynamicResolver>,
+): ReadonlyArray<CompiledAgentDynamicResolver> =>
+  [...resolvers].sort(
+    (left, right) =>
+      left.slot.localeCompare(right.slot) || left.resolverId.localeCompare(right.resolverId),
+  );
+
+const generatedDynamicResolverImports = (
+  resolvers: ReadonlyArray<CompiledAgentDynamicResolver>,
+): ReadonlyArray<StaticTargetModuleImport> =>
+  sortedDynamicResolvers(resolvers).map((resolver, index) => ({
+    kind: "authored-dynamic-resolver",
+    source: importDynamicResolverPath(resolver.path),
+    imports: [`default as dynamicResolver_${index}`],
   }));
 
 const renderChannelRegistry = (
@@ -509,8 +532,126 @@ const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string =
   return entries.length === 0 ? "[]" : `[\n${entries.join(",\n")}\n]`;
 };
 
-const renderSkillNameSchema = (skills: ReadonlyArray<CompiledAgentSkill>): string =>
-  `Schema.Literals(${JSON.stringify(sortedSkills(skills).map((skill) => skill.name))})`;
+const renderInstructionFragments = (
+  fragments: ReadonlyArray<CompiledAgentInstructionFragment>,
+): string => {
+  const entries = [...fragments]
+    .sort((left, right) => left.fragmentId.localeCompare(right.fragmentId))
+    .map((fragment) =>
+      `  ${JSON.stringify(
+        stableJsonValue({
+          digest: fragment.digest,
+          id: fragment.fragmentId,
+          text: fragment.text,
+        }),
+      )}`,
+    );
+  return entries.length === 0 ? "[]" : `[\n${entries.join(",\n")}\n]`;
+};
+
+const renderDynamicCapabilityCatalog = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  toolNames: ReadonlyArray<string>,
+  hasSkills: boolean,
+): string => {
+  const manifestTools = normalized.deployment.manifest.tools ?? {};
+  const dynamicToolNames = [
+    ...toolNames,
+    ...(hasSkills ? [GENERATED_LOAD_SKILL_TOOL_NAME, GENERATED_READ_SKILL_FILE_TOOL_NAME] : []),
+  ];
+  return JSON.stringify(
+    stableJsonValue({
+      instructions: normalized.instructionFragments.map((fragment) => ({
+        digest: fragment.digest,
+        id: fragment.fragmentId,
+      })),
+      skills: normalized.skills.map((skill) => ({
+        digest: skill.digest,
+        id: skill.name,
+      })),
+      tools: [...new Set(dynamicToolNames)].sort().map((toolName) => ({
+        id: toolName,
+        ...(manifestTools[toolName]?.bindingRef === undefined
+          ? {}
+          : { bindingRef: manifestTools[toolName]?.bindingRef }),
+      })),
+    }),
+    null,
+    2,
+  );
+};
+
+const renderDynamicResolverImportStatements = (
+  resolvers: ReadonlyArray<CompiledAgentDynamicResolver>,
+): string =>
+  sortedDynamicResolvers(resolvers)
+    .map(
+      (resolver, index) =>
+        `import dynamicResolver_${index} from ${jsString(importDynamicResolverPath(resolver.path))};`,
+    )
+    .join("\n");
+
+const renderDynamicCapabilitySupport = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  toolNames: ReadonlyArray<string>,
+  hasSkills: boolean,
+): string => {
+  const resolvers = sortedDynamicResolvers(normalized.dynamicResolvers);
+  const resolverEntries =
+    resolvers.length === 0
+      ? "[]"
+      : `[\n${resolvers
+          .map(
+            (resolver, index) => `  {
+    resolverId: ${jsString(resolver.resolverId)},
+    slot: ${jsString(resolver.slot)},
+    resolve: dynamicResolver_${index},
+  },`,
+          )
+          .join("\n")}\n]`;
+  return `${renderDynamicResolverImportStatements(resolvers)}
+
+const generatedDynamicCapabilityCatalog = ${renderDynamicCapabilityCatalog(
+    normalized,
+    toolNames,
+    hasSkills,
+  )} satisfies DynamicCapabilityCompiledCatalog;
+
+const generatedInstructionFragments = ${renderInstructionFragments(
+    normalized.instructionFragments,
+  )} satisfies ReadonlyArray<SubmitInstructionFragment>;
+
+const generatedDynamicCapabilityResolvers = ${resolverEntries} satisfies ReadonlyArray<DynamicCapabilityResolverDefinition>;
+
+const generatedDynamicCapabilityTurnEvent = (
+  refs: { readonly sessionRef?: string; readonly turnRef?: string } = {},
+): DynamicCapabilityEventRef => ({
+  name: DYNAMIC_CAPABILITY_EVENT.TURN_STARTED,
+  ...(refs.sessionRef === undefined ? {} : { sessionRef: refs.sessionRef }),
+  ...(refs.turnRef === undefined ? {} : { turnRef: refs.turnRef }),
+});
+
+const generatedDynamicSubmitBindingsFor = async (
+  event: DynamicCapabilityEventRef,
+): Promise<GeneratedTargetResult<Pick<AgentSubmitBindings, "dynamicCapabilityProjection" | "instructionFragments">>> => {
+  const projection = await runDynamicCapabilityResolvers({
+    event,
+    catalog: generatedDynamicCapabilityCatalog,
+    resolvers: generatedDynamicCapabilityResolvers,
+    materials: semanticManifest.materials ?? {},
+  });
+  if (!projection.ok) {
+    return targetFailure(\`dynamic capability resolver failed: \${JSON.stringify(projection.issues)}\`);
+  }
+  return {
+    ok: true,
+    value: {
+      dynamicCapabilityProjection: projection.projection,
+      instructionFragments: generatedInstructionFragments,
+    },
+  };
+};`;
+};
 
 const renderSkillSupport = (skills: ReadonlyArray<CompiledAgentSkill>): string => {
   if (skills.length === 0) return "";
@@ -539,20 +680,35 @@ const generatedSkillCatalog = ${renderSkillCatalog(skills)} satisfies ReadonlyAr
 const generatedSkillNames = generatedSkillCatalog.map((skill) => skill.name);
 const generatedSkillByName = Object.fromEntries(
   generatedSkillCatalog.map((skill) => [skill.name, skill]),
-) as Readonly<Record<(typeof generatedSkillNames)[number], GeneratedSkill>>;
+) as Readonly<Record<string, GeneratedSkill>>;
 const generatedSkillFilePathCatalog = generatedSkillCatalog.flatMap((skill) =>
   skill.files.map((file) => ({ name: skill.name, path: file.path })),
 );
-const generatedSkillsSystemAdvert = [
+const generatedVisibleSkillCatalogFor = (
+  projection: DynamicCapabilityProjection | undefined,
+): ReadonlyArray<GeneratedSkill> => {
+  if (projection === undefined) return generatedSkillCatalog;
+  const visible = new Set(
+    projection.skills.filter((skill) => skill.visible).map((skill) => skill.id),
+  );
+  return generatedSkillCatalog.filter((skill) => visible.has(skill.name));
+};
+
+const generatedSkillsSystemAdvert = (
+  projection: DynamicCapabilityProjection | undefined,
+): string => [
   "Available agent skills are not loaded by default.",
-  ...generatedSkillCatalog.map((skill) => \`- \${skill.name}: \${skill.description}\`),
+  ...generatedVisibleSkillCatalogFor(projection).map((skill) => \`- \${skill.name}: \${skill.description}\`),
   "Do not assume a skill's full instructions until ${GENERATED_LOAD_SKILL_TOOL_NAME} returns it.",
 ].join("\\n");
 
-const generatedSystemPrompt = (system: string | undefined): string =>
+const generatedSystemPrompt = (
+  system: string | undefined,
+  projection: DynamicCapabilityProjection | undefined,
+): string =>
   system === undefined || system.length === 0
-    ? generatedSkillsSystemAdvert
-    : \`\${system}\\n\\n\${generatedSkillsSystemAdvert}\`;
+    ? generatedSkillsSystemAdvert(projection)
+    : \`\${system}\\n\\n\${generatedSkillsSystemAdvert(projection)}\`;
 
 const generatedLoadedSkill = (skill: GeneratedSkill): LoadedGeneratedSkill => ({
   name: skill.name,
@@ -567,32 +723,50 @@ const generatedLoadedSkill = (skill: GeneratedSkill): LoadedGeneratedSkill => ({
   })),
 });
 
-const generatedLoadSkillTool = defineProductTool({
+const generatedFrameworkToolsFor = (
+  projection: DynamicCapabilityProjection | undefined,
+): Readonly<Record<string, Tool>> => {
+  const visibleSkillNames = new Set(
+    generatedVisibleSkillCatalogFor(projection).map((skill) => skill.name),
+  );
+  if (visibleSkillNames.size === 0) return {};
+  const visibleSkill = (name: string): GeneratedSkill | null => {
+    if (!visibleSkillNames.has(name)) return null;
+    return generatedSkillByName[name] ?? null;
+  };
+  const generatedLoadSkillTool = defineProductTool({
   name: ${jsString(GENERATED_LOAD_SKILL_TOOL_NAME)},
   description: "Load the full text of a CLI-authored agent skill by name.",
-  args: Schema.Struct({ name: ${renderSkillNameSchema(skills)} }),
+  args: Schema.Struct({ name: Schema.String }),
   authority: "agentos.generated.skills",
   authorityId: "agentos.generated.skills.load_skill",
-  admit: () => Effect.succeed({ ok: true as const }),
-  execute: ({ name }) => Effect.succeed(generatedLoadedSkill(generatedSkillByName[name])),
-});
+  admit: ({ name }) => Effect.succeed({ ok: visibleSkillNames.has(name) } as const),
+  execute: ({ name }) => {
+    const skill = visibleSkill(name);
+    if (skill === null) return Effect.fail(Error(\`unknown skill \${name}\`));
+    return Effect.succeed(generatedLoadedSkill(skill));
+  },
+  });
 
-const generatedReadSkillFileTool = defineProductTool({
+  const generatedReadSkillFileTool = defineProductTool({
   name: ${jsString(GENERATED_READ_SKILL_FILE_TOOL_NAME)},
   description: "Read one declared supporting file from a CLI-authored agent skill package.",
   args: Schema.Struct({
-    name: ${renderSkillNameSchema(skills)},
+    name: Schema.String,
     path: Schema.String,
   }),
   authority: "agentos.generated.skills",
   authorityId: "agentos.generated.skills.read_skill_file",
   admit: ({ name, path }) =>
     Effect.succeed({
-      ok: generatedSkillFilePathCatalog.some((file) => file.name === name && file.path === path),
+      ok:
+        visibleSkillNames.has(name) &&
+        generatedSkillFilePathCatalog.some((file) => file.name === name && file.path === path),
     } as const),
   execute: ({ name, path }) => {
-    const file = generatedSkillByName[name].files.find((candidate) => candidate.path === path);
-    if (file === undefined) {
+    const skill = visibleSkill(name);
+    const file = skill?.files.find((candidate) => candidate.path === path);
+    if (skill === null || file === undefined) {
       return Effect.fail(Error(\`unknown skill file \${name}/\${path}\`));
     }
     return Effect.succeed({
@@ -602,22 +776,26 @@ const generatedReadSkillFileTool = defineProductTool({
       text: file.text,
     });
   },
-});
+  });
 
-const generatedFrameworkTools = {
-  ${jsString(GENERATED_LOAD_SKILL_TOOL_NAME)}: generatedLoadSkillTool,
-  ${jsString(GENERATED_READ_SKILL_FILE_TOOL_NAME)}: generatedReadSkillFileTool,
-} satisfies Readonly<Record<string, Tool>>;
+  return {
+    ${jsString(GENERATED_LOAD_SKILL_TOOL_NAME)}: generatedLoadSkillTool,
+    ${jsString(GENERATED_READ_SKILL_FILE_TOOL_NAME)}: generatedReadSkillFileTool,
+  } satisfies Readonly<Record<string, Tool>>;
+};
 `;
 };
 
 const renderSubmitSpecFromRunInput = (
   hasSkills: boolean,
-): string => `const submitSpecFromRunInput = (input: SubmitRunInput): AgentSubmitSpec => ({
+): string => `const submitSpecFromRunInput = (
+  input: SubmitRunInput,
+  dynamicCapabilityProjection: DynamicCapabilityProjection | undefined,
+): AgentSubmitSpec => ({
   input,
   intent: input.intent,
   context: input.context,
-  ${hasSkills ? "system: generatedSystemPrompt(input.system)," : "...(input.system === undefined ? {} : { system: input.system }),"}
+  ${hasSkills ? "system: generatedSystemPrompt(input.system, dynamicCapabilityProjection)," : "...(input.system === undefined ? {} : { system: input.system }),"}
   ...(input.budget === undefined ? {} : { budget: input.budget }),
   ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
   ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
@@ -671,19 +849,29 @@ const submitRunInputFromSessionTurn = (
 
 const renderProductApiDurableObjectMethods = (): string => `
   submitSessionTurn(input: AgentSessionSubmitTurnInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.submitWithBindingsAndProductLink(
-          submitSpecFromRunInput(submitRunInputFromSessionTurn(input)),
-          bindings.value,
-          {
-            kind: "session_turn",
-            sessionRef: input.sessionRef,
-            turnRef: input.turnRef,
-            ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
-          },
-        )
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(
+      this.targetEnv,
+      generatedDynamicCapabilityTurnEvent({
+        sessionRef: input.sessionRef,
+        turnRef: input.turnRef,
+      }),
+    ).then((bindings) =>
+      bindings.ok
+        ? this.submitWithBindingsAndProductLink(
+            submitSpecFromRunInput(
+              submitRunInputFromSessionTurn(input),
+              bindings.value.dynamicCapabilityProjection,
+            ),
+            bindings.value,
+            {
+              kind: "session_turn",
+              sessionRef: input.sessionRef,
+              turnRef: input.turnRef,
+              ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+            },
+          )
+        : rejectTargetFailure(bindings),
+    );
   }
 
   inspectSession(input: { readonly sessionRef: string }): Promise<AgentSessionProjection> {
@@ -697,20 +885,24 @@ const renderProductApiDurableObjectMethods = (): string => `
   }
 
   runWorkflow(input: AgentWorkflowRunInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.submitWithBindingsAndProductLink(
-          submitSpecFromRunInput(submitRunInputFromWorkflowRun(input)),
-          bindings.value,
-          {
-            kind: "workflow_run",
-            workflowId: input.workflowId,
-            workflowRunId: input.workflowRunId,
-            ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
-            ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
-          },
-        )
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok
+        ? this.submitWithBindingsAndProductLink(
+            submitSpecFromRunInput(
+              submitRunInputFromWorkflowRun(input),
+              bindings.value.dynamicCapabilityProjection,
+            ),
+            bindings.value,
+            {
+              kind: "workflow_run",
+              workflowId: input.workflowId,
+              workflowRunId: input.workflowRunId,
+              ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+              ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
+            },
+          )
+        : rejectTargetFailure(bindings),
+    );
   }
 
   inspectWorkflowRun(input: AgentWorkflowRunRef): Promise<WorkflowRunProjection | null> {
@@ -781,6 +973,7 @@ const renderWorkspaceStaticTarget = (
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
   const hasSkills = normalized.skills.length > 0;
+  const hasDynamicCapability = true;
   const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
@@ -823,6 +1016,7 @@ const renderWorkspaceStaticTarget = (
         "WORKSPACE_OPERATION_HOST_FACT",
         "defineHost",
         "resolveRuntimeInstallGraph",
+        ...(hasDynamicCapability ? ["runDynamicCapabilityResolvers"] : []),
         "workspaceOperations",
       ],
       modules.runtimeCapability,
@@ -831,7 +1025,10 @@ const renderWorkspaceStaticTarget = (
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
       modules.openAiCompatibleTransport,
     ),
-    renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol),
+    renderNamedImport(
+      ["DYNAMIC_CAPABILITY_EVENT", "manifestTruthIdentity"],
+      modules.runtimeProtocol,
+    ),
     renderNamedImport(
       ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
       modules.runtimeRunProjector,
@@ -855,6 +1052,20 @@ const renderWorkspaceStaticTarget = (
       ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
     ),
+    ...(hasDynamicCapability
+      ? [
+          renderTypeImport(
+            [
+              "DynamicCapabilityCompiledCatalog",
+              "DynamicCapabilityEventRef",
+              "DynamicCapabilityProjection",
+              "SubmitInstructionFragment",
+            ],
+            modules.runtimeProtocol,
+          ),
+          renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
+        ]
+      : []),
     renderTypeImport(
       [
         "AgentSessionListProjection",
@@ -928,6 +1139,7 @@ const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
 const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
+${hasDynamicCapability ? renderDynamicCapabilitySupport(normalized, toolNames, hasSkills) : ""}
 ${renderSkillSupport(normalized.skills)}
 const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
 
@@ -1108,7 +1320,10 @@ const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonN
   };
 };
 
-const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {
+const generatedSubmitBindingsFor = async (
+  env: AgentOSTargetEnv,
+  event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
+): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
   const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
   if (preflightDiagnostics.length > 0) {
     return targetFailure(
@@ -1119,17 +1334,21 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
   const capabilityGraph = generatedCapabilityInstallGraphFor(env);
   const route = generatedLlmRouteFor(env);
   if (!route.ok) return route;
+  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
+  if (!dynamicBindings.ok) return dynamicBindings;
+  const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
   return {
     ok: true,
     value: {
       ...capabilityGraph.bindings,
+      ...dynamicBindings.value,
       llmRoutes: {
         default: route.value,
       },
       tools: {
         ...(capabilityGraph.bindings.tools ?? {}),
         ...generatedCustomTools,
-        ${hasSkills ? "...generatedFrameworkTools," : ""}
+        ${hasSkills ? "...generatedFrameworkToolsFor(dynamicCapabilityProjection)," : ""}
       },
     },
   };
@@ -1177,34 +1396,39 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
   }
 
   override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.submitWithBindings(spec, bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok ? this.submitWithBindings(spec, bindings.value) : rejectTargetFailure(bindings),
+    );
   }
 
   submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.submitWithBindings(submitSpecFromRunInput(input), bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok
+        ? this.submitWithBindings(
+            submitSpecFromRunInput(input, bindings.value.dynamicCapabilityProjection),
+            bindings.value,
+          )
+        : rejectTargetFailure(bindings),
+    );
   }
 
 ${renderProductApiDurableObjectMethods()}
 ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.resumeInputRequestWithBindings(input, bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok
+        ? this.resumeInputRequestWithBindings(input, bindings.value)
+        : rejectTargetFailure(bindings),
+    );
   }
 
   decideInputRequest(input: WorkspaceAgentDecideInputRequestCommandInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.decideInputRequestWithBindings(input, bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok
+        ? this.decideInputRequestWithBindings(input, bindings.value)
+        : rejectTargetFailure(bindings),
+    );
   }
 
   customCommand(input: WorkspaceAgentCustomCommandInput): Promise<unknown> {
@@ -1279,6 +1503,7 @@ const renderChatStaticTarget = (
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
   const hasSkills = normalized.skills.length > 0;
+  const hasDynamicCapability = true;
   const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
@@ -1305,11 +1530,15 @@ const renderChatStaticTarget = (
     `import deploymentProvenance from "./deployment.json";`,
     ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedSchedule"], "./schedules")] : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
+    renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
       modules.openAiCompatibleTransport,
     ),
-    renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol),
+    renderNamedImport(
+      ["DYNAMIC_CAPABILITY_EVENT", "manifestTruthIdentity"],
+      modules.runtimeProtocol,
+    ),
     renderNamedImport(
       ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
       modules.runtimeRunProjector,
@@ -1327,6 +1556,20 @@ const renderChatStaticTarget = (
       ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
     ),
+    ...(hasDynamicCapability
+      ? [
+          renderTypeImport(
+            [
+              "DynamicCapabilityCompiledCatalog",
+              "DynamicCapabilityEventRef",
+              "DynamicCapabilityProjection",
+              "SubmitInstructionFragment",
+            ],
+            modules.runtimeProtocol,
+          ),
+          renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
+        ]
+      : []),
     renderTypeImport(
       [
         "AgentSessionListProjection",
@@ -1391,6 +1634,7 @@ const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
 };
 
 const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
+${renderDynamicCapabilitySupport(normalized, toolNames, hasSkills)}
 ${renderSkillSupport(normalized.skills)}
 
 const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
@@ -1461,7 +1705,10 @@ const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonN
   };
 };
 
-const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResult<AgentSubmitBindings> => {
+const generatedSubmitBindingsFor = async (
+  env: AgentOSTargetEnv,
+  event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
+): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
   const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
   if (preflightDiagnostics.length > 0) {
     return targetFailure(
@@ -1471,9 +1718,13 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
   }
   const route = generatedLlmRouteFor(env);
   if (!route.ok) return route;
+  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
+  if (!dynamicBindings.ok) return dynamicBindings;
+  const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
   return {
     ok: true,
     value: {
+      ...dynamicBindings.value,
       llmRoutes: {
         default: route.value,
       },
@@ -1481,7 +1732,7 @@ const generatedSubmitBindingsFor = (env: AgentOSTargetEnv): GeneratedTargetResul
         hasSkills
           ? `{
         ...generatedCustomTools,
-        ...generatedFrameworkTools,
+        ...generatedFrameworkToolsFor(dynamicCapabilityProjection),
       }`
           : "generatedCustomTools"
       },
@@ -1514,34 +1765,39 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
   }
 
   override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.submitWithBindings(spec, bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok ? this.submitWithBindings(spec, bindings.value) : rejectTargetFailure(bindings),
+    );
   }
 
   submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.submitWithBindings(submitSpecFromRunInput(input), bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok
+        ? this.submitWithBindings(
+            submitSpecFromRunInput(input, bindings.value.dynamicCapabilityProjection),
+            bindings.value,
+          )
+        : rejectTargetFailure(bindings),
+    );
   }
 
 ${renderProductApiDurableObjectMethods()}
 ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.resumeInputRequestWithBindings(input, bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok
+        ? this.resumeInputRequestWithBindings(input, bindings.value)
+        : rejectTargetFailure(bindings),
+    );
   }
 
   decideInputRequest(input: WorkspaceAgentDecideInputRequestCommandInput): Promise<SubmitResult> {
-    const bindings = generatedSubmitBindingsFor(this.targetEnv);
-    return bindings.ok
-      ? this.decideInputRequestWithBindings(input, bindings.value)
-      : rejectTargetFailure(bindings);
+    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+      bindings.ok
+        ? this.decideInputRequestWithBindings(input, bindings.value)
+        : rejectTargetFailure(bindings),
+    );
   }
 
   customCommand(input: WorkspaceAgentCustomCommandInput): Promise<unknown> {
@@ -1565,6 +1821,7 @@ const renderLocalAgentApp = (
     throw new TypeError(`local agent app renderer received ${normalized.target.kind}`);
   }
   const hasChannels = normalized.channels.length > 0;
+  const hasSkills = normalized.skills.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
@@ -1595,10 +1852,14 @@ const renderLocalAgentApp = (
       : []),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
+    renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
     ...(hasSchedules
       ? [renderNamedImport(["projectScheduleFireHistory"], modules.runtimeSchedule)]
       : []),
-    renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol),
+    renderNamedImport(
+      ["DYNAMIC_CAPABILITY_EVENT", "manifestTruthIdentity"],
+      modules.runtimeProtocol,
+    ),
     renderNamedImport(
       ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
       modules.openAiCompatibleTransport,
@@ -1608,6 +1869,17 @@ const renderLocalAgentApp = (
       modules.runtimeRunProjector,
     ),
     renderTypeImport(["AgentManifest", "SubmitResult", "SubmitRunInput"], modules.runtimeProtocol),
+    renderTypeImport(
+      [
+        "AgentSubmitBindings",
+        "DynamicCapabilityCompiledCatalog",
+        "DynamicCapabilityEventRef",
+        "DynamicCapabilityProjection",
+        "SubmitInstructionFragment",
+      ],
+      modules.runtimeProtocol,
+    ),
+    renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
     ...(hasSchedules
       ? [
           renderTypeImport(
@@ -1629,7 +1901,17 @@ const renderLocalAgentApp = (
       ],
       modules.runtimeRunProjector,
     ),
-    renderTypeImport(["CreateLocalAgentRuntimeOptions", "LocalAgentRuntime"], modules.localRuntime),
+    renderTypeImport(
+      ["CreateLocalAgentRuntimeOptions", "LocalAgentRuntime", "LocalAgentSubmitInput"],
+      modules.localRuntime,
+    ),
+    ...(hasSkills
+      ? [
+          renderNamedImport(["defineProductTool"], modules.coreTools),
+          renderNamedImport(["Effect", "Schema"], modules.effect),
+          renderTypeImport(["Tool"], modules.coreTools),
+        ]
+      : []),
   ].join("\n");
   return `${imports}
 
@@ -1638,7 +1920,26 @@ const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
 
 type AgentOSTargetEnv = Readonly<Record<string, string | undefined>>;
 
+type GeneratedTargetFailure = {
+  readonly ok: false;
+  readonly message: string;
+};
+
+type GeneratedTargetResult<Value> =
+  | { readonly ok: true; readonly value: Value }
+  | GeneratedTargetFailure;
+
+const targetFailure = (message: string): GeneratedTargetFailure => ({
+  ok: false,
+  message,
+});
+
+const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
+  Promise.reject(Error(failure.message));
+
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
+${renderDynamicCapabilitySupport(normalized, toolNames, hasSkills)}
+${renderSkillSupport(normalized.skills)}
 
 const cleanEnv = (source: AgentOSTargetEnv): Record<string, string> => {
   const env: Record<string, string> = {};
@@ -1697,6 +1998,25 @@ const generatedLocalLlmFor = (
 };
 
 ${renderProductApiHelpers()}
+
+const generatedLocalSubmitInputFromRunInput = async (
+  input: SubmitRunInput,
+  event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
+): Promise<LocalAgentSubmitInput> => {
+  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
+  if (!dynamicBindings.ok) return rejectTargetFailure(dynamicBindings);
+  const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
+  return {
+    ...input,
+    ...(input.context === undefined ? {} : { context: input.context }),
+    ...(input.system === undefined && !${hasSkills} ? {} : {
+      system: ${hasSkills ? "generatedSystemPrompt(input.system, dynamicCapabilityProjection)" : "input.system"},
+    }),
+    dynamicCapabilityProjection,
+    instructionFragments: dynamicBindings.value.instructionFragments,
+    ${hasSkills ? "tools: generatedFrameworkToolsFor(dynamicCapabilityProjection)," : ""}
+  };
+};
 
 export interface LocalAgentApp {
   readonly runtime: LocalAgentRuntime;
@@ -1757,24 +2077,35 @@ export const createLocalAgentApp = async (
   });
   const sessions = {
     submitTurn: (input: AgentSessionSubmitTurnInput) =>
-      lowered.submitWithProductLink(submitRunInputFromSessionTurn(input), {
-        kind: "session_turn",
-        sessionRef: input.sessionRef,
-        turnRef: input.turnRef,
-        ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
-      }),
+      generatedLocalSubmitInputFromRunInput(
+        submitRunInputFromSessionTurn(input),
+        generatedDynamicCapabilityTurnEvent({
+          sessionRef: input.sessionRef,
+          turnRef: input.turnRef,
+        }),
+      ).then((submitInput) =>
+        lowered.submitWithProductLink(submitInput, {
+          kind: "session_turn",
+          sessionRef: input.sessionRef,
+          turnRef: input.turnRef,
+          ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+        }),
+      ),
     inspect: (sessionRef: string) => projectAgentSession(lowered.runtime.events(), sessionRef),
     list: () => projectAgentSessions(lowered.runtime.events()),
   };
   const workflows = {
     run: (input: AgentWorkflowRunInput) =>
-      lowered.submitWithProductLink(submitRunInputFromWorkflowRun(input), {
-        kind: "workflow_run",
-        workflowId: input.workflowId,
-        workflowRunId: input.workflowRunId,
-        ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
-        ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
-      }),
+      generatedLocalSubmitInputFromRunInput(submitRunInputFromWorkflowRun(input)).then(
+        (submitInput) =>
+          lowered.submitWithProductLink(submitInput, {
+            kind: "workflow_run",
+            workflowId: input.workflowId,
+            workflowRunId: input.workflowRunId,
+            ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+            ...(input.inputDigest === undefined ? {} : { inputDigest: input.inputDigest }),
+          }),
+      ),
     inspectRun: (workflowId: string, workflowRunId: string) =>
       projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
     listRuns: (workflowId: string) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
@@ -3241,6 +3572,12 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         source: modules.localRuntime,
         imports: ["lowerLocalAgentRuntime"],
       },
+      {
+        kind: "capability-runtime",
+        source: modules.runtimeCapability,
+        imports: ["runDynamicCapabilityResolvers"],
+      },
+      ...generatedDynamicResolverImports(normalized.dynamicResolvers),
       ...(hasChannels
         ? [
             {
@@ -3420,11 +3757,18 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
               "WORKSPACE_OPERATION_HOST_FACT",
               "defineHost",
               "resolveRuntimeInstallGraph",
+              "runDynamicCapabilityResolvers",
               "workspaceOperations",
             ],
           },
         ]
-      : []),
+      : [
+          {
+            kind: "capability-runtime" as const,
+            source: modules.runtimeCapability,
+            imports: ["runDynamicCapabilityResolvers"],
+          },
+        ]),
     {
       kind: "provider-runtime",
       source: modules.openAiCompatibleTransport,
@@ -3439,6 +3783,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           : ["WORKSPACE_AGENT_COMMAND"],
     },
     ...generatedToolImports(authoredManifestToolNames),
+    ...generatedDynamicResolverImports(normalized.dynamicResolvers),
     ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? [
           {

@@ -2246,7 +2246,7 @@ void test("static target injects skill advert and load_skill for workspace and c
       "  advert: text.includes('generatedSkillsSystemAdvert'),",
       "  loadSkill: text.includes('name: \"load_skill\"'),",
       "  readSkillFile: text.includes('name: \"read_skill_file\"'),",
-      "  system: text.includes('system: generatedSystemPrompt(input.system)'),",
+      "  system: text.includes('system: generatedSystemPrompt(input.system, dynamicCapabilityProjection)'),",
       "  echoDescription: text.includes('Echo workspace routing'),",
       "  reviewDescription: text.includes('Review chat routing'),",
       "  advertUsesDescription: text.includes('${skill.name}: ${skill.description}'),",
@@ -2268,6 +2268,77 @@ void test("static target injects skill advert and load_skill for workspace and c
     for (const [marker, present] of Object.entries(output[profile])) {
       if (marker === "legacyPathDigestAdvert") {
         assert.equal(present, false, `${profile} target kept legacy path/digest advert`);
+      } else {
+        assert.equal(present, true, `${profile} target missing ${marker}`);
+      }
+    }
+  }
+});
+
+void test("static target wires one dynamic capability registry for cloudflare and node targets", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const compiled = compileAgentTree({ files: [",
+      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-dynamic", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-dynamic" } } },',
+      '  { path: "agent/instructions/tone.md", kind: "markdown", text: "Use a terse tone." },',
+      '  { path: "agent/tools/echo.ts", kind: "tool", declaration: {} },',
+      '  { path: "agent/skills/review.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview carefully." },',
+      '  { path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
+      '  { path: "agent/skills/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } },',
+      '  { path: "agent/instructions/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { instructions: ["tone"] } } },',
+      "] });",
+      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+      "const baseConfig = {",
+      '  agent: "./agent",',
+      '  deployment: { id: "target-dynamic" },',
+      '  client: { kind: "browser-direct@1" },',
+      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      "};",
+      "const linkedFor = (config, generatedPath) => {",
+      "  const normalized = normalizeAgentOsConfig(config, compiled.value);",
+      "  if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
+      "  const linked = linkWorkspaceStaticTarget(normalized.value);",
+      "  if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
+      "  return {",
+      "    text: linked.value.files.find((file) => file.path === generatedPath).text,",
+      "    dynamicImports: linked.value.moduleGraph.filter((entry) => entry.kind === 'authored-dynamic-resolver'),",
+      "  };",
+      "};",
+      "const cloudflareTarget = { kind: 'cloudflare-do@1', durableObject: { className: 'AgentOS', binding: 'AGENT_OS' } };",
+      "const workspace = linkedFor({ ...baseConfig, profile: 'workspace@1', target: cloudflareTarget, workspace: { binding: 'Sandbox', root: '/workspace' } }, '.agentos/generated/target.ts');",
+      "const chat = linkedFor({ ...baseConfig, profile: 'chat@1', target: cloudflareTarget }, '.agentos/generated/target.ts');",
+      "const node = linkedFor({ ...baseConfig, profile: 'workspace@1', target: { kind: 'node@1' }, workspace: { binding: 'Sandbox', root: '/workspace' } }, '.agentos/generated/local.ts');",
+      "const markers = (target) => ({",
+      "  runResolvers: target.text.includes('runDynamicCapabilityResolvers'),",
+      "  registry: target.text.includes('generatedDynamicCapabilityResolvers'),",
+      "  catalog: target.text.includes('generatedDynamicCapabilityCatalog'),",
+      "  resolverImport: target.text.includes('../../agent/tools/session.dynamic') && target.text.includes('../../agent/skills/session.dynamic') && target.text.includes('../../agent/instructions/session.dynamic'),",
+      "  projectionBinding: target.text.includes('dynamicCapabilityProjection'),",
+      "  fragmentBinding: target.text.includes('instructionFragments'),",
+      "  skillToolsFromProjection: target.text.includes('generatedFrameworkToolsFor(dynamicCapabilityProjection)'),",
+      "  promptFromProjection: target.text.includes('generatedSystemPrompt(input.system, dynamicCapabilityProjection)'),",
+      "  moduleGraphDynamicImports: target.dynamicImports.map((entry) => entry.source).sort(),",
+      "});",
+      "console.log(JSON.stringify({ workspace: markers(workspace), chat: markers(chat), node: markers(node) }));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  for (const profile of ["workspace", "chat", "node"]) {
+    const markers = output[profile];
+    for (const [marker, present] of Object.entries(markers)) {
+      if (marker === "moduleGraphDynamicImports") {
+        assert.deepEqual(
+          present,
+          [
+            "../../agent/instructions/session.dynamic",
+            "../../agent/skills/session.dynamic",
+            "../../agent/tools/session.dynamic",
+          ],
+          `${profile} target dynamic module graph mismatch`,
+        );
       } else {
         assert.equal(present, true, `${profile} target missing ${marker}`);
       }
