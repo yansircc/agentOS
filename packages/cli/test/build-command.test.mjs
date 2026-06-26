@@ -2304,6 +2304,7 @@ void test("static target wires one dynamic capability registry for cloudflare an
       "  return {",
       "    text: linked.value.files.find((file) => file.path === generatedPath).text,",
       "    dynamicImports: linked.value.moduleGraph.filter((entry) => entry.kind === 'authored-dynamic-resolver'),",
+      "    toolImports: linked.value.moduleGraph.filter((entry) => entry.kind === 'authored-tool'),",
       "  };",
       "};",
       "const cloudflareTarget = { kind: 'cloudflare-do@1', durableObject: { className: 'AgentOS', binding: 'AGENT_OS' } };",
@@ -2319,7 +2320,11 @@ void test("static target wires one dynamic capability registry for cloudflare an
       "  fragmentBinding: target.text.includes('instructionFragments'),",
       "  skillToolsFromProjection: target.text.includes('generatedFrameworkToolsFor(dynamicCapabilityProjection)'),",
       "  promptFromProjection: target.text.includes('generatedSystemPrompt(input.system, dynamicCapabilityProjection)'),",
+      "  customToolRegistry: target.text.includes('const generatedCustomTools'),",
+      "  customToolsInSubmit: target.text.includes('...generatedCustomTools'),",
+      "  customToolImport: target.text.includes('../../agent/tools/echo'),",
       "  moduleGraphDynamicImports: target.dynamicImports.map((entry) => entry.source).sort(),",
+      "  moduleGraphToolImports: target.toolImports.map((entry) => entry.source).sort(),",
       "});",
       "console.log(JSON.stringify({ workspace: markers(workspace), chat: markers(chat), node: markers(node) }));",
     ].join("\n"),
@@ -2338,6 +2343,12 @@ void test("static target wires one dynamic capability registry for cloudflare an
             "../../agent/tools/session.dynamic",
           ],
           `${profile} target dynamic module graph mismatch`,
+        );
+      } else if (marker === "moduleGraphToolImports") {
+        assert.deepEqual(
+          present,
+          ["../../agent/tools/echo"],
+          `${profile} target authored tool module graph mismatch`,
         );
       } else {
         assert.equal(present, true, `${profile} target missing ${marker}`);

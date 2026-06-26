@@ -8,15 +8,14 @@ export const DYNAMIC_TOOL_VISIBILITY_DENIED_REASON = "tool_visibility_denied";
 
 const visibleIds = (
   entries: ReadonlyArray<{ readonly id: string; readonly visible: boolean }>,
-): ReadonlySet<string> => new Set(entries.filter((entry) => entry.visible).map((entry) => entry.id));
+): ReadonlySet<string> =>
+  new Set(entries.filter((entry) => entry.visible).map((entry) => entry.id));
 
 export const visibleToolIdsForDynamicCapabilityProjection = (
   projection: DynamicCapabilityProjection | undefined,
   tools: Readonly<Record<string, Tool>>,
 ): ReadonlySet<string> =>
-  projection === undefined
-    ? new Set(Object.keys(tools))
-    : visibleIds(projection.tools);
+  projection === undefined ? new Set(Object.keys(tools)) : visibleIds(projection.tools);
 
 export const toolsForDynamicCapabilityProjection = (
   tools: Readonly<Record<string, Tool>>,

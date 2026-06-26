@@ -357,10 +357,9 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
         files.push({
           path: toAuthoredPath(cwd, file.path),
           kind: "dynamic",
-          declaration:
-            shouldLoadDynamicResolverDeclaration(relativeToolPath, file.sourceKind)
-              ? await loadDynamicResolverDeclaration(file.path)
-              : undefined,
+          declaration: shouldLoadDynamicResolverDeclaration(relativeToolPath, file.sourceKind)
+            ? await loadDynamicResolverDeclaration(file.path)
+            : undefined,
           sourceKind: file.sourceKind,
         });
         continue;
@@ -420,10 +419,9 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
         files.push({
           path: authoredPath,
           kind: "dynamic",
-          declaration:
-            shouldLoadDynamicResolverDeclaration(relativeSkillPath, file.sourceKind)
-              ? await loadDynamicResolverDeclaration(file.path)
-              : undefined,
+          declaration: shouldLoadDynamicResolverDeclaration(relativeSkillPath, file.sourceKind)
+            ? await loadDynamicResolverDeclaration(file.path)
+            : undefined,
           sourceKind: file.sourceKind,
         });
         continue;
@@ -455,10 +453,12 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
         files.push({
           path: authoredPath,
           kind: "dynamic",
-          declaration:
-            shouldLoadDynamicResolverDeclaration(relativeInstructionPath, file.sourceKind)
-              ? await loadDynamicResolverDeclaration(file.path)
-              : undefined,
+          declaration: shouldLoadDynamicResolverDeclaration(
+            relativeInstructionPath,
+            file.sourceKind,
+          )
+            ? await loadDynamicResolverDeclaration(file.path)
+            : undefined,
           sourceKind: file.sourceKind,
         });
         continue;

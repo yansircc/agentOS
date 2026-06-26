@@ -737,6 +737,13 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./workspace-binding:WorkspaceToolExposurePolicy`
 - `./workspace-binding:WorkspaceToolExposureProfile`
 
+- `./capability:DynamicCapabilityResolverDefinition`
+- `./capability:DynamicCapabilityResolverServiceInput`
+- `./capability:DynamicCapabilityResolverServiceIssue`
+- `./capability:DynamicCapabilityResolverServiceResult`
+- `./capability:makeDynamicCapabilityContext`
+- `./capability:runDynamicCapabilityResolvers`
+
 ## Experimental exports
 
 - `.:StructuredCallFailureClassification`

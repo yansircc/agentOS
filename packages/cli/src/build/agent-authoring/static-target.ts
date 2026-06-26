@@ -537,14 +537,15 @@ const renderInstructionFragments = (
 ): string => {
   const entries = [...fragments]
     .sort((left, right) => left.fragmentId.localeCompare(right.fragmentId))
-    .map((fragment) =>
-      `  ${JSON.stringify(
-        stableJsonValue({
-          digest: fragment.digest,
-          id: fragment.fragmentId,
-          text: fragment.text,
-        }),
-      )}`,
+    .map(
+      (fragment) =>
+        `  ${JSON.stringify(
+          stableJsonValue({
+            digest: fragment.digest,
+            id: fragment.fragmentId,
+            text: fragment.text,
+          }),
+        )}`,
     );
   return entries.length === 0 ? "[]" : `[\n${entries.join(",\n")}\n]`;
 };
@@ -1828,6 +1829,16 @@ const renderLocalAgentApp = (
     (toolName): toolName is WorkspaceToolName =>
       isWorkspaceToolName(toolName) && !authoredToolNames.has(toolName),
   );
+  const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
+  const toolImports = customToolNames
+    .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
+    .join("\n");
+  const customToolRecord =
+    customToolNames.length === 0
+      ? "{}"
+      : `{\n${customToolNames
+          .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
+          .join("\n")}\n}`;
   const workspaceToolArray = `[${workspaceToolList.map(jsString).join(", ")}] as const`;
   const usesMutationTools = workspaceToolList.some((toolName) =>
     workspaceMutationToolNames.has(toolName),
@@ -1905,13 +1916,18 @@ const renderLocalAgentApp = (
       ["CreateLocalAgentRuntimeOptions", "LocalAgentRuntime", "LocalAgentSubmitInput"],
       modules.localRuntime,
     ),
-    ...(hasSkills
-      ? [
-          renderNamedImport(["defineProductTool"], modules.coreTools),
-          renderNamedImport(["Effect", "Schema"], modules.effect),
-          renderTypeImport(["Tool"], modules.coreTools),
-        ]
-      : []),
+    renderTypeImport(["WorkspaceAgentCustomCommandInput"], modules.workspaceAgentHost),
+    renderNamedImport(
+      [
+        ...(hasSkills ? ["defineProductTool"] : []),
+        "deterministicToolInvocation",
+        "unsafeRunToolByName",
+      ],
+      modules.coreTools,
+    ),
+    renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
+    renderTypeImport(["Tool"], modules.coreTools),
+    ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
   return `${imports}
 
@@ -1938,6 +1954,7 @@ const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
   Promise.reject(Error(failure.message));
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
+const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
 ${renderDynamicCapabilitySupport(normalized, toolNames, hasSkills)}
 ${renderSkillSupport(normalized.skills)}
 
@@ -2014,7 +2031,14 @@ const generatedLocalSubmitInputFromRunInput = async (
     }),
     dynamicCapabilityProjection,
     instructionFragments: dynamicBindings.value.instructionFragments,
-    ${hasSkills ? "tools: generatedFrameworkToolsFor(dynamicCapabilityProjection)," : ""}
+    tools: ${
+      hasSkills
+        ? `{
+      ...generatedCustomTools,
+      ...generatedFrameworkToolsFor(dynamicCapabilityProjection),
+    }`
+        : "generatedCustomTools"
+    },
   };
 };
 
@@ -2033,6 +2057,7 @@ export interface LocalAgentApp {
     ) => WorkflowRunProjection | null;
     readonly listRuns: (workflowId: string) => WorkflowRunListProjection;
   };
+  readonly customCommand: (input: WorkspaceAgentCustomCommandInput) => Promise<unknown>;
   ${
     hasSchedules
       ? `readonly schedules: {
@@ -2110,6 +2135,13 @@ export const createLocalAgentApp = async (
       projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
     listRuns: (workflowId: string) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
   };
+  const customCommand = (input: WorkspaceAgentCustomCommandInput): Promise<unknown> =>
+    Effect.runPromise(
+      unsafeRunToolByName(
+        generatedCustomTools,
+        deterministicToolInvocation(input.method, input.input),
+      ),
+    );
   ${
     hasSchedules
       ? `const scheduleHistory = (
@@ -2138,6 +2170,7 @@ export const createLocalAgentApp = async (
     runtime: lowered.runtime,
     sessions,
     workflows,
+    customCommand,
     ${
       hasSchedules
         ? `schedules: {
@@ -3548,6 +3581,9 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         issues: [{ kind: "unsupported_static_target", target: normalized.target.kind }],
       };
     }
+    const authoredManifestToolNames = toolNames.filter((toolName) =>
+      normalized.authoredToolNames.includes(toolName),
+    );
     const deploymentJson = {
       deploymentId: normalized.deployment.deploymentId,
       backend: normalized.deployment.backend,
@@ -3577,6 +3613,12 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         source: modules.runtimeCapability,
         imports: ["runDynamicCapabilityResolvers"],
       },
+      {
+        kind: "workspace-host",
+        source: modules.workspaceAgentHost,
+        imports: ["WorkspaceAgentCustomCommandInput"],
+      },
+      ...generatedToolImports(authoredManifestToolNames),
       ...generatedDynamicResolverImports(normalized.dynamicResolvers),
       ...(hasChannels
         ? [

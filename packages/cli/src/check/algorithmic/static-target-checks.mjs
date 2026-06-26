@@ -289,9 +289,9 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "const renderSkillSupport =",
       "const generatedLoadSkillTool = defineProductTool",
       "const generatedSkillsSystemAdvert =",
-      "const generatedFrameworkTools =",
+      "const generatedFrameworkToolsFor =",
       "const renderSubmitSpecFromRunInput =",
-      "system: generatedSystemPrompt(input.system)",
+      "generatedSystemPrompt(input.system, dynamicCapabilityProjection)",
     ];
     for (const marker of requiredSkillSupportMarkers) {
       if (!source.includes(marker)) {

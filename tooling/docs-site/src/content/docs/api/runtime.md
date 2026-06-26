@@ -738,6 +738,13 @@ slug: "api/runtime"
 - `./workspace-binding:WorkspaceToolExposurePolicy`
 - `./workspace-binding:WorkspaceToolExposureProfile`
 
+- `./capability:DynamicCapabilityResolverDefinition`
+- `./capability:DynamicCapabilityResolverServiceInput`
+- `./capability:DynamicCapabilityResolverServiceIssue`
+- `./capability:DynamicCapabilityResolverServiceResult`
+- `./capability:makeDynamicCapabilityContext`
+- `./capability:runDynamicCapabilityResolvers`
+
 ## Experimental exports
 
 - `.:StructuredCallFailureClassification`

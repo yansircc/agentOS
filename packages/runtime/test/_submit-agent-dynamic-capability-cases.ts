@@ -34,9 +34,7 @@ const dynamicProjection = (
 const projectionEntry = (id: string, visible: boolean) => ({
   id,
   visible,
-  decision: visible
-    ? DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED
-    : DYNAMIC_CAPABILITY_VISIBILITY.DENIED,
+  decision: visible ? DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED : DYNAMIC_CAPABILITY_VISIBILITY.DENIED,
   provenance: [
     {
       resolverId: `resolver:${id}`,
@@ -80,20 +78,16 @@ export const registerSubmitAgentDynamicCapabilityCases = () => {
       );
 
       expect(result).toMatchObject({ ok: true, final: "done" });
-      expect(
-        llmRequests[0]?.tools?.map((tool) => tool.function.name),
-      ).toEqual(["read_file"]);
+      expect(llmRequests[0]?.tools?.map((tool) => tool.function.name)).toEqual(["read_file"]);
       expect(
         events
           .map((event) => decodeRuntimeLedgerEvent(event))
           .filter(
             (decoded) =>
-              decoded._tag === "runtime" &&
-              decoded.event.kind === RUNTIME_EVENT_KIND.LLM_REQUESTED,
+              decoded._tag === "runtime" && decoded.event.kind === RUNTIME_EVENT_KIND.LLM_REQUESTED,
           )
           .map((decoded) =>
-            decoded._tag === "runtime" &&
-            decoded.event.kind === RUNTIME_EVENT_KIND.LLM_REQUESTED
+            decoded._tag === "runtime" && decoded.event.kind === RUNTIME_EVENT_KIND.LLM_REQUESTED
               ? decoded.event.payload.toolNames
               : [],
           ),

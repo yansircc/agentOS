@@ -446,7 +446,8 @@ const submitSpecWithBindings = (
   route: input.route ?? defaultRoute,
   effectAuthorityRef,
   tools: { ...bindings.tools, ...input.tools },
-  dynamicCapabilityProjection: bindings.dynamicCapabilityProjection ?? input.dynamicCapabilityProjection,
+  dynamicCapabilityProjection:
+    bindings.dynamicCapabilityProjection ?? input.dynamicCapabilityProjection,
   instructionFragments: bindings.instructionFragments ?? input.instructionFragments,
   executionDomains: [...(bindings.executionDomains ?? []), ...(input.executionDomains ?? [])],
   materials: { ...bindings.materials, ...input.materials },

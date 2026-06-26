@@ -252,8 +252,7 @@ export interface DynamicCapabilityProjectionEntry {
   readonly provenance: ReadonlyArray<DynamicCapabilityResolverProvenance>;
 }
 
-export interface DynamicCapabilityInstructionProjectionEntry
-  extends DynamicCapabilityProjectionEntry {
+export interface DynamicCapabilityInstructionProjectionEntry extends DynamicCapabilityProjectionEntry {
   readonly digest: string;
 }
 
@@ -498,10 +497,12 @@ export const mergeDynamicCapabilityProjection = (input: {
     catalogIds(input.catalog, DYNAMIC_CAPABILITY_SLOT.INSTRUCTIONS),
     DYNAMIC_CAPABILITY_SLOT.INSTRUCTIONS,
     input.results,
-  ).map((entry): DynamicCapabilityInstructionProjectionEntry => ({
-    ...entry,
-    digest: instructions.get(entry.id) ?? "",
-  }));
+  ).map(
+    (entry): DynamicCapabilityInstructionProjectionEntry => ({
+      ...entry,
+      digest: instructions.get(entry.id) ?? "",
+    }),
+  );
   return {
     ok: true,
     value: {
