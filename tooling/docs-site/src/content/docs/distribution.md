@@ -124,10 +124,12 @@ Restore the consumer to registry truth with:
 agentos consumer restore /path/to/consumer
 ```
 
-The legacy root scripts `install:consumer`, `status:consumer`, `check:consumer`,
-and `restore:consumer` are thin aliases for the same `agentos consumer`
-commands. Use the `agentos` binary form for machine-readable `--json` output;
-package-manager script runners may print their own lifecycle text.
+The legacy root scripts `install:consumer`, `status:consumer`, and
+`restore:consumer` are thin aliases for the same `agentos consumer` commands.
+Use the `agentos` binary form for machine-readable `--json` output and for the
+fail-closed `consumer check` gate; package-manager script runners may print
+their own lifecycle text, and root `check:*` scripts are reserved for
+repository-owned gates.
 
 Use the local registry channel only when the consumer must exercise package
 manager registry resolution, dist-tags, or npmrc behavior:

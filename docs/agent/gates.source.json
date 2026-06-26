@@ -26,7 +26,7 @@
       "expensive": true
     },
     "effect-scan": {
-      "command": "rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan && effect-skill-scan . --strict --output gate-json --evidence /tmp/agentos-effect-scan",
+      "command": "pnpm run agentos check effect-scan --evidence /tmp/agentos-effect-scan",
       "expensive": true
     }
   },

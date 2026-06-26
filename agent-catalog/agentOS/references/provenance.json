@@ -50,8 +50,8 @@
     },
     {
       "path": "docs/agent/gates.source.json",
-      "sha256": "c1f87b0751226126b5489318ee93dd31be0394c930f13eae943d0cbb1f34d3ad",
-      "byteSize": 2850
+      "sha256": "b4f7144c626ecc0192abc84d3122d327a27e1b64b24888a19a4f6709a301a055",
+      "byteSize": 2765
     },
     {
       "path": "docs/agent/invariant-matrix.json",
@@ -145,8 +145,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "b9714c4364c4dad34c656053f56a3913e275b0a14061b97f34e10734031d2b61",
-      "byteSize": 4170
+      "sha256": "f7215e8330cc0bfafcdd75d5cae4641ea7f0ef7f44e46c7897a85353ef4dce76",
+      "byteSize": 4012
     },
     {
       "path": "packages/cli/package.json",

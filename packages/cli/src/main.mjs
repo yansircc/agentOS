@@ -16,6 +16,7 @@ import {
   runAffectedGates,
 } from "./check/gate-selector.mjs";
 import { runDefaultGate } from "./check/default-gate.mjs";
+import { runEffectScanGate } from "./check/effect-scan-gate.mjs";
 import { listGuards, runGroup, runGuard } from "./runner.mjs";
 
 const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -55,6 +56,7 @@ Usage:
   agentos check structural
   agentos check affected [--base <ref>] [--head <ref>] [--json] [--explain] [--run]
   agentos check docs
+  agentos check effect-scan [--repo <path>] [--evidence <path>] [--scanner <command>]
   agentos check effect-manifests
   agentos check release
   agentos check site
@@ -222,6 +224,9 @@ const runCheck = async (args) => {
       expectNoExtraArgs(rest, "agentos check docs");
       await runGroup("check-docs");
       return;
+    case "effect-scan":
+      runEffectScanGate(rest, { defaultRepoRoot: repoRootFromMain() });
+      return;
     case "effect-manifests":
       expectNoExtraArgs(rest, "agentos check effect-manifests");
       await runGroup("check-effect-manifests");
@@ -258,7 +263,7 @@ const runCheck = async (args) => {
         return;
       }
       throw new Error(
-        "agentos check: choose one of all, default, structural, affected, docs, effect-manifests, release, site, guard-coverage, guard, guards, or an algorithmic checker id",
+        "agentos check: choose one of all, default, structural, affected, docs, effect-scan, effect-manifests, release, site, guard-coverage, guard, guards, or an algorithmic checker id",
       );
   }
 };

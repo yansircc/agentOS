@@ -12,7 +12,7 @@ pnpm run agentos check guard public-api
 pnpm run typecheck
 pnpm run test
 rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan
-effect-skill-scan /Users/yansir/code/52/agentOS --strict --output gate-json --evidence /tmp/agentos-effect-scan
+pnpm run agentos check effect-scan --evidence /tmp/agentos-effect-scan
 git diff --check
 ```
 
@@ -20,9 +20,14 @@ git diff --check
 intent validation, typecheck, and package tests. The explicit commands are
 still useful when isolating failures.
 
-Use `effect-skill-scan /Users/yansir/code/52/agentOS --strict --output raw-json --profile`
-only when you need the large raw scanner payload for profile/reference routing
-or debugging.
+`agentos check effect-scan` runs `effect-skill-scan --output gate-json`, requires
+the scanner-owned machine severity projection, and fails only on scanner-owned
+block findings or an invalid/missing gate projection. Review/profile signals
+remain non-gating unless the scanner places them in the block tier.
+
+Use `effect-skill-scan /Users/yansir/code/52/agentOS --strict --output raw-json
+--profile` only when you need the large raw scanner payload for profile/reference
+routing or debugging.
 
 ## Release Gate
 

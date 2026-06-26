@@ -910,10 +910,12 @@ const envNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const unwrapDevVarsValue = (
   rawValue: string,
   line: number,
-): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly issue: DevVarsIssue } => {
+):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly issue: DevVarsIssue } => {
   if (rawValue.length < 2) return { ok: true, value: rawValue };
   const quote = rawValue[0];
-  if (quote !== "'" && quote !== "\"") return { ok: true, value: rawValue };
+  if (quote !== "'" && quote !== '"') return { ok: true, value: rawValue };
   if (!rawValue.endsWith(quote)) {
     return {
       ok: false,
@@ -935,7 +937,10 @@ const unwrapDevVarsValue = (
 
 const parseDevVars = (
   text: string,
-): { readonly values: Readonly<Record<string, string>>; readonly issues: ReadonlyArray<DevVarsIssue> } => {
+): {
+  readonly values: Readonly<Record<string, string>>;
+  readonly issues: ReadonlyArray<DevVarsIssue>;
+} => {
   const values: Record<string, string> = {};
   const issues: DevVarsIssue[] = [];
   const lines = text.split(/\r?\n/u);
@@ -1063,12 +1068,15 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
   }
 
   const bindings = llmMaterialEnvBindings(facts.normalized.llm);
-  const bindingByKind = Object.fromEntries(bindings.map((binding) => [binding.kind, binding])) as
-    Record<LlmMaterialEnvKind, LlmMaterialEnvBinding>;
+  const bindingByKind = Object.fromEntries(
+    bindings.map((binding) => [binding.kind, binding]),
+  ) as Record<LlmMaterialEnvKind, LlmMaterialEnvBinding>;
   const modelValue = materialValueFor(bindingByKind.model, env);
   const refResolver = {
     material: (ref: MaterialRef): NonNullable<unknown> | null => {
-      const binding = bindings.find((candidate) => candidate.kind === ref.kind && candidate.ref === ref.ref);
+      const binding = bindings.find(
+        (candidate) => candidate.kind === ref.kind && candidate.ref === ref.ref,
+      );
       return binding === undefined ? null : materialValueFor(binding, env);
     },
   };
@@ -1125,7 +1133,11 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
 const printPreflightLlm = (
   output: Readonly<{
     readonly ok: boolean;
-    readonly route: Readonly<{ readonly bindingRef: string; readonly status: string; readonly kind?: string }>;
+    readonly route: Readonly<{
+      readonly bindingRef: string;
+      readonly status: string;
+      readonly kind?: string;
+    }>;
     readonly materials: ReadonlyArray<
       Readonly<{
         readonly kind: string;
@@ -1135,7 +1147,9 @@ const printPreflightLlm = (
         readonly status: string;
       }>
     >;
-    readonly diagnostics: ReadonlyArray<Readonly<{ readonly pass: string; readonly reason: string }>>;
+    readonly diagnostics: ReadonlyArray<
+      Readonly<{ readonly pass: string; readonly reason: string }>
+    >;
   }>,
   json: boolean,
 ): void => {
@@ -1146,10 +1160,10 @@ const printPreflightLlm = (
   const lines = [
     `agentOS LLM preflight ${output.ok ? "passed" : "failed"}`,
     `route: ${output.route.bindingRef} (${output.route.kind ?? "unknown"}) ${output.route.status}`,
-    ...output.materials.map(
-      (row) => `${row.kind}: ${row.status} ${row.envName} (${row.source})`,
+    ...output.materials.map((row) => `${row.kind}: ${row.status} ${row.envName} (${row.source})`),
+    ...output.diagnostics.map(
+      (diagnostic) => `diagnostic: ${diagnostic.pass} - ${diagnostic.reason}`,
     ),
-    ...output.diagnostics.map((diagnostic) => `diagnostic: ${diagnostic.pass} - ${diagnostic.reason}`),
   ];
   process.stdout.write(`${lines.join("\n")}\n`);
 };
