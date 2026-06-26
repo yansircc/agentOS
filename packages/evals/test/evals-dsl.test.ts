@@ -44,7 +44,14 @@ describe("@agent-os/evals DSL", () => {
     expect(definition.id).toBe("session.basic");
     expect(definition.cases[0]?.id).toBe("case-1");
     expect(definition.assertions).toEqual([{ kind: "completed" }]);
-    expect(await definition.run?.({} as never)).toBe("ok");
+    expect(
+      await definition.run?.({
+        t: {},
+        sessions: {},
+        workflows: {},
+        channels: {},
+      } as never),
+    ).toBe("ok");
     expect(Object.isFrozen(definition)).toBe(true);
   });
 

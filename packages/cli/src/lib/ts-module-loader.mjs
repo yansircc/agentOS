@@ -10,7 +10,7 @@ const compare = (left, right) => left.localeCompare(right);
 
 export const bundleModuleForNode = async (
   entryPoint,
-  { external = [], prefix = "agentos-ts-module-", tempRoot = os.tmpdir() } = {},
+  { define = {}, external = [], prefix = "agentos-ts-module-", tempRoot = os.tmpdir() } = {},
 ) => {
   const outDir = path.join(tempRoot, `${prefix}${randomUUID()}`);
   const outfile = path.join(outDir, "entry.mjs");
@@ -22,6 +22,7 @@ export const bundleModuleForNode = async (
     format: "esm",
     platform: "node",
     target: "node22",
+    define,
     external: [...new Set(["esbuild", "cloudflare:*", ...external])].sort(compare),
     logLevel: "silent",
   });

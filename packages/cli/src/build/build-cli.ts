@@ -3,6 +3,7 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import {
   compileAgentTree,
@@ -42,11 +43,24 @@ interface ServeArgs {
   readonly json: boolean;
 }
 
+interface EvalArgs {
+  readonly cwd: string;
+  readonly config: string;
+  readonly packageScope?: string;
+  readonly target?: "local" | "remote";
+  readonly baseUrl?: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly llm: "config" | "test";
+  readonly llmResponse: string;
+  readonly json: boolean;
+}
+
 type CliArgs =
   | { readonly command: "help" }
   | { readonly command: "build"; readonly args: BuildArgs }
   | { readonly command: "info"; readonly args: InfoArgs }
-  | { readonly command: "serve" | "dev"; readonly args: ServeArgs };
+  | { readonly command: "serve" | "dev"; readonly args: ServeArgs }
+  | { readonly command: "eval"; readonly args: EvalArgs };
 
 const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
   const args: {
@@ -190,6 +204,104 @@ const parseServeArgs = (rawArgs: ReadonlyArray<string>): ServeArgs => {
   return args;
 };
 
+const parseHeader = (value: string | undefined): readonly [string, string] => {
+  if (value === undefined) throw new Error("--header requires a value");
+  const separator = value.indexOf("=");
+  if (separator <= 0) {
+    throw new Error("--header must use name=value");
+  }
+  const name = value.slice(0, separator).trim().toLowerCase();
+  const headerValue = value.slice(separator + 1);
+  if (name.length === 0) {
+    throw new Error("--header name must be non-empty");
+  }
+  return [name, headerValue] as const;
+};
+
+const parseEvalArgs = (rawArgs: ReadonlyArray<string>): EvalArgs => {
+  const args: {
+    cwd: string;
+    config: string;
+    packageScope?: string;
+    target?: "local" | "remote";
+    baseUrl?: string;
+    headers: Record<string, string>;
+    llm: "config" | "test";
+    llmResponse: string;
+    json: boolean;
+  } = {
+    cwd: process.cwd(),
+    config: "agentos.config.jsonc",
+    headers: {},
+    llm: "config",
+    llmResponse: "ok",
+    json: false,
+  };
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
+    switch (arg) {
+      case "--cwd":
+        if (rawArgs[index + 1] === undefined) throw new Error("--cwd requires a value");
+        args.cwd = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--config":
+        if (rawArgs[index + 1] === undefined) throw new Error("--config requires a value");
+        args.config = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--package-scope":
+        if (rawArgs[index + 1] === undefined) throw new Error("--package-scope requires a value");
+        args.packageScope = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--target": {
+        const value = rawArgs[index + 1];
+        if (value !== "local" && value !== "remote") {
+          throw new Error("--target must be one of local, remote");
+        }
+        args.target = value;
+        index += 1;
+        break;
+      }
+      case "--base-url":
+        if (rawArgs[index + 1] === undefined) throw new Error("--base-url requires a value");
+        args.baseUrl = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--header": {
+        const [name, value] = parseHeader(rawArgs[index + 1]);
+        args.headers[name] = value;
+        index += 1;
+        break;
+      }
+      case "--llm": {
+        const value = rawArgs[index + 1];
+        if (value !== "config" && value !== "test") {
+          throw new Error("--llm must be one of config, test");
+        }
+        args.llm = value;
+        index += 1;
+        break;
+      }
+      case "--llm-response":
+        if (rawArgs[index + 1] === undefined) throw new Error("--llm-response requires a value");
+        args.llmResponse = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--json":
+        args.json = true;
+        break;
+      default:
+        throw new Error(`unexpected argument ${arg}`);
+    }
+  }
+  return Object.freeze({
+    ...args,
+    headers: Object.freeze({ ...args.headers }),
+  });
+};
+
 const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
   const [command, ...rest] = rawArgs;
   if (command === undefined || command === "--help" || command === "-h") return { command: "help" };
@@ -199,7 +311,8 @@ const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
   if (command === "serve" || command === "dev") {
     return { command, args: parseServeArgs(rest) };
   }
-  throw new Error("choose one of build, info, serve, dev");
+  if (command === "eval") return { command: "eval", args: parseEvalArgs(rest) };
+  throw new Error("choose one of build, info, serve, dev, eval");
 };
 
 const help = `Usage:
@@ -207,10 +320,12 @@ const help = `Usage:
   agentos info [--cwd <path>] [--config <path>] [--json]
   agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
 
 Compiles agent/ + workflows/ + agent/schedules/ + agentos.config.jsonc into .agentos/generated/.
 Prints compile-only agent inspection without starting a runtime.
 Serves the generated local node app through the CLI-owned public command/event protocol.
+Runs evals/**/*.eval.ts against the generated app public command/event/channel protocol.
 `;
 
 const stripJsonc = (text: string): string => {
@@ -704,6 +819,9 @@ interface LocalAgentApp {
     readonly inspectRun: (workflowId: string, workflowRunId: string) => unknown;
     readonly listRuns: (workflowId: string) => unknown;
   };
+  readonly channels?: {
+    readonly handle: (request: Request) => Promise<Response | null>;
+  };
   readonly customCommand?: (input: unknown) => Promise<unknown>;
 }
 
@@ -804,6 +922,64 @@ const readJsonBody = (request: http.IncomingMessage): Promise<unknown> =>
     });
     request.on("error", reject);
   });
+
+const readRawBody = async (request: http.IncomingMessage): Promise<Uint8Array> => {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    size += buffer.byteLength;
+    if (size > 1_000_000) throw new HttpFailure(413, "request body too large");
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+};
+
+const headersFromIncoming = (request: http.IncomingMessage): Headers => {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(name, item);
+    } else {
+      headers.set(name, value);
+    }
+  }
+  return headers;
+};
+
+const webRequestFromIncoming = async (
+  request: http.IncomingMessage,
+  url: URL,
+): Promise<Request> => {
+  const method = request.method ?? "GET";
+  const hasBody = method !== "GET" && method !== "HEAD";
+  const body = hasBody ? await readRawBody(request) : undefined;
+  return new Request(url, {
+    method,
+    headers: headersFromIncoming(request),
+    ...(body === undefined
+      ? {}
+      : {
+          body: body.buffer.slice(
+            body.byteOffset,
+            body.byteOffset + body.byteLength,
+          ) as ArrayBuffer,
+        }),
+  });
+};
+
+const writeWebResponse = async (
+  response: http.ServerResponse,
+  webResponse: Response,
+): Promise<void> => {
+  const headers: Record<string, string> = {};
+  webResponse.headers.forEach((value, name) => {
+    headers[name] = value;
+  });
+  response.writeHead(webResponse.status, headers);
+  response.end(Buffer.from(await webResponse.arrayBuffer()));
+};
 
 const commandInputRecord = (input: unknown, label: string): Readonly<Record<string, unknown>> => {
   if (!isPlainRecord(input)) throw new HttpFailure(400, `invalid ${label} command input`);
@@ -930,7 +1106,27 @@ const writeSseEvents = (
   response.end();
 };
 
-const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Promise<void> => {
+interface StartedGeneratedAppServer {
+  readonly payload: Readonly<{
+    status: "listening";
+    protocol: "agentos-local-app@1";
+    mode: "serve" | "dev";
+    target: string;
+    llm: "config" | "test";
+    url: string;
+    endpoints: Readonly<{
+      health: string;
+      command: string;
+      events: string;
+    }>;
+  }>;
+  readonly close: () => Promise<void>;
+}
+
+const startGeneratedAppServer = async (
+  command: "serve" | "dev",
+  args: ServeArgs,
+): Promise<StartedGeneratedAppServer> => {
   const facts = await loadCompileFacts(args);
   const app = await loadGeneratedLocalApp(args, facts);
   const server = http.createServer((request, response) => {
@@ -957,6 +1153,18 @@ const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Pro
         writeSseEvents(response, app.runtime.events({ afterId: parseAfterId(url) }));
         return;
       }
+      if (url.pathname.startsWith("/channels/")) {
+        if (app.channels === undefined) {
+          throw new HttpFailure(501, "channels are unavailable");
+        }
+        const channelResponse = await app.channels.handle(await webRequestFromIncoming(request, url));
+        if (channelResponse === null) {
+          notFound(response);
+          return;
+        }
+        await writeWebResponse(response, channelResponse);
+        return;
+      }
       notFound(response);
     })().catch((error: unknown) => {
       errorResponse(response, error);
@@ -972,8 +1180,8 @@ const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Pro
   const port = typeof address === "object" && address !== null ? address.port : args.port;
   const url = `http://${args.host}:${port}`;
   const payload = {
-    status: "listening",
-    protocol: "agentos-local-app@1",
+    status: "listening" as const,
+    protocol: "agentos-local-app@1" as const,
     mode: command,
     target: facts.normalized.target.kind,
     llm: args.llm,
@@ -984,17 +1192,386 @@ const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Pro
       events: `${url}/agentos/events`,
     },
   };
+  return {
+    payload,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+      }),
+  };
+};
+
+const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Promise<void> => {
+  const started = await startGeneratedAppServer(command, args);
   process.stdout.write(
     args.json
-      ? `${JSON.stringify(payload)}\n`
-      : `agentOS ${command} listening on ${url} (${payload.protocol}, llm=${args.llm})\n`,
+      ? `${JSON.stringify(started.payload)}\n`
+      : `agentOS ${command} listening on ${started.payload.url} (${started.payload.protocol}, llm=${args.llm})\n`,
   );
 
   await new Promise<void>((resolve) => {
-    const close = () => server.close(() => resolve());
+    const close = () => {
+      void started.close().finally(resolve);
+    };
     process.once("SIGINT", close);
     process.once("SIGTERM", close);
   });
+};
+
+interface EvalCaseLike {
+  readonly id: string;
+  readonly input: unknown;
+  readonly tags?: readonly string[];
+  readonly metadata?: Readonly<Record<string, unknown>>;
+}
+
+interface EvalDefinitionLike {
+  readonly id: string;
+  readonly path?: string;
+  readonly cases: readonly EvalCaseLike[];
+  readonly run?: (context: unknown) => Promise<unknown> | unknown;
+}
+
+interface EvalConfigLike {
+  readonly target?: { readonly kind: "local" } | { readonly kind: "remote"; readonly baseUrl: string; readonly headers?: Readonly<Record<string, string>> };
+  readonly timeoutMs?: number;
+}
+
+interface EvalHttpTarget {
+  readonly kind: "local" | "remote";
+  readonly baseUrl: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+interface EvalCaseResult {
+  readonly evalId: string;
+  readonly caseId: string;
+  readonly status: "passed" | "failed";
+  readonly error?: string;
+}
+
+const collectEvalFiles = async (directory: string): Promise<readonly string[]> => {
+  if (!(await pathExists(directory))) return [];
+  const files: string[] = [];
+  const visit = async (current: string): Promise<void> => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const target = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        await visit(target);
+        continue;
+      }
+      if (entry.isFile() && /\.eval\.[cm]?[jt]sx?$/u.test(entry.name)) {
+        files.push(target);
+      }
+    }
+  };
+  await visit(directory);
+  return files.sort((left, right) => left.localeCompare(right));
+};
+
+const isEvalDefinition = (value: unknown): value is EvalDefinitionLike =>
+  isPlainRecord(value) &&
+  typeof value.id === "string" &&
+  Array.isArray(value.cases) &&
+  (value.run === undefined || typeof value.run === "function");
+
+const evalDefinitionsFromModule = (
+  mod: Readonly<Record<string, unknown>>,
+  file: string,
+): readonly EvalDefinitionLike[] => {
+  const values = Object.values(mod).flatMap((value): readonly unknown[] =>
+    Array.isArray(value) ? value : [value],
+  );
+  const definitions = values.filter(isEvalDefinition);
+  if (definitions.length === 0) {
+    throw new Error(`${path.relative(process.cwd(), file)} exports no defineEval declaration`);
+  }
+  return definitions;
+};
+
+const loadEvalDefinitions = async (
+  cwd: string,
+  files: readonly string[],
+): Promise<readonly EvalDefinitionLike[]> => {
+  const definitions: EvalDefinitionLike[] = [];
+  for (const file of files) {
+    const mod = (await importBundledModule(file, {
+      define: { "import.meta.url": JSON.stringify(pathToFileURL(file).href) },
+      prefix: "agentos-eval-file-",
+      tempRoot: path.join(cwd, ".agentos", ".cache"),
+    })) as Readonly<Record<string, unknown>>;
+    definitions.push(...evalDefinitionsFromModule(mod, file));
+  }
+  return definitions;
+};
+
+const isEvalConfig = (value: unknown): value is EvalConfigLike =>
+  isPlainRecord(value) && (value.target === undefined || isPlainRecord(value.target));
+
+const loadEvalConfig = async (cwd: string): Promise<EvalConfigLike> => {
+  const configPath = path.join(cwd, "evals", "evals.config.ts");
+  if (!(await pathExists(configPath))) return {};
+  const mod = (await importBundledModule(configPath, {
+    define: { "import.meta.url": JSON.stringify(pathToFileURL(configPath).href) },
+    prefix: "agentos-eval-config-",
+    tempRoot: path.join(cwd, ".agentos", ".cache"),
+  })) as Readonly<Record<string, unknown>>;
+  const config = mod.default ?? mod.config;
+  if (!isEvalConfig(config)) {
+    throw new Error("evals/evals.config.ts must export defineEvalConfig() as default or config");
+  }
+  return config;
+};
+
+const targetFromArgs = (
+  args: EvalArgs,
+  config: EvalConfigLike,
+  localUrl?: string,
+): EvalHttpTarget => {
+  const configuredTarget = config.target;
+  const mode = args.target ?? (args.baseUrl !== undefined ? "remote" : configuredTarget?.kind) ?? "local";
+  if (mode === "remote") {
+    const baseUrl =
+      args.baseUrl ??
+      (configuredTarget?.kind === "remote" ? configuredTarget.baseUrl : undefined);
+    if (baseUrl === undefined) {
+      throw new Error("agentos eval: remote target requires --base-url or evals.config.ts target");
+    }
+    return {
+      kind: "remote",
+      baseUrl,
+      headers: Object.freeze({
+        ...(configuredTarget?.kind === "remote" ? configuredTarget.headers ?? {} : {}),
+        ...args.headers,
+      }),
+    };
+  }
+  if (localUrl === undefined) {
+    throw new Error("agentos eval: local target did not start");
+  }
+  return {
+    kind: "local",
+    baseUrl: localUrl,
+    headers: Object.freeze({ ...args.headers }),
+  };
+};
+
+const parseJsonOrText = async (response: Response): Promise<unknown> => {
+  const text = await response.text();
+  if (text.length === 0) return null;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("json")) return JSON.parse(text);
+  return text;
+};
+
+const parseSseJsonEvents = (text: string): readonly unknown[] =>
+  text
+    .split(/\n\n/u)
+    .flatMap((chunk) =>
+      chunk
+        .split("\n")
+        .filter((line) => line.startsWith("data: "))
+        .map((line) => JSON.parse(line.slice("data: ".length))),
+    );
+
+const responseHeaders = (headers: Headers): Readonly<Record<string, string>> => {
+  const output: Record<string, string> = {};
+  headers.forEach((value, name) => {
+    output[name] = value;
+  });
+  return Object.freeze(output);
+};
+
+const headersRecord = (headers: HeadersInit | undefined): Readonly<Record<string, string>> => {
+  const output: Record<string, string> = {};
+  new Headers(headers).forEach((value, name) => {
+    output[name] = value;
+  });
+  return output;
+};
+
+const jsonFetch = async (
+  target: EvalHttpTarget,
+  pathName: string,
+  init: RequestInit = {},
+): Promise<unknown> => {
+  const response = await fetch(new URL(pathName, target.baseUrl), {
+    ...init,
+    headers: {
+      ...target.headers,
+      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+      ...headersRecord(init.headers),
+    },
+  });
+  const body = await parseJsonOrText(response);
+  if (!response.ok) {
+    const detail = isPlainRecord(body) && isPlainRecord(body.error) ? body.error.message : body;
+    throw new Error(`HTTP ${response.status} ${pathName}: ${String(detail)}`);
+  }
+  return body;
+};
+
+const commandValue = async (
+  target: EvalHttpTarget,
+  name: string,
+  input?: unknown,
+): Promise<unknown> => {
+  const body = await jsonFetch(target, "/agentos/command", {
+    method: "POST",
+    body: JSON.stringify({ name, input }),
+  });
+  if (!isPlainRecord(body) || body.ok !== true) {
+    throw new Error(`agentos command ${name} returned invalid response`);
+  }
+  return body.value;
+};
+
+const createEvalFacades = (target: EvalHttpTarget) => {
+  const events = async () => {
+    const response = await fetch(new URL("/agentos/events", target.baseUrl), {
+      headers: target.headers,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status} /agentos/events`);
+    return parseSseJsonEvents(await response.text());
+  };
+  const sessions = {
+    submitTurn: (input: unknown) => commandValue(target, "submitSessionTurn", input),
+    inspect: (sessionRef: string) => commandValue(target, "inspectSession", { sessionRef }),
+    list: () => commandValue(target, "listSessions"),
+    command: (name: string, input?: unknown) => commandValue(target, name, input),
+    events,
+    projection: (name: string, input?: unknown) => commandValue(target, name, input),
+  };
+  const workflows = {
+    run: (input: unknown) => commandValue(target, "runWorkflow", input),
+    inspectRun: (workflowId: string, workflowRunId: string) =>
+      commandValue(target, "inspectWorkflowRun", { workflowId, workflowRunId }),
+    listRuns: (workflowId: string) => commandValue(target, "listWorkflowRuns", { workflowId }),
+    start: (name: string, input?: unknown) =>
+      commandValue(target, "runWorkflow", { workflowId: name, ...(isPlainRecord(input) ? input : { input }) }),
+    inspect: (workflowRef: string) => commandValue(target, "inspectWorkflowRun", { workflowRunId: workflowRef }),
+  };
+  const channels = {
+    request: async (input: {
+      readonly method?: string;
+      readonly path: string;
+      readonly headers?: Readonly<Record<string, string>>;
+      readonly body?: unknown;
+    }) => {
+      const response = await fetch(new URL(input.path, target.baseUrl), {
+        method: input.method ?? "POST",
+        headers: {
+          ...target.headers,
+          ...(input.body === undefined ? {} : { "content-type": "application/json" }),
+          ...(input.headers ?? {}),
+        },
+        ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+      });
+      return Object.freeze({
+        status: response.status,
+        headers: responseHeaders(response.headers),
+        body: await parseJsonOrText(response),
+      });
+    },
+    dispatch: async (channel: string, payload: unknown) => {
+      const response = await channels.request({
+        method: "POST",
+        path: `/channels/${channel}`,
+        body: payload,
+      });
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`channel ${channel} returned HTTP ${response.status}`);
+      }
+      return response.body;
+    },
+  };
+  return Object.freeze({
+    sessions,
+    workflows,
+    channels,
+  });
+};
+
+const runEvalDefinition = async (
+  definition: EvalDefinitionLike,
+  target: EvalHttpTarget,
+): Promise<readonly EvalCaseResult[]> => {
+  const facades = createEvalFacades(target);
+  const results: EvalCaseResult[] = [];
+  for (const testCase of definition.cases) {
+    try {
+      if (definition.run !== undefined) {
+        await definition.run({
+          case: testCase,
+          target: { kind: target.kind, ...(target.kind === "remote" ? { baseUrl: target.baseUrl, headers: target.headers } : {}) },
+          t: facades,
+          sessions: facades.sessions,
+          workflows: facades.workflows,
+          channels: facades.channels,
+        });
+      }
+      results.push({ evalId: definition.id, caseId: testCase.id, status: "passed" });
+    } catch (error) {
+      results.push({
+        evalId: definition.id,
+        caseId: testCase.id,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return results;
+};
+
+const runEval = async (args: EvalArgs): Promise<void> => {
+  const cwd = path.resolve(args.cwd);
+  const evalFiles = await collectEvalFiles(path.join(cwd, "evals"));
+  if (evalFiles.length === 0) {
+    throw new Error("agentos eval: no evals/**/*.eval.ts files found");
+  }
+  const [config, definitions] = await Promise.all([
+    loadEvalConfig(cwd),
+    loadEvalDefinitions(cwd, evalFiles),
+  ]);
+  let started: StartedGeneratedAppServer | undefined;
+  try {
+    const configuredMode = args.target ?? (args.baseUrl !== undefined ? "remote" : config.target?.kind);
+    if (configuredMode !== "remote") {
+      started = await startGeneratedAppServer("serve", {
+        cwd,
+        config: args.config,
+        ...(args.packageScope === undefined ? {} : { packageScope: args.packageScope }),
+        host: "127.0.0.1",
+        port: 0,
+        llm: args.llm,
+        llmResponse: args.llmResponse,
+        json: true,
+      });
+    }
+    const target = targetFromArgs(args, config, started?.payload.url);
+    const results = (
+      await Promise.all(definitions.map((definition) => runEvalDefinition(definition, target)))
+    ).flat();
+    const failed = results.filter((result) => result.status === "failed");
+    const report = {
+      ok: failed.length === 0,
+      target: { kind: target.kind, ...(target.kind === "remote" ? { baseUrl: target.baseUrl } : {}) },
+      files: evalFiles.map((file) => path.relative(cwd, file)),
+      evals: definitions.map((definition) => definition.id),
+      total: results.length,
+      passed: results.length - failed.length,
+      failed: failed.length,
+      results,
+    };
+    process.stdout.write(
+      args.json
+        ? `${JSON.stringify(report, null, 2)}\n`
+        : `agentOS eval ${report.ok ? "passed" : "failed"}: ${report.passed}/${report.total}\n`,
+    );
+    if (!report.ok) process.exitCode = 1;
+  } finally {
+    await started?.close();
+  }
 };
 
 const printInfoHuman = (info: ReturnType<typeof projectInfo>): void => {
@@ -1025,6 +1602,10 @@ const main = async (): Promise<void> => {
   }
   if (parsed.command === "serve" || parsed.command === "dev") {
     await serveGeneratedApp(parsed.command, parsed.args);
+    return;
+  }
+  if (parsed.command === "eval") {
+    await runEval(parsed.args);
     return;
   }
   const facts = await loadCompileFacts({ ...parsed.args, packageScope: undefined });

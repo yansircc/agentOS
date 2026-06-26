@@ -12,12 +12,15 @@
 - `.:EvalCase`
 - `.:EvalCaseSpec`
 - `.:EvalChannelFacade`
+- `.:EvalChannelRequest`
 - `.:EvalConfig`
 - `.:EvalConfigSpec`
 - `.:EvalContext`
 - `.:EvalDefinition`
 - `.:EvalDefinitionSpec`
 - `.:EvalEventRecord`
+- `.:EvalFacades`
+- `.:EvalHttpResponse`
 - `.:EvalJsonObject`
 - `.:EvalJsonValue`
 - `.:EvalObservation`

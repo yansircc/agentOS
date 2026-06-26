@@ -2057,6 +2057,13 @@ export interface LocalAgentApp {
     ) => WorkflowRunProjection | null;
     readonly listRuns: (workflowId: string) => WorkflowRunListProjection;
   };
+  ${
+    hasChannels
+      ? `readonly channels: {
+    readonly handle: (request: Request) => Promise<Response | null>;
+  };`
+      : ""
+  }
   readonly customCommand: (input: WorkspaceAgentCustomCommandInput) => Promise<unknown>;
   ${
     hasSchedules
@@ -2135,6 +2142,19 @@ export const createLocalAgentApp = async (
       projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
     listRuns: (workflowId: string) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
   };
+  ${
+    hasChannels
+      ? `const channelRuntime: ChannelRuntime = {
+    submit: (input) => lowered.runtime.submit(input),
+    dispatch: async () => {
+      throw new Error("local node channel dispatch is unavailable");
+    },
+  };
+  const channels = {
+    handle: (request: Request) => handleLocalAgentChannelRequest(request, channelRuntime),
+  };`
+      : ""
+  }
   const customCommand = (input: WorkspaceAgentCustomCommandInput): Promise<unknown> =>
     Effect.runPromise(
       unsafeRunToolByName(
@@ -2170,7 +2190,7 @@ export const createLocalAgentApp = async (
     runtime: lowered.runtime,
     sessions,
     workflows,
-    customCommand,
+    ${hasChannels ? "channels,\n    " : ""}customCommand,
     ${
       hasSchedules
         ? `schedules: {

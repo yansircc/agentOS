@@ -1,4 +1,5 @@
 export interface BundleModuleForNodeOptions {
+  readonly define?: Readonly<Record<string, string>>;
   readonly external?: ReadonlyArray<string>;
   readonly prefix?: string;
   readonly tempRoot?: string;

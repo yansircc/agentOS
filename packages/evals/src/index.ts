@@ -54,23 +54,50 @@ export type EvalAssertion =
     };
 
 export interface EvalSessionFacade {
+  readonly submitTurn: (input: unknown) => Promise<unknown>;
+  readonly inspect: (sessionRef: string) => Promise<unknown>;
+  readonly list: () => Promise<unknown>;
   readonly command: (name: string, input?: unknown) => Promise<unknown>;
   readonly events: (sessionId?: string) => Promise<readonly EvalEventRecord[]>;
   readonly projection: (name: string, input?: unknown) => Promise<unknown>;
 }
 
 export interface EvalWorkflowFacade {
+  readonly run: (input: unknown) => Promise<unknown>;
+  readonly inspectRun: (workflowId: string, workflowRunId: string) => Promise<unknown>;
+  readonly listRuns: (workflowId: string) => Promise<unknown>;
   readonly start: (name: string, input?: unknown) => Promise<unknown>;
   readonly inspect: (workflowRef: string) => Promise<unknown>;
 }
 
+export interface EvalHttpResponse {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body: unknown;
+}
+
+export interface EvalChannelRequest {
+  readonly method?: string;
+  readonly path: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly body?: unknown;
+}
+
 export interface EvalChannelFacade {
+  readonly request: (input: EvalChannelRequest) => Promise<EvalHttpResponse>;
   readonly dispatch: (channel: string, payload: unknown) => Promise<unknown>;
+}
+
+export interface EvalFacades {
+  readonly sessions: EvalSessionFacade;
+  readonly workflows: EvalWorkflowFacade;
+  readonly channels: EvalChannelFacade;
 }
 
 export interface EvalContext<Input = unknown> {
   readonly case: EvalCase<Input>;
   readonly target: EvalTarget;
+  readonly t: EvalFacades;
   readonly sessions: EvalSessionFacade;
   readonly workflows: EvalWorkflowFacade;
   readonly channels: EvalChannelFacade;

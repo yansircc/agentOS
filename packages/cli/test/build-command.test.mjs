@@ -11,6 +11,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { buildSync } from "esbuild";
@@ -74,6 +75,7 @@ const linkSmokeDependency = (root, specifier, target) => {
 
 const linkGeneratedTargetSmokeDependencies = (root) => {
   linkSmokeDependency(root, "@agent-os/core", path.join(repoRoot, "packages/core"));
+  linkSmokeDependency(root, "@agent-os/evals", path.join(repoRoot, "packages/evals"));
   linkSmokeDependency(root, "@agent-os/runtime", path.join(repoRoot, "packages/runtime"));
   linkSmokeDependency(root, "effect", path.join(repoRoot, "node_modules/effect"));
 };
@@ -152,6 +154,28 @@ const waitForJsonLine = (child) =>
     child.on("exit", (code, signal) => {
       clearTimeout(timeout);
       reject(new Error(`server exited before ready: code=${code} signal=${signal}\nstderr:\n${stderr}`));
+    });
+  });
+
+const runCli = (args, options = {}) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cli, ...args], {
+      cwd: options.cwd ?? repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (status, signal) => {
+      resolve({ status, signal, stdout, stderr });
     });
   });
 
@@ -1373,6 +1397,157 @@ void test("agentos serve exposes generated node app through public command and e
     if (child !== undefined) {
       stopProcessGroup(child);
       await new Promise((resolve) => child.once("close", resolve));
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos eval discovers eval files and runs local target through public endpoints", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-local-"));
+  try {
+    writeNodeWorkspaceAgentFixture(root);
+    linkGeneratedTargetSmokeDependencies(root);
+    mkdirSync(path.join(root, "evals/session"), { recursive: true });
+    writeFileSync(
+      path.join(root, "evals/evals.config.ts"),
+      [
+        'import { defineEvalConfig } from "@agent-os/evals";',
+        "export default defineEvalConfig({",
+        '  target: { kind: "local" },',
+        '  providers: [{ id: "scripted", kind: "scripted", purpose: "local smoke" }],',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(root, "evals/session/basic.eval.ts"),
+      [
+        'import { defineEval } from "@agent-os/evals";',
+        "export default defineEval({",
+        "  path: import.meta.url,",
+        '  cases: [{ id: "turn", input: { sessionRef: "session-1", turnRef: "turn-1" } }],',
+        "  run: async (t) => {",
+        "    const input = t.case.input;",
+        "    const result = await t.sessions.submitTurn({",
+        '      intent: "say hello",',
+        "      context: {},",
+        "      sessionRef: input.sessionRef,",
+        "      turnRef: input.turnRef,",
+        "    });",
+        '    if (result.final !== "eval done") throw new Error("unexpected final");',
+        "    const events = await t.sessions.events();",
+        '    if (!events.some((event) => event.kind === "agent.run.completed")) {',
+        '      throw new Error("completion event missing");',
+        "    }",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await runCli(
+      [
+        "eval",
+        "--cwd",
+        root,
+        "--llm",
+        "test",
+        "--llm-response",
+        "eval done",
+        "--json",
+      ],
+      { cwd: root },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, true);
+    assert.equal(report.target.kind, "local");
+    assert.deepEqual(report.files, ["evals/session/basic.eval.ts"]);
+    assert.deepEqual(report.evals, ["session.basic"]);
+    assert.equal(report.total, 1);
+    assert.equal(report.passed, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos eval remote target uses the same public command driver with headers", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-remote-"));
+  let server;
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    linkGeneratedTargetSmokeDependencies(root);
+    mkdirSync(path.join(root, "evals/workflow"), { recursive: true });
+    writeFileSync(
+      path.join(root, "evals/workflow/remote.eval.ts"),
+      [
+        'import { defineEval } from "@agent-os/evals";',
+        "export default defineEval({",
+        "  path: import.meta.url,",
+        '  cases: [{ id: "run", input: { workflowId: "wf", workflowRunId: "run-1" } }],',
+        "  run: async (t) => {",
+        "    const result = await t.workflows.run({",
+        '      intent: "run workflow",',
+        "      context: {},",
+        "      workflowId: t.case.input.workflowId,",
+        "      workflowRunId: t.case.input.workflowRunId,",
+        "    });",
+        '    if (result.final !== "remote done") throw new Error("unexpected remote final");',
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const requests = [];
+    server = http.createServer((request, response) => {
+      requests.push({ url: request.url, auth: request.headers.authorization });
+      if (request.url === "/agentos/command" && request.method === "POST") {
+        let body = "";
+        request.setEncoding("utf8");
+        request.on("data", (chunk) => {
+          body += chunk;
+        });
+        request.on("end", () => {
+          const parsed = JSON.parse(body);
+          assert.equal(parsed.name, "runWorkflow");
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify({ ok: true, value: { ok: true, final: "remote done" } }));
+        });
+        return;
+      }
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: false }));
+    });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+    const result = await runCli(
+      [
+        "eval",
+        "--cwd",
+        root,
+        "--target",
+        "remote",
+        "--base-url",
+        `http://127.0.0.1:${port}`,
+        "--header",
+        "authorization=Bearer eval",
+        "--json",
+      ],
+      { cwd: root },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, true);
+    assert.equal(report.target.kind, "remote");
+    assert.equal(report.passed, 1);
+    assert.deepEqual(requests.map((request) => request.auth), ["Bearer eval"]);
+  } finally {
+    if (server !== undefined) {
+      await new Promise((resolve) => server.close(resolve));
     }
     rmSync(root, { recursive: true, force: true });
   }
