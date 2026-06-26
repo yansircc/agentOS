@@ -35,6 +35,14 @@ export {
   type ResolveRuntimeOptions,
   type PreflightDiagnostic,
 } from "./resolve";
+export {
+  makeDynamicCapabilityContext,
+  runDynamicCapabilityResolvers,
+  type DynamicCapabilityResolverDefinition,
+  type DynamicCapabilityResolverServiceInput,
+  type DynamicCapabilityResolverServiceIssue,
+  type DynamicCapabilityResolverServiceResult,
+} from "./dynamic-resolver";
 export { nodeHost } from "./hosts";
 export type {
   CapabilityRequirement,
