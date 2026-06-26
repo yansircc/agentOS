@@ -34,6 +34,9 @@ import {
   toolResultSnapshotFromExecutedPayload,
   toolRejectedEvent,
   validateRuntimeLedgerTransitions,
+  scheduleFireDispatchedEvent,
+  scheduleFireFailedEvent,
+  scheduleFireRequestedEvent,
   workflowRunSubmittedEvent,
   type RuntimeEventCommitSpec,
 } from "../../src/runtime-protocol/runtime-events";
@@ -72,6 +75,13 @@ const executionIdentity: ExecutionIdentity = {
     providerStrategy: "effect-ai",
   },
 };
+const schedulePrincipal = {
+  authority: "agentos.app",
+  subject: "agent:daily",
+  claims: { deployment: "prod" },
+};
+const scheduledAt = "2026-06-26T01:02:00.000Z";
+const scheduleFireId = "schedule-fire:agentos.app:agent%3Adaily:daily-summary:2026-06-26T01%3A02%3A00.000Z";
 
 const resolvedToolExecution = (
   execution: ToolExecution,
@@ -186,6 +196,39 @@ describe("runtime event vocabulary", () => {
         runtimeRunId: 1,
         idempotencyKey: "idem:1",
         inputDigest: "sha256:input",
+        traceContext,
+      }),
+      scheduleFireRequestedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        appPrincipal: schedulePrincipal,
+        traceContext,
+      }),
+      scheduleFireDispatchedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        requestedEventId: 3,
+        productLink: {
+          kind: "session_turn",
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 1,
+          idempotencyKey: scheduleFireId,
+        },
+        traceContext,
+      }),
+      scheduleFireFailedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        requestedEventId: 3,
+        phase: "handler",
+        reason: "handler_failed",
         traceContext,
       }),
       llmRequestedEvent({
@@ -391,6 +434,82 @@ describe("runtime event vocabulary", () => {
     expect(serialized).not.toContain("status");
     expect(serialized).not.toContain("terminal");
     expect(serialized).not.toContain("executionIdentity");
+  });
+
+  it("records schedule fire handoff facts without downstream terminal truth", () => {
+    const requested = ledgerEvent(
+      10,
+      scheduleFireRequestedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        appPrincipal: schedulePrincipal,
+      }),
+    );
+    const dispatched = ledgerEvent(
+      11,
+      scheduleFireDispatchedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        requestedEventId: requested.id,
+        productLink: {
+          kind: "workflow_run",
+          workflowId: "daily-summary",
+          workflowRunId: "workflow-run:daily-summary:1",
+          runtimeRunId: 1,
+          idempotencyKey: scheduleFireId,
+          inputDigest: "sha256:input",
+        },
+      }),
+    );
+    const failed = ledgerEvent(
+      12,
+      scheduleFireFailedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        requestedEventId: requested.id,
+        phase: "product_ingress",
+        reason: "submit_failed",
+      }),
+    );
+
+    expect(projectRuntimeSafeLedgerEvent(requested)?.safePayload).toEqual({
+      scheduleId: "daily-summary",
+      fireId: scheduleFireId,
+      scheduledAt,
+      appPrincipal: schedulePrincipal,
+    });
+    expect(projectRuntimeSafeLedgerEvent(dispatched)?.safePayload).toEqual({
+      scheduleId: "daily-summary",
+      fireId: scheduleFireId,
+      scheduledAt,
+      requestedEventId: requested.id,
+      productLink: {
+        kind: "workflow_run",
+        workflowId: "daily-summary",
+        workflowRunId: "workflow-run:daily-summary:1",
+        runtimeRunId: 1,
+        idempotencyKey: scheduleFireId,
+        inputDigest: "sha256:input",
+      },
+    });
+    expect(projectRuntimeSafeLedgerEvent(failed)?.safePayload).toEqual({
+      scheduleId: "daily-summary",
+      fireId: scheduleFireId,
+      scheduledAt,
+      requestedEventId: requested.id,
+      phase: "product_ingress",
+      reason: "submit_failed",
+    });
+    const serialized = JSON.stringify([requested, dispatched, failed]);
+    expect(serialized).not.toContain("final");
+    expect(serialized).not.toContain("outputKind");
+    expect(serialized).not.toContain("terminal");
   });
 
   it("projects LLM and complete-after-tools runtime facts without prompt or args", () => {
@@ -758,6 +877,151 @@ describe("runtime event vocabulary", () => {
     ).toEqual({
       ok: true,
     });
+  });
+
+  it("accepts schedule fire requested to one handoff outcome", () => {
+    const requested = ledgerEvent(
+      1,
+      scheduleFireRequestedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        appPrincipal: schedulePrincipal,
+      }),
+    );
+    const dispatched = ledgerEvent(
+      2,
+      scheduleFireDispatchedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        requestedEventId: requested.id,
+        productLink: {
+          kind: "session_turn",
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 10,
+          idempotencyKey: scheduleFireId,
+        },
+      }),
+    );
+    const failed = ledgerEvent(
+      3,
+      scheduleFireFailedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        requestedEventId: requested.id,
+        phase: "handler",
+        reason: "handler_failed",
+      }),
+    );
+
+    expect(validateRuntimeLedgerTransitions({ history: [], events: [requested, dispatched] })).toEqual({
+      ok: true,
+    });
+    expect(validateRuntimeLedgerTransitions({ history: [requested], events: [failed] })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("rejects schedule fire handoff without a matching requested fact", () => {
+    const requested = ledgerEvent(
+      1,
+      scheduleFireRequestedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        appPrincipal: schedulePrincipal,
+      }),
+    );
+    const wrongSource = ledgerEvent(
+      2,
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "answer" }),
+    );
+    const dispatched = (overrides: {
+      readonly id?: number;
+      readonly requestedEventId?: number;
+      readonly fireId?: string;
+      readonly idempotencyKey?: string;
+    } = {}) =>
+      ledgerEvent(
+        overrides.id ?? 3,
+        scheduleFireDispatchedEvent({
+          ...runtimeIdentity,
+          scheduleId: "daily-summary",
+          fireId: overrides.fireId ?? scheduleFireId,
+          scheduledAt,
+          requestedEventId: overrides.requestedEventId ?? requested.id,
+          productLink: {
+            kind: "session_turn",
+            sessionRef: "session:s1",
+            turnRef: "turn:s1:1",
+            runtimeRunId: 10,
+            idempotencyKey: overrides.idempotencyKey ?? scheduleFireId,
+          },
+        }),
+      );
+    const failed = ledgerEvent(
+      4,
+      scheduleFireFailedEvent({
+        ...runtimeIdentity,
+        scheduleId: "daily-summary",
+        fireId: scheduleFireId,
+        scheduledAt,
+        requestedEventId: requested.id,
+        phase: "handler",
+        reason: "handler_failed",
+      }),
+    );
+
+    const wrongKind = validateRuntimeLedgerTransitions({
+      history: [wrongSource],
+      events: [dispatched({ requestedEventId: wrongSource.id })],
+    });
+    expect(wrongKind.ok).toBe(false);
+    if (!wrongKind.ok) {
+      expect(wrongKind.issues.map((issue) => issue.code)).toEqual([
+        "runtime_schedule_fire_source_kind_mismatch",
+      ]);
+    }
+
+    const mismatch = validateRuntimeLedgerTransitions({
+      history: [requested],
+      events: [dispatched({ fireId: "schedule-fire:other", idempotencyKey: "schedule-fire:other" })],
+    });
+    expect(mismatch.ok).toBe(false);
+    if (!mismatch.ok) {
+      expect(mismatch.issues.map((issue) => issue.code)).toEqual([
+        "runtime_schedule_fire_source_mismatch",
+      ]);
+    }
+
+    const idempotencyMismatch = validateRuntimeLedgerTransitions({
+      history: [requested],
+      events: [dispatched({ idempotencyKey: "other-idempotency-key" })],
+    });
+    expect(idempotencyMismatch.ok).toBe(false);
+    if (!idempotencyMismatch.ok) {
+      expect(idempotencyMismatch.issues.map((issue) => issue.code)).toEqual([
+        "runtime_schedule_fire_product_idempotency_mismatch",
+      ]);
+    }
+
+    const duplicate = validateRuntimeLedgerTransitions({
+      history: [requested, dispatched()],
+      events: [failed],
+    });
+    expect(duplicate.ok).toBe(false);
+    if (!duplicate.ok) {
+      expect(duplicate.issues.map((issue) => issue.code)).toEqual([
+        "runtime_schedule_fire_outcome_duplicate",
+      ]);
+    }
   });
 
   it("accepts product link events only as unique links to a prior runtime run", () => {

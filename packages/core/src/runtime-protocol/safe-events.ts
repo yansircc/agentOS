@@ -90,6 +90,30 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
           : { idempotencyKey: event.payload.idempotencyKey }),
         ...(event.payload.inputDigest === undefined ? {} : { inputDigest: event.payload.inputDigest }),
       });
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
+      return safeLedgerEvent(event, {
+        scheduleId: event.payload.scheduleId,
+        fireId: event.payload.fireId,
+        scheduledAt: event.payload.scheduledAt,
+        appPrincipal: event.payload.appPrincipal,
+      });
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
+      return safeLedgerEvent(event, {
+        scheduleId: event.payload.scheduleId,
+        fireId: event.payload.fireId,
+        scheduledAt: event.payload.scheduledAt,
+        requestedEventId: event.payload.requestedEventId,
+        productLink: event.payload.productLink,
+      });
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
+      return safeLedgerEvent(event, {
+        scheduleId: event.payload.scheduleId,
+        fireId: event.payload.fireId,
+        scheduledAt: event.payload.scheduledAt,
+        requestedEventId: event.payload.requestedEventId,
+        phase: event.payload.phase,
+        reason: event.payload.reason,
+      });
     case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
       return safeLedgerEvent(event, {
         runId: event.payload.runId,

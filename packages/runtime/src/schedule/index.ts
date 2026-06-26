@@ -1,4 +1,17 @@
-import type { SubmitResult, SubmitRunInput } from "@agent-os/core/runtime-protocol";
+import type { AuthorityRef, ScopeRef } from "@agent-os/core/effect-claim";
+import type { TraceContext } from "@agent-os/core/telemetry-protocol";
+import {
+  decodeSubmitResult,
+  RUNTIME_EVENT_KIND,
+  scheduleFireDispatchedEvent,
+  scheduleFireFailedEvent,
+  scheduleFireRequestedEvent,
+  type RuntimeEventCommitSpecByKind,
+  type ScheduleFireFailedPayload,
+  type ScheduleFireProductLink,
+  type SubmitResult,
+  type SubmitRunInput,
+} from "@agent-os/core/runtime-protocol";
 
 const CRON_FIELD_PATTERN = /^[0-9*,/-]+$/u;
 const SCHEDULED_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/u;
@@ -79,6 +92,46 @@ export type ScheduleFireIdentitySpec = Readonly<{
   scheduleId: string;
   scheduledAt: string | number | Date;
 }>;
+
+export type ScheduleFireDispatchInput<TResult = unknown> = Readonly<{
+  runtime: ScheduleRuntime;
+  schedule: DefinedSchedule<TResult>;
+  scheduleId: string;
+  scheduledAt: string | number | Date;
+  appPrincipal: SchedulePrincipal;
+  scopeRef: ScopeRef;
+  effectAuthorityRef: AuthorityRef;
+  traceContext?: TraceContext;
+}>;
+
+export type ScheduleFireRequestedEventSpec = RuntimeEventCommitSpecByKind<
+  typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED
+>;
+
+export type ScheduleFireDispatchedEventSpec = RuntimeEventCommitSpecByKind<
+  typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED
+>;
+
+export type ScheduleFireFailedEventSpec = RuntimeEventCommitSpecByKind<
+  typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED
+>;
+
+export type ScheduleFireDispatchResult =
+  | Readonly<{
+      ok: true;
+      fireId: string;
+      requested: ScheduleFireRequestedEventSpec;
+      outcome: (requestedEventId: number) => ScheduleFireDispatchedEventSpec;
+      productLink: ScheduleFireProductLink;
+    }>
+  | Readonly<{
+      ok: false;
+      fireId: string;
+      requested: ScheduleFireRequestedEventSpec;
+      outcome: (requestedEventId: number) => ScheduleFireFailedEventSpec;
+      phase: ScheduleFireFailedPayload["phase"];
+      reason: string;
+    }>;
 
 export const cronMinuteExpression = (value: string): CronMinuteExpression => {
   if (typeof value !== "string") {
@@ -162,6 +215,160 @@ export const createScheduleContext = (
   });
 };
 
+export const dispatchScheduleFire = async <TResult = unknown>(
+  input: ScheduleFireDispatchInput<TResult>,
+): Promise<ScheduleFireDispatchResult> => {
+  assertScheduleRuntime(input.runtime);
+  assertDefinedSchedule(input.schedule);
+  const appPrincipal = normalizePrincipal(input.appPrincipal);
+  const scheduleId = nonEmptyString(input.scheduleId)
+    ? input.scheduleId
+    : failScheduleContract("Schedule dispatch requires scheduleId");
+  const scheduledAt = scheduledMinute(input.scheduledAt);
+  const fireId = scheduleFireId({ appPrincipal, scheduleId, scheduledAt });
+  const requested = scheduleFireRequestedEvent({
+    scopeRef: input.scopeRef,
+    effectAuthorityRef: input.effectAuthorityRef,
+    scheduleId,
+    fireId,
+    scheduledAt,
+    appPrincipal,
+    ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  });
+  const base = {
+    scopeRef: input.scopeRef,
+    effectAuthorityRef: input.effectAuthorityRef,
+    scheduleId,
+    fireId,
+    scheduledAt,
+    ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  };
+  const failed = (
+    phase: ScheduleFireFailedPayload["phase"],
+    reason: string,
+  ): ScheduleFireDispatchResult => ({
+    ok: false,
+    fireId,
+    requested,
+    phase,
+    reason,
+    outcome: (requestedEventId) =>
+      scheduleFireFailedEvent({
+        ...base,
+        requestedEventId,
+        phase,
+        reason,
+      }),
+  });
+
+  let productLink: ScheduleFireProductLink | undefined;
+  let firstFailure: ScheduleFireDispatchFailure | undefined;
+  const rememberFailure = (
+    phase: ScheduleFireFailedPayload["phase"],
+    reason: string,
+  ): ScheduleFireDispatchFailure => {
+    const failure = new ScheduleFireDispatchFailure(phase, reason);
+    firstFailure ??= failure;
+    return failure;
+  };
+  const normalizedRuntime: ScheduleRuntime = Object.freeze({
+    sessions: Object.freeze({
+      submitTurn: async (submitInput: ScheduleSessionSubmitTurnInput) => {
+        const idempotencyKey = requiredFireIdempotencyKey(
+          submitInput.idempotencyKey,
+          fireId,
+          rememberFailure,
+        );
+        assertSingleProductIngress(productLink, rememberFailure);
+        let result: SubmitResult;
+        try {
+          result = await input.runtime.sessions.submitTurn({
+            ...submitInput,
+            idempotencyKey,
+          });
+        } catch {
+          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_failed");
+        }
+        const decoded = decodeSubmitResult(result);
+        if (decoded === null) {
+          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_result_invalid");
+        }
+        productLink = {
+          kind: "session_turn",
+          sessionRef: submitInput.sessionRef,
+          turnRef: submitInput.turnRef,
+          runtimeRunId: decoded.runId,
+          idempotencyKey,
+        };
+        return decoded;
+      },
+    }),
+    workflows: Object.freeze({
+      run: async (runInput: ScheduleWorkflowRunInput) => {
+        const idempotencyKey = requiredFireIdempotencyKey(
+          runInput.idempotencyKey,
+          fireId,
+          rememberFailure,
+        );
+        assertSingleProductIngress(productLink, rememberFailure);
+        let result: SubmitResult;
+        try {
+          result = await input.runtime.workflows.run({
+            ...runInput,
+            idempotencyKey,
+          });
+        } catch {
+          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_failed");
+        }
+        const decoded = decodeSubmitResult(result);
+        if (decoded === null) {
+          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_result_invalid");
+        }
+        productLink = {
+          kind: "workflow_run",
+          workflowId: runInput.workflowId,
+          workflowRunId: runInput.workflowRunId,
+          runtimeRunId: decoded.runId,
+          idempotencyKey,
+          ...(runInput.inputDigest === undefined ? {} : { inputDigest: runInput.inputDigest }),
+        };
+        return decoded;
+      },
+    }),
+  });
+
+  try {
+    await input.schedule.handler(
+      createScheduleContext(normalizedRuntime, { appPrincipal, fireId, scheduledAt }),
+    );
+  } catch (cause) {
+    if (cause instanceof ScheduleFireDispatchFailure) {
+      return failed(cause.phase, cause.reason);
+    }
+    return failed("handler", "schedule_fire_handler_failed");
+  }
+
+  if (firstFailure !== undefined) {
+    return failed(firstFailure.phase, firstFailure.reason);
+  }
+  if (productLink === undefined) {
+    return failed("contract", "schedule_fire_product_ingress_missing");
+  }
+  const dispatchedProductLink = productLink;
+  return {
+    ok: true,
+    fireId,
+    requested,
+    productLink: dispatchedProductLink,
+    outcome: (requestedEventId) =>
+      scheduleFireDispatchedEvent({
+        ...base,
+        requestedEventId,
+        productLink: dispatchedProductLink,
+      }),
+  };
+};
+
 const parseScheduledMinuteString = (value: string): Date => {
   if (typeof value !== "string" || value.length === 0) {
     return failScheduleContract("Schedule scheduledAt must be a valid timestamp");
@@ -178,6 +385,46 @@ const assertScheduleRuntime = (runtime: ScheduleRuntime): void => {
   }
   if (!isRecord(runtime.workflows) || typeof runtime.workflows.run !== "function") {
     failScheduleContract("Schedule runtime requires workflows.run");
+  }
+};
+
+class ScheduleFireDispatchFailure extends Error {
+  constructor(
+    readonly phase: ScheduleFireFailedPayload["phase"],
+    readonly reason: string,
+  ) {
+    super(reason);
+  }
+}
+
+const assertDefinedSchedule = (schedule: DefinedSchedule): void => {
+  if (!isRecord(schedule) || typeof schedule.handler !== "function") {
+    failScheduleContract("Schedule dispatch requires a defined schedule");
+  }
+};
+
+const requiredFireIdempotencyKey = (
+  idempotencyKey: string | undefined,
+  fireId: string,
+  fail: (
+    phase: ScheduleFireFailedPayload["phase"],
+    reason: string,
+  ) => ScheduleFireDispatchFailure,
+): string => {
+  if (idempotencyKey === undefined) return fireId;
+  if (idempotencyKey === fireId) return idempotencyKey;
+  throw fail("contract", "schedule_fire_idempotency_key_mismatch");
+};
+
+const assertSingleProductIngress = (
+  productLink: ScheduleFireProductLink | undefined,
+  fail: (
+    phase: ScheduleFireFailedPayload["phase"],
+    reason: string,
+  ) => ScheduleFireDispatchFailure,
+): void => {
+  if (productLink !== undefined) {
+    throw fail("contract", "schedule_fire_multiple_product_ingress_calls");
   }
 };
 

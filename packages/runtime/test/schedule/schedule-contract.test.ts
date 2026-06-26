@@ -4,10 +4,13 @@ import {
   createScheduleContext,
   cronMinuteExpression,
   defineSchedule,
+  dispatchScheduleFire,
   scheduleFireId,
   scheduledMinute,
   type ScheduleHandler,
+  type ScheduleSessionSubmitTurnInput,
   type ScheduleRuntime,
+  type ScheduleWorkflowRunInput,
 } from "../../src/schedule";
 import * as runtimeRoot from "../../src/index";
 
@@ -36,6 +39,10 @@ const appPrincipal = {
 };
 
 const handler: ScheduleHandler = () => delivered;
+const runtimeIdentity = {
+  scopeRef: { kind: "conversation" as const, scopeId: "schedule-contract-test" },
+  effectAuthorityRef: { authorityClass: "test", authorityId: "schedule-contract-test" },
+};
 
 const runtimePackageJson = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
@@ -117,6 +124,234 @@ describe("@agent-os/runtime/schedule", () => {
     expect(Object.isFrozen(context.appPrincipal)).toBe(true);
     expect(Object.isFrozen(context.sessions)).toBe(true);
     expect(Object.isFrozen(context.workflows)).toBe(true);
+  });
+
+  it("dispatches a schedule fire by forcing session product idempotency to fireId", async () => {
+    let capturedInput: ScheduleSessionSubmitTurnInput | undefined;
+    const schedule = defineSchedule({
+      cron: "* * * * *",
+      handler: (context) =>
+        context.sessions.submitTurn({
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          intent: "daily summary",
+          context: { from: "schedule" },
+        }),
+    });
+    const dispatchRuntime: ScheduleRuntime = {
+      sessions: {
+        submitTurn: async (input) => {
+          capturedInput = input;
+          return { ...delivered, runId: 42 };
+        },
+      },
+      workflows: runtime.workflows,
+    };
+
+    const result = await dispatchScheduleFire({
+      ...runtimeIdentity,
+      runtime: dispatchRuntime,
+      schedule,
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:59.999Z",
+      appPrincipal,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.fireId).toBe(capturedInput?.idempotencyKey);
+    expect(result.requested.kind).toBe("schedule.fire_requested");
+    if (!result.ok) expect.fail("expected schedule fire dispatch");
+    expect(result.productLink).toEqual({
+      kind: "session_turn",
+      sessionRef: "session:s1",
+      turnRef: "turn:s1:1",
+      runtimeRunId: 42,
+      idempotencyKey: result.fireId,
+    });
+    expect(result.outcome(100).payload).toEqual({
+      scheduleId: "daily-summary",
+      fireId: result.fireId,
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      requestedEventId: 100,
+      productLink: result.productLink,
+    });
+    expect(JSON.stringify(result.outcome(100))).not.toContain("delivered");
+    expect(JSON.stringify(result.outcome(100))).not.toContain("final");
+  });
+
+  it("dispatches a schedule fire through workflow product ingress", async () => {
+    let capturedInput: ScheduleWorkflowRunInput | undefined;
+    const schedule = defineSchedule({
+      cron: "* * * * *",
+      handler: (context) =>
+        context.workflows.run({
+          workflowId: "daily-summary",
+          workflowRunId: "workflow-run:daily-summary:1",
+          intent: "daily summary",
+          context: { from: "schedule" },
+          inputDigest: "sha256:input",
+        }),
+    });
+    const dispatchRuntime: ScheduleRuntime = {
+      sessions: runtime.sessions,
+      workflows: {
+        run: async (input) => {
+          capturedInput = input;
+          return { ...delivered, runId: 77 };
+        },
+      },
+    };
+
+    const result = await dispatchScheduleFire({
+      ...runtimeIdentity,
+      runtime: dispatchRuntime,
+      schedule,
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      appPrincipal,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.fireId).toBe(capturedInput?.idempotencyKey);
+    if (!result.ok) expect.fail("expected schedule fire dispatch");
+    expect(result.productLink).toEqual({
+      kind: "workflow_run",
+      workflowId: "daily-summary",
+      workflowRunId: "workflow-run:daily-summary:1",
+      runtimeRunId: 77,
+      idempotencyKey: result.fireId,
+      inputDigest: "sha256:input",
+    });
+  });
+
+  it("fails closed when a handler does not hand off to product ingress", async () => {
+    const result = await dispatchScheduleFire({
+      ...runtimeIdentity,
+      runtime,
+      schedule: defineSchedule({ cron: "* * * * *", handler: () => undefined }),
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      appPrincipal,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      phase: "contract",
+      reason: "schedule_fire_product_ingress_missing",
+    });
+    expect(result.outcome(100).kind).toBe("schedule.fire_failed");
+  });
+
+  it("fails closed before product ingress when the handler overrides fire idempotency", async () => {
+    let called = false;
+    const result = await dispatchScheduleFire({
+      ...runtimeIdentity,
+      runtime: {
+        sessions: {
+          submitTurn: async () => {
+            called = true;
+            return delivered;
+          },
+        },
+        workflows: runtime.workflows,
+      },
+      schedule: defineSchedule({
+        cron: "* * * * *",
+        handler: (context) =>
+          context.sessions.submitTurn({
+            sessionRef: "session:s1",
+            turnRef: "turn:s1:1",
+            intent: "daily summary",
+            context: {},
+            idempotencyKey: "not-the-fire-id",
+          }),
+      }),
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      appPrincipal,
+    });
+
+    expect(called).toBe(false);
+    expect(result).toMatchObject({
+      ok: false,
+      phase: "contract",
+      reason: "schedule_fire_idempotency_key_mismatch",
+    });
+  });
+
+  it("fails closed when product ingress cannot prove a submitted runtime run", async () => {
+    const result = await dispatchScheduleFire({
+      ...runtimeIdentity,
+      runtime: {
+        sessions: {
+          submitTurn: async () => ({ ...delivered, runId: 0 }) as never,
+        },
+        workflows: runtime.workflows,
+      },
+      schedule: defineSchedule({
+        cron: "* * * * *",
+        handler: (context) =>
+          context.sessions.submitTurn({
+            sessionRef: "session:s1",
+            turnRef: "turn:s1:1",
+            intent: "daily summary",
+            context: {},
+          }),
+      }),
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      appPrincipal,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      phase: "product_ingress",
+      reason: "schedule_fire_product_ingress_result_invalid",
+    });
+  });
+
+  it("fails closed when a handler attempts multiple product handoffs", async () => {
+    const result = await dispatchScheduleFire({
+      ...runtimeIdentity,
+      runtime: {
+        sessions: {
+          submitTurn: async () => ({ ...delivered, runId: 1 }),
+        },
+        workflows: {
+          run: async () => ({ ...delivered, runId: 2 }),
+        },
+      },
+      schedule: defineSchedule({
+        cron: "* * * * *",
+        handler: async (context) => {
+          await context.sessions.submitTurn({
+            sessionRef: "session:s1",
+            turnRef: "turn:s1:1",
+            intent: "daily summary",
+            context: {},
+          });
+          try {
+            await context.workflows.run({
+              workflowId: "daily-summary",
+              workflowRunId: "workflow-run:daily-summary:1",
+              intent: "daily summary",
+              context: {},
+            });
+          } catch {
+            return undefined;
+          }
+        },
+      }),
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      appPrincipal,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      phase: "contract",
+      reason: "schedule_fire_multiple_product_ingress_calls",
+    });
   });
 
   it("fails closed when context inputs are not positive contracts", () => {

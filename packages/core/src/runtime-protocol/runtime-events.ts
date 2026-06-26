@@ -33,6 +33,11 @@ const nonEmptyString = Schema.String.pipe(
   Schema.check(Schema.makeFilter((value) => value.length > 0)),
 );
 const unknownRecord = Schema.Record(Schema.String, Schema.Unknown);
+const scheduledMinuteString = Schema.String.pipe(
+  Schema.check(
+    Schema.makeFilter((value) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/u.test(value)),
+  ),
+);
 
 const INPUT_REQUEST_KINDS = new Set<InputRequestKind>(["approval", "question", "authorization"]);
 
@@ -54,6 +59,9 @@ export const RUNTIME_EVENT_KIND = {
   CHAT_INGESTED: "chat.ingested",
   AGENT_SESSION_TURN_SUBMITTED: "agent_session.turn_submitted",
   WORKFLOW_RUN_SUBMITTED: "workflow.run_submitted",
+  SCHEDULE_FIRE_REQUESTED: "schedule.fire_requested",
+  SCHEDULE_FIRE_DISPATCHED: "schedule.fire_dispatched",
+  SCHEDULE_FIRE_FAILED: "schedule.fire_failed",
   LLM_REQUESTED: "llm.requested",
   LLM_RESPONSE: "llm.response",
   TOOL_EXECUTED: "tool.executed",
@@ -148,6 +156,56 @@ export type WorkflowRunSubmittedPayload = {
   readonly runtimeRunId: number;
   readonly idempotencyKey?: string;
   readonly inputDigest?: string;
+  readonly traceContext?: TraceContext;
+};
+
+export type SchedulePrincipalPayload = {
+  readonly authority: string;
+  readonly subject: string;
+  readonly claims?: Readonly<Record<string, unknown>>;
+};
+
+export type ScheduleFireRequestedPayload = {
+  readonly scheduleId: string;
+  readonly fireId: string;
+  readonly scheduledAt: string;
+  readonly appPrincipal: SchedulePrincipalPayload;
+  readonly traceContext?: TraceContext;
+};
+
+export type ScheduleFireProductLink =
+  | {
+      readonly kind: "session_turn";
+      readonly sessionRef: string;
+      readonly turnRef: string;
+      readonly runtimeRunId: number;
+      readonly idempotencyKey: string;
+    }
+  | {
+      readonly kind: "workflow_run";
+      readonly workflowId: string;
+      readonly workflowRunId: string;
+      readonly runtimeRunId: number;
+      readonly idempotencyKey: string;
+      readonly inputDigest?: string;
+    };
+
+export type ScheduleFireDispatchedPayload = {
+  readonly scheduleId: string;
+  readonly fireId: string;
+  readonly scheduledAt: string;
+  readonly requestedEventId: number;
+  readonly productLink: ScheduleFireProductLink;
+  readonly traceContext?: TraceContext;
+};
+
+export type ScheduleFireFailedPayload = {
+  readonly scheduleId: string;
+  readonly fireId: string;
+  readonly scheduledAt: string;
+  readonly requestedEventId: number;
+  readonly phase: "handler" | "product_ingress" | "contract";
+  readonly reason: string;
   readonly traceContext?: TraceContext;
 };
 
@@ -438,6 +496,62 @@ export const WorkflowRunSubmittedPayloadSchema: Schema.Decoder<WorkflowRunSubmit
     traceContext: Schema.optional(TraceContextSchema),
   });
 
+export const SchedulePrincipalPayloadSchema: Schema.Decoder<SchedulePrincipalPayload> =
+  Schema.Struct({
+    authority: nonEmptyString,
+    subject: nonEmptyString,
+    claims: Schema.optional(unknownRecord),
+  });
+
+export const ScheduleFireRequestedPayloadSchema: Schema.Decoder<ScheduleFireRequestedPayload> =
+  Schema.Struct({
+    scheduleId: nonEmptyString,
+    fireId: nonEmptyString,
+    scheduledAt: scheduledMinuteString,
+    appPrincipal: SchedulePrincipalPayloadSchema,
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
+export const ScheduleFireProductLinkSchema: Schema.Decoder<ScheduleFireProductLink> =
+  Schema.Union([
+    Schema.Struct({
+      kind: Schema.Literal("session_turn"),
+      sessionRef: nonEmptyString,
+      turnRef: nonEmptyString,
+      runtimeRunId: positiveInt,
+      idempotencyKey: nonEmptyString,
+    }),
+    Schema.Struct({
+      kind: Schema.Literal("workflow_run"),
+      workflowId: nonEmptyString,
+      workflowRunId: nonEmptyString,
+      runtimeRunId: positiveInt,
+      idempotencyKey: nonEmptyString,
+      inputDigest: Schema.optional(nonEmptyString),
+    }),
+  ]);
+
+export const ScheduleFireDispatchedPayloadSchema: Schema.Decoder<ScheduleFireDispatchedPayload> =
+  Schema.Struct({
+    scheduleId: nonEmptyString,
+    fireId: nonEmptyString,
+    scheduledAt: scheduledMinuteString,
+    requestedEventId: positiveInt,
+    productLink: ScheduleFireProductLinkSchema,
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
+export const ScheduleFireFailedPayloadSchema: Schema.Decoder<ScheduleFireFailedPayload> =
+  Schema.Struct({
+    scheduleId: nonEmptyString,
+    fireId: nonEmptyString,
+    scheduledAt: scheduledMinuteString,
+    requestedEventId: positiveInt,
+    phase: Schema.Literals(["handler", "product_ingress", "contract"]),
+    reason: nonEmptyString,
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
 export const LlmResponsePayloadSchema: Schema.Decoder<LlmResponsePayload> = Schema.Struct({
   turn: TurnRefSchema,
   items: Schema.Array(LlmOutputItemSchema),
@@ -591,6 +705,9 @@ export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.CHAT_INGESTED]: ChatIngestedPayload;
   readonly [RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED]: AgentSessionTurnSubmittedPayload;
   readonly [RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED]: WorkflowRunSubmittedPayload;
+  readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED]: ScheduleFireRequestedPayload;
+  readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED]: ScheduleFireDispatchedPayload;
+  readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED]: ScheduleFireFailedPayload;
   readonly [RUNTIME_EVENT_KIND.LLM_REQUESTED]: LlmRequestedPayload;
   readonly [RUNTIME_EVENT_KIND.LLM_RESPONSE]: LlmResponsePayload;
   readonly [RUNTIME_EVENT_KIND.TOOL_EXECUTED]: ToolExecutedPayload;
@@ -688,6 +805,18 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
       return Schema.decodeUnknownSync(WorkflowRunSubmittedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
+      return Schema.decodeUnknownSync(ScheduleFireRequestedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
+      return Schema.decodeUnknownSync(ScheduleFireDispatchedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
+      return Schema.decodeUnknownSync(ScheduleFireFailedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
       return Schema.decodeUnknownSync(LlmRequestedPayloadSchema)(
         payload,
@@ -764,6 +893,18 @@ const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
       return Schema.decodeUnknownOption(WorkflowRunSubmittedPayloadSchema)(
         payload,
       ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
+      return Schema.decodeUnknownOption(ScheduleFireRequestedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
+      return Schema.decodeUnknownOption(ScheduleFireDispatchedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
+      return Schema.decodeUnknownOption(ScheduleFireFailedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
       return Schema.decodeUnknownOption(LlmRequestedPayloadSchema)(payload) as Option.Option<
         RuntimeEventPayloadByKind[K]
@@ -851,7 +992,11 @@ export type RuntimeLedgerTransitionIssueCode =
   | "runtime_source_payload_invalid"
   | "runtime_compaction_source_kind_mismatch"
   | "runtime_compaction_source_turn_mismatch"
-  | "runtime_resume_consumed_event_kind_mismatch";
+  | "runtime_resume_consumed_event_kind_mismatch"
+  | "runtime_schedule_fire_source_kind_mismatch"
+  | "runtime_schedule_fire_source_mismatch"
+  | "runtime_schedule_fire_product_idempotency_mismatch"
+  | "runtime_schedule_fire_outcome_duplicate";
 
 export type RuntimeLedgerTransitionIssue = {
   readonly code: RuntimeLedgerTransitionIssueCode;
@@ -1011,6 +1156,17 @@ type RuntimeProductLinkState = {
   >;
 };
 
+type RuntimeScheduleFireState = {
+  readonly requests: Map<number, ScheduleFireRequestedPayload>;
+  readonly outcomesByRequestedEventId: Map<
+    number,
+    {
+      readonly eventId: number;
+      readonly eventKind: RuntimeEventKind;
+    }
+  >;
+};
+
 const makeRuntimeRunState = (): RuntimeRunState => ({
   interruptions: new Map(),
 });
@@ -1022,11 +1178,132 @@ const makeRuntimeProductLinkState = (): RuntimeProductLinkState => ({
   runtimeRunLinks: new Map(),
 });
 
+const makeRuntimeScheduleFireState = (): RuntimeScheduleFireState => ({
+  requests: new Map(),
+  outcomesByRequestedEventId: new Map(),
+});
+
 const sessionTurnLinkKey = (payload: AgentSessionTurnSubmittedPayload): string =>
   `${payload.sessionRef}\u0000${payload.turnRef}`;
 
 const workflowRunLinkKey = (payload: WorkflowRunSubmittedPayload): string =>
   `${payload.workflowId}\u0000${payload.workflowRunId}`;
+
+const isScheduleFireEvent = (
+  event: RuntimeLedgerEvent,
+): event is
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED> =>
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED ||
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED ||
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED;
+
+const scheduleFireOutcomeRequestedEventId = (
+  event:
+    | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED>
+    | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED>,
+): number => event.payload.requestedEventId;
+
+const applyScheduleFireEvent = (
+  scheduleFires: RuntimeScheduleFireState,
+  event: RuntimeLedgerEvent,
+): void => {
+  if (event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED) {
+    scheduleFires.requests.set(event.id, event.payload);
+    return;
+  }
+  if (
+    event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED ||
+    event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED
+  ) {
+    const requestedEventId = scheduleFireOutcomeRequestedEventId(event);
+    if (!scheduleFires.outcomesByRequestedEventId.has(requestedEventId)) {
+      scheduleFires.outcomesByRequestedEventId.set(requestedEventId, {
+        eventId: event.id,
+        eventKind: event.kind,
+      });
+    }
+  }
+};
+
+const validateScheduleFireEvent = (
+  priorById: ReadonlyMap<number, LedgerEvent>,
+  scheduleFires: RuntimeScheduleFireState,
+  event: RuntimeLedgerEvent,
+  issues: RuntimeLedgerTransitionIssue[],
+): void => {
+  if (event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED) {
+    applyScheduleFireEvent(scheduleFires, event);
+    return;
+  }
+  if (
+    event.kind !== RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED &&
+    event.kind !== RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED
+  ) {
+    return;
+  }
+  const requestedEventId = scheduleFireOutcomeRequestedEventId(event);
+  const existingOutcome = scheduleFires.outcomesByRequestedEventId.get(requestedEventId);
+  if (existingOutcome !== undefined) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_schedule_fire_outcome_duplicate",
+        event,
+        requestedEventId,
+        "schedule fire request can record only one handoff outcome",
+        existingOutcome.eventKind,
+      ),
+    );
+  }
+  const source = decodedRuntimeSourceEvent(priorById, event, requestedEventId, issues);
+  if (source === null) return;
+  if (source.kind !== RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_schedule_fire_source_kind_mismatch",
+        event,
+        requestedEventId,
+        "schedule fire handoff outcome must reference schedule.fire_requested",
+        source.kind,
+      ),
+    );
+    return;
+  }
+  const requested = source.payload;
+  if (
+    requested.scheduleId !== event.payload.scheduleId ||
+    requested.fireId !== event.payload.fireId ||
+    requested.scheduledAt !== event.payload.scheduledAt
+  ) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_schedule_fire_source_mismatch",
+        event,
+        requestedEventId,
+        "schedule fire handoff outcome must preserve scheduleId, fireId, and scheduledAt",
+        source.kind,
+      ),
+    );
+    return;
+  }
+  if (
+    event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED &&
+    event.payload.productLink.idempotencyKey !== event.payload.fireId
+  ) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_schedule_fire_product_idempotency_mismatch",
+        event,
+        requestedEventId,
+        "schedule fire handoff must pass fireId as the product ingress idempotency key",
+        source.kind,
+      ),
+    );
+    return;
+  }
+  applyScheduleFireEvent(scheduleFires, event);
+};
 
 const addSessionTurnLink = (
   productLinks: RuntimeProductLinkState,
@@ -1093,6 +1370,10 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       return event.payload.runtimeRunId;
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
+      throw new TypeError("schedule fire events are not runtime run-bound");
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return event.payload.turn.id;
     case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
@@ -1159,8 +1440,13 @@ const consumedDecisionRef = (event: LedgerEvent): string | null => {
 const applyHistoricalRuntimeRunEvent = (
   states: Map<number, RuntimeRunState>,
   productLinks: RuntimeProductLinkState,
+  scheduleFires: RuntimeScheduleFireState,
   event: RuntimeLedgerEvent,
 ): void => {
+  if (isScheduleFireEvent(event)) {
+    applyScheduleFireEvent(scheduleFires, event);
+    return;
+  }
   const runId = runtimeRunId(event);
   const state = runStateFor(states, runId);
   switch (event.kind) {
@@ -1225,12 +1511,13 @@ export const validateRuntimeLedgerTransitions = (input: {
   const priorById = new Map(input.history.map((event) => [event.id, event] as const));
   const runStates = new Map<number, RuntimeRunState>();
   const productLinks = makeRuntimeProductLinkState();
+  const scheduleFires = makeRuntimeScheduleFireState();
   const issues: RuntimeLedgerTransitionIssue[] = [];
 
   for (const historical of input.history) {
     const decoded = decodeRuntimeLedgerEventSafe(historical);
     if (decoded?._tag === "runtime") {
-      applyHistoricalRuntimeRunEvent(runStates, productLinks, decoded.event);
+      applyHistoricalRuntimeRunEvent(runStates, productLinks, scheduleFires, decoded.event);
     }
   }
 
@@ -1251,6 +1538,11 @@ export const validateRuntimeLedgerTransitions = (input: {
     }
 
     const event = decoded.event;
+    if (isScheduleFireEvent(event)) {
+      validateScheduleFireEvent(priorById, scheduleFires, event, issues);
+      priorById.set(event.id, event);
+      continue;
+    }
     const runId = runtimeRunId(event);
     const runState = runStateFor(runStates, runId);
     const hasStarted = runState.startedEventId !== undefined;
@@ -1620,6 +1912,63 @@ export const workflowRunSubmittedEvent = (
     runtimeRunId: spec.runtimeRunId,
     ...(spec.idempotencyKey === undefined ? {} : { idempotencyKey: spec.idempotencyKey }),
     ...(spec.inputDigest === undefined ? {} : { inputDigest: spec.inputDigest }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const scheduleFireRequestedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly scheduleId: string;
+    readonly fireId: string;
+    readonly scheduledAt: string;
+    readonly appPrincipal: SchedulePrincipalPayload;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED, {
+    scheduleId: spec.scheduleId,
+    fireId: spec.fireId,
+    scheduledAt: spec.scheduledAt,
+    appPrincipal: spec.appPrincipal,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const scheduleFireDispatchedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly scheduleId: string;
+    readonly fireId: string;
+    readonly scheduledAt: string;
+    readonly requestedEventId: number;
+    readonly productLink: ScheduleFireProductLink;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED, {
+    scheduleId: spec.scheduleId,
+    fireId: spec.fireId,
+    scheduledAt: spec.scheduledAt,
+    requestedEventId: spec.requestedEventId,
+    productLink: spec.productLink,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const scheduleFireFailedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly scheduleId: string;
+    readonly fireId: string;
+    readonly scheduledAt: string;
+    readonly requestedEventId: number;
+    readonly phase: "handler" | "product_ingress" | "contract";
+    readonly reason: string;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED, {
+    scheduleId: spec.scheduleId,
+    fireId: spec.fireId,
+    scheduledAt: spec.scheduledAt,
+    requestedEventId: spec.requestedEventId,
+    phase: spec.phase,
+    reason: spec.reason,
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

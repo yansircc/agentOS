@@ -71,6 +71,10 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       return event.payload.runtimeRunId;
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
+      throw new TypeError("schedule fire events are not runtime run-bound");
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return event.payload.turn.id;

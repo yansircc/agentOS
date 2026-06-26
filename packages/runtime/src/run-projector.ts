@@ -68,6 +68,11 @@ const startFor = (
       event.id === runId && event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
   );
 
+const isScheduleFireEvent = (event: RuntimeLedgerEvent): boolean =>
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED ||
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED ||
+  event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED;
+
 const runtimeRunId = (event: RuntimeLedgerEvent): number => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
@@ -75,6 +80,10 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       return event.payload.runtimeRunId;
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
+    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
+      throw new TypeError("schedule fire events are not runtime run-bound");
     case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
     case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
       return event.payload.runId;
@@ -307,7 +316,7 @@ const runStatusFromRuntimeEvents = (
     return { kind: "open_without_terminal", startedAt: start.ts };
   }
 
-  const evidence = runtimeEvents.find((event) => runtimeRunId(event) === runId);
+  const evidence = runtimeEvents.find((event) => !isScheduleFireEvent(event) && runtimeRunId(event) === runId);
   return {
     kind: "orphaned",
     startedAt: evidence?.ts ?? 0,
@@ -397,6 +406,7 @@ const runsPageProjection = defineProjectionSpec<RunsPageProjectionInput, RunList
     const byRun = new Map<number, Acc>();
 
     for (const ev of runtimeEvents) {
+      if (isScheduleFireEvent(ev)) continue;
       if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_STARTED) {
         if (!byRun.has(ev.id)) {
           byRun.set(ev.id, {
