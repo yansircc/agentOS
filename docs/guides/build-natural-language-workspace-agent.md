@@ -249,6 +249,20 @@ The generated target is a static residual program:
 - runtime code must not choose provider, backend, tool, or capability
   implementations by interpreting strings from JSON.
 
+For local development there are two public shapes with different owners.
+`createLocalAgentRuntime` from `@agent-os/runtime/local` is the direct
+dev/test harness. It lowers the authored config to the same local substrate but
+returns only `submit`, `events`, `diagnostics`, and `inspect`. Use it when a
+test or spike needs to submit one run and inspect runtime facts directly.
+
+The product local path is the generated `node@1` `LocalAgentApp`, or the
+`lowerLocalAgentRuntime` primitive used by that generated app. That path owns
+product-facing `sessions.*`, `workflows.*`, channel dispatch, schedule fire
+handoff, dynamic capability wiring, generated target identity, and
+`submitWithProductLink`. Product code should not copy
+`resolveRuntime + submitAgentEffect + workspaceOperations` assembly; it should
+use the generated app or the lowerer boundary.
+
 ## Client Boundary
 
 Generated `client.ts` rides on `@agent-os/client` and the selected framework
@@ -286,6 +300,21 @@ should not derive session or workflow lifecycle by renaming raw run status.
 
 Product UI starts after the generated client. Timeline rows, file review
 panels, layout, and product-specific visual state belong in `app/`.
+
+## Product Link Boundary
+
+A product link is runtime evidence and correlation data. It may connect an
+agentOS run to a product-owned operation such as a `ChangeRun`, workflow run,
+session, or external operation id. agentOS owns the runtime run id, terminal
+runtime status, tool events, diagnostics, and evidence link. The product owns
+the product facts.
+
+Do not treat product links or runtime ledger events as the source of truth for
+product control-plane records. In a zeroY3-style product, `Change`,
+`Candidate`, `Grant`, `Intent`, `Receipt`, approval, deployment, and product
+receipt facts remain product-owned. Runtime projections can support debugging
+and evidence review, but product state machines must not derive approval or
+deployment truth from runtime events alone.
 
 ## Workspace Boundary
 

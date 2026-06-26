@@ -1,5 +1,23 @@
 # @yansirplus/runtime Public API Intent
 
+## Local Runtime Boundary
+
+`./local:createLocalAgentRuntime` is the public dev/test harness. It exposes the
+local runtime as `submit`, `events`, `diagnostics`, and `inspect` over the same
+lowering substrate used by generated local targets.
+
+`./local:lowerLocalAgentRuntime` is the product lowerer used by generated
+`node@1` `LocalAgentApp` output. Use it, or the generated app, when product
+sessions, workflows, channels, schedules, dynamic capability wiring, generated
+target identity, or `submitWithProductLink` are part of the boundary. It is not
+a license to duplicate raw `resolveRuntime + submitAgentEffect +
+workspaceOperations` assembly in product code.
+
+Product links are runtime evidence links only. agentOS owns runtime run ids,
+terminal runtime status, tool events, diagnostics, and evidence correlation.
+Product applications own product control-plane facts such as Change, Candidate,
+Grant, Intent, Receipt, approval, deployment, and product receipt records.
+
 ## Public exports
 
 - `.:AcquireCtx`
