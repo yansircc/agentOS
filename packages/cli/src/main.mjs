@@ -42,6 +42,8 @@ Usage:
   agentos --version
   agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
   agentos info [--cwd <path>] [--config <path>] [--json]
+  agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos check all
   agentos check default
   agentos check structural
@@ -70,6 +72,8 @@ const fail = (message) => {
     message.startsWith("agentos:") ||
     message.startsWith("agentos build:") ||
     message.startsWith("agentos info:") ||
+    message.startsWith("agentos serve:") ||
+    message.startsWith("agentos dev:") ||
     message.startsWith("agentos check:") ||
     message.startsWith("agentos generate:")
   ) {
@@ -120,6 +124,10 @@ const runBuildRunner = async (command, args) => {
 const runBuild = async (args) => runBuildRunner("build", args);
 
 const runInfo = async (args) => runBuildRunner("info", args);
+
+const runServe = async (args) => runBuildRunner("serve", args);
+
+const runDev = async (args) => runBuildRunner("dev", args);
 
 const runCheck = async (args) => {
   const [command, ...rest] = args;
@@ -254,6 +262,12 @@ const main = async () => {
     case "info":
       await runInfo(rest);
       return;
+    case "serve":
+      await runServe(rest);
+      return;
+    case "dev":
+      await runDev(rest);
+      return;
     case "check":
       await runCheck(rest);
       return;
@@ -261,7 +275,7 @@ const main = async () => {
       await runGenerate(rest);
       return;
     default:
-      throw new Error("agentos: choose one of build, info, check, generate");
+      throw new Error("agentos: choose one of build, info, serve, dev, check, generate");
   }
 };
 

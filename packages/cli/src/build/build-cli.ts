@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import http from "node:http";
 import path from "node:path";
 
 import {
@@ -16,6 +17,7 @@ import {
   type StaticTargetLink,
 } from "./agent-authoring";
 import { importBundledModule } from "../lib/ts-module-loader.mjs";
+import { WORKSPACE_AGENT_COMMAND } from "@agent-os/core/workspace-agent";
 
 interface BuildArgs {
   readonly cwd: string;
@@ -29,10 +31,22 @@ interface InfoArgs {
   readonly json: boolean;
 }
 
+interface ServeArgs {
+  readonly cwd: string;
+  readonly config: string;
+  readonly packageScope?: string;
+  readonly host: string;
+  readonly port: number;
+  readonly llm: "config" | "test";
+  readonly llmResponse: string;
+  readonly json: boolean;
+}
+
 type CliArgs =
   | { readonly command: "help" }
   | { readonly command: "build"; readonly args: BuildArgs }
-  | { readonly command: "info"; readonly args: InfoArgs };
+  | { readonly command: "info"; readonly args: InfoArgs }
+  | { readonly command: "serve" | "dev"; readonly args: ServeArgs };
 
 const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
   const args: {
@@ -97,21 +111,106 @@ const parseInfoArgs = (rawArgs: ReadonlyArray<string>): InfoArgs => {
   return args;
 };
 
+const parsePort = (value: string | undefined): number => {
+  if (value === undefined) throw new Error("--port requires a value");
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
+    throw new Error("--port must be an integer between 0 and 65535");
+  }
+  return parsed;
+};
+
+const parseServeArgs = (rawArgs: ReadonlyArray<string>): ServeArgs => {
+  const args: {
+    cwd: string;
+    config: string;
+    packageScope?: string;
+    host: string;
+    port: number;
+    llm: "config" | "test";
+    llmResponse: string;
+    json: boolean;
+  } = {
+    cwd: process.cwd(),
+    config: "agentos.config.jsonc",
+    host: "127.0.0.1",
+    port: 8787,
+    llm: "config",
+    llmResponse: "ok",
+    json: false,
+  };
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index];
+    switch (arg) {
+      case "--cwd":
+        if (rawArgs[index + 1] === undefined) throw new Error("--cwd requires a value");
+        args.cwd = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--config":
+        if (rawArgs[index + 1] === undefined) throw new Error("--config requires a value");
+        args.config = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--package-scope":
+        if (rawArgs[index + 1] === undefined) throw new Error("--package-scope requires a value");
+        args.packageScope = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--host":
+        if (rawArgs[index + 1] === undefined) throw new Error("--host requires a value");
+        args.host = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--port":
+        args.port = parsePort(rawArgs[index + 1]);
+        index += 1;
+        break;
+      case "--llm": {
+        const value = rawArgs[index + 1];
+        if (value !== "config" && value !== "test") {
+          throw new Error("--llm must be one of config, test");
+        }
+        args.llm = value;
+        index += 1;
+        break;
+      }
+      case "--llm-response":
+        if (rawArgs[index + 1] === undefined) throw new Error("--llm-response requires a value");
+        args.llmResponse = rawArgs[index + 1];
+        index += 1;
+        break;
+      case "--json":
+        args.json = true;
+        break;
+      default:
+        throw new Error(`unexpected argument ${arg}`);
+    }
+  }
+  return args;
+};
+
 const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
   const [command, ...rest] = rawArgs;
   if (command === undefined || command === "--help" || command === "-h") return { command: "help" };
   if (rest.includes("--help") || rest.includes("-h")) return { command: "help" };
   if (command === "build") return { command: "build", args: parseBuildArgs(rest) };
   if (command === "info") return { command: "info", args: parseInfoArgs(rest) };
-  throw new Error("choose one of build, info");
+  if (command === "serve" || command === "dev") {
+    return { command, args: parseServeArgs(rest) };
+  }
+  throw new Error("choose one of build, info, serve, dev");
 };
 
 const help = `Usage:
   agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
   agentos info [--cwd <path>] [--config <path>] [--json]
+  agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
 
 Compiles agent/ + workflows/ + agent/schedules/ + agentos.config.jsonc into .agentos/generated/.
 Prints compile-only agent inspection without starting a runtime.
+Serves the generated local node app through the CLI-owned public command/event protocol.
 `;
 
 const stripJsonc = (text: string): string => {
@@ -588,6 +687,316 @@ const projectInfo = (facts: CompileFacts) => ({
   runtime: unavailable("agentos info does not start a local or Cloudflare runtime"),
 });
 
+interface LocalAgentApp {
+  readonly runtime: {
+    readonly submit: (input: unknown) => Promise<unknown>;
+    readonly events: (opts?: { readonly afterId?: number }) => ReadonlyArray<unknown>;
+    readonly diagnostics: () => ReadonlyArray<unknown>;
+    readonly inspect: () => unknown;
+  };
+  readonly sessions?: {
+    readonly submitTurn: (input: unknown) => Promise<unknown>;
+    readonly inspect: (sessionRef: string) => unknown;
+    readonly list: () => unknown;
+  };
+  readonly workflows?: {
+    readonly run: (input: unknown) => Promise<unknown>;
+    readonly inspectRun: (workflowId: string, workflowRunId: string) => unknown;
+    readonly listRuns: (workflowId: string) => unknown;
+  };
+  readonly customCommand?: (input: unknown) => Promise<unknown>;
+}
+
+interface GeneratedLocalModule {
+  readonly createLocalAgentApp?: (
+    options?: Readonly<Record<string, unknown>>,
+  ) => Promise<LocalAgentApp>;
+}
+
+interface CommandRequest {
+  readonly name: string;
+  readonly input: unknown;
+}
+
+const PRODUCT_COMMAND = {
+  SUBMIT_SESSION_TURN: "submitSessionTurn",
+  INSPECT_SESSION: "inspectSession",
+  LIST_SESSIONS: "listSessions",
+  RUN_WORKFLOW: "runWorkflow",
+  INSPECT_WORKFLOW_RUN: "inspectWorkflowRun",
+  LIST_WORKFLOW_RUNS: "listWorkflowRuns",
+} as const;
+
+class HttpFailure extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const requireStringField = (
+  value: Readonly<Record<string, unknown>>,
+  field: string,
+  message: string,
+): string => {
+  const fieldValue = value[field];
+  if (typeof fieldValue !== "string" || fieldValue.length === 0) {
+    throw new HttpFailure(400, message);
+  }
+  return fieldValue;
+};
+
+const assertSubmitRunInput = (value: unknown, label: string): unknown => {
+  if (!isPlainRecord(value)) throw new HttpFailure(400, `invalid ${label} command input`);
+  if (typeof value.intent !== "string" || !isPlainRecord(value.context)) {
+    throw new HttpFailure(400, `invalid ${label} submit run input`);
+  }
+  return value;
+};
+
+const commandRequestFromUnknown = (value: unknown): CommandRequest => {
+  if (!isPlainRecord(value)) throw new HttpFailure(400, "command request must be an object");
+  const name = requireStringField(value, "name", "command request name must be a non-empty string");
+  return { name, input: value.input };
+};
+
+const jsonResponse = (
+  response: http.ServerResponse,
+  status: number,
+  body: Readonly<Record<string, unknown>>,
+): void => {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  response.end(`${JSON.stringify(body)}\n`);
+};
+
+const errorResponse = (response: http.ServerResponse, error: unknown): void => {
+  const status = error instanceof HttpFailure ? error.status : 500;
+  const message = error instanceof Error ? error.message : String(error);
+  jsonResponse(response, status, { ok: false, error: { message } });
+};
+
+const notFound = (response: http.ServerResponse): void => {
+  jsonResponse(response, 404, { ok: false, error: { message: "not found" } });
+};
+
+const readJsonBody = (request: http.IncomingMessage): Promise<unknown> =>
+  new Promise((resolve, reject) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        reject(new HttpFailure(413, "request body too large"));
+        request.destroy();
+      }
+    });
+    request.on("end", () => {
+      try {
+        resolve(body.trim().length === 0 ? {} : JSON.parse(body));
+      } catch {
+        reject(new HttpFailure(400, "request body must be JSON"));
+      }
+    });
+    request.on("error", reject);
+  });
+
+const commandInputRecord = (input: unknown, label: string): Readonly<Record<string, unknown>> => {
+  if (!isPlainRecord(input)) throw new HttpFailure(400, `invalid ${label} command input`);
+  return input;
+};
+
+const invokeLocalAgentCommand = async (
+  app: LocalAgentApp,
+  request: CommandRequest,
+): Promise<unknown> => {
+  const { name, input } = request;
+  if (name === WORKSPACE_AGENT_COMMAND.SUBMIT) {
+    const record = commandInputRecord(input, "submit");
+    return app.runtime.submit(assertSubmitRunInput(record.input, "submit"));
+  }
+  if (name === PRODUCT_COMMAND.SUBMIT_SESSION_TURN) {
+    if (app.sessions === undefined) throw new HttpFailure(501, "sessions are unavailable");
+    const record = commandInputRecord(input, "submitSessionTurn");
+    assertSubmitRunInput(record, "submitSessionTurn");
+    requireStringField(record, "sessionRef", "invalid session turn identity");
+    requireStringField(record, "turnRef", "invalid session turn identity");
+    return app.sessions.submitTurn(record);
+  }
+  if (name === PRODUCT_COMMAND.INSPECT_SESSION) {
+    if (app.sessions === undefined) throw new HttpFailure(501, "sessions are unavailable");
+    const record = commandInputRecord(input, "inspectSession");
+    return app.sessions.inspect(requireStringField(record, "sessionRef", "invalid sessionRef"));
+  }
+  if (name === PRODUCT_COMMAND.LIST_SESSIONS) {
+    if (app.sessions === undefined) throw new HttpFailure(501, "sessions are unavailable");
+    return app.sessions.list();
+  }
+  if (name === PRODUCT_COMMAND.RUN_WORKFLOW) {
+    if (app.workflows === undefined) throw new HttpFailure(501, "workflows are unavailable");
+    const record = commandInputRecord(input, "runWorkflow");
+    assertSubmitRunInput(record, "runWorkflow");
+    requireStringField(record, "workflowId", "invalid workflow run identity");
+    requireStringField(record, "workflowRunId", "invalid workflow run identity");
+    return app.workflows.run(record);
+  }
+  if (name === PRODUCT_COMMAND.INSPECT_WORKFLOW_RUN) {
+    if (app.workflows === undefined) throw new HttpFailure(501, "workflows are unavailable");
+    const record = commandInputRecord(input, "inspectWorkflowRun");
+    return app.workflows.inspectRun(
+      requireStringField(record, "workflowId", "invalid workflow run identity"),
+      requireStringField(record, "workflowRunId", "invalid workflow run identity"),
+    );
+  }
+  if (name === PRODUCT_COMMAND.LIST_WORKFLOW_RUNS) {
+    if (app.workflows === undefined) throw new HttpFailure(501, "workflows are unavailable");
+    const record = commandInputRecord(input, "listWorkflowRuns");
+    return app.workflows.listRuns(requireStringField(record, "workflowId", "invalid workflowId"));
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.CUSTOM) {
+    if (app.customCommand === undefined) {
+      throw new HttpFailure(501, "custom commands are unavailable");
+    }
+    return app.customCommand(input);
+  }
+  throw new HttpFailure(501, `unsupported generated app command ${name}`);
+};
+
+const localAppOptionsFor = (args: ServeArgs): Readonly<Record<string, unknown>> => ({
+  cwd: path.resolve(args.cwd),
+  inheritEnv: true,
+  ...(args.llm === "test"
+    ? {
+        llm: {
+          kind: "test",
+          responses: [
+            {
+              items: [{ type: "message", text: args.llmResponse }],
+              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            },
+          ],
+        },
+      }
+    : {}),
+});
+
+const loadGeneratedLocalApp = async (
+  args: ServeArgs,
+  facts: CompileFacts,
+): Promise<LocalAgentApp> => {
+  if (facts.normalized.target.kind !== "node@1") {
+    throw new Error(
+      `agentos serve requires target kind node@1; observed ${facts.normalized.target.kind}`,
+    );
+  }
+  await writeGeneratedFiles(facts.cwd, facts.linked.files);
+  const generatedLocal = path.join(facts.cwd, ".agentos", "generated", "local.ts");
+  const mod = (await importBundledModule(generatedLocal, {
+    prefix: "agentos-generated-local-app-",
+    tempRoot: path.join(facts.cwd, ".agentos", ".cache"),
+  })) as GeneratedLocalModule;
+  if (typeof mod.createLocalAgentApp !== "function") {
+    throw new Error(".agentos/generated/local.ts must export createLocalAgentApp");
+  }
+  return mod.createLocalAgentApp(localAppOptionsFor(args));
+};
+
+const parseAfterId = (url: URL): number | undefined => {
+  const value = url.searchParams.get("afterId");
+  if (value === null || value.length === 0) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new HttpFailure(400, "afterId must be a non-negative integer");
+  }
+  return parsed;
+};
+
+const writeSseEvents = (
+  response: http.ServerResponse,
+  events: ReadonlyArray<unknown>,
+): void => {
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+  for (const event of events) {
+    response.write(`event: ledger\ndata: ${JSON.stringify(event)}\n\n`);
+  }
+  response.end();
+};
+
+const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Promise<void> => {
+  const facts = await loadCompileFacts(args);
+  const app = await loadGeneratedLocalApp(args, facts);
+  const server = http.createServer((request, response) => {
+    void (async () => {
+      const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+      if (request.method === "GET" && url.pathname === "/agentos/health") {
+        jsonResponse(response, 200, {
+          ok: true,
+          protocol: "agentos-local-app@1",
+          mode: command,
+          target: facts.normalized.target.kind,
+          llm: args.llm,
+          diagnostics: app.runtime.diagnostics(),
+        });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/agentos/command") {
+        const body = await readJsonBody(request);
+        const result = await invokeLocalAgentCommand(app, commandRequestFromUnknown(body));
+        jsonResponse(response, 200, { ok: true, value: result });
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/agentos/events") {
+        writeSseEvents(response, app.runtime.events({ afterId: parseAfterId(url) }));
+        return;
+      }
+      notFound(response);
+    })().catch((error: unknown) => {
+      errorResponse(response, error);
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(args.port, args.host, () => resolve());
+  });
+
+  const address = server.address();
+  const port = typeof address === "object" && address !== null ? address.port : args.port;
+  const url = `http://${args.host}:${port}`;
+  const payload = {
+    status: "listening",
+    protocol: "agentos-local-app@1",
+    mode: command,
+    target: facts.normalized.target.kind,
+    llm: args.llm,
+    url,
+    endpoints: {
+      health: `${url}/agentos/health`,
+      command: `${url}/agentos/command`,
+      events: `${url}/agentos/events`,
+    },
+  };
+  process.stdout.write(
+    args.json
+      ? `${JSON.stringify(payload)}\n`
+      : `agentOS ${command} listening on ${url} (${payload.protocol}, llm=${args.llm})\n`,
+  );
+
+  await new Promise<void>((resolve) => {
+    const close = () => server.close(() => resolve());
+    process.once("SIGINT", close);
+    process.once("SIGTERM", close);
+  });
+};
+
 const printInfoHuman = (info: ReturnType<typeof projectInfo>): void => {
   const lines = [
     "agentOS info",
@@ -614,6 +1023,10 @@ const main = async (): Promise<void> => {
     console.log(`generated ${facts.linked.files.length} agentOS files`);
     return;
   }
+  if (parsed.command === "serve" || parsed.command === "dev") {
+    await serveGeneratedApp(parsed.command, parsed.args);
+    return;
+  }
   const facts = await loadCompileFacts({ ...parsed.args, packageScope: undefined });
   const info = projectInfo(facts);
   if (parsed.args.json) {
@@ -628,7 +1041,15 @@ try {
 } catch (error) {
   const command = process.argv[2];
   const prefix =
-    command === "build" ? "agentos build" : command === "info" ? "agentos info" : "agentos";
+    command === "build"
+      ? "agentos build"
+      : command === "info"
+        ? "agentos info"
+        : command === "serve"
+          ? "agentos serve"
+          : command === "dev"
+            ? "agentos dev"
+            : "agentos";
   process.stderr.write(`${prefix}: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 }

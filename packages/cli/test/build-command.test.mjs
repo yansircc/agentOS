@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { buildSync } from "esbuild";
@@ -76,6 +76,91 @@ const linkGeneratedTargetSmokeDependencies = (root) => {
   linkSmokeDependency(root, "@agent-os/core", path.join(repoRoot, "packages/core"));
   linkSmokeDependency(root, "@agent-os/runtime", path.join(repoRoot, "packages/runtime"));
   linkSmokeDependency(root, "effect", path.join(repoRoot, "node_modules/effect"));
+};
+
+const writeNodeWorkspaceAgentFixture = (root) => {
+  writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+  mkdirSync(path.join(root, "agent"), { recursive: true });
+  writeFileSync(path.join(root, "agent/instructions.md"), "Operate locally.");
+  writeFileSync(
+    path.join(root, "agent/agent.json"),
+    JSON.stringify(
+      {
+        agentId: "node-local-agent",
+        scope: {
+          kind: "session",
+          idSource: "manifest",
+          stableScopeId: "node-local-scope",
+        },
+        effectAuthorityRef: {
+          authorityClass: "effect",
+          authorityId: "node-local-agent",
+        },
+        tools: {
+          write_file: { interaction: "approval" },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    path.join(root, "agentos.config.jsonc"),
+    [
+      "{",
+      '  "profile": "workspace@1",',
+      '  "agent": "./agent",',
+      '  "deployment": { "id": "node-local-deployment", "version": "0.1.0" },',
+      '  "target": { "kind": "node@1" },',
+      '  "client": { "kind": "browser-direct@1" },',
+      '  "llm": {',
+      '    "route": "openai-chat-compatible",',
+      '    "endpointRef": "openrouter",',
+      '    "credentialRef": "openrouter-key",',
+      '    "modelRef": "openrouter-default-text-model"',
+      "  },",
+      '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
+      "}",
+      "",
+    ].join("\n"),
+  );
+};
+
+const waitForJsonLine = (child) =>
+  new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      reject(new Error(`timed out waiting for server stdout\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+    }, 20_000);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      const line = stdout.split("\n").find((candidate) => candidate.trim().startsWith("{"));
+      if (line === undefined) return;
+      clearTimeout(timeout);
+      try {
+        resolve(JSON.parse(line));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    child.on("exit", (code, signal) => {
+      clearTimeout(timeout);
+      reject(new Error(`server exited before ready: code=${code} signal=${signal}\nstderr:\n${stderr}`));
+    });
+  });
+
+const stopProcessGroup = (child) => {
+  try {
+    process.kill(-child.pid, "SIGTERM");
+  } catch {
+    child.kill("SIGTERM");
+  }
 };
 
 void test("agentos --version derives from the release source fact", () => {
@@ -1179,51 +1264,7 @@ void test("agentos build compiles an authored workspace tree into generated file
 void test("agentos build emits node local agent app target", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-node-build-"));
   try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Operate locally.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "node-local-agent",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "node-local-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "node-local-agent",
-          },
-          tools: {
-            write_file: { interaction: "approval" },
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "node-local-deployment", "version": "0.1.0" },',
-        '  "target": { "kind": "node@1" },',
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
+    writeNodeWorkspaceAgentFixture(root);
 
     const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
       encoding: "utf8",
@@ -1266,6 +1307,73 @@ void test("agentos build emits node local agent app target", () => {
     assert.equal(existsSync(path.join(root, ".agentos/generated/worker.ts")), false);
     assert.equal(existsSync(path.join(root, ".agentos/generated/wrangler.jsonc")), false);
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos serve exposes generated node app through public command and event endpoints", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-node-serve-"));
+  let child;
+  try {
+    writeNodeWorkspaceAgentFixture(root);
+    linkGeneratedTargetSmokeDependencies(root);
+    child = spawn(
+      process.execPath,
+      [
+        cli,
+        "serve",
+        "--cwd",
+        root,
+        "--port",
+        "0",
+        "--llm",
+        "test",
+        "--llm-response",
+        "scripted done",
+        "--json",
+      ],
+      {
+        cwd: root,
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    const ready = await waitForJsonLine(child);
+    assert.equal(ready.status, "listening");
+    assert.equal(ready.protocol, "agentos-local-app@1");
+    assert.equal(ready.target, "node@1");
+    assert.equal(ready.llm, "test");
+
+    const health = await fetch(ready.endpoints.health).then((response) => response.json());
+    assert.equal(health.ok, true);
+    assert.equal(health.protocol, "agentos-local-app@1");
+    assert.deepEqual(health.diagnostics, []);
+
+    const submitted = await fetch(ready.endpoints.command, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "submitSessionTurn",
+        input: {
+          intent: "say hello",
+          context: {},
+          sessionRef: "session-1",
+          turnRef: "turn-1",
+        },
+      }),
+    }).then((response) => response.json());
+    assert.equal(submitted.ok, true);
+    assert.equal(submitted.value.ok, true);
+    assert.equal(submitted.value.final, "scripted done");
+
+    const events = await fetch(ready.endpoints.events).then((response) => response.text());
+    assert.match(events, /event: ledger/);
+    assert.match(events, /agent\.run\.completed|runtime\.completed_after_tools/);
+  } finally {
+    if (child !== undefined) {
+      stopProcessGroup(child);
+      await new Promise((resolve) => child.once("close", resolve));
+    }
     rmSync(root, { recursive: true, force: true });
   }
 });
