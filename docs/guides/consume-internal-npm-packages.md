@@ -42,6 +42,23 @@ instead of sharing the agentOS source workspace lockfile.
     when consuming the local channel.
 11. Run the app typecheck and tests under its own lockfile.
 
+## Installed Agent Catalog
+
+`@yansirplus/cli` carries one generated `agent-catalog/agentOS` bundle. Coding
+agents should read `agent-catalog/agentOS/SKILL.md` first and treat it as a
+router, then load only the needed files under `references/`:
+
+- `references/package-map.md` for package ownership and entrypoints;
+- `references/public-api/*.md` for public API intent;
+- `references/agent/start-here.md` for the generated navigation route;
+- `references/agent/*.json` for recipes, primitives, decisions, errors, and
+  invariants;
+- `references/provenance.json` for source and output hashes.
+
+The catalog is installed-version truth, not a source authoring surface. Do not
+hand-edit `agent-catalog/agentOS/*` or create `catalog.source.json`; edit the
+owning package/docs facts and regenerate the catalog.
+
 ## Import Surface
 
 Use direct package roots only for consumer-facing packages:
