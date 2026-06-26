@@ -7,6 +7,8 @@
 - `.:defineEvalDataset`
 - `.:evalAssertion`
 - `.:evalIdFromPath`
+- `.:parseEvalConfig`
+- `.:parseEvalDefinition`
 - `.:EvalAssertion`
 - `.:EvalAssertionCheck`
 - `.:EvalCase`
@@ -19,6 +21,7 @@
 - `.:EvalDefinition`
 - `.:EvalDefinitionSpec`
 - `.:EvalEventRecord`
+- `.:EvalEventQuery`
 - `.:EvalFacades`
 - `.:EvalHttpResponse`
 - `.:EvalJsonObject`

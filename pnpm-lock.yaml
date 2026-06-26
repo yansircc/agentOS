@@ -118,6 +118,9 @@ importers:
       '@agent-os/core':
         specifier: workspace:*
         version: link:../core
+      '@agent-os/evals':
+        specifier: workspace:*
+        version: link:../evals
       '@agent-os/runtime':
         specifier: workspace:*
         version: link:../runtime

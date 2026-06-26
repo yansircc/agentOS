@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { walkRepoSourceFiles } from "../lib/repo-source-files.mjs";
 
 const repoRoot = process.cwd();
 const catalogRoot = path.join(repoRoot, "agent-catalog", "agentOS");
@@ -77,14 +78,14 @@ const rewritePublicSpecifiers = (text) => text.replaceAll(sourcePackageScope, pu
 const uniqueSorted = (values) =>
   [...new Set(values)].sort((left, right) => left.localeCompare(right));
 
-const walk = (dir, predicate, skip = new Set()) => {
+const walkAbsoluteFiles = (dir, predicate) => {
   if (!fs.existsSync(dir)) return [];
   const files = [];
   const visit = (current) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const target = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (!skip.has(entry.name)) visit(target);
+        visit(target);
         continue;
       }
       if (entry.isFile() && predicate(target)) files.push(target);
@@ -251,6 +252,18 @@ const renderSkill = () =>
 const rewriteStartHere = (text) =>
   rewritePublicSpecifiers(text)
     .replaceAll("docs/agent/", "")
+    .replaceAll("(agent/", "(")
+    .replaceAll("primitives.md](primitives.md)", "primitives.json](primitives.json)")
+    .replaceAll(
+      "decision-graph.md](decision-graph.md)",
+      "decision-graph.json](decision-graph.json)",
+    )
+    .replaceAll("errors.md](errors.md)", "errors.json](errors.json)")
+    .replaceAll(
+      "invariant-matrix.md](invariant-matrix.md)",
+      "invariant-matrix.json](invariant-matrix.json)",
+    )
+    .replace(/\[([^\]]+)\]\(((?:guides|tutorials)\/[^)]+)\)/gu, "$1 (`$2`)")
     .replaceAll("../packages/", "../source-docs/packages/");
 
 const baseInputPaths = () => [
@@ -268,9 +281,9 @@ const baseInputPaths = () => [
   "docs/agent/errors.json",
   "docs/agent/invariant-matrix.json",
   ...surface.packages.map((pkg) => `${pkg.path}/package.json`),
-  ...walk(abs("docs/agent"), (file) =>
-    /\.source\.json$|schemas\/.+\.schema\.json$/u.test(repoPath(file)),
-  ).map(repoPath),
+  ...walkRepoSourceFiles(repoRoot, "docs/agent").filter((file) =>
+    /\.source\.json$|schemas\/.+\.schema\.json$/u.test(file),
+  ),
 ];
 
 const inputRecords = () =>
@@ -280,11 +293,9 @@ const inputRecords = () =>
   });
 
 const assertNoCatalogSource = () => {
-  const offenders = walk(
-    repoRoot,
+  const offenders = walkRepoSourceFiles(repoRoot, ".").filter(
     (file) => path.basename(file) === "catalog.source.json",
-    new Set([".git", ".parallel", "node_modules", "dist", ".wrangler"]),
-  ).map(repoPath);
+  );
   if (offenders.length > 0) {
     fail(`catalog.source.json is not an allowed source fact:\n${offenders.join("\n")}`);
   }
@@ -371,7 +382,37 @@ const buildOutputs = () => {
 };
 
 const allCatalogFiles = () =>
-  walk(catalogRoot, () => true).map((file) => toPosix(path.relative(catalogRoot, file)));
+  walkAbsoluteFiles(catalogRoot, () => true).map((file) =>
+    toPosix(path.relative(catalogRoot, file)),
+  );
+
+const markdownLinks = (text) =>
+  [...text.matchAll(/\[[^\]]+\]\(([^)]+)\)/gu)]
+    .map((match) => match[1])
+    .filter(
+      (href) =>
+        typeof href === "string" &&
+        href.length > 0 &&
+        !href.startsWith("#") &&
+        !/^[a-z][a-z0-9+.-]*:/iu.test(href),
+    );
+
+const catalogMarkdownLinkFailures = (outputs) => {
+  const outputFiles = new Set(outputs.keys());
+  const failures = [];
+  for (const [file, text] of outputs.entries()) {
+    if (!file.endsWith(".md")) continue;
+    for (const href of markdownLinks(text)) {
+      const [target] = href.split("#");
+      if (target === undefined || target.length === 0) continue;
+      const resolved = toPosix(path.normalize(path.join(path.dirname(file), target)));
+      if (resolved.startsWith("../") || path.isAbsolute(resolved) || !outputFiles.has(resolved)) {
+        failures.push(`${file}: broken catalog link ${href}`);
+      }
+    }
+  }
+  return failures;
+};
 
 const checkOutputs = (outputs) => {
   const failures = [];
@@ -388,6 +429,7 @@ const checkOutputs = (outputs) => {
   for (const file of allCatalogFiles()) {
     if (!expectedFiles.has(file)) failures.push(`${file} is extra`);
   }
+  failures.push(...catalogMarkdownLinkFailures(outputs));
   if (failures.length > 0) {
     fail(`agent catalog is stale:\n${failures.join("\n")}`);
   }

@@ -1512,6 +1512,7 @@ void test("agentos eval remote target uses the same public command driver with h
       ].join("\n"),
     );
     const requests = [];
+    const events = [];
     server = http.createServer((request, response) => {
       requests.push({ url: request.url, auth: request.headers.authorization });
       if (request.url === "/agentos/command" && request.method === "POST") {
@@ -1524,6 +1525,8 @@ void test("agentos eval remote target uses the same public command driver with h
           const parsed = JSON.parse(body);
           response.writeHead(200, { "content-type": "application/json" });
           if (parsed.name === "runWorkflow") {
+            events.push({ id: 1, kind: "tool.executed", payload: { name: "lookup" } });
+            events.push({ id: 2, kind: "agent.run.completed", payload: { tokensUsed: 2 } });
             response.end(JSON.stringify({ ok: true, value: { ok: true, final: "remote done" } }));
             return;
           }
@@ -1537,14 +1540,15 @@ void test("agentos eval remote target uses the same public command driver with h
         });
         return;
       }
-      if (request.url === "/agentos/events" && request.method === "GET") {
+      if (request.url?.startsWith("/agentos/events") && request.method === "GET") {
+        const url = new URL(request.url, "http://127.0.0.1");
+        const afterId = Number(url.searchParams.get("afterId") ?? 0);
         response.writeHead(200, { "content-type": "text/event-stream" });
         response.end(
-          [
-            'event: ledger\ndata: {"kind":"tool.executed","payload":{"name":"lookup"}}',
-            'event: ledger\ndata: {"kind":"agent.run.completed","payload":{"tokensUsed":2}}',
-            "",
-          ].join("\n\n"),
+          events
+            .filter((event) => event.id > afterId)
+            .map((event) => `event: ledger\ndata: ${JSON.stringify(event)}`)
+            .join("\n\n"),
         );
         return;
       }
@@ -1584,12 +1588,126 @@ void test("agentos eval remote target uses the same public command driver with h
       ["passed", "passed", "passed", "passed"],
     );
     assert.deepEqual(
-      requests.map((request) => request.url),
-      ["/agentos/command", "/agentos/events", "/agentos/command"],
+      requests
+        .filter((request) => request.url?.startsWith("/agentos/events"))
+        .map((request) => request.url),
+      ["/agentos/events", "/agentos/events?afterId=0"],
     );
+    assert.equal(requests.filter((request) => request.url === "/agentos/command").length, 2);
     assert.deepEqual(
       requests.map((request) => request.auth),
-      ["Bearer eval", "Bearer eval", "Bearer eval"],
+      ["Bearer eval", "Bearer eval", "Bearer eval", "Bearer eval"],
+    );
+  } finally {
+    if (server !== undefined) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos eval scopes assertion observations to the current case event delta", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-event-delta-"));
+  let server;
+  const events = [];
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    linkGeneratedTargetSmokeDependencies(root);
+    mkdirSync(path.join(root, "evals"), { recursive: true });
+    writeFileSync(
+      path.join(root, "evals/01-tool.eval.ts"),
+      [
+        'import { defineEval, evalAssertion } from "@agent-os/evals";',
+        "export default defineEval({",
+        "  path: import.meta.url,",
+        '  cases: [{ id: "tool", input: {} }],',
+        '  assertions: [evalAssertion.calledTool("lookup")],',
+        '  run: async (t) => { await t.sessions.command("emitTool"); },',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(root, "evals/02-no-tool.eval.ts"),
+      [
+        'import { defineEval, evalAssertion } from "@agent-os/evals";',
+        "export default defineEval({",
+        "  path: import.meta.url,",
+        '  cases: [{ id: "no-tool", input: {} }],',
+        "  assertions: [evalAssertion.usedNoTools()],",
+        '  run: async (t) => { await t.sessions.command("emitDone"); },',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    server = http.createServer((request, response) => {
+      if (request.url === "/agentos/command" && request.method === "POST") {
+        let body = "";
+        request.setEncoding("utf8");
+        request.on("data", (chunk) => {
+          body += chunk;
+        });
+        request.on("end", () => {
+          const parsed = JSON.parse(body);
+          if (parsed.name === "emitTool") {
+            events.push({
+              id: events.length + 1,
+              kind: "tool.executed",
+              payload: { name: "lookup" },
+            });
+          }
+          events.push({ id: events.length + 1, kind: "agent.run.completed", payload: {} });
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify({ ok: true, value: { ok: true } }));
+        });
+        return;
+      }
+      if (request.url?.startsWith("/agentos/events") && request.method === "GET") {
+        const url = new URL(request.url, "http://127.0.0.1");
+        const afterId = Number(url.searchParams.get("afterId") ?? 0);
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(
+          events
+            .filter((event) => event.id > afterId)
+            .map((event) => `event: ledger\ndata: ${JSON.stringify(event)}`)
+            .join("\n\n"),
+        );
+        return;
+      }
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: false }));
+    });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+    const result = await runCli(
+      [
+        "eval",
+        "--cwd",
+        root,
+        "--target",
+        "remote",
+        "--base-url",
+        `http://127.0.0.1:${port}`,
+        "--json",
+      ],
+      { cwd: root },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, true);
+    assert.deepEqual(report.evals, ["01-tool", "02-no-tool"]);
+    assert.deepEqual(
+      report.results.map((caseResult) => caseResult.status),
+      ["passed", "passed"],
+    );
+    assert.deepEqual(
+      report.results.map((caseResult) => caseResult.observation.events.map((event) => event.kind)),
+      [["tool.executed", "agent.run.completed"], ["agent.run.completed"]],
     );
   } finally {
     if (server !== undefined) {
@@ -1622,7 +1740,7 @@ void test("agentos eval fails cases when public-boundary assertions fail", async
       if (request.url === "/agentos/events" && request.method === "GET") {
         response.writeHead(200, { "content-type": "text/event-stream" });
         response.end(
-          'event: ledger\ndata: {"kind":"agent.run.completed","payload":{"tokensUsed":1}}\n\n',
+          'event: ledger\ndata: {"id":1,"kind":"agent.run.completed","payload":{"tokensUsed":1}}\n\n',
         );
         return;
       }
@@ -1726,13 +1844,133 @@ void test("agentos eval derives waiting and failed assertions from public event 
   await runStatusFixture({
     name: "waiting",
     assertion: "evalAssertion.waiting()",
-    event: '{"kind":"agent.run.interrupted","payload":{"reason":"decision_required"}}',
+    event: '{"id":1,"kind":"agent.run.interrupted","payload":{"reason":"decision_required"}}',
   });
   await runStatusFixture({
     name: "failed",
     assertion: 'evalAssertion.failed("agent.aborted.upstream_failure")',
-    event: '{"kind":"agent.aborted.upstream_failure","payload":{"tokensUsed":1}}',
+    event: '{"id":1,"kind":"agent.aborted.upstream_failure","payload":{"tokensUsed":1}}',
   });
+});
+
+void test("agentos eval fails closed when public event records omit ids", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-idless-events-"));
+  let server;
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    linkGeneratedTargetSmokeDependencies(root);
+    mkdirSync(path.join(root, "evals/session"), { recursive: true });
+    writeFileSync(
+      path.join(root, "evals/session/idless.eval.ts"),
+      [
+        'import { defineEval, evalAssertion } from "@agent-os/evals";',
+        "export default defineEval({",
+        "  path: import.meta.url,",
+        '  cases: [{ id: "idless", input: {} }],',
+        "  assertions: [evalAssertion.completed()],",
+        '  run: async (t) => { await t.sessions.command("emit"); },',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    server = http.createServer((request, response) => {
+      if (request.url === "/agentos/command" && request.method === "POST") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true, value: { ok: true } }));
+        return;
+      }
+      if (request.url?.startsWith("/agentos/events") && request.method === "GET") {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end('event: ledger\ndata: {"kind":"agent.run.completed"}\n\n');
+        return;
+      }
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: false }));
+    });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+    const result = await runCli(
+      [
+        "eval",
+        "--cwd",
+        root,
+        "--target",
+        "remote",
+        "--base-url",
+        `http://127.0.0.1:${port}`,
+        "--json",
+      ],
+      { cwd: root },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /id-less event agent\.run\.completed/u);
+  } finally {
+    if (server !== undefined) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos eval rejects malformed declarations through the eval DSL contract", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-malformed-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    linkGeneratedTargetSmokeDependencies(root);
+    mkdirSync(path.join(root, "evals/session"), { recursive: true });
+    writeFileSync(
+      path.join(root, "evals/session/malformed.eval.ts"),
+      [
+        "export default {",
+        '  id: "malformed",',
+        '  cases: [{ id: "bad", input: {} }],',
+        '  assertions: [{ kind: "mystery" }],',
+        "};",
+        "",
+      ].join("\n"),
+    );
+    const result = await runCli(
+      ["eval", "--cwd", root, "--target", "remote", "--base-url", "http://127.0.0.1:9", "--json"],
+      { cwd: root },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /unknown eval assertion kind mystery/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos eval rejects malformed config through the eval DSL contract", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-malformed-config-"));
+  try {
+    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
+    linkGeneratedTargetSmokeDependencies(root);
+    mkdirSync(path.join(root, "evals/session"), { recursive: true });
+    writeFileSync(
+      path.join(root, "evals/evals.config.ts"),
+      ["export default {", '  target: { kind: "remote" },', "};", ""].join("\n"),
+    );
+    writeFileSync(
+      path.join(root, "evals/session/basic.eval.ts"),
+      [
+        'import { defineEval } from "@agent-os/evals";',
+        "export default defineEval({",
+        "  path: import.meta.url,",
+        '  cases: [{ id: "basic", input: {} }],',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const result = await runCli(["eval", "--cwd", root, "--json"], { cwd: root });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /remote eval target baseUrl must be a string/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 void test("agentos build emits one channel registry for cloudflare and node targets", () => {

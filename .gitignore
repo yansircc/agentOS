@@ -12,3 +12,4 @@ dist/
 .agentos-audits/
 .agentos/eval-results/
 spikes/**
+.codex

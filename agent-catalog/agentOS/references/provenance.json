@@ -150,8 +150,8 @@
     },
     {
       "path": "packages/cli/package.json",
-      "sha256": "83a7d93ce8d7a3ae6d272a7fc92d02d0e94e2dfba455a4cfecb836b5cae84a78",
-      "byteSize": 653
+      "sha256": "c174c5ba959149012994364b1f55ff994bcc73cdd147e65854e9658a061c46ea",
+      "byteSize": 691
     },
     {
       "path": "packages/client/package.json",
@@ -212,8 +212,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/start-here.md",
-      "sha256": "fcfc7d3fd44dfad9bae21bd1c6125126f51fc444f0bc6b0275853d12f65a25f7",
-      "byteSize": 2794
+      "sha256": "9a01b676da04d3de17a1a208c528eea3a0156c2a0612340cb340c24c2f116225",
+      "byteSize": 2787
     },
     {
       "path": "agent-catalog/agentOS/references/agent/recipes.json",

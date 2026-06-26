@@ -11,6 +11,8 @@ Status: 0.5.x active development. Public exports are limited to eval authoring D
 - `.:defineEvalDataset`
 - `.:evalAssertion`
 - `.:evalIdFromPath`
+- `.:parseEvalConfig`
+- `.:parseEvalDefinition`
 - `.:EvalAssertion`
 - `.:EvalAssertionCheck`
 - `.:EvalCase`
@@ -23,6 +25,7 @@ Status: 0.5.x active development. Public exports are limited to eval authoring D
 - `.:EvalDefinition`
 - `.:EvalDefinitionSpec`
 - `.:EvalEventRecord`
+- `.:EvalEventQuery`
 - `.:EvalFacades`
 - `.:EvalHttpResponse`
 - `.:EvalJsonObject`

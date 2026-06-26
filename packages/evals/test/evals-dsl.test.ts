@@ -5,6 +5,8 @@ import {
   defineEvalDataset,
   evalAssertion,
   evalIdFromPath,
+  parseEvalConfig,
+  parseEvalDefinition,
 } from "../src/index";
 
 describe("@agent-os/evals DSL", () => {
@@ -124,5 +126,55 @@ describe("@agent-os/evals DSL", () => {
     expect(custom).toMatchObject({ kind: "check", name: "custom" });
     if (custom.kind !== "check") throw new Error("expected check assertion");
     await expect(custom.check({ events: [], projections: new Map() })).resolves.toBe(true);
+  });
+
+  it("parses eval declarations through the DSL acceptance contract", () => {
+    expect(
+      parseEvalDefinition({
+        path: "/repo/evals/session/basic.eval.ts",
+        cases: [{ input: { prompt: "ship" } }],
+        assertions: [evalAssertion.completed()],
+      }),
+    ).toMatchObject({
+      id: "session.basic",
+      cases: [{ id: "case-1", input: { prompt: "ship" } }],
+      assertions: [{ kind: "completed" }],
+    });
+
+    expect(() =>
+      parseEvalDefinition({
+        id: "bad",
+        cases: [{ input: {} }],
+        assertions: [{ kind: "mystery" }],
+      }),
+    ).toThrow(/unknown eval assertion kind mystery/u);
+
+    expect(() =>
+      parseEvalDefinition({
+        id: "bad-metadata",
+        cases: [{ input: {}, metadata: { factory: () => "not-json" } }],
+      }),
+    ).toThrow(/eval case metadata must be a JSON object/u);
+  });
+
+  it("parses eval config through the DSL acceptance contract", () => {
+    expect(
+      parseEvalConfig({
+        target: { kind: "remote", baseUrl: "https://example.invalid" },
+        providers: [{ id: "scripted", kind: "scripted" }],
+      }),
+    ).toMatchObject({
+      target: { kind: "remote", baseUrl: "https://example.invalid" },
+      providers: [{ id: "scripted", kind: "scripted" }],
+    });
+
+    expect(() => parseEvalConfig({ target: { kind: "remote" } })).toThrow(
+      /remote eval target baseUrl must be a string/u,
+    );
+    expect(() =>
+      parseEvalConfig({
+        providers: [{ id: "scripted", kind: "scripted", metadata: { tokens: Number.NaN } }],
+      }),
+    ).toThrow(/eval provider metadata must be a JSON object/u);
   });
 });

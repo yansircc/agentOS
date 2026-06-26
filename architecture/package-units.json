@@ -12,7 +12,7 @@
       "publicPackageName": "@yansirplus/core",
       "status": "target",
       "hardInstallEnvelope": {
-        "dependencies": [],
+        "dependencies": ["@agent-os/evals"],
         "installScripts": [],
         "nativeArtifacts": [],
         "packageWideMetadata": [],

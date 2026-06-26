@@ -19,6 +19,18 @@ import {
 } from "./agent-authoring";
 import { importBundledModule } from "../lib/ts-module-loader.mjs";
 import { WORKSPACE_AGENT_COMMAND } from "@agent-os/core/workspace-agent";
+import {
+  parseEvalConfig,
+  parseEvalDefinition,
+  type EvalAssertion,
+  type EvalConfig,
+  type EvalDefinition,
+  type EvalEventRecord,
+  type EvalJsonObject,
+  type EvalJsonValue,
+  type EvalObservation,
+  type EvalTarget,
+} from "@agent-os/evals";
 
 interface BuildArgs {
   readonly cwd: string;
@@ -1217,36 +1229,17 @@ const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Pro
   });
 };
 
-interface EvalCaseLike {
-  readonly id: string;
-  readonly input: unknown;
-  readonly tags?: readonly string[];
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}
-
-interface EvalDefinitionLike {
-  readonly id: string;
-  readonly path?: string;
-  readonly cases: readonly EvalCaseLike[];
-  readonly assertions?: readonly EvalAssertionLike[];
-  readonly run?: (context: unknown) => Promise<unknown> | unknown;
-}
-
-interface EvalConfigLike {
-  readonly target?:
-    | { readonly kind: "local" }
-    | {
-        readonly kind: "remote";
-        readonly baseUrl: string;
-        readonly headers?: Readonly<Record<string, string>>;
-      };
-  readonly timeoutMs?: number;
-}
+type EvalDefinitionLike = EvalDefinition;
+type EvalConfigLike = EvalConfig;
 
 interface EvalHttpTarget {
   readonly kind: "local" | "remote";
   readonly baseUrl: string;
   readonly headers: Readonly<Record<string, string>>;
+}
+
+interface EvalEventQueryLike {
+  readonly afterId?: number;
 }
 
 interface EvalCaseResult {
@@ -1260,19 +1253,7 @@ interface EvalCaseResult {
 
 type EvalObservationStatus = "completed" | "waiting" | "failed";
 
-type EvalAssertionLike =
-  | { readonly kind: "completed" }
-  | { readonly kind: "waiting" }
-  | { readonly kind: "failed"; readonly reason?: string }
-  | { readonly kind: "called_tool"; readonly toolName: string }
-  | { readonly kind: "not_called_tool"; readonly toolName: string }
-  | { readonly kind: "used_no_tools" }
-  | { readonly kind: "projection"; readonly name: string }
-  | {
-      readonly kind: "check";
-      readonly name: string;
-      readonly check: (observation: EvalObservationForCheck) => boolean | Promise<boolean>;
-    };
+type EvalAssertionLike = EvalAssertion;
 
 interface EvalProjectionObservation {
   readonly ok: boolean;
@@ -1280,18 +1261,15 @@ interface EvalProjectionObservation {
   readonly error?: string;
 }
 
-interface EvalObservationForCheck {
-  readonly status?: EvalObservationStatus;
-  readonly events: readonly EvalEventRecordLike[];
-  readonly projections: ReadonlyMap<string, unknown>;
-  readonly usage: Readonly<Record<string, unknown>>;
+interface EvalObservationForCheck extends EvalObservation {
+  readonly usage: EvalJsonObject;
 }
 
 interface EvalObservationArtifact {
   readonly status?: EvalObservationStatus;
   readonly events: readonly EvalEventRecordLike[];
   readonly projections: Readonly<Record<string, EvalProjectionObservation>>;
-  readonly usage: Readonly<Record<string, unknown>>;
+  readonly usage: EvalJsonObject;
 }
 
 interface EvalAssertionResult {
@@ -1301,11 +1279,7 @@ interface EvalAssertionResult {
   readonly message?: string;
 }
 
-interface EvalEventRecordLike {
-  readonly kind: string;
-  readonly payload?: unknown;
-  readonly timestamp?: string;
-}
+type EvalEventRecordLike = EvalEventRecord;
 
 const collectEvalFiles = async (directory: string): Promise<readonly string[]> => {
   if (!(await pathExists(directory))) return [];
@@ -1326,12 +1300,6 @@ const collectEvalFiles = async (directory: string): Promise<readonly string[]> =
   return files.sort((left, right) => left.localeCompare(right));
 };
 
-const isEvalDefinition = (value: unknown): value is EvalDefinitionLike =>
-  isPlainRecord(value) &&
-  typeof value.id === "string" &&
-  Array.isArray(value.cases) &&
-  (value.run === undefined || typeof value.run === "function");
-
 const evalDefinitionsFromModule = (
   mod: Readonly<Record<string, unknown>>,
   file: string,
@@ -1339,7 +1307,16 @@ const evalDefinitionsFromModule = (
   const values = Object.values(mod).flatMap((value): readonly unknown[] =>
     Array.isArray(value) ? value : [value],
   );
-  const definitions = values.filter(isEvalDefinition);
+  const definitions = values.flatMap((value): readonly EvalDefinitionLike[] => {
+    if (!isPlainRecord(value)) return [];
+    try {
+      return [parseEvalDefinition(value)];
+    } catch (error) {
+      throw new Error(
+        `${path.relative(process.cwd(), file)} exports invalid eval declaration: ${errorMessage(error)}`,
+      );
+    }
+  });
   if (definitions.length === 0) {
     throw new Error(`${path.relative(process.cwd(), file)} exports no defineEval declaration`);
   }
@@ -1362,22 +1339,22 @@ const loadEvalDefinitions = async (
   return definitions;
 };
 
-const isEvalConfig = (value: unknown): value is EvalConfigLike =>
-  isPlainRecord(value) && (value.target === undefined || isPlainRecord(value.target));
-
 const loadEvalConfig = async (cwd: string): Promise<EvalConfigLike> => {
   const configPath = path.join(cwd, "evals", "evals.config.ts");
-  if (!(await pathExists(configPath))) return {};
+  if (!(await pathExists(configPath))) return parseEvalConfig(undefined);
   const mod = (await importBundledModule(configPath, {
     define: { "import.meta.url": JSON.stringify(pathToFileURL(configPath).href) },
     prefix: "agentos-eval-config-",
     tempRoot: path.join(cwd, ".agentos", ".cache"),
   })) as Readonly<Record<string, unknown>>;
   const config = mod.default ?? mod.config;
-  if (!isEvalConfig(config)) {
-    throw new Error("evals/evals.config.ts must export defineEvalConfig() as default or config");
+  try {
+    return parseEvalConfig(config);
+  } catch (error) {
+    throw new Error(
+      `evals/evals.config.ts must export defineEvalConfig() as default or config: ${errorMessage(error)}`,
+    );
   }
-  return config;
 };
 
 const targetFromArgs = (
@@ -1428,6 +1405,21 @@ const parseSseJsonEvents = (text: string): readonly unknown[] =>
       .filter((line) => line.startsWith("data: "))
       .map((line) => JSON.parse(line.slice("data: ".length))),
   );
+
+const evalEventRecordFromUnknown = (value: unknown): EvalEventRecordLike => {
+  if (!isPlainRecord(value) || typeof value.kind !== "string") {
+    throw new Error("/agentos/events emitted a non-event record");
+  }
+  if (typeof value.id !== "number" || !Number.isInteger(value.id) || value.id <= 0) {
+    throw new Error(`/agentos/events emitted id-less event ${value.kind}`);
+  }
+  return Object.freeze({
+    id: value.id,
+    kind: value.kind,
+    ...(Object.hasOwn(value, "payload") ? { payload: value.payload } : {}),
+    ...(typeof value.timestamp === "string" ? { timestamp: value.timestamp } : {}),
+  });
+};
 
 const responseHeaders = (headers: Headers): Readonly<Record<string, string>> => {
   const output: Record<string, string> = {};
@@ -1481,13 +1473,21 @@ const commandValue = async (
   return body.value;
 };
 
+const eventQueryParams = (query: EvalEventQueryLike | undefined): string => {
+  if (query?.afterId === undefined) return "";
+  return `?afterId=${encodeURIComponent(String(query.afterId))}`;
+};
+
 const createEvalFacades = (target: EvalHttpTarget) => {
-  const events = async () => {
-    const response = await fetch(new URL("/agentos/events", target.baseUrl), {
-      headers: target.headers,
-    });
+  const events = async (query?: EvalEventQueryLike) => {
+    const response = await fetch(
+      new URL(`/agentos/events${eventQueryParams(query)}`, target.baseUrl),
+      {
+        headers: target.headers,
+      },
+    );
     if (!response.ok) throw new Error(`HTTP ${response.status} /agentos/events`);
-    return parseSseJsonEvents(await response.text());
+    return parseSseJsonEvents(await response.text()).map(evalEventRecordFromUnknown);
   };
   const sessions = {
     submitTurn: (input: unknown) => commandValue(target, "submitSessionTurn", input),
@@ -1551,15 +1551,6 @@ const createEvalFacades = (target: EvalHttpTarget) => {
   });
 };
 
-const evalEventRecordFromUnknown = (value: unknown): EvalEventRecordLike | null => {
-  if (!isPlainRecord(value) || typeof value.kind !== "string") return null;
-  return Object.freeze({
-    kind: value.kind,
-    ...(Object.hasOwn(value, "payload") ? { payload: value.payload } : {}),
-    ...(typeof value.timestamp === "string" ? { timestamp: value.timestamp } : {}),
-  });
-};
-
 const assertionProjectionNames = (assertions: readonly EvalAssertionLike[]): readonly string[] =>
   [
     ...new Set(
@@ -1597,6 +1588,13 @@ const toolEventKinds = new Set(["tool.executed", "tool.rejected"]);
 const eventPayload = (event: EvalEventRecordLike): Readonly<Record<string, unknown>> =>
   isPlainRecord(event.payload) ? event.payload : {};
 
+const isEvalJsonValue = (value: unknown): value is EvalJsonValue => {
+  if (value === null) return true;
+  if (["boolean", "number", "string"].includes(typeof value)) return true;
+  if (Array.isArray(value)) return value.every(isEvalJsonValue);
+  return isPlainRecord(value) && Object.values(value).every(isEvalJsonValue);
+};
+
 const statusFromEvents = (
   events: readonly EvalEventRecordLike[],
 ): EvalObservationStatus | undefined => {
@@ -1617,26 +1615,24 @@ const statusFromEvents = (
   return status;
 };
 
-const usageFromEvents = (
-  events: readonly EvalEventRecordLike[],
-): Readonly<Record<string, unknown>> => {
+const usageFromEvents = (events: readonly EvalEventRecordLike[]): EvalJsonObject => {
   let tokensUsed = 0;
   let hasTokensUsed = false;
-  let llmUsage: unknown;
+  let llmUsage: EvalJsonValue | undefined;
   for (const event of events) {
     const payload = eventPayload(event);
     if (typeof payload.tokensUsed === "number") {
       tokensUsed += payload.tokensUsed;
       hasTokensUsed = true;
     }
-    if (isPlainRecord(payload.usage)) {
+    if (isEvalJsonValue(payload.usage)) {
       llmUsage = payload.usage;
     }
   }
-  return Object.freeze({
-    ...(hasTokensUsed ? { tokensUsed } : {}),
-    ...(llmUsage === undefined ? {} : { llmUsage }),
-  });
+  const usage: Record<string, EvalJsonValue> = {};
+  if (hasTokensUsed) usage.tokensUsed = tokensUsed;
+  if (llmUsage !== undefined) usage.llmUsage = llmUsage;
+  return Object.freeze(usage);
 };
 
 const calledToolNames = (events: readonly EvalEventRecordLike[]): ReadonlySet<string> => {
@@ -1795,15 +1791,13 @@ const collectEvalObservation = async (
   target: EvalHttpTarget,
   assertions: readonly EvalAssertionLike[],
   runError: unknown,
+  eventQuery?: EvalEventQueryLike,
 ): Promise<EvalObservationArtifact> => {
   const [rawEvents, projections] = await Promise.all([
-    facades.sessions.events(),
+    facades.sessions.events(eventQuery),
     projectionObservationsForAssertions(target, assertions),
   ]);
-  const events = rawEvents.flatMap((value) => {
-    const event = evalEventRecordFromUnknown(value);
-    return event === null ? [] : [event];
-  });
+  const events = rawEvents;
   const observedStatus = statusFromEvents(events);
   return Object.freeze({
     status: observedStatus ?? (runError === undefined ? "completed" : "failed"),
@@ -1811,6 +1805,16 @@ const collectEvalObservation = async (
     projections,
     usage: usageFromEvents(events),
   });
+};
+
+const maxObservedEventId = (events: readonly EvalEventRecordLike[]): number => {
+  let max = 0;
+  for (const event of events) {
+    if (event.id > max) {
+      max = event.id;
+    }
+  }
+  return max;
 };
 
 const errorMessage = (error: unknown): string =>
@@ -1824,17 +1828,20 @@ const runEvalDefinition = async (
   const results: EvalCaseResult[] = [];
   const assertions = definition.assertions ?? [];
   for (const testCase of definition.cases) {
+    const afterId =
+      definition.run === undefined
+        ? undefined
+        : maxObservedEventId(await facades.sessions.events());
     let runError: unknown;
     try {
       if (definition.run !== undefined) {
+        const evalTarget: EvalTarget =
+          target.kind === "remote"
+            ? { kind: "remote", baseUrl: target.baseUrl, headers: target.headers }
+            : { kind: "local" };
         await definition.run({
           case: testCase,
-          target: {
-            kind: target.kind,
-            ...(target.kind === "remote"
-              ? { baseUrl: target.baseUrl, headers: target.headers }
-              : {}),
-          },
+          target: evalTarget,
           t: facades,
           sessions: facades.sessions,
           workflows: facades.workflows,
@@ -1844,7 +1851,13 @@ const runEvalDefinition = async (
     } catch (error) {
       runError = error;
     }
-    const observation = await collectEvalObservation(facades, target, assertions, runError);
+    const observation = await collectEvalObservation(
+      facades,
+      target,
+      assertions,
+      runError,
+      afterId === undefined ? undefined : { afterId },
+    );
     const assertionResults = await Promise.all(
       assertions.map((assertion) => evaluateEvalAssertion(assertion, observation, runError)),
     );
@@ -1914,9 +1927,10 @@ const runEval = async (args: EvalArgs): Promise<void> => {
       });
     }
     const target = targetFromArgs(args, config, started?.payload.url);
-    const results = (
-      await Promise.all(definitions.map((definition) => runEvalDefinition(definition, target)))
-    ).flat();
+    const results = [];
+    for (const definition of definitions) {
+      results.push(...(await runEvalDefinition(definition, target)));
+    }
     const failed = results.filter((result) => result.status === "failed");
     const report = {
       ok: failed.length === 0,

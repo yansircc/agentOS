@@ -12,6 +12,8 @@ slug: "api/evals"
 - `.:defineEvalDataset`
 - `.:evalAssertion`
 - `.:evalIdFromPath`
+- `.:parseEvalConfig`
+- `.:parseEvalDefinition`
 - `.:EvalAssertion`
 - `.:EvalAssertionCheck`
 - `.:EvalCase`
@@ -24,6 +26,7 @@ slug: "api/evals"
 - `.:EvalDefinition`
 - `.:EvalDefinitionSpec`
 - `.:EvalEventRecord`
+- `.:EvalEventQuery`
 - `.:EvalFacades`
 - `.:EvalHttpResponse`
 - `.:EvalJsonObject`

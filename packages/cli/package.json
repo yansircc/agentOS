@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@agent-os/core": "workspace:*",
+    "@agent-os/evals": "workspace:*",
     "@agent-os/runtime": "workspace:*",
     "effect": "catalog:",
     "esbuild": "catalog:",

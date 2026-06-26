@@ -17,6 +17,7 @@ import {
   workspacePackageRecords as graphWorkspacePackageRecords,
 } from "./package-graph.mjs";
 import { workspacePackagePatterns } from "../lib/workspace-manifest.mjs";
+import { walkRepoSourceFiles } from "../lib/repo-source-files.mjs";
 import { collectAgentDocsModel } from "../lib/agent-docs-model.mjs";
 import { createOwnerChecks } from "./algorithmic/owner-checks.mjs";
 import { createArchitectureChecks } from "./algorithmic/architecture-checks.mjs";
@@ -48,23 +49,7 @@ const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath)
 const readJson = (relativePath) => JSON.parse(read(relativePath));
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
-const walk = (relativePath, options = {}) => {
-  const absolutePath = path.join(repoRoot, relativePath);
-  if (!fs.existsSync(absolutePath)) return [];
-  const stat = fs.statSync(absolutePath);
-  if (stat.isFile()) return [relativePath];
-  const ignored =
-    options.ignored ??
-    new Set(["node_modules", "dist", ".wrangler", ".turbo", ".parallel", ".cst", ".git"]);
-  const files = [];
-  for (const entry of fs.readdirSync(absolutePath, { withFileTypes: true })) {
-    if (entry.isDirectory() && ignored.has(entry.name)) continue;
-    const child = path.join(relativePath, entry.name);
-    if (entry.isDirectory()) files.push(...walk(child, options));
-    if (entry.isFile()) files.push(child.split(path.sep).join("/"));
-  }
-  return files.sort(compare);
-};
+const walk = (relativePath, options = {}) => walkRepoSourceFiles(repoRoot, relativePath, options);
 
 const failIfAny = (label, failures) => {
   if (failures.length === 0) {
