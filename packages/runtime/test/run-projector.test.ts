@@ -23,6 +23,7 @@ import {
   agentSessionTurnSubmittedEvent,
   chatIngestedEvent,
   llmResponseEvent,
+  scheduleFireRequestedEvent,
   toolExecutedEvent,
   workflowRunSubmittedEvent,
   type RuntimeEventCommitSpec,
@@ -111,6 +112,27 @@ const validRunRows = (): ReadonlyArray<LedgerEvent> => [
 ];
 
 describe("runtime run projectors", () => {
+  it("ignores schedule fire facts when projecting run status", () => {
+    const rows = [
+      event(
+        1,
+        scheduleFireRequestedEvent({
+          ...runtimeIdentity,
+          scheduleId: "daily",
+          fireId: "fire:daily:2026-01-01T00:00:00.000Z",
+          scheduledAt: "2026-01-01T00:00:00.000Z",
+          appPrincipal: { authority: "test", subject: "scheduler" },
+        }),
+      ),
+    ];
+
+    expect(projectRunStatus(rows, 99)).toEqual({
+      kind: "orphaned",
+      startedAt: 0,
+      evidence: "no_run_evidence",
+    });
+  });
+
   it("projects run trace and delivered status from decoded runtime facts", () => {
     const rows = validRunRows();
 

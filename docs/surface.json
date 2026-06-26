@@ -280,7 +280,7 @@
         },
         {
           "subpath": "./run-projector",
-          "audiences": ["advanced"],
+          "audiences": ["generated-only", "advanced"],
           "capability": "runtime run projection helpers",
           "surfaceClass": "stable-contract"
         },

@@ -359,6 +359,8 @@
       "commandGroup": "all",
       "constraints": {
         "rootScripts": [
+          "agent-catalog:check",
+          "agent-catalog:generate",
           "agentos",
           "build:internal-packages",
           "check",

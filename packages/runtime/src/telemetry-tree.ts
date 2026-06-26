@@ -45,7 +45,7 @@ const runtimeEventsOf = (events: ReadonlyArray<LedgerEvent>): ReadonlyArray<Runt
   return runtimeEvents;
 };
 
-const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
+const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number | undefined => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
       return event.id;
@@ -74,7 +74,7 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number => {
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
-      throw new TypeError("schedule fire events are not runtime run-bound");
+      return undefined;
     case RUNTIME_EVENT_KIND.LLM_REQUESTED:
     case RUNTIME_EVENT_KIND.LLM_RESPONSE:
       return event.payload.turn.id;
@@ -109,7 +109,8 @@ const runtimeTraceContext = (
 ): Effect.Effect<TraceContext | undefined, InvalidTraceContext> =>
   Effect.gen(function* () {
     const direct = yield* traceContextFromPayload(event.payload);
-    return direct ?? traceContextForRun(runtimeEvents, runIdForRuntimeEvent(event));
+    const runId = runIdForRuntimeEvent(event);
+    return direct ?? (runId === undefined ? undefined : traceContextForRun(runtimeEvents, runId));
   });
 
 const telemetryNode = (spec: {

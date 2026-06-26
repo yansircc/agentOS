@@ -76,7 +76,7 @@ Audience is declared per package entrypoint, not per package.
 | `@agent-os/runtime/llm-effect-ai/openai-compatible` | `generated-only`, `advanced`       | OpenAI-compatible chat-completions transport adapter                                      |
 | `@agent-os/runtime/llm-effect-ai/anthropic`         | `advanced`                         | Anthropic Effect AI provider adapter                                                      |
 | `@agent-os/runtime/node`                            | `advanced`                         | Node runtime adapter                                                                      |
-| `@agent-os/runtime/run-projector`                   | `advanced`                         | runtime run projection helpers                                                            |
+| `@agent-os/runtime/run-projector`                   | `generated-only`, `advanced`       | runtime run projection helpers                                                            |
 | `@agent-os/runtime/sse-http`                        | `generated-only`, `advanced`       | SSE HTTP helpers                                                                          |
 | `@agent-os/runtime/telemetry-otlp`                  | `advanced`                         | OTLP telemetry projection                                                                 |
 | `@agent-os/runtime/testing`                         | `advanced`                         | deterministic in-memory WorkspaceEnv test fixture                                         |

@@ -20,8 +20,8 @@
   "inputFiles": [
     {
       "path": "docs/agent/boundary-rules.source.json",
-      "sha256": "e1fbc5f5ba16ffe70b7a3164f5c213053ff432ac5ca318151a4bdfd0a765a160",
-      "byteSize": 40824
+      "sha256": "fc42aa5b3b727afe18b4148a57354ded06daf6aff44e41101870770f1f3ea452",
+      "byteSize": 40893
     },
     {
       "path": "docs/agent/capability-rules.source.json",
@@ -120,17 +120,17 @@
     },
     {
       "path": "docs/api/core.md",
-      "sha256": "100077669723bfafbe6dd734d9e7c5332e53acec295012cd2e81435bea488cda",
-      "byteSize": 61615
+      "sha256": "bc2830f4dadc40ae8c60f70abad9f76246b0b01919bda6efd45b1d73d840ff0b",
+      "byteSize": 62746
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "d969f647cbd2df3b51486f9d3f49c122e2bd3340739b04724b153990ba7289b3",
-      "byteSize": 27595
+      "sha256": "bcc9f833a00e48fb7d0b32e302b2a8f9a8f54653d2d1e9019c4fbbca10f5a530",
+      "byteSize": 27716
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "62ba10b1ad7e8201a3cc2cb751815a4a327577ddecfc7b1e7ad5650cd84d2f75",
+      "sha256": "3ff84f1eb2f08a8d231c5087e5c928fc585f5495f2891d769d8abfc994741c71",
       "byteSize": 22157
     },
     {
@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/surface.json",
-      "sha256": "1d052d924184a30fd5cd00fd8568a8e0a09dcc63882955845698f7cae7a3b665",
-      "byteSize": 16434
+      "sha256": "d6595a9c22851153de7b5c0493605869419d1cafa2a1fb46495971120c28aadd",
+      "byteSize": 16452
     },
     {
       "path": "package.json",
@@ -182,18 +182,18 @@
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "2ddadf12177a3c7d4413b2a042f1c83d860311dc43746183d4b2dfbbb56da6f6",
+      "sha256": "0cfe027b85b7bea0896b971322b5a66fce3bc1bd0c7e8066c3f3145c765f2d61",
       "byteSize": 13257
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/core.md",
-      "sha256": "527947cd31ae3a581e0feb39cf604bb8fb248a2e0d6c962b2e11ef94378713f2",
-      "byteSize": 61617
+      "sha256": "77dddebe19f3979bfc67f0a56b0f1e31bafa955c9b98440d5896c077b8a6ac9d",
+      "byteSize": 62748
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "644d8f4f9edb463ef8e32f996386fa38ecf40ea63ce2c126785242d3f30f0fa7",
-      "byteSize": 27597
+      "sha256": "1056ae8aeec4045fa4d4cde7b0d05a7dbfcb12feeebd0a31ecfeef0067046eb9",
+      "byteSize": 27718
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",
@@ -207,8 +207,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/start-here.md",
-      "sha256": "f6cfb4c7ae21f4eb56bac5e386f4a47597fe17da1ba56afaa876eeef4e034b63",
-      "byteSize": 2816
+      "sha256": "fcfc7d3fd44dfad9bae21bd1c6125126f51fc444f0bc6b0275853d12f65a25f7",
+      "byteSize": 2794
     },
     {
       "path": "agent-catalog/agentOS/references/agent/recipes.json",

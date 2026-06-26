@@ -73,7 +73,7 @@ const isScheduleFireEvent = (event: RuntimeLedgerEvent): boolean =>
   event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED ||
   event.kind === RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED;
 
-const runtimeRunId = (event: RuntimeLedgerEvent): number => {
+const runtimeRunId = (event: RuntimeLedgerEvent): number | undefined => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
       return event.id;
@@ -83,7 +83,7 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
-      throw new TypeError("schedule fire events are not runtime run-bound");
+      return undefined;
     case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
     case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
       return event.payload.runId;
@@ -421,6 +421,7 @@ const runsPageProjection = defineProjectionSpec<RunsPageProjectionInput, RunList
         continue;
       }
       const runId = runtimeRunId(ev);
+      if (runId === undefined) continue;
       const acc = byRun.get(runId);
       if (acc === undefined || acc.terminal !== undefined) continue;
       if (ev.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED) {

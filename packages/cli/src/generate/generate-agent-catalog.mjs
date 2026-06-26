@@ -308,8 +308,31 @@ const buildNonProvenanceOutputs = () =>
     ["references/agent/invariant-matrix.json", read("docs/agent/invariant-matrix.json")],
   ]);
 
+const formatCatalogOutputs = (outputs) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-catalog-"));
+  try {
+    for (const [file, text] of outputs) {
+      const target = path.join(tmpDir, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `${text.replace(/\s+$/u, "")}\n`);
+    }
+    const result = spawnSync("vp", ["fmt", tmpDir, "--write"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    if (result.status !== 0) {
+      fail(`agent catalog formatting failed: ${result.stderr || result.stdout || result.status}`);
+    }
+    return new Map(
+      [...outputs.keys()].map((file) => [file, fs.readFileSync(path.join(tmpDir, file), "utf8")]),
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+};
+
 const buildOutputs = () => {
-  const outputs = buildNonProvenanceOutputs();
+  const outputs = formatCatalogOutputs(buildNonProvenanceOutputs());
   const generatedAt = deterministicGeneratedAt();
   const outputRecords = [...outputs.entries()].map(([file, text]) => ({
     path: `agent-catalog/agentOS/${file}`,

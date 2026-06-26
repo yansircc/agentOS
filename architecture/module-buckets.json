@@ -157,6 +157,12 @@
       "bucket": "adapter"
     },
     {
+      "id": "runtime-generated-contract-adapters",
+      "match": "regex",
+      "value": "^packages/runtime/src/(channel|schedule)/",
+      "bucket": "adapter"
+    },
+    {
       "id": "runtime-live-loop-adapter",
       "match": "regex",
       "value": "^packages/runtime/src/(attached-stream|driver|submit-agent|workspace-job)\\.ts$",

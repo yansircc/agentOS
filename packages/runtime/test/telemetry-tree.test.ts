@@ -8,6 +8,7 @@ import {
   agentRunCompletedEvent,
   agentRunStartedEvent,
   llmResponseEvent,
+  scheduleFireRequestedEvent,
   toolExecutedEvent,
   type RuntimeEventCommitSpec,
 } from "@agent-os/core/runtime-protocol";
@@ -107,6 +108,26 @@ const fixtureEvents = (timeOffset: number): ReadonlyArray<LedgerEvent> => [
 ];
 
 describe("runtime telemetry tree projection", () => {
+  it.effect("ignores schedule fire facts because they are not run-bound telemetry nodes", () =>
+    Effect.gen(function* () {
+      const tree = yield* projectTelemetryEventTree([
+        event(
+          1,
+          scheduleFireRequestedEvent({
+            ...runtimeIdentity,
+            scheduleId: "daily",
+            fireId: "fire:daily:2026-01-01T00:00:00.000Z",
+            scheduledAt: "2026-01-01T00:00:00.000Z",
+            appPrincipal: { authority: "test", subject: "scheduler" },
+            traceContext,
+          }),
+        ),
+      ]);
+
+      expect(tree.nodes).toEqual([]);
+    }),
+  );
+
   it.effect("projects ledger facts into a backend-neutral canonical telemetry tree", () =>
     Effect.gen(function* () {
       const cfTree = yield* projectTelemetryEventTree(fixtureEvents(0));

@@ -62,7 +62,7 @@ Published scope: `@yansirplus`
 | `@yansirplus/runtime/llm-effect-ai/openai-compatible` | generated-only, advanced       | OpenAI-compatible chat-completions transport adapter                                      | `@yansirplus/runtime` |
 | `@yansirplus/runtime/llm-effect-ai/anthropic`         | advanced                       | Anthropic Effect AI provider adapter                                                      | `@yansirplus/runtime` |
 | `@yansirplus/runtime/node`                            | advanced                       | Node runtime adapter                                                                      | `@yansirplus/runtime` |
-| `@yansirplus/runtime/run-projector`                   | advanced                       | runtime run projection helpers                                                            | `@yansirplus/runtime` |
+| `@yansirplus/runtime/run-projector`                   | generated-only, advanced       | runtime run projection helpers                                                            | `@yansirplus/runtime` |
 | `@yansirplus/runtime/sse-http`                        | generated-only, advanced       | SSE HTTP helpers                                                                          | `@yansirplus/runtime` |
 | `@yansirplus/runtime/telemetry-otlp`                  | advanced                       | OTLP telemetry projection                                                                 | `@yansirplus/runtime` |
 | `@yansirplus/runtime/testing`                         | advanced                       | deterministic in-memory WorkspaceEnv test fixture                                         | `@yansirplus/runtime` |
