@@ -7,6 +7,7 @@ import {
   type DynamicCapabilityFailureReason,
   type DynamicCapabilityMergeIssue,
   type DynamicCapabilityProjection,
+  type DynamicCapabilityRunInput,
   type DynamicCapabilityResolverMergeInput,
   type DynamicCapabilityResolverProvenance,
   type DynamicCapabilityResolverResult,
@@ -28,6 +29,7 @@ export interface DynamicCapabilityResolverServiceInput {
   readonly event: DynamicCapabilityEventRef;
   readonly catalog: DynamicCapabilityCompiledCatalog;
   readonly resolvers: ReadonlyArray<DynamicCapabilityResolverDefinition>;
+  readonly input?: DynamicCapabilityRunInput;
   readonly auth?: Readonly<Record<string, unknown>>;
   readonly projections?: Readonly<Record<string, unknown>>;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
@@ -66,12 +68,21 @@ const freezeCatalog = (
     ),
   });
 
+const freezeDynamicCapabilityRunInput = (
+  input: DynamicCapabilityRunInput | undefined,
+): DynamicCapabilityRunInput =>
+  Object.freeze({
+    ...(input?.phase === undefined ? {} : { phase: input.phase }),
+    values: freezeRecord(input?.values),
+  });
+
 export const makeDynamicCapabilityContext = (
   input: Omit<DynamicCapabilityResolverServiceInput, "resolvers" | "timeoutMs">,
 ): DynamicCapabilityContext =>
   Object.freeze({
     event: Object.freeze({ ...input.event }),
     catalog: freezeCatalog(input.catalog),
+    input: freezeDynamicCapabilityRunInput(input.input),
     auth: freezeRecord(input.auth),
     projections: freezeRecord(input.projections),
     materials: freezeRecord(input.materials),

@@ -151,6 +151,7 @@ import {
 } from "./submit-agent/tool-runtime";
 import {
   DYNAMIC_TOOL_VISIBILITY_DENIED_REASON,
+  dynamicCapabilityPhasePolicyDeniedDiagnostic,
   dynamicCapabilityToolVisibilityDenied,
   instructionFragmentsForDynamicCapabilityProjection,
   systemWithDynamicInstructionFragments,
@@ -993,6 +994,12 @@ export const submitAgentEffect = (
                 ? spec.tools[call.function.name]
                 : undefined;
               if (hiddenTool !== undefined) {
+                const phasePolicyDiagnostic = dynamicCapabilityPhasePolicyDeniedDiagnostic(
+                  call.function.name,
+                  spec.dynamicCapabilityProjection,
+                );
+                const rejectionReason =
+                  phasePolicyDiagnostic?.reason ?? DYNAMIC_TOOL_VISIBILITY_DENIED_REASON;
                 const hiddenContract = hiddenTool.contract;
                 const hiddenClaim = makePreClaim({
                   operationRef: makeOperationRef("tool", [scope, started.id, turn, call.id]),
@@ -1012,13 +1019,22 @@ export const submitAgentEffect = (
                     name: call.function.name,
                     args: summarizeToolArguments(call.function.arguments),
                     execution: hiddenTool.execution,
-                    claim: settleToolPolicyRejected(
-                      hiddenClaim,
-                      DYNAMIC_TOOL_VISIBILITY_DENIED_REASON,
-                    ),
+                    claim: settleToolPolicyRejected(hiddenClaim, rejectionReason),
                     diagnostics: {
                       phase: "policy",
-                      reason: DYNAMIC_TOOL_VISIBILITY_DENIED_REASON,
+                      reason: rejectionReason,
+                      ...(phasePolicyDiagnostic === undefined
+                        ? {}
+                        : {
+                            source: phasePolicyDiagnostic.source,
+                            toolName: call.function.name,
+                            policyId: phasePolicyDiagnostic.policyId,
+                            policyPhase: phasePolicyDiagnostic.phase,
+                            requiredCategory: phasePolicyDiagnostic.requiredCategory,
+                            ...(phasePolicyDiagnostic.category === undefined
+                              ? {}
+                              : { category: phasePolicyDiagnostic.category }),
+                          }),
                       argumentSummary: summarizeToolArguments(call.function.arguments),
                     },
                     traceContext,
@@ -1026,7 +1042,7 @@ export const submitAgentEffect = (
                 });
                 return yield* new ToolError({
                   toolName: call.function.name,
-                  cause: { reason: DYNAMIC_TOOL_VISIBILITY_DENIED_REASON },
+                  cause: { reason: rejectionReason },
                 });
               }
               return yield* new ToolError({

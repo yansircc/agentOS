@@ -277,6 +277,7 @@ export interface AgentSubmitSpec {
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
   readonly traceContext?: SubmitSpec["traceContext"];
+  readonly dynamicCapability?: SubmitRunInput["dynamicCapability"];
   readonly materials?: SubmitRunInput["materials"];
   readonly toolContext?: SubmitRunInput["toolContext"];
   readonly toolPolicy?: SubmitSpec["toolPolicy"];

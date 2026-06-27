@@ -1,7 +1,9 @@
 import type {
+  DynamicCapabilityPhasePolicyDeniedDiagnostic,
   DynamicCapabilityProjection,
   SubmitInstructionFragment,
 } from "@agent-os/core/runtime-protocol";
+import { DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON } from "@agent-os/core/runtime-protocol";
 import type { Tool } from "@agent-os/core/tools";
 
 export const DYNAMIC_TOOL_VISIBILITY_DENIED_REASON = "tool_visibility_denied";
@@ -35,6 +37,17 @@ export const dynamicCapabilityToolVisibilityDenied = (
   projection !== undefined &&
   Object.prototype.hasOwnProperty.call(tools, toolName) &&
   !visibleToolIdsForDynamicCapabilityProjection(projection, tools).has(toolName);
+
+export const dynamicCapabilityPhasePolicyDeniedDiagnostic = (
+  toolName: string,
+  projection: DynamicCapabilityProjection | undefined,
+): DynamicCapabilityPhasePolicyDeniedDiagnostic | undefined =>
+  projection?.tools
+    .find((entry) => entry.id === toolName)
+    ?.diagnostics?.find(
+      (diagnostic): diagnostic is DynamicCapabilityPhasePolicyDeniedDiagnostic =>
+        diagnostic.reason === DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON,
+    );
 
 export const visibleSkillIdsForDynamicCapabilityProjection = (
   projection: DynamicCapabilityProjection | undefined,

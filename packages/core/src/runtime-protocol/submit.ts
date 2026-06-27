@@ -17,7 +17,7 @@ import {
   type InputRequestResumePayload,
 } from "./input-request";
 import type { ExecutionIdentity } from "./execution-identity";
-import type { DynamicCapabilityProjection } from "./capability";
+import type { DynamicCapabilityProjection, DynamicCapabilityRunInput } from "./capability";
 
 export class MissingSubmitRunBinding extends Data.TaggedError(
   "agent_os.missing_submit_run_binding",
@@ -119,6 +119,7 @@ export interface SubmitRunInput {
   };
   readonly outputSchema?: AnyAgentSchemaSource;
   readonly traceContext?: TraceContext;
+  readonly dynamicCapability?: DynamicCapabilityRunInput;
   readonly materials?: Readonly<Record<string, MaterialRef>>;
   readonly toolContext?: SubmitToolContext;
   readonly toolPolicy?: SubmitToolPolicy;

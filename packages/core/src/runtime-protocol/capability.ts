@@ -170,6 +170,55 @@ export const DYNAMIC_CAPABILITY_VISIBILITY = {
 export type DynamicCapabilityVisibilityDecision =
   (typeof DYNAMIC_CAPABILITY_VISIBILITY)[keyof typeof DYNAMIC_CAPABILITY_VISIBILITY];
 
+export const DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS = {
+  READ: "read",
+  WRITE: "write",
+  DURABLE_REQUEST: "durable_request",
+  EXTERNAL_EFFECT: "external_effect",
+} as const;
+
+export type DynamicCapabilityPhasePolicyAccess =
+  | (typeof DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS)[keyof typeof DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS]
+  | (string & {});
+
+export const DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON =
+  "capability_phase_policy_denied" as const;
+
+export const DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE =
+  "dynamic_capability_phase_policy" as const;
+
+export interface DynamicCapabilityRunInput {
+  readonly phase?: string;
+  readonly values?: Readonly<Record<string, unknown>>;
+}
+
+export interface DynamicCapabilityPhasePolicyTool {
+  readonly id: string;
+  readonly categories?: ReadonlyArray<DynamicCapabilityPhasePolicyAccess>;
+}
+
+export interface DynamicCapabilityPhasePolicy {
+  readonly policyId: string;
+  readonly phase: string;
+  readonly allowedCategories: ReadonlyArray<DynamicCapabilityPhasePolicyAccess>;
+  readonly tools: ReadonlyArray<DynamicCapabilityPhasePolicyTool>;
+  readonly skills?: DynamicCapabilitySlotSelection;
+  readonly instructions?: DynamicCapabilitySlotSelection;
+}
+
+export interface DynamicCapabilityPhasePolicyDeniedDiagnostic {
+  readonly reason: typeof DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON;
+  readonly source: typeof DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE;
+  readonly targetId: string;
+  readonly policyId: string;
+  readonly phase: string;
+  readonly requiredCategory: DynamicCapabilityPhasePolicyAccess;
+  readonly category?: DynamicCapabilityPhasePolicyAccess;
+}
+
+export type DynamicCapabilityProjectionDiagnostic =
+  DynamicCapabilityPhasePolicyDeniedDiagnostic;
+
 export interface DynamicCapabilityEventRef {
   readonly name: DynamicCapabilityEventName;
   readonly sourceEventId?: number;
@@ -202,6 +251,7 @@ export interface DynamicCapabilityCompiledCatalog {
 export interface DynamicCapabilityContext {
   readonly event: DynamicCapabilityEventRef;
   readonly catalog: DynamicCapabilityCompiledCatalog;
+  readonly input: DynamicCapabilityRunInput;
   readonly auth: Readonly<Record<string, unknown>>;
   readonly projections: Readonly<Record<string, unknown>>;
   readonly materials: Readonly<Record<string, MaterialRef>>;
@@ -210,6 +260,7 @@ export interface DynamicCapabilityContext {
 export interface DynamicCapabilitySlotSelection {
   readonly allow?: ReadonlyArray<string>;
   readonly deny?: ReadonlyArray<string>;
+  readonly diagnostics?: ReadonlyArray<DynamicCapabilityProjectionDiagnostic>;
 }
 
 export interface DynamicCapabilityResolverResult {
@@ -225,7 +276,10 @@ export interface DynamicCapabilityResolverResultIssue {
     | "unknown_field"
     | "slot_object_required"
     | "array_required"
-    | "target_id_string_required";
+    | "target_id_string_required"
+    | "diagnostic_object_required"
+    | "diagnostic_field_string_required"
+    | "diagnostic_field_value_required";
 }
 
 export type DynamicCapabilityResolverResultParseResult =
@@ -250,6 +304,7 @@ export interface DynamicCapabilityProjectionEntry {
   readonly visible: boolean;
   readonly decision: DynamicCapabilityVisibilityDecision;
   readonly provenance: ReadonlyArray<DynamicCapabilityResolverProvenance>;
+  readonly diagnostics?: ReadonlyArray<DynamicCapabilityProjectionDiagnostic>;
 }
 
 export interface DynamicCapabilityInstructionProjectionEntry extends DynamicCapabilityProjectionEntry {
@@ -296,7 +351,16 @@ const dynamicCapabilitySlots: ReadonlyArray<DynamicCapabilitySlot> = [
 ];
 
 const dynamicCapabilityResultFields = new Set<string>(dynamicCapabilitySlots);
-const dynamicCapabilitySlotSelectionFields = new Set(["allow", "deny"]);
+const dynamicCapabilitySlotSelectionFields = new Set(["allow", "deny", "diagnostics"]);
+const dynamicCapabilityDiagnosticFields = new Set([
+  "reason",
+  "source",
+  "targetId",
+  "policyId",
+  "phase",
+  "requiredCategory",
+  "category",
+]);
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -323,6 +387,91 @@ const parseDynamicCapabilityTargetIds = (
   return out;
 };
 
+const parseRequiredDiagnosticString = (
+  path: string,
+  value: unknown,
+  issues: DynamicCapabilityResolverResultIssue[],
+): string | undefined => {
+  if (typeof value !== "string" || value.length === 0) {
+    issues.push({ path, reason: "diagnostic_field_string_required" });
+    return undefined;
+  }
+  return value;
+};
+
+const parseDynamicCapabilityProjectionDiagnostics = (
+  path: string,
+  value: unknown,
+  issues: DynamicCapabilityResolverResultIssue[],
+): ReadonlyArray<DynamicCapabilityProjectionDiagnostic> | undefined => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    issues.push({ path, reason: "array_required" });
+    return undefined;
+  }
+  const out: DynamicCapabilityProjectionDiagnostic[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const item = value[index];
+    const itemPath = `${path}/${index}`;
+    if (!isRecord(item)) {
+      issues.push({ path: itemPath, reason: "diagnostic_object_required" });
+      continue;
+    }
+    for (const field of Object.keys(item)) {
+      if (!dynamicCapabilityDiagnosticFields.has(field)) {
+        issues.push({ path: `${itemPath}/${field}`, reason: "unknown_field" });
+      }
+    }
+    const reason = parseRequiredDiagnosticString(`${itemPath}/reason`, item.reason, issues);
+    const source = parseRequiredDiagnosticString(`${itemPath}/source`, item.source, issues);
+    const targetId = parseRequiredDiagnosticString(`${itemPath}/targetId`, item.targetId, issues);
+    const policyId = parseRequiredDiagnosticString(`${itemPath}/policyId`, item.policyId, issues);
+    const phase = parseRequiredDiagnosticString(`${itemPath}/phase`, item.phase, issues);
+    const requiredCategory = parseRequiredDiagnosticString(
+      `${itemPath}/requiredCategory`,
+      item.requiredCategory,
+      issues,
+    );
+    const category =
+      item.category === undefined
+        ? undefined
+        : parseRequiredDiagnosticString(`${itemPath}/category`, item.category, issues);
+    if (
+      reason !== undefined &&
+      reason !== DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON
+    ) {
+      issues.push({ path: `${itemPath}/reason`, reason: "diagnostic_field_value_required" });
+    }
+    if (
+      source !== undefined &&
+      source !== DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE
+    ) {
+      issues.push({ path: `${itemPath}/source`, reason: "diagnostic_field_value_required" });
+    }
+    if (
+      reason !== DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON ||
+      source !== DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE ||
+      targetId === undefined ||
+      policyId === undefined ||
+      phase === undefined ||
+      requiredCategory === undefined ||
+      (item.category !== undefined && category === undefined)
+    ) {
+      continue;
+    }
+    out.push({
+      reason,
+      source,
+      targetId,
+      policyId,
+      phase,
+      requiredCategory,
+      ...(category === undefined ? {} : { category }),
+    });
+  }
+  return out;
+};
+
 const parseDynamicCapabilitySlotSelection = (
   path: string,
   value: unknown,
@@ -339,9 +488,15 @@ const parseDynamicCapabilitySlotSelection = (
   }
   const allow = parseDynamicCapabilityTargetIds(`${path}/allow`, value.allow, issues);
   const deny = parseDynamicCapabilityTargetIds(`${path}/deny`, value.deny, issues);
+  const diagnostics = parseDynamicCapabilityProjectionDiagnostics(
+    `${path}/diagnostics`,
+    value.diagnostics,
+    issues,
+  );
   return {
     ...(allow === undefined ? {} : { allow }),
     ...(deny === undefined ? {} : { deny }),
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   };
 };
 
@@ -415,6 +570,7 @@ const mergeProjectionEntries = (
   inputs: ReadonlyArray<DynamicCapabilityResolverMergeInput>,
 ): ReadonlyArray<DynamicCapabilityProjectionEntry> => {
   const provenanceById = new Map<string, DynamicCapabilityResolverProvenance[]>();
+  const diagnosticsById = new Map<string, DynamicCapabilityProjectionDiagnostic[]>();
   const allowed = new Set<string>();
   const denied = new Set<string>();
   for (const input of inputs) {
@@ -427,6 +583,12 @@ const mergeProjectionEntries = (
       denied.add(id);
       provenanceById.set(id, [...(provenanceById.get(id) ?? []), input.provenance]);
     }
+    for (const diagnostic of selection?.diagnostics ?? []) {
+      diagnosticsById.set(diagnostic.targetId, [
+        ...(diagnosticsById.get(diagnostic.targetId) ?? []),
+        diagnostic,
+      ]);
+    }
   }
   return uniqueSorted(ids).map((id) => {
     const decision = denied.has(id)
@@ -434,11 +596,13 @@ const mergeProjectionEntries = (
       : allowed.has(id)
         ? DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED
         : DYNAMIC_CAPABILITY_VISIBILITY.BASELINE;
+    const diagnostics = diagnosticsById.get(id);
     return {
       id,
       visible: decision !== DYNAMIC_CAPABILITY_VISIBILITY.DENIED,
       decision,
       provenance: provenanceById.get(id) ?? [],
+      ...(diagnostics === undefined || diagnostics.length === 0 ? {} : { diagnostics }),
     };
   });
 };
@@ -471,7 +635,11 @@ const unknownDynamicCapabilityTargets = (
         });
       }
       const known = new Set(catalogIds(catalog, slot));
-      for (const targetId of [...(selection?.allow ?? []), ...(selection?.deny ?? [])]) {
+      for (const targetId of [
+        ...(selection?.allow ?? []),
+        ...(selection?.deny ?? []),
+        ...(selection?.diagnostics ?? []).map((diagnostic) => diagnostic.targetId),
+      ]) {
         if (known.has(targetId)) continue;
         issues.push({
           kind: "unknown_target",
@@ -526,5 +694,61 @@ export const mergeDynamicCapabilityProjection = (input: {
             left.slot.localeCompare(right.slot) || left.resolverId.localeCompare(right.resolverId),
         ),
     },
+  };
+};
+
+const UNCATEGORIZED_PHASE_POLICY_ACCESS = "uncategorized";
+
+const firstPolicyCategory = (
+  categories: ReadonlyArray<DynamicCapabilityPhasePolicyAccess> | undefined,
+): DynamicCapabilityPhasePolicyAccess => categories?.[0] ?? UNCATEGORIZED_PHASE_POLICY_ACCESS;
+
+const policyToolById = (
+  tools: ReadonlyArray<DynamicCapabilityPhasePolicyTool>,
+): ReadonlyMap<string, DynamicCapabilityPhasePolicyTool> =>
+  new Map(tools.map((tool) => [tool.id, tool]));
+
+const policyAllowsTool = (
+  tool: DynamicCapabilityPhasePolicyTool | undefined,
+  allowedCategories: ReadonlySet<DynamicCapabilityPhasePolicyAccess>,
+): boolean =>
+  tool !== undefined &&
+  (tool.categories ?? []).some((category) => allowedCategories.has(category));
+
+export const lowerDynamicCapabilityPhasePolicy = (input: {
+  readonly catalog: DynamicCapabilityCompiledCatalog;
+  readonly policy: DynamicCapabilityPhasePolicy;
+}): DynamicCapabilityResolverResult => {
+  const allowedCategories = new Set(input.policy.allowedCategories);
+  const tools = policyToolById(input.policy.tools);
+  const allow: string[] = [];
+  const deny: string[] = [];
+  const diagnostics: DynamicCapabilityProjectionDiagnostic[] = [];
+
+  for (const tool of uniqueSorted(input.catalog.tools.map((entry) => entry.id))) {
+    const toolPolicy = tools.get(tool);
+    if (policyAllowsTool(toolPolicy, allowedCategories)) {
+      allow.push(tool);
+      continue;
+    }
+    const requiredCategory = firstPolicyCategory(toolPolicy?.categories);
+    deny.push(tool);
+    diagnostics.push({
+      reason: DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON,
+      source: DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE,
+      targetId: tool,
+      policyId: input.policy.policyId,
+      phase: input.policy.phase,
+      requiredCategory,
+      category: requiredCategory,
+    });
+  }
+
+  return {
+    tools: { allow, deny, diagnostics },
+    ...(input.policy.skills === undefined ? {} : { skills: input.policy.skills }),
+    ...(input.policy.instructions === undefined
+      ? {}
+      : { instructions: input.policy.instructions }),
   };
 };

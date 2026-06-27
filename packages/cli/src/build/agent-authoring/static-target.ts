@@ -773,11 +773,13 @@ const generatedDynamicCapabilityTurnEvent = (
 
 const generatedDynamicSubmitBindingsFor = async (
   event: DynamicCapabilityEventRef,
+  input: DynamicCapabilityRunInput | undefined = undefined,
 ): Promise<GeneratedTargetResult<Pick<AgentSubmitBindings, "dynamicCapabilityProjection" | "instructionFragments">>> => {
   const projection = await runDynamicCapabilityResolvers({
     event,
     catalog: generatedDynamicCapabilityCatalog,
     resolvers: generatedDynamicCapabilityResolvers,
+    input,
     materials: semanticManifest.materials ?? {},
   });
   if (!projection.ok) {
@@ -939,6 +941,7 @@ const renderSubmitSpecFromRunInput = (
   ...(input.budget === undefined ? {} : { budget: input.budget }),
   ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
   ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  ...(input.dynamicCapability === undefined ? {} : { dynamicCapability: input.dynamicCapability }),
   ...(input.materials === undefined ? {} : { materials: input.materials }),
   ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
   ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
@@ -995,6 +998,7 @@ const renderProductApiDurableObjectMethods = (): string => `
         sessionRef: input.sessionRef,
         turnRef: input.turnRef,
       }),
+      input.dynamicCapability,
     ).then((bindings) =>
       bindings.ok
         ? this.submitWithBindingsAndProductLink(
@@ -1025,7 +1029,11 @@ const renderProductApiDurableObjectMethods = (): string => `
   }
 
   runWorkflow(input: AgentWorkflowRunInput): Promise<SubmitResult> {
-    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+    return generatedSubmitBindingsFor(
+      this.targetEnv,
+      generatedDynamicCapabilityTurnEvent(),
+      input.dynamicCapability,
+    ).then((bindings) =>
       bindings.ok
         ? this.submitWithBindingsAndProductLink(
             submitSpecFromRunInput(
@@ -1200,6 +1208,7 @@ const renderWorkspaceStaticTarget = (
               "DynamicCapabilityCompiledCatalog",
               "DynamicCapabilityEventRef",
               "DynamicCapabilityProjection",
+              "DynamicCapabilityRunInput",
               "SubmitInstructionFragment",
             ],
             modules.runtimeProtocol,
@@ -1415,6 +1424,7 @@ ${renderGeneratedLlmRoutesFor(normalized.llmRoutes)}
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
   event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
+  dynamicCapability: DynamicCapabilityRunInput | undefined = undefined,
 ): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
   const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
   if (preflightDiagnostics.length > 0) {
@@ -1426,7 +1436,7 @@ const generatedSubmitBindingsFor = async (
   const capabilityGraph = generatedCapabilityInstallGraphFor(env);
   const routes = generatedLlmRoutesFor(env);
   if (!routes.ok) return routes;
-  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
+  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event, dynamicCapability);
   if (!dynamicBindings.ok) return dynamicBindings;
   const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
   return {
@@ -1486,13 +1496,21 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
   }
 
   override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
-    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+    return generatedSubmitBindingsFor(
+      this.targetEnv,
+      generatedDynamicCapabilityTurnEvent(),
+      spec.dynamicCapability,
+    ).then((bindings) =>
       bindings.ok ? this.submitWithBindings(spec, bindings.value) : rejectTargetFailure(bindings),
     );
   }
 
   submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
-    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+    return generatedSubmitBindingsFor(
+      this.targetEnv,
+      generatedDynamicCapabilityTurnEvent(),
+      input.dynamicCapability,
+    ).then((bindings) =>
       bindings.ok
         ? this.submitWithBindings(
             submitSpecFromRunInput(input, bindings.value.dynamicCapabilityProjection),
@@ -1651,6 +1669,7 @@ const renderChatStaticTarget = (
               "DynamicCapabilityCompiledCatalog",
               "DynamicCapabilityEventRef",
               "DynamicCapabilityProjection",
+              "DynamicCapabilityRunInput",
               "SubmitInstructionFragment",
             ],
             modules.runtimeProtocol,
@@ -1747,6 +1766,7 @@ ${renderGeneratedLlmRoutesFor(normalized.llmRoutes)}
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
   event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
+  dynamicCapability: DynamicCapabilityRunInput | undefined = undefined,
 ): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
   const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
   if (preflightDiagnostics.length > 0) {
@@ -1757,7 +1777,7 @@ const generatedSubmitBindingsFor = async (
   }
   const routes = generatedLlmRoutesFor(env);
   if (!routes.ok) return routes;
-  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
+  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event, dynamicCapability);
   if (!dynamicBindings.ok) return dynamicBindings;
   const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
   return {
@@ -1802,13 +1822,21 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
   }
 
   override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
-    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+    return generatedSubmitBindingsFor(
+      this.targetEnv,
+      generatedDynamicCapabilityTurnEvent(),
+      spec.dynamicCapability,
+    ).then((bindings) =>
       bindings.ok ? this.submitWithBindings(spec, bindings.value) : rejectTargetFailure(bindings),
     );
   }
 
   submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
-    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+    return generatedSubmitBindingsFor(
+      this.targetEnv,
+      generatedDynamicCapabilityTurnEvent(),
+      input.dynamicCapability,
+    ).then((bindings) =>
       bindings.ok
         ? this.submitWithBindings(
             submitSpecFromRunInput(input, bindings.value.dynamicCapabilityProjection),
@@ -1932,6 +1960,7 @@ const renderLocalAgentApp = (
         "DynamicCapabilityCompiledCatalog",
         "DynamicCapabilityEventRef",
         "DynamicCapabilityProjection",
+        "DynamicCapabilityRunInput",
         "SubmitInstructionFragment",
       ],
       modules.runtimeProtocol,
@@ -2067,7 +2096,7 @@ const generatedLocalSubmitInputFromRunInput = async (
   input: SubmitRunInput,
   event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
 ): Promise<LocalAgentSubmitInput> => {
-  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
+  const dynamicBindings = await generatedDynamicSubmitBindingsFor(event, input.dynamicCapability);
   if (!dynamicBindings.ok) return rejectTargetFailure(dynamicBindings);
   const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
   return {

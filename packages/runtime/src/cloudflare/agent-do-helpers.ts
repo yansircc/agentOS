@@ -45,6 +45,7 @@ export interface AgentSubmitSpecLike {
   readonly budget?: SubmitSpec["budget"];
   readonly outputSchema?: SubmitSpec["outputSchema"];
   readonly traceContext?: SubmitSpec["traceContext"];
+  readonly dynamicCapability?: SubmitRunInput["dynamicCapability"];
   readonly materials?: SubmitRunInput["materials"];
   readonly toolContext?: SubmitRunInput["toolContext"];
   readonly toolPolicy?: SubmitSpec["toolPolicy"];
@@ -59,6 +60,7 @@ export const submitRunInputFromAgentSpec = (spec: AgentSubmitSpecLike): SubmitRu
   ...(spec.budget === undefined ? {} : { budget: spec.budget }),
   ...(spec.outputSchema === undefined ? {} : { outputSchema: spec.outputSchema }),
   ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  ...(spec.dynamicCapability === undefined ? {} : { dynamicCapability: spec.dynamicCapability }),
   ...(spec.materials === undefined ? {} : { materials: spec.materials }),
   ...(spec.toolContext === undefined ? {} : { toolContext: spec.toolContext }),
   ...(spec.toolPolicy === undefined ? {} : { toolPolicy: spec.toolPolicy }),
