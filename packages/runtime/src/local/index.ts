@@ -43,6 +43,7 @@ import {
   type WorkspaceExecResult,
   type WorkspaceFileStat,
 } from "../workspace-env-core";
+import { defineWorkspaceSessionLease, type WorkspaceSessionLease } from "../workspace-session";
 import {
   abortErrorFor,
   checkSignal,
@@ -357,6 +358,59 @@ const localAgentHost = (target: LocalAgentRuntimeTarget, workspaceEnv: Workspace
     }),
   });
 
+const localWorkspaceSession = (input: {
+  readonly target: LocalAgentRuntimeTarget;
+  readonly identity: string;
+  readonly workspaceEnv: WorkspaceEnv;
+  readonly workspaceOperations?: WorkspaceOperationsOptions;
+}): WorkspaceSessionLease =>
+  defineWorkspaceSessionLease({
+    identity: {
+      scope: input.identity,
+      runId: input.target,
+      workspaceRef: input.workspaceEnv.domain.ref,
+    },
+    env: input.workspaceEnv,
+    repo: { repoRef: input.workspaceEnv.cwd, root: input.workspaceEnv.cwd },
+    permissions:
+      input.workspaceOperations === undefined
+        ? undefined
+        : {
+            phaseRef: input.target,
+            policy: {
+              ...(input.workspaceOperations.exposure === undefined
+                ? {}
+                : { exposure: input.workspaceOperations.exposure }),
+              ...(input.workspaceOperations.toolNames === undefined
+                ? {}
+                : { toolNames: input.workspaceOperations.toolNames }),
+              ...(input.workspaceOperations.mutationPolicy === undefined
+                ? {}
+                : { mutationPolicy: input.workspaceOperations.mutationPolicy }),
+              ...(input.workspaceOperations.shellPolicy === undefined
+                ? {}
+                : { shellPolicy: input.workspaceOperations.shellPolicy }),
+              ...(input.workspaceOperations.toolInteractions === undefined
+                ? {}
+                : { toolInteractions: input.workspaceOperations.toolInteractions }),
+            },
+          },
+    resourceLimits: {
+      ...(input.workspaceOperations?.maxFileBytes === undefined
+        ? {}
+        : { maxFileBytes: input.workspaceOperations.maxFileBytes }),
+      ...(input.workspaceOperations?.maxCommandChars === undefined
+        ? {}
+        : { maxCommandChars: input.workspaceOperations.maxCommandChars }),
+      ...(input.workspaceOperations?.execTimeoutMs === undefined
+        ? {}
+        : { execTimeoutMs: input.workspaceOperations.execTimeoutMs }),
+      ...(input.workspaceOperations?.maxOutputBytes === undefined
+        ? {}
+        : { maxOutputBytes: input.workspaceOperations.maxOutputBytes }),
+    },
+  });
+
 const localWorkspaceOperations = (options: WorkspaceOperationsOptions | undefined) =>
   workspaceOperations({
     toolNames: WORKSPACE_TOOL_NAMES,
@@ -601,7 +655,13 @@ export const lowerLocalAgentRuntime = async (
     env: options.env,
     inheritEnv: options.inheritEnv,
   });
-  const host = localAgentHost(target, workspaceEnv);
+  const workspaceSession = localWorkspaceSession({
+    target,
+    identity: options.identity,
+    workspaceEnv,
+    workspaceOperations: options.workspaceOperations,
+  });
+  const host = localAgentHost(target, workspaceSession.env);
   const capabilities = [
     localWorkspaceOperations(options.workspaceOperations),
     ...(options.capabilities ?? []),

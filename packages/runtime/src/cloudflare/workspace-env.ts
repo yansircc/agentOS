@@ -6,10 +6,22 @@ import {
   type CloudflareWorkspaceEnvOptions,
 } from "./workspace-env-adapter";
 import type { WorkspaceEnv } from "../workspace-env-core";
+import {
+  defineWorkspaceSessionLease,
+  type WorkspaceSessionArtifactReadback,
+  type WorkspaceSessionLease,
+  type WorkspaceSessionPermissionInput,
+  type WorkspaceSessionRepoBinding,
+  type WorkspaceSessionResourceLimits,
+} from "../workspace-session";
 
 export interface CloudflareWorkspaceEnvResolverInput {
   readonly scope: string;
   readonly runId: string;
+  readonly repo?: WorkspaceSessionRepoBinding;
+  readonly permissions?: WorkspaceSessionPermissionInput;
+  readonly resourceLimits?: WorkspaceSessionResourceLimits;
+  readonly artifactReadback?: WorkspaceSessionArtifactReadback;
 }
 
 export interface CloudflareWorkspaceEnvBinding {
@@ -72,6 +84,7 @@ export interface CloudflareWorkspaceEnvLease {
   readonly sandboxId: string;
   readonly workspaceRef: string;
   readonly env: WorkspaceEnv;
+  readonly session: WorkspaceSessionLease;
   readonly cleanup: () => Promise<void>;
 }
 
@@ -231,17 +244,30 @@ export const createCloudflareWorkspaceEnvResolver = (
           ? {}
           : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
       });
+      const cleanup = async () => {
+        try {
+          await options.cleanup?.(env, input);
+        } finally {
+          leases.delete(key);
+        }
+      };
+      const session = defineWorkspaceSessionLease({
+        identity: { scope: input.scope, runId: input.runId, workspaceRef },
+        env,
+        ...(input.repo === undefined ? {} : { repo: input.repo }),
+        ...(input.permissions === undefined ? {} : { permissions: input.permissions }),
+        ...(input.resourceLimits === undefined ? {} : { resourceLimits: input.resourceLimits }),
+        ...(input.artifactReadback === undefined
+          ? {}
+          : { artifactReadback: input.artifactReadback }),
+        cleanup,
+      });
       const lease = {
         sandboxId,
         workspaceRef,
         env,
-        cleanup: async () => {
-          try {
-            await options.cleanup?.(env, input);
-          } finally {
-            leases.delete(key);
-          }
-        },
+        session,
+        cleanup,
       };
       leases.set(key, lease);
       return lease;
@@ -292,23 +318,36 @@ export const createCloudflareSandboxWorkspaceEnvResolver = (
           ? {}
           : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
       });
+      const cleanup = async () => {
+        try {
+          await options.cleanup?.({
+            ...input,
+            sandboxId,
+            workspaceRef,
+            env,
+            client: workspaceClient,
+          });
+        } finally {
+          leases.delete(key);
+        }
+      };
+      const session = defineWorkspaceSessionLease({
+        identity: { scope: input.scope, runId: input.runId, workspaceRef },
+        env,
+        ...(input.repo === undefined ? {} : { repo: input.repo }),
+        ...(input.permissions === undefined ? {} : { permissions: input.permissions }),
+        ...(input.resourceLimits === undefined ? {} : { resourceLimits: input.resourceLimits }),
+        ...(input.artifactReadback === undefined
+          ? {}
+          : { artifactReadback: input.artifactReadback }),
+        cleanup,
+      });
       const lease = {
         sandboxId,
         workspaceRef,
         env,
-        cleanup: async () => {
-          try {
-            await options.cleanup?.({
-              ...input,
-              sandboxId,
-              workspaceRef,
-              env,
-              client: workspaceClient,
-            });
-          } finally {
-            leases.delete(key);
-          }
-        },
+        session,
+        cleanup,
       };
       leases.set(key, lease);
       return lease;

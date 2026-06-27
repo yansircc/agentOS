@@ -25,6 +25,12 @@ import {
   createCloudflareWorkspaceEnvResolver,
 } from "../../src/cloudflare/workspace-env";
 import { installCloudflareWorkspaceOperationProvider } from "../../src/cloudflare/workspace-op";
+import {
+  cleanupWorkspaceSessionLease,
+  defineWorkspaceSessionLease,
+  readWorkspaceSessionTerminalArtifact,
+  workspaceSessionToolOptions,
+} from "../../src/workspace-session";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const RUNTIME_SOURCE_PACKAGE_NAME = "@agent-os/runtime";
@@ -291,10 +297,15 @@ describe("Cloudflare DO workspace host helpers", () => {
       workspaceResolver: {
         resolve: async ({ scope, runId }) => {
           resolved.push(`${scope}:${runId}`);
+          const env = workspaceEnv(`workspace:${scope}:${runId}`);
           return {
             sandboxId: `sandbox:${scope}:${runId}`,
             workspaceRef: `workspace:${scope}:${runId}`,
-            env: workspaceEnv(`workspace:${scope}:${runId}`),
+            env,
+            session: defineWorkspaceSessionLease({
+              identity: { scope, runId, workspaceRef: `workspace:${scope}:${runId}` },
+              env,
+            }),
             cleanup: async () => undefined,
           };
         },
@@ -379,6 +390,7 @@ describe("Cloudflare DO workspace host helpers", () => {
   it("resolves one Cloudflare WorkspaceEnv lease per scope/run and validates bindings", async () => {
     const sandboxIds: string[] = [];
     const cleaned: string[] = [];
+    const readbackInputs: unknown[] = [];
     const resolver = createCloudflareWorkspaceEnvResolver({
       binding: {
         getSandbox: (sandboxId) => {
@@ -396,14 +408,55 @@ describe("Cloudflare DO workspace host helpers", () => {
 
     const first = await resolver.resolve({ scope: "scope-1", runId: "run-1" });
     const second = await resolver.resolve({ scope: "scope-1", runId: "run-1" });
-    const third = await resolver.resolve({ scope: "scope-1", runId: "run-2" });
+    const third = await resolver.resolve({
+      scope: "scope-1",
+      runId: "run-2",
+      repo: { repoRef: "repo:example", root: "/workspace" },
+      permissions: {
+        phaseRef: "change",
+        policy: {
+          toolNames: ["read_file", "write_file"],
+          mutationPolicy: "receipt-backed",
+          toolInteractions: { write_file: "approval" },
+        },
+      },
+      resourceLimits: { execTimeoutMs: 1_000 },
+      artifactReadback: {
+        readTerminalArtifact: async (input) => {
+          readbackInputs.push(input);
+          return "artifact";
+        },
+      },
+    });
 
     expect(first).toBe(second);
     expect(third).not.toBe(first);
     expect(sandboxIds).toEqual(["workspace-job:scope-1:run-1", "workspace-job:scope-1:run-2"]);
     expect(first.env.domain.ref).toBe("cloudflare-sandbox:scope-1:run-1");
+    expect(first.session.identity).toEqual({
+      scope: "scope-1",
+      runId: "run-1",
+      workspaceRef: "cloudflare-sandbox:scope-1:run-1",
+    });
+    expect(first.session.env).toBe(first.env);
+    expect(third.session.repo).toEqual({ repoRef: "repo:example", root: "/workspace" });
+    expect(workspaceSessionToolOptions(third.session)).toEqual({
+      toolNames: ["read_file", "write_file"],
+      mutationPolicy: "receipt-backed",
+      toolInteractions: { write_file: "approval" },
+      execTimeoutMs: 1_000,
+    });
+    await expect(
+      readWorkspaceSessionTerminalArtifact(third.session, {
+        path: "/result.json",
+        artifactRef: "artifact:result",
+      }),
+    ).resolves.toBe("artifact");
+    expect(readbackInputs).toEqual([
+      { runId: "run-2", path: "/result.json", artifactRef: "artifact:result" },
+    ]);
 
-    await first.cleanup();
+    await cleanupWorkspaceSessionLease(first.session, { reason: "completed" });
     const afterCleanup = await resolver.resolve({ scope: "scope-1", runId: "run-1" });
     expect(afterCleanup).not.toBe(first);
     expect(cleaned).toEqual(["run-1"]);
