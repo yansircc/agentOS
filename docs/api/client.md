@@ -11,6 +11,7 @@
 - `.:AgentClientInputRequestSnapshot`
 - `.:AgentClientListener`
 - `.:AgentClientRpcInvoker`
+- `.:AgentClientRunInspectionSnapshot`
 - `.:AgentClientRunSnapshot`
 - `.:AgentClientRunStatus`
 - `.:AgentClientSelector`
@@ -28,6 +29,7 @@
 - `.:createInitialAgentClientSnapshot`
 - `.:isCurrentContinuationRef`
 - `.:isCurrentInputRequestRef`
+- `.:projectAgentClientRunInspection`
 - `.:selectAgentClientSnapshot`
 - `./react:AgentClientSelector`
 - `./react:AgentClientStore`

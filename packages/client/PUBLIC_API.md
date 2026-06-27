@@ -15,6 +15,7 @@ Status: 0.5.x active development for the canonical agent client package. Root ex
 - `.:AgentClientInputRequestSnapshot`
 - `.:AgentClientListener`
 - `.:AgentClientRpcInvoker`
+- `.:AgentClientRunInspectionSnapshot`
 - `.:AgentClientRunSnapshot`
 - `.:AgentClientRunStatus`
 - `.:AgentClientSelector`
@@ -32,6 +33,7 @@ Status: 0.5.x active development for the canonical agent client package. Root ex
 - `.:createInitialAgentClientSnapshot`
 - `.:isCurrentContinuationRef`
 - `.:isCurrentInputRequestRef`
+- `.:projectAgentClientRunInspection`
 - `.:selectAgentClientSnapshot`
 - `./react:AgentClientSelector`
 - `./react:AgentClientStore`

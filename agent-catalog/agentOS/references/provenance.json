@@ -115,18 +115,18 @@
     },
     {
       "path": "docs/api/client.md",
-      "sha256": "1a54e6d9f3e9f8c697053adb745b91160c95a2c46f81938fb86c1631abf306ae",
-      "byteSize": 3273
+      "sha256": "9d206ed56926e164a48569f2f36ea05dca272df458b26e400bfb47460ee144df",
+      "byteSize": 3350
     },
     {
       "path": "docs/api/core.md",
-      "sha256": "940ab40be2f7db2db23bef8c9184c9c64d3cad5d43e70a10669a797116941d6d",
-      "byteSize": 65882
+      "sha256": "aeb408fcddceb6038a1e03f833a83b477885840b9ac91388cc4d51843c4a2333",
+      "byteSize": 66210
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "92c13c10405b0dec6accaf87014d03526c462828bb6f1b06e0acba8b7f521815",
-      "byteSize": 29002
+      "sha256": "abe7856e2d5ceaac9b8b08b4017837294b55fbfbb0d5cb86fa5f4583a9c48148",
+      "byteSize": 29198
     },
     {
       "path": "docs/runtime-packages.md",
@@ -192,18 +192,18 @@
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/core.md",
-      "sha256": "376e99ab8e274fe6a6f0596769ae19d0dcc5dcb17e75093642b63b276c5c4deb",
-      "byteSize": 65884
+      "sha256": "1a54080ce1d5b375927564647ee42e0307db99a33b658d7d0005454971023f20",
+      "byteSize": 66212
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "743c7dc41a454848c40d67c4a4d593b4bcf13e8a683b2f46e85f0e4d4ac5abd8",
-      "byteSize": 29004
+      "sha256": "533f145d62586e7b5eb0b1bf90bbedeb0c3c725b406c1657bc97b28c6d2995d0",
+      "byteSize": 29200
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",
-      "sha256": "611b07c88899686c7437c954aad901a31d5bd6c173b98275d9913c15a83966d5",
-      "byteSize": 3275
+      "sha256": "cd5b84b526ed085c4a4775e59fbadc1811fb4ee447d4edf272f4ef52eac02ec5",
+      "byteSize": 3352
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/cli.md",

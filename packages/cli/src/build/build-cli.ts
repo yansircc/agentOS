@@ -1175,6 +1175,7 @@ interface LocalAgentApp {
     readonly events: (opts?: { readonly afterId?: number }) => ReadonlyArray<unknown>;
     readonly diagnostics: () => ReadonlyArray<unknown>;
     readonly inspect: () => unknown;
+    readonly inspectRun?: (runId: number | string) => unknown;
   };
   readonly sessions?: {
     readonly submitTurn: (input: unknown) => Promise<unknown>;
@@ -1210,6 +1211,10 @@ const PRODUCT_COMMAND = {
   RUN_WORKFLOW: "runWorkflow",
   INSPECT_WORKFLOW_RUN: "inspectWorkflowRun",
   LIST_WORKFLOW_RUNS: "listWorkflowRuns",
+} as const;
+
+const RUNTIME_COMMAND = {
+  INSPECT_RUN: "inspectRuntimeRun",
 } as const;
 
 class HttpFailure extends Error {
@@ -1361,6 +1366,22 @@ const invokeLocalAgentCommand = async (
   if (name === WORKSPACE_AGENT_COMMAND.SUBMIT) {
     const record = commandInputRecord(input, "submit");
     return app.runtime.submit(assertSubmitRunInput(record.input, "submit"));
+  }
+  if (name === RUNTIME_COMMAND.INSPECT_RUN) {
+    if (app.runtime.inspectRun === undefined) {
+      throw new HttpFailure(501, "runtime run inspection is unavailable");
+    }
+    const record = commandInputRecord(input, "inspectRuntimeRun");
+    const rawRunId = record.runId;
+    if (
+      !(
+        (typeof rawRunId === "number" && Number.isInteger(rawRunId) && rawRunId >= 1) ||
+        (typeof rawRunId === "string" && rawRunId.length > 0)
+      )
+    ) {
+      throw new HttpFailure(400, "invalid runtime run identity");
+    }
+    return app.runtime.inspectRun(rawRunId);
   }
   if (name === PRODUCT_COMMAND.SUBMIT_SESSION_TURN) {
     if (app.sessions === undefined) throw new HttpFailure(501, "sessions are unavailable");

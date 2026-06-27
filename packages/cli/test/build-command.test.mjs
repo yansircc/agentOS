@@ -1567,14 +1567,17 @@ void test("agentos build emits node local agent app target", () => {
     assert.match(local, /export interface LocalAgentApp/);
     assert.match(local, /readonly sessions:/);
     assert.match(local, /readonly workflows:/);
+    assert.match(local, /export interface LocalAgentAppRuntime extends LocalAgentRuntime/);
     assert.match(local, /projectAgentSession/);
+    assert.match(local, /projectRunInspection/);
     assert.match(local, /projectWorkflowRuns/);
     assert.match(local, /export const createLocalAgentApp/);
     assert.match(local, /target: "node@1"/);
     assert.match(local, /llm: options\.llm \?\? generatedLocalLlmFor\(targetEnv\)/);
     assert.match(local, /workspaceOperations: generatedWorkspaceOperations/);
     assert.match(local, /toolInteractions: generatedWorkspaceToolInteractions/);
-    assert.match(local, /runtime: lowered\.runtime/);
+    assert.match(local, /runtime: LocalAgentAppRuntime/);
+    assert.match(local, /inspectRun: \(runId\) =>/);
     assert.match(local, /lowered\.submitWithProductLink/);
     assert.doesNotMatch(local, /resolveRuntime|submitAgentEffect|workspaceOperations\(/);
     assert.doesNotMatch(local, /cloudflare|createAgentDurableObject|wrangler/i);
@@ -1693,6 +1696,9 @@ void test("agentos eval discovers eval files and runs local target through publi
         "      turnRef: input.turnRef,",
         "    });",
         '    if (result.final !== "eval done") throw new Error("unexpected final");',
+        '    const inspection = await t.sessions.projection("inspectRuntimeRun", { runId: result.runId });',
+        '    if (inspection.status?.kind !== "delivered") throw new Error("run inspection did not expose delivered status");',
+        '    if (inspection.lastKnownEvent?.kind !== "agent.run.completed") throw new Error("run inspection did not expose last completed event");',
         "    const events = await t.sessions.events();",
         '    if (!events.some((event) => event.kind === "agent.run.completed")) {',
         '      throw new Error("completion event missing");',

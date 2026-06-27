@@ -199,6 +199,7 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `.:PreflightDiagnosticSink`
 - `.:projectRecoveryAttemptBudget`
 - `.:projectRunsPage`
+- `.:projectRunInspection`
 - `.:projectRunStatus`
 - `.:projectRunTrace`
 - `.:projectSubmitResult`
@@ -218,6 +219,8 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `.:ResolveRuntimeResult`
 - `.:resolveRuntime`
 - `.:resolveRuntimeInstallGraph`
+- `.:RunInspection`
+- `.:RunInspectionDiagnostic`
 - `.:Resources`
 - `.:responseToSseHttpChunks`
 - `.:RUN_BEARING_KINDS`
@@ -674,6 +677,7 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `./run-projector:projectAgentSessions`
 - `./run-projector:projectAgentSessionTurnLinks`
 - `./run-projector:projectRunsPage`
+- `./run-projector:projectRunInspection`
 - `./run-projector:projectRunStatus`
 - `./run-projector:projectRunTrace`
 - `./run-projector:projectSubmitResult`
@@ -681,6 +685,8 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `./run-projector:projectWorkflowRuns`
 - `./run-projector:projectWorkflowRunLinks`
 - `./run-projector:RUN_BEARING_KINDS`
+- `./run-projector:RunInspection`
+- `./run-projector:RunInspectionDiagnostic`
 - `./run-projector:WorkflowRunAttemptProjection`
 - `./run-projector:WorkflowRunError`
 - `./run-projector:WorkflowRunListProjection`

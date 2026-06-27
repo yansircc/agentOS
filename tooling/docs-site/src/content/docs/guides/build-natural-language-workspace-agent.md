@@ -297,6 +297,13 @@ await agent.workflows.run({
 const reportRun = await agent.workflows.inspectRun("weekly-report", "weekly-report:2026-06-26");
 ```
 
+Generated local `LocalAgentApp` targets also expose `runtime.inspectRun(runId)`
+for product UI diagnostics. That projection reports the runtime run status,
+last-known runtime event, pending input request or cancellation posture,
+diagnostics, and product-link correlation from existing ledger/runtime facts. It
+is an evidence view for debugging and operator timelines; it is not the product
+Workbench or workflow state machine.
+
 Slack, GitHub, support, and other continuing conversation surfaces submit
 session turns. Summarize, report, check, build, and other finite operation
 surfaces run workflows. `client.run`, runtime events, and

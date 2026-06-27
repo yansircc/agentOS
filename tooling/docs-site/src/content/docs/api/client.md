@@ -16,6 +16,7 @@ slug: "api/client"
 - `.:AgentClientInputRequestSnapshot`
 - `.:AgentClientListener`
 - `.:AgentClientRpcInvoker`
+- `.:AgentClientRunInspectionSnapshot`
 - `.:AgentClientRunSnapshot`
 - `.:AgentClientRunStatus`
 - `.:AgentClientSelector`
@@ -33,6 +34,7 @@ slug: "api/client"
 - `.:createInitialAgentClientSnapshot`
 - `.:isCurrentContinuationRef`
 - `.:isCurrentInputRequestRef`
+- `.:projectAgentClientRunInspection`
 - `.:selectAgentClientSnapshot`
 - `./react:AgentClientSelector`
 - `./react:AgentClientStore`

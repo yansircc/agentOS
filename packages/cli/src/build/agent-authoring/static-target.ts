@@ -1883,7 +1883,13 @@ const renderLocalAgentApp = (
       modules.openAiCompatibleTransport,
     ),
     renderNamedImport(
-      ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
+      [
+        "projectAgentSession",
+        "projectAgentSessions",
+        "projectRunInspection",
+        "projectWorkflowRun",
+        "projectWorkflowRuns",
+      ],
       modules.runtimeRunProjector,
     ),
     renderTypeImport(["AgentManifest", "SubmitResult", "SubmitRunInput"], modules.runtimeProtocol),
@@ -1914,6 +1920,7 @@ const renderLocalAgentApp = (
       [
         "AgentSessionListProjection",
         "AgentSessionProjection",
+        "RunInspection",
         "WorkflowRunListProjection",
         "WorkflowRunProjection",
       ],
@@ -2049,8 +2056,12 @@ const generatedLocalSubmitInputFromRunInput = async (
   };
 };
 
+export interface LocalAgentAppRuntime extends LocalAgentRuntime {
+  readonly inspectRun: (runId: number | string) => RunInspection;
+}
+
 export interface LocalAgentApp {
-  readonly runtime: LocalAgentRuntime;
+  readonly runtime: LocalAgentAppRuntime;
   readonly sessions: {
     readonly submitTurn: (input: AgentSessionSubmitTurnInput) => Promise<SubmitResult>;
     readonly inspect: (sessionRef: string) => AgentSessionProjection;
@@ -2149,6 +2160,11 @@ export const createLocalAgentApp = async (
       projectWorkflowRun(lowered.runtime.events(), workflowId, workflowRunId),
     listRuns: (workflowId: string) => projectWorkflowRuns(lowered.runtime.events(), workflowId),
   };
+  const runtime: LocalAgentAppRuntime = {
+    ...lowered.runtime,
+    inspectRun: (runId) =>
+      projectRunInspection(lowered.runtime.events(), runId, lowered.runtime.diagnostics()),
+  };
   ${
     hasChannels
       ? `const channelRuntime: ChannelRuntime = {
@@ -2194,7 +2210,7 @@ export const createLocalAgentApp = async (
       : ""
   }
   return {
-    runtime: lowered.runtime,
+    runtime,
     sessions,
     workflows,
     ${hasChannels ? "channels,\n    " : ""}customCommand,
@@ -3644,6 +3660,17 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         kind: "workspace-host",
         source: modules.workspaceAgentHost,
         imports: ["WorkspaceAgentCustomCommandInput"],
+      },
+      {
+        kind: "target-runtime",
+        source: modules.runtimeRunProjector,
+        imports: [
+          "projectAgentSession",
+          "projectAgentSessions",
+          "projectRunInspection",
+          "projectWorkflowRun",
+          "projectWorkflowRuns",
+        ],
       },
       ...generatedToolImports(authoredManifestToolNames),
       ...generatedDynamicResolverImports(normalized.dynamicResolvers),
