@@ -717,8 +717,18 @@ const policyAllowsTool = (
 
 export const lowerDynamicCapabilityPhasePolicy = (input: {
   readonly catalog: DynamicCapabilityCompiledCatalog;
+  readonly slot: DynamicCapabilitySlot;
   readonly policy: DynamicCapabilityPhasePolicy;
 }): DynamicCapabilityResolverResult => {
+  if (input.slot === DYNAMIC_CAPABILITY_SLOT.SKILLS) {
+    return input.policy.skills === undefined ? {} : { skills: input.policy.skills };
+  }
+  if (input.slot === DYNAMIC_CAPABILITY_SLOT.INSTRUCTIONS) {
+    return input.policy.instructions === undefined
+      ? {}
+      : { instructions: input.policy.instructions };
+  }
+
   const allowedCategories = new Set(input.policy.allowedCategories);
   const tools = policyToolById(input.policy.tools);
   const allow: string[] = [];
@@ -746,9 +756,5 @@ export const lowerDynamicCapabilityPhasePolicy = (input: {
 
   return {
     tools: { allow, deny, diagnostics },
-    ...(input.policy.skills === undefined ? {} : { skills: input.policy.skills }),
-    ...(input.policy.instructions === undefined
-      ? {}
-      : { instructions: input.policy.instructions }),
   };
 };

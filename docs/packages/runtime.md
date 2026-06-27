@@ -122,6 +122,18 @@ uses schema-owned string detail. `handler_missing` remains reserved vocabulary
 until capability requirements declare required handler contracts and runtime
 code emits it from that contract.
 
+Dynamic capability phase policy is generic runtime algebra over the existing
+dynamic capability projection. Products may pass opaque submit-time
+`dynamicCapability.phase` values such as observe/propose/change/publish-style
+labels into generated targets, but those labels remain product facts and are not
+runtime enums, ledger events, or workflow state. Generated targets pass the
+opaque input to dynamic resolvers; resolvers can call
+`lowerDynamicCapabilityPhasePolicy` with access categories such as `read`,
+`write`, `durable_request`, and `external_effect`. The lowerer emits slot-local
+allow/deny selections and structured `capability_phase_policy_denied`
+diagnostics; model-visible tools, skills, and instruction fragments still come
+only from the dynamic capability projection.
+
 ## Minimal Usage
 
 Depend on runtime for consumer-facing runtime execution, admission service, and

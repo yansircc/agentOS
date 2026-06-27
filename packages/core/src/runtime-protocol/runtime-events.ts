@@ -429,6 +429,12 @@ export interface ToolArgumentSummary {
 export interface ToolRejectedDiagnostics {
   readonly phase: ToolRejectedDiagnosticsPhase;
   readonly reason: string;
+  readonly source?: string;
+  readonly toolName?: string;
+  readonly policyId?: string;
+  readonly policyPhase?: string;
+  readonly requiredCategory?: string;
+  readonly category?: string;
   readonly argumentSummary?: ToolArgumentSummary;
   readonly schemaIssues?: ReadonlyArray<AgentSchemaIssue>;
 }
@@ -705,6 +711,12 @@ export const ToolRejectedPayloadSchema: Schema.Decoder<ToolRejectedPayload> = Sc
     Schema.Struct({
       phase: Schema.Literals(TOOL_REJECTED_DIAGNOSTICS_PHASES),
       reason: nonEmptyString,
+      source: Schema.optional(nonEmptyString),
+      toolName: Schema.optional(nonEmptyString),
+      policyId: Schema.optional(nonEmptyString),
+      policyPhase: Schema.optional(nonEmptyString),
+      requiredCategory: Schema.optional(nonEmptyString),
+      category: Schema.optional(nonEmptyString),
       argumentSummary: Schema.optional(
         Schema.Struct({
           type: nonEmptyString,

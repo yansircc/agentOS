@@ -2,9 +2,13 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   DYNAMIC_CAPABILITY_EVENT,
   DYNAMIC_CAPABILITY_FAILURE_REASON,
+  DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS,
+  DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON,
+  DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE,
   DYNAMIC_CAPABILITY_RESOLVER_STATUS,
   DYNAMIC_CAPABILITY_SLOT,
   DYNAMIC_CAPABILITY_VISIBILITY,
+  lowerDynamicCapabilityPhasePolicy,
   type DynamicCapabilityCompiledCatalog,
   type DynamicCapabilityContext,
   type DynamicCapabilityEventRef,
@@ -49,6 +53,7 @@ describe("runDynamicCapabilityResolvers", () => {
     const result = await runDynamicCapabilityResolvers({
       event: turnEvent,
       catalog,
+      input: { phase: "observe", values: { ticket: "change-1" } },
       auth: { role: "admin" },
       projections: { session: { id: "session:1" } },
       materials: {},
@@ -65,10 +70,112 @@ describe("runDynamicCapabilityResolvers", () => {
     expect(Object.isFrozen(observed)).toBe(true);
     expect(Object.isFrozen(observed?.catalog.tools)).toBe(true);
     expect(Object.isFrozen(observed?.catalog.tools[0])).toBe(true);
+    expect(observed?.input).toEqual({ phase: "observe", values: { ticket: "change-1" } });
+    expect(Object.isFrozen(observed?.input.values)).toBe(true);
     expect(Object.isFrozen(observed?.auth)).toBe(true);
     expect("commit" in (observed as object)).toBe(false);
     expect("openProvider" in (observed as object)).toBe(false);
     expect("workspace" in (observed as object)).toBe(false);
+  });
+
+  it("lowers product-authored phase policy into dynamic capability projection diagnostics", async () => {
+    const result = await runDynamicCapabilityResolvers({
+      event: turnEvent,
+      catalog,
+      input: { phase: "observe" },
+      resolvers: [
+        resolver("product-phase-policy", DYNAMIC_CAPABILITY_SLOT.TOOLS, (context) =>
+          lowerDynamicCapabilityPhasePolicy({
+            catalog: context.catalog,
+            slot: DYNAMIC_CAPABILITY_SLOT.TOOLS,
+            policy: {
+              policyId: "zero-y3-fixture-policy",
+              phase: context.input.phase ?? "unknown",
+              allowedCategories: [DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.READ],
+              tools: [
+                { id: "read_file", categories: [DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.READ] },
+                { id: "write_file", categories: [DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE] },
+              ],
+              instructions: { allow: ["tone"] },
+            },
+          }),
+        ),
+        resolver("product-phase-instructions", DYNAMIC_CAPABILITY_SLOT.INSTRUCTIONS, (context) =>
+          lowerDynamicCapabilityPhasePolicy({
+            catalog: context.catalog,
+            slot: DYNAMIC_CAPABILITY_SLOT.INSTRUCTIONS,
+            policy: {
+              policyId: "zero-y3-fixture-policy",
+              phase: context.input.phase ?? "unknown",
+              allowedCategories: [DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.READ],
+              tools: [
+                { id: "read_file", categories: [DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.READ] },
+                { id: "write_file", categories: [DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE] },
+              ],
+              instructions: { allow: ["tone"] },
+            },
+          }),
+        ),
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.projection.tools).toEqual([
+      {
+        id: "read_file",
+        visible: true,
+        decision: DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED,
+        provenance: [
+          {
+            resolverId: "product-phase-policy",
+            slot: "tools",
+            eventName: "turn.started",
+            status: "applied",
+          },
+        ],
+      },
+      {
+        id: "write_file",
+        visible: false,
+        decision: DYNAMIC_CAPABILITY_VISIBILITY.DENIED,
+        provenance: [
+          {
+            resolverId: "product-phase-policy",
+            slot: "tools",
+            eventName: "turn.started",
+            status: "applied",
+          },
+        ],
+        diagnostics: [
+          {
+            reason: DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON,
+            source: DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE,
+            targetId: "write_file",
+            policyId: "zero-y3-fixture-policy",
+            phase: "observe",
+            requiredCategory: DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE,
+            category: DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE,
+          },
+        ],
+      },
+    ]);
+    expect(result.projection.instructions).toEqual([
+      {
+        id: "tone",
+        digest: "fnv1a32:tone",
+        visible: true,
+        decision: DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED,
+        provenance: [
+          {
+            resolverId: "product-phase-instructions",
+            slot: "instructions",
+            eventName: "turn.started",
+            status: "applied",
+          },
+        ],
+      },
+    ]);
   });
 
   it("applies deny-wins merge over compiled catalog ids", async () => {

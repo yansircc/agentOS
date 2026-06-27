@@ -1,5 +1,8 @@
 import {
   DYNAMIC_CAPABILITY_EVENT,
+  DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS,
+  DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON,
+  DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE,
   DYNAMIC_CAPABILITY_PROJECTION_VERSION,
   DYNAMIC_CAPABILITY_SLOT,
   DYNAMIC_CAPABILITY_VISIBILITY,
@@ -163,6 +166,85 @@ export const registerSubmitAgentDynamicCapabilityCases = () => {
         "tool.rejected",
         "agent.aborted.tool_error",
       ]);
+    }),
+  );
+
+  it.effect("rejects phase-policy hidden tools with structured diagnostics", () =>
+    Effect.gen(function* () {
+      let writeFileExecuted = false;
+      const writeFile = defineTool({
+        name: "write_file",
+        description: "write file",
+        args: Schema.Struct({ path: Schema.String }),
+        execute: ({ path }) => {
+          writeFileExecuted = true;
+          return Effect.succeed({ path, written: true });
+        },
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+
+      const { result, events } = yield* runSubmit(
+        baseSpec({
+          tools: { write_file: writeFile },
+          dynamicCapabilityProjection: dynamicProjection({
+            tools: [
+              {
+                ...projectionEntry("write_file", false),
+                diagnostics: [
+                  {
+                    reason: DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON,
+                    source: DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE,
+                    targetId: "write_file",
+                    policyId: "product-phase-policy",
+                    phase: "change",
+                    requiredCategory: DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE,
+                    category: DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE,
+                  },
+                ],
+              },
+            ],
+          }),
+        }),
+        [
+          response({
+            items: [
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-hidden-by-phase",
+                  type: "function",
+                  function: {
+                    name: "write_file",
+                    arguments: '{"path":"out.txt"}',
+                  },
+                },
+              },
+            ],
+          }),
+        ],
+      );
+
+      expect(result).toMatchObject({ ok: false, reason: "tool_error" });
+      expect(writeFileExecuted).toBe(false);
+      const rejected = events
+        .map((event) => decodeRuntimeLedgerEvent(event))
+        .find((decoded) => decoded._tag === "runtime" && decoded.event.kind === "tool.rejected");
+      expect(
+        rejected?._tag === "runtime" && rejected.event.kind === "tool.rejected"
+          ? rejected.event.payload.diagnostics
+          : undefined,
+      ).toMatchObject({
+        phase: "policy",
+        reason: DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON,
+        source: DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE,
+        toolName: "write_file",
+        policyId: "product-phase-policy",
+        policyPhase: "change",
+        requiredCategory: DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE,
+        category: DYNAMIC_CAPABILITY_PHASE_POLICY_ACCESS.WRITE,
+      });
     }),
   );
 
