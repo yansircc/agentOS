@@ -21,8 +21,10 @@ import {
   AGENTOS_CONFIG_PROFILE,
   AGENTOS_CONFIG_TARGET,
   llmMaterialEnvBindings,
+  llmMaterialEnvBindingsForRoutes,
   type AgentOsConfigCloudflareDoTarget,
   type AgentOsConfigClientKind,
+  type AgentOsConfigLlmRouteBinding,
   type AgentOsConfigLlmRoute,
   type AgentOsConfigProfile,
   type AgentOsConfigTarget,
@@ -165,6 +167,117 @@ const stableJson = (value: unknown): string =>
   `${JSON.stringify(stableJsonValue(value), null, 2)}\n`;
 
 const jsString = (value: string): string => JSON.stringify(value);
+
+const identifierSuffix = (value: string): string =>
+  value.replace(/[^A-Za-z0-9_$]+/g, "_").replace(/^[^A-Za-z_$]+/u, "_$&");
+
+const routeEntries = (
+  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+): ReadonlyArray<readonly [string, AgentOsConfigLlmRouteBinding]> =>
+  Object.entries(routes).sort(([left], [right]) => left.localeCompare(right));
+
+const uniqueLlmMaterialEnvBindings = (
+  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+) => {
+  const bindings = new Map<string, ReturnType<typeof llmMaterialEnvBindingsForRoutes>[number]>();
+  for (const binding of llmMaterialEnvBindingsForRoutes(routes)) {
+    bindings.set(`${binding.kind}:${binding.ref}`, binding);
+  }
+  return [...bindings.values()].sort((left, right) =>
+    `${left.kind}:${left.ref}`.localeCompare(`${right.kind}:${right.ref}`),
+  );
+};
+
+const renderMaterialValueFunction = (
+  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+): string => {
+  const bindings = uniqueLlmMaterialEnvBindings(routes);
+  const cases = bindings
+    .map(
+      (binding) => `  if (ref.kind === ${jsString(binding.kind)} && ref.ref === ${jsString(
+        binding.ref,
+      )}) {
+    return materialEnvValue(env, ${jsString(binding.envName)});
+  }`,
+    )
+    .join("\n");
+  return `const materialValue = (
+  env: AgentOSTargetEnv,
+  ref: { readonly kind: string; readonly ref: string },
+): NonNullable<unknown> | null => {
+${cases}
+  return null;
+};`;
+};
+
+const renderGeneratedProviderPreflight = (
+  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+): string => {
+  const diagnostics = routeEntries(routes)
+    .map(
+      ([bindingRef, route]) => `  ...preflightOpenAiCompatibleProviderMaterial({
+    route: {
+      kind: ${jsString(route.route)},
+      endpointRef: ${jsString(route.endpointRef)},
+      credentialRef: ${jsString(route.credentialRef)},
+      modelId: typeof materialValue(env, { kind: "model", ref: ${jsString(
+        route.modelRef,
+      )} }) === "string"
+        ? materialValue(env, { kind: "model", ref: ${jsString(route.modelRef)} }) as string
+        : "",
+    },
+    refResolver: { material: (ref) => materialValue(env, ref) },
+    routeBindingRef: ${jsString(bindingRef)},
+    modelMaterial: {
+      ref: ${jsString(route.modelRef)},
+      value: materialValue(env, { kind: "model", ref: ${jsString(route.modelRef)} }),
+    },
+  }),`,
+    )
+    .join("\n");
+  return `const generatedProviderPreflightDiagnosticsFor = (
+  env: AgentOSTargetEnv,
+): ReturnType<typeof preflightOpenAiCompatibleProviderMaterial> => [
+${diagnostics}
+];`;
+};
+
+const renderGeneratedLlmRoutesFor = (
+  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+): string => {
+  const checks = routeEntries(routes)
+    .map(([bindingRef, route]) => {
+      const suffix = identifierSuffix(bindingRef);
+      return `  const modelId_${suffix} = requiredStringMaterial(
+    "model",
+    ${jsString(route.modelRef)},
+    materialValue(env, { kind: "model", ref: ${jsString(route.modelRef)} }),
+  );
+  if (!modelId_${suffix}.ok) return modelId_${suffix};`;
+    })
+    .join("\n");
+  const entries = routeEntries(routes)
+    .map(
+      ([bindingRef, route]) => `      ${jsString(bindingRef)}: {
+        kind: ${jsString(route.route)},
+        endpointRef: ${jsString(route.endpointRef)},
+        credentialRef: ${jsString(route.credentialRef)},
+        modelId: modelId_${identifierSuffix(bindingRef)}.value,
+      },`,
+    )
+    .join("\n");
+  return `const generatedLlmRoutesFor = (
+  env: AgentOSTargetEnv,
+): GeneratedTargetResult<NonNullable<AgentSubmitBindings["llmRoutes"]>> => {
+${checks}
+  return {
+    ok: true,
+    value: {
+${entries}
+    },
+  };
+};`;
+};
 
 const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
 
@@ -1001,11 +1114,9 @@ const renderWorkspaceStaticTarget = (
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
-  const llmEnvByKind = Object.fromEntries(
-    llmMaterialEnvBindings(normalized.llm).map((binding) => [binding.kind, binding.envName]),
-  ) as Readonly<Record<LlmMaterialEnvKind, string>>;
-  const generatedLlmEnvFields = Object.values(llmEnvByKind)
-    .map((envName) => `  readonly ${envName}?: string;`)
+  const llmEnvBindings = uniqueLlmMaterialEnvBindings(normalized.llmRoutes);
+  const generatedLlmEnvFields = llmEnvBindings
+    .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
@@ -1258,41 +1369,8 @@ const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null =>
   return typeof value === "string" && value.length > 0 ? value : null;
 };
 
-const materialValue = (
-  env: AgentOSTargetEnv,
-  ref: { readonly kind: string; readonly ref: string },
-): NonNullable<unknown> | null => {
-  if (ref.kind === "endpoint" && ref.ref === ${jsString(normalized.llm.endpointRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.endpoint)});
-  }
-  if (ref.kind === "credential" && ref.ref === ${jsString(normalized.llm.credentialRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.credential)});
-  }
-  if (ref.kind === "model" && ref.ref === ${jsString(normalized.llm.modelRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.model)});
-  }
-  return null;
-};
-
-const generatedProviderPreflightDiagnosticsFor = (
-  env: AgentOSTargetEnv,
-): ReturnType<typeof preflightOpenAiCompatibleProviderMaterial> => {
-  const modelValue = materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} });
-  return preflightOpenAiCompatibleProviderMaterial({
-    route: {
-      kind: "openai-chat-compatible",
-      endpointRef: ${jsString(normalized.llm.endpointRef)},
-      credentialRef: ${jsString(normalized.llm.credentialRef)},
-      modelId: typeof modelValue === "string" ? modelValue : "",
-    },
-    refResolver: { material: (ref) => materialValue(env, ref) },
-    routeBindingRef: "default",
-    modelMaterial: {
-      ref: ${jsString(normalized.llm.modelRef)},
-      value: modelValue,
-    },
-  });
-};
+${renderMaterialValueFunction(normalized.llmRoutes)}
+${renderGeneratedProviderPreflight(normalized.llmRoutes)}
 
 const requiredStringMaterial = (
   kind: string,
@@ -1303,23 +1381,7 @@ const requiredStringMaterial = (
   return targetFailure(\`missing \${kind} material: \${ref}\`);
 };
 
-const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonNullable<AgentSubmitBindings["llmRoutes"]>["default"]> => {
-  const modelId = requiredStringMaterial(
-    "model",
-    ${jsString(normalized.llm.modelRef)},
-    materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} }),
-  );
-  if (!modelId.ok) return modelId;
-  return {
-    ok: true,
-    value: {
-      kind: "openai-chat-compatible",
-      endpointRef: ${jsString(normalized.llm.endpointRef)},
-      credentialRef: ${jsString(normalized.llm.credentialRef)},
-      modelId: modelId.value,
-    },
-  };
-};
+${renderGeneratedLlmRoutesFor(normalized.llmRoutes)}
 
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
@@ -1333,8 +1395,8 @@ const generatedSubmitBindingsFor = async (
     );
   }
   const capabilityGraph = generatedCapabilityInstallGraphFor(env);
-  const route = generatedLlmRouteFor(env);
-  if (!route.ok) return route;
+  const routes = generatedLlmRoutesFor(env);
+  if (!routes.ok) return routes;
   const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
   if (!dynamicBindings.ok) return dynamicBindings;
   const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
@@ -1343,9 +1405,7 @@ const generatedSubmitBindingsFor = async (
     value: {
       ...capabilityGraph.bindings,
       ...dynamicBindings.value,
-      llmRoutes: {
-        default: route.value,
-      },
+      llmRoutes: routes.value,
       tools: {
         ...(capabilityGraph.bindings.tools ?? {}),
         ...generatedCustomTools,
@@ -1520,11 +1580,9 @@ const renderChatStaticTarget = (
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
-  const llmEnvByKind = Object.fromEntries(
-    llmMaterialEnvBindings(normalized.llm).map((binding) => [binding.kind, binding.envName]),
-  ) as Readonly<Record<LlmMaterialEnvKind, string>>;
-  const generatedLlmEnvFields = Object.values(llmEnvByKind)
-    .map((envName) => `  readonly ${envName}?: string;`)
+  const llmEnvBindings = uniqueLlmMaterialEnvBindings(normalized.llmRoutes);
+  const generatedLlmEnvFields = llmEnvBindings
+    .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
@@ -1643,41 +1701,8 @@ const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null =>
   return typeof value === "string" && value.length > 0 ? value : null;
 };
 
-const materialValue = (
-  env: AgentOSTargetEnv,
-  ref: { readonly kind: string; readonly ref: string },
-): NonNullable<unknown> | null => {
-  if (ref.kind === "endpoint" && ref.ref === ${jsString(normalized.llm.endpointRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.endpoint)});
-  }
-  if (ref.kind === "credential" && ref.ref === ${jsString(normalized.llm.credentialRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.credential)});
-  }
-  if (ref.kind === "model" && ref.ref === ${jsString(normalized.llm.modelRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.model)});
-  }
-  return null;
-};
-
-const generatedProviderPreflightDiagnosticsFor = (
-  env: AgentOSTargetEnv,
-): ReturnType<typeof preflightOpenAiCompatibleProviderMaterial> => {
-  const modelValue = materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} });
-  return preflightOpenAiCompatibleProviderMaterial({
-    route: {
-      kind: "openai-chat-compatible",
-      endpointRef: ${jsString(normalized.llm.endpointRef)},
-      credentialRef: ${jsString(normalized.llm.credentialRef)},
-      modelId: typeof modelValue === "string" ? modelValue : "",
-    },
-    refResolver: { material: (ref) => materialValue(env, ref) },
-    routeBindingRef: "default",
-    modelMaterial: {
-      ref: ${jsString(normalized.llm.modelRef)},
-      value: modelValue,
-    },
-  });
-};
+${renderMaterialValueFunction(normalized.llmRoutes)}
+${renderGeneratedProviderPreflight(normalized.llmRoutes)}
 
 const requiredStringMaterial = (
   kind: string,
@@ -1688,23 +1713,7 @@ const requiredStringMaterial = (
   return targetFailure(\`missing \${kind} material: \${ref}\`);
 };
 
-const generatedLlmRouteFor = (env: AgentOSTargetEnv): GeneratedTargetResult<NonNullable<AgentSubmitBindings["llmRoutes"]>["default"]> => {
-  const modelId = requiredStringMaterial(
-    "model",
-    ${jsString(normalized.llm.modelRef)},
-    materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} }),
-  );
-  if (!modelId.ok) return modelId;
-  return {
-    ok: true,
-    value: {
-      kind: "openai-chat-compatible",
-      endpointRef: ${jsString(normalized.llm.endpointRef)},
-      credentialRef: ${jsString(normalized.llm.credentialRef)},
-      modelId: modelId.value,
-    },
-  };
-};
+${renderGeneratedLlmRoutesFor(normalized.llmRoutes)}
 
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
@@ -1717,8 +1726,8 @@ const generatedSubmitBindingsFor = async (
       preflightDiagnostics,
     );
   }
-  const route = generatedLlmRouteFor(env);
-  if (!route.ok) return route;
+  const routes = generatedLlmRoutesFor(env);
+  if (!routes.ok) return routes;
   const dynamicBindings = await generatedDynamicSubmitBindingsFor(event);
   if (!dynamicBindings.ok) return dynamicBindings;
   const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
@@ -1726,9 +1735,7 @@ const generatedSubmitBindingsFor = async (
     ok: true,
     value: {
       ...dynamicBindings.value,
-      llmRoutes: {
-        default: route.value,
-      },
+      llmRoutes: routes.value,
       tools: ${
         hasSkills
           ? `{

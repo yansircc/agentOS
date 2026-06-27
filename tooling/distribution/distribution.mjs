@@ -37,7 +37,7 @@ switch (command) {
     localRegistry(commandArgs);
     break;
   case "install-consumer":
-    installConsumer(commandArgs);
+    await installConsumer(commandArgs);
     break;
   case "consumer-status":
     consumerStatus(commandArgs);

@@ -22,6 +22,10 @@ import {
   unpackTarballInto,
   writeJson,
 } from "./support.mjs";
+import {
+  installManifestProtocol,
+  sourceIdentityFor,
+} from "../../packages/cli/src/consumer-overlay.mjs";
 import { publishedRecords, sourcePublishGuards } from "./package-records.mjs";
 import {
   agentCatalogProvenance,
@@ -59,8 +63,13 @@ export const readInstallManifest = () => {
     fail(`${repoPath(installManifestPath)} is missing; run pack first`);
   }
   const manifest = readJson(installManifestPath);
-  if (manifest === null || typeof manifest !== "object" || manifest.tarballs === undefined) {
-    fail(`${repoPath(installManifestPath)} is not an install manifest`);
+  if (
+    manifest === null ||
+    typeof manifest !== "object" ||
+    manifest.protocol !== installManifestProtocol ||
+    manifest.tarballs === undefined
+  ) {
+    fail(`${repoPath(installManifestPath)} is not an ${installManifestProtocol} manifest`);
   }
   return manifest;
 };
@@ -98,8 +107,11 @@ export const writeInstallManifest = (entries) => {
     ]),
   );
   writeJson(installManifestPath, {
+    protocol: installManifestProtocol,
     version: packageVersion(),
     generatedBy: "tooling/distribution/distribution.mjs pack",
+    generatedAt: new Date().toISOString(),
+    source: sourceIdentityFor(repoRoot),
     dependencies,
     overrides: dependencies,
     tarballs: Object.fromEntries(

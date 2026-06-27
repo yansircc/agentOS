@@ -6,6 +6,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { bundleModuleForNode } from "./lib/ts-module-loader.mjs";
 import {
+  consumerCheck,
+  consumerStatus,
+  installConsumer,
+  restoreConsumer,
+} from "./consumer-overlay.mjs";
+import {
   algorithmicCheckerAcceptsArgs,
   hasAlgorithmicChecker,
   runAlgorithmicChecker,
@@ -24,12 +30,14 @@ const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import
 const repoRootFromMain = () => path.dirname(path.dirname(packageRootFromMain()));
 
 const readReleaseVersion = () => {
-  const packageJson = JSON.parse(
-    readFileSync(path.join(repoRootFromMain(), "package.json"), "utf8"),
-  );
-  const version = packageJson.agentOsRelease?.version;
+  const rootPackagePath = path.join(repoRootFromMain(), "package.json");
+  const packagePath = existsSync(rootPackagePath)
+    ? rootPackagePath
+    : path.join(packageRootFromMain(), "package.json");
+  const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+  const version = packageJson.agentOsRelease?.version ?? packageJson.version;
   if (typeof version !== "string" || version.length === 0) {
-    throw new Error("package.json agentOsRelease.version must be a non-empty string");
+    throw new Error("package.json version must be a non-empty string");
   }
   return version;
 };
@@ -47,7 +55,7 @@ Usage:
   agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
   agentos preflight llm [--cwd <path>] [--config <path>] [--route <binding-ref>] [--json]
-  agentos consumer install /path/to/consumer [--no-install] [--skip-pack] [--json]
+  agentos consumer install /path/to/consumer [--from-manifest <path>] [--no-install] [--skip-pack] [--json]
   agentos consumer status /path/to/consumer [--json] [--check-npm] [--registry <url>]
   agentos consumer check /path/to/consumer [--json] [--check-npm] [--registry <url>]
   agentos consumer restore /path/to/consumer [--no-install] [--json]
@@ -143,32 +151,38 @@ const runEval = async (args) => runBuildRunner("eval", args);
 
 const runPreflight = async (args) => runBuildRunner("preflight", args);
 
-const loadConsumerCommands = async () => {
-  const modulePath = path.join(repoRootFromMain(), "tooling/distribution/consumer.mjs");
-  if (!existsSync(modulePath)) {
-    throw new Error(
-      "agentos consumer: local consumer overlay commands require an agentOS source checkout with tooling/distribution",
-    );
-  }
-  return import(pathToFileURL(modulePath).href);
+const sourceConsumerProducer = () => {
+  const modulePath = path.join(repoRootFromMain(), "tooling/distribution/pack-check.mjs");
+  const supportPath = path.join(repoRootFromMain(), "tooling/distribution/support.mjs");
+  if (!existsSync(modulePath) || !existsSync(supportPath)) return undefined;
+  return {
+    sourceRoot: repoRootFromMain(),
+    defaultInstallManifestPath: path.join(repoRootFromMain(), "dist/internal-npm/install-manifest.json"),
+    produceInstallManifest: async () => {
+      const producer = await import(pathToFileURL(modulePath).href);
+      producer.packInternal();
+      return path.join(repoRootFromMain(), "dist/internal-npm/install-manifest.json");
+    },
+  };
 };
 
 const runConsumer = async (args) => {
   const [command, ...rest] = args;
   const commandArgs = rest[0] === "--" ? rest.slice(1) : rest;
-  const commands = await loadConsumerCommands();
+  const sourceContext = sourceConsumerProducer() ?? {};
+  const context = { packageRoot: packageRootFromMain(), ...sourceContext };
   switch (command) {
     case "install":
-      commands.installConsumer(commandArgs);
+      await installConsumer(commandArgs, context);
       return;
     case "status":
-      commands.consumerStatus(commandArgs);
+      consumerStatus(commandArgs, context);
       return;
     case "check":
-      commands.consumerCheck(commandArgs);
+      consumerCheck(commandArgs, context);
       return;
     case "restore":
-      commands.restoreConsumer(commandArgs);
+      restoreConsumer(commandArgs, context);
       return;
     default:
       throw new Error("agentos consumer: choose one of install, status, check, restore");

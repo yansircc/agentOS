@@ -1037,12 +1037,13 @@ const preflightDiagnostic = (
 const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
   const facts = await loadCompileFacts({ cwd: args.cwd, config: args.config });
   const routeBindingRef = args.routeBindingRef;
-  const availableRoutes = ["default"] as const;
+  const availableRoutes = Object.keys(facts.normalized.llmRoutes).sort();
+  const llm = facts.normalized.llmRoutes[routeBindingRef];
   const env = await readPreflightEnv(facts.cwd);
   const envDiagnostics: PreflightDiagnostic[] = env.issues.map((issue) =>
     preflightDiagnostic("env_file", ".dev.vars is invalid", issue),
   );
-  if (!availableRoutes.includes(routeBindingRef as "default")) {
+  if (llm === undefined) {
     const output = {
       protocol: "agentos-preflight-llm@1",
       ok: false,
@@ -1067,7 +1068,7 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
     return;
   }
 
-  const bindings = llmMaterialEnvBindings(facts.normalized.llm);
+  const bindings = llmMaterialEnvBindings(llm);
   const bindingByKind = Object.fromEntries(
     bindings.map((binding) => [binding.kind, binding]),
   ) as Record<LlmMaterialEnvKind, LlmMaterialEnvBinding>;
@@ -1085,15 +1086,15 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
       ? []
       : preflightOpenAiCompatibleProviderMaterial({
           route: {
-            kind: facts.normalized.llm.route,
-            endpointRef: facts.normalized.llm.endpointRef,
-            credentialRef: facts.normalized.llm.credentialRef,
+            kind: llm.route,
+            endpointRef: llm.endpointRef,
+            credentialRef: llm.credentialRef,
             modelId: typeof modelValue === "string" ? modelValue : "",
           },
           refResolver,
           routeBindingRef,
           modelMaterial: {
-            ref: facts.normalized.llm.modelRef,
+            ref: llm.modelRef,
             value: modelValue,
           },
         });
@@ -1118,7 +1119,7 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
     route: {
       bindingRef: routeBindingRef,
       status: providerDetail?.routeStatus ?? (ok ? "present" : "invalid"),
-      kind: facts.normalized.llm.route,
+      kind: llm.route,
     },
     env: {
       sources: env.sources,

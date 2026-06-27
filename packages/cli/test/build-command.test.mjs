@@ -327,6 +327,87 @@ void test("agentos preflight llm uses normalized material env bindings without l
     const wrongRouteProjection = JSON.parse(wrongRoute.stdout);
     assert.equal(wrongRouteProjection.route.status, "missing");
     assert.deepEqual(wrongRouteProjection.route.available, ["default"]);
+
+    const namedSecret = "sk-agentos-product-loop-secret";
+    const namedEndpoint = "https://product-loop.example.test/v1";
+    const namedModel = "product-loop-test-model";
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      readFileSync(path.join(root, "agentos.config.jsonc"), "utf8").replace(
+        '    "modelRef": "openrouter-default-text-model"\n  },',
+        [
+          '    "modelRef": "openrouter-default-text-model",',
+          '    "routes": {',
+          '      "product_loop": {',
+          '        "route": "openai-chat-compatible",',
+          '        "endpointRef": "product-loop",',
+          '        "credentialRef": "product-loop-key",',
+          '        "modelRef": "product-loop-model"',
+          "      }",
+          "    }",
+          "  },",
+        ].join("\n"),
+      ),
+    );
+    writeFileSync(
+      path.join(root, ".dev.vars"),
+      [
+        `AGENTOS_ENDPOINT_OPENROUTER=${endpoint}`,
+        `AGENTOS_CREDENTIAL_OPENROUTER_KEY=${secret}`,
+        `AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL=${model}`,
+        `AGENTOS_ENDPOINT_PRODUCT_LOOP=${namedEndpoint}`,
+        `AGENTOS_CREDENTIAL_PRODUCT_LOOP_KEY=${namedSecret}`,
+        `AGENTOS_MODEL_PRODUCT_LOOP_MODEL=${namedModel}`,
+        "",
+      ].join("\n"),
+    );
+    const namedRoute = await runCli(
+      ["preflight", "llm", "--cwd", root, "--route", "product_loop", "--json"],
+      { env: childEnv },
+    );
+    assert.equal(namedRoute.status, 0, namedRoute.stderr);
+    for (const value of [namedSecret, namedEndpoint, namedModel]) {
+      assert.doesNotMatch(namedRoute.stdout, new RegExp(value.replaceAll(".", "\\.")));
+    }
+    const namedProjection = JSON.parse(namedRoute.stdout);
+    assert.equal(namedProjection.ok, true);
+    assert.deepEqual(namedProjection.route, {
+      bindingRef: "product_loop",
+      status: "present",
+      kind: "openai-chat-compatible",
+    });
+    assert.deepEqual(
+      namedProjection.materials.map((row) => ({
+        kind: row.kind,
+        ref: row.ref,
+        envName: row.envName,
+        source: row.source,
+        status: row.status,
+      })),
+      [
+        {
+          kind: "endpoint",
+          ref: "product-loop",
+          envName: "AGENTOS_ENDPOINT_PRODUCT_LOOP",
+          source: ".dev.vars",
+          status: "present",
+        },
+        {
+          kind: "credential",
+          ref: "product-loop-key",
+          envName: "AGENTOS_CREDENTIAL_PRODUCT_LOOP_KEY",
+          source: ".dev.vars",
+          status: "present",
+        },
+        {
+          kind: "model",
+          ref: "product-loop-model",
+          envName: "AGENTOS_MODEL_PRODUCT_LOOP_MODEL",
+          source: ".dev.vars",
+          status: "present",
+        },
+      ],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -578,7 +659,15 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
       '  deployment: { id: "node-target-fixture" },',
       '  target: { kind: "node@1" },',
       '  client: { kind: "browser-direct@1" },',
-      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      "  llm: {",
+      '    route: "openai-chat-compatible",',
+      '    endpointRef: "openrouter",',
+      '    credentialRef: "openrouter-key",',
+      '    modelRef: "openrouter-model",',
+      "    routes: {",
+      '      product_loop: { route: "openai-chat-compatible", endpointRef: "product-loop", credentialRef: "product-loop-key", modelRef: "product-loop-model" },',
+      "    },",
+      "  },",
       '  workspace: { binding: "Sandbox", root: "/workspace" },',
       "};",
       "const decoded = decodeAgentOsConfig(config);",
@@ -592,6 +681,7 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
       "console.log(JSON.stringify({",
       "  targetKinds: Object.values(AGENTOS_CONFIG_TARGET).sort(),",
       "  normalizedTarget: normalized.value.target,",
+      "  llmRoutes: normalized.value.llmRoutes,",
       "  deploymentBackend: normalized.value.deployment.backend,",
       "  deploymentAdapter: normalized.value.deployment.adapter,",
       '  targetOrigins: Object.fromEntries(Object.entries(normalized.value.provenance.deployment).filter(([key]) => key.startsWith("/target"))),',
@@ -607,6 +697,20 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
   const output = JSON.parse(result.stdout);
   assert.deepEqual(output.targetKinds, ["cloudflare-do@1", "node@1"]);
   assert.deepEqual(output.normalizedTarget, { kind: "node@1" });
+  assert.deepEqual(output.llmRoutes, {
+    default: {
+      route: "openai-chat-compatible",
+      endpointRef: "openrouter",
+      credentialRef: "openrouter-key",
+      modelRef: "openrouter-model",
+    },
+    product_loop: {
+      route: "openai-chat-compatible",
+      endpointRef: "product-loop",
+      credentialRef: "product-loop-key",
+      modelRef: "product-loop-model",
+    },
+  });
   assert.equal(output.deploymentBackend, "node");
   assert.equal(output.deploymentAdapter, "node@1");
   assert.deepEqual(output.targetOrigins, {
@@ -3064,7 +3168,15 @@ void test("static target injects skill advert and load_skill for workspace and c
       '  deployment: { id: "target-skills" },',
       '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
       '  client: { kind: "browser-direct@1" },',
-      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      "  llm: {",
+      '    route: "openai-chat-compatible",',
+      '    endpointRef: "openrouter",',
+      '    credentialRef: "openrouter-key",',
+      '    modelRef: "openrouter-model",',
+      "    routes: {",
+      '      product_loop: { route: "openai-chat-compatible", endpointRef: "product-loop", credentialRef: "product-loop-key", modelRef: "product-loop-model" },',
+      "    },",
+      "  },",
       "};",
       "const targetFor = (config) => {",
       "  const normalized = normalizeAgentOsConfig(config, compiled.value);",
@@ -3092,6 +3204,7 @@ void test("static target injects skill advert and load_skill for workspace and c
       "  echoBody: text.includes('Use workspace echo skill.'),",
       "  reviewBody: text.includes('Use chat review skill.'),",
       "  frameworkTools: text.includes('...generatedFrameworkTools'),",
+      "  productLoopRoute: text.includes('product_loop'),",
       "});",
       "console.log(JSON.stringify({ workspace: markers(workspaceTarget), chat: markers(chatTarget) }));",
     ].join("\n"),

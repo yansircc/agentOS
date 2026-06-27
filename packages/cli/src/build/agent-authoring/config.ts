@@ -91,11 +91,15 @@ export interface AgentOsConfigClient {
   readonly kind: AgentOsConfigClientKind;
 }
 
-export interface AgentOsConfigLlm {
+export interface AgentOsConfigLlmRouteBinding {
   readonly route: AgentOsConfigLlmRoute;
   readonly endpointRef: string;
   readonly credentialRef: string;
   readonly modelRef: string;
+}
+
+export interface AgentOsConfigLlm extends AgentOsConfigLlmRouteBinding {
+  readonly routes?: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
 }
 
 export type AgentOsConfigWorkspaceTopology = WorkspaceTopology;
@@ -203,7 +207,8 @@ export interface NormalizedAgentOsConfigBase<M extends AgentManifest = AgentMani
   readonly dynamicResolvers: CompiledAgentManifest["dynamicResolvers"];
   readonly target: AgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
-  readonly llm: AgentOsConfigLlm;
+  readonly llm: AgentOsConfigLlmRouteBinding;
+  readonly llmRoutes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
   readonly origins: Readonly<Record<AgentOsConfigFactKey, AgentOsConfigOrigin>>;
   readonly provenance: StaticTargetProvenance;
 }
@@ -320,13 +325,18 @@ export const llmMaterialEnvNameCollisionIssues = (
 };
 
 export const llmMaterialEnvBindings = (
-  llm: AgentOsConfigLlm,
+  llm: AgentOsConfigLlmRouteBinding,
 ): ReadonlyArray<LlmMaterialEnvBinding> =>
   llmMaterialEnvBindingsForRefs([
     { kind: "endpoint", ref: llm.endpointRef },
     { kind: "credential", ref: llm.credentialRef },
     { kind: "model", ref: llm.modelRef },
   ]);
+
+export const llmMaterialEnvBindingsForRoutes = (
+  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+): ReadonlyArray<LlmMaterialEnvBinding> =>
+  Object.values(routes).flatMap((route) => llmMaterialEnvBindings(route));
 
 const configAllowedFields = new Set([
   "$schema",
@@ -344,7 +354,8 @@ const nodeTargetAllowedFields = new Set(["kind"]);
 const cloudflareTargetAllowedFields = new Set(["kind", "durableObject"]);
 const durableObjectAllowedFields = new Set(["className", "binding"]);
 const clientAllowedFields = new Set(["kind"]);
-const llmAllowedFields = new Set(["route", "endpointRef", "credentialRef", "modelRef"]);
+const llmAllowedFields = new Set(["route", "endpointRef", "credentialRef", "modelRef", "routes"]);
+const llmRouteAllowedFields = new Set(["route", "endpointRef", "credentialRef", "modelRef"]);
 const workspaceAllowedFields = new Set(["binding", "root", "topology"]);
 const topologyAllowedFields = new Set(["kind", "allocator"]);
 
@@ -525,22 +536,29 @@ const decodeClientConfig = (
   return { kind: record.kind };
 };
 
-const decodeLlmConfig = (issues: AgentOsConfigIssue[], value: unknown): AgentOsConfigLlm | null => {
-  const record = configRequiredRecord(issues, "agentos.config.jsonc", "/llm", value);
+const decodeLlmRouteConfig = (
+  issues: AgentOsConfigIssue[],
+  path: string,
+  value: unknown,
+  options: { readonly checkAllowedFields?: boolean } = {},
+): AgentOsConfigLlmRouteBinding | null => {
+  const record = configRequiredRecord(issues, "agentos.config.jsonc", path, value);
   if (record === null) return null;
-  assertConfigAllowedFields(issues, "/llm", record, llmAllowedFields);
+  if (options.checkAllowedFields !== false) {
+    assertConfigAllowedFields(issues, path, record, llmRouteAllowedFields);
+  }
   if (record.route !== AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE) {
-    issueInvalidConfigValue(issues, "/llm", "/llm/route", "llm_route_invalid");
+    issueInvalidConfigValue(issues, path, `${path}/route`, "llm_route_invalid");
     return null;
   }
-  const endpointRef = configStringField(issues, "/llm", "/llm/endpointRef", record.endpointRef);
+  const endpointRef = configStringField(issues, path, `${path}/endpointRef`, record.endpointRef);
   const credentialRef = configStringField(
     issues,
-    "/llm",
-    "/llm/credentialRef",
+    path,
+    `${path}/credentialRef`,
     record.credentialRef,
   );
-  const modelRef = configStringField(issues, "/llm", "/llm/modelRef", record.modelRef);
+  const modelRef = configStringField(issues, path, `${path}/modelRef`, record.modelRef);
   return endpointRef === null || credentialRef === null || modelRef === null
     ? null
     : {
@@ -548,6 +566,50 @@ const decodeLlmConfig = (issues: AgentOsConfigIssue[], value: unknown): AgentOsC
         endpointRef,
         credentialRef,
         modelRef,
+      };
+};
+
+const routeBindingRefPattern = /^[A-Za-z0-9._:-]+$/u;
+
+const decodeLlmRoutesConfig = (
+  issues: AgentOsConfigIssue[],
+  value: unknown,
+): Readonly<Record<string, AgentOsConfigLlmRouteBinding>> | undefined => {
+  if (value === undefined) return undefined;
+  const record = configRequiredRecord(issues, "/llm", "/llm/routes", value);
+  if (record === null) return undefined;
+  const routes: Record<string, AgentOsConfigLlmRouteBinding> = {};
+  for (const [bindingRef, routeValue] of Object.entries(record).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    const routePath = `/llm/routes/${bindingRef}`;
+    if (bindingRef === "default") {
+      issueInvalidConfigValue(issues, routePath, routePath, "llm_default_route_duplicate");
+      continue;
+    }
+    if (!routeBindingRefPattern.test(bindingRef)) {
+      issueInvalidConfigValue(issues, routePath, routePath, "llm_route_binding_ref_invalid");
+      continue;
+    }
+    const route = decodeLlmRouteConfig(issues, routePath, routeValue);
+    if (route !== null) routes[bindingRef] = route;
+  }
+  return routes;
+};
+
+const decodeLlmConfig = (issues: AgentOsConfigIssue[], value: unknown): AgentOsConfigLlm | null => {
+  const record = configRequiredRecord(issues, "agentos.config.jsonc", "/llm", value);
+  if (record === null) return null;
+  assertConfigAllowedFields(issues, "/llm", record, llmAllowedFields);
+  const defaultRoute = decodeLlmRouteConfig(issues, "/llm", record, {
+    checkAllowedFields: false,
+  });
+  const routes = decodeLlmRoutesConfig(issues, record.routes);
+  return defaultRoute === null
+    ? null
+    : {
+        ...defaultRoute,
+        ...(routes === undefined ? {} : { routes }),
       };
 };
 
@@ -905,6 +967,44 @@ const cloudflareWorkspaceSandboxId = (input: {
   return `${shortenedPrefix}${suffix}`;
 };
 
+const defaultLlmRoute = (llm: AgentOsConfigLlm): AgentOsConfigLlmRouteBinding => ({
+  route: llm.route,
+  endpointRef: llm.endpointRef,
+  credentialRef: llm.credentialRef,
+  modelRef: llm.modelRef,
+});
+
+const normalizedLlmRoutes = (
+  llm: AgentOsConfigLlm,
+): Readonly<Record<string, AgentOsConfigLlmRouteBinding>> => ({
+  default: defaultLlmRoute(llm),
+  ...(llm.routes ?? {}),
+});
+
+const addLlmRouteOrigins = (
+  origins: Record<AgentOsConfigFactKey, AgentOsConfigOrigin>,
+  llm: AgentOsConfigLlm,
+): void => {
+  origins["/llm/route"] = configAuthorOrigin("/llm/route");
+  origins["/llm/endpointRef"] = configAuthorOrigin("/llm/endpointRef");
+  origins["/llm/credentialRef"] = configAuthorOrigin("/llm/credentialRef");
+  origins["/llm/modelRef"] = configAuthorOrigin("/llm/modelRef");
+  for (const routeBindingRef of Object.keys(llm.routes ?? {}).sort()) {
+    origins[`/llm/routes/${routeBindingRef}/route`] = configAuthorOrigin(
+      `/llm/routes/${routeBindingRef}/route`,
+    );
+    origins[`/llm/routes/${routeBindingRef}/endpointRef`] = configAuthorOrigin(
+      `/llm/routes/${routeBindingRef}/endpointRef`,
+    );
+    origins[`/llm/routes/${routeBindingRef}/credentialRef`] = configAuthorOrigin(
+      `/llm/routes/${routeBindingRef}/credentialRef`,
+    );
+    origins[`/llm/routes/${routeBindingRef}/modelRef`] = configAuthorOrigin(
+      `/llm/routes/${routeBindingRef}/modelRef`,
+    );
+  }
+};
+
 export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   config: AgentOsConfigV1,
   compiled: CompiledAgentManifest<K>,
@@ -912,7 +1012,10 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   const decoded = decodeAgentOsConfig(config);
   if (!decoded.ok) return decoded;
   const value = decoded.value;
-  const llmEnvIssues = llmMaterialEnvNameCollisionIssues(llmMaterialEnvBindings(value.llm));
+  const llmRoutes = normalizedLlmRoutes(value.llm);
+  const llmEnvIssues = llmMaterialEnvNameCollisionIssues(
+    llmMaterialEnvBindingsForRoutes(llmRoutes),
+  );
   if (llmEnvIssues.length > 0) {
     return { ok: false, issues: llmEnvIssues };
   }
@@ -955,15 +1058,12 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         : { "/deployment/version": configAuthorOrigin("/deployment/version") }),
       ...targetOriginFacts(value.target),
       "/client/kind": configAuthorOrigin("/client/kind"),
-      "/llm/route": configAuthorOrigin("/llm/route"),
-      "/llm/endpointRef": configAuthorOrigin("/llm/endpointRef"),
-      "/llm/credentialRef": configAuthorOrigin("/llm/credentialRef"),
-      "/llm/modelRef": configAuthorOrigin("/llm/modelRef"),
       "/deployment/backend": `derived:/target/kind`,
       "/deployment/adapter": `derived:/target/kind`,
       "/deployment/codec": chatMacroOrigin("/deployment/codec"),
       "/deployment/providerStrategy": `derived:/llm/route`,
     };
+    addLlmRouteOrigins(origins, value.llm);
     return {
       ok: true,
       value: {
@@ -989,7 +1089,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         dynamicResolvers: compiled.dynamicResolvers,
         target: value.target,
         client: value.client,
-        llm: value.llm,
+        llm: llmRoutes.default,
+        llmRoutes,
         origins,
         provenance: {
           manifest: profileManifest.provenance,
@@ -1031,10 +1132,6 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       : { "/deployment/version": configAuthorOrigin("/deployment/version") }),
     ...targetOriginFacts(value.target),
     "/client/kind": configAuthorOrigin("/client/kind"),
-    "/llm/route": configAuthorOrigin("/llm/route"),
-    "/llm/endpointRef": configAuthorOrigin("/llm/endpointRef"),
-    "/llm/credentialRef": configAuthorOrigin("/llm/credentialRef"),
-    "/llm/modelRef": configAuthorOrigin("/llm/modelRef"),
     "/workspace/binding": configAuthorOrigin("/workspace/binding"),
     "/workspace/bindingRef": `derived:/workspace/binding`,
     "/workspace/root": configAuthorOrigin("/workspace/root"),
@@ -1053,6 +1150,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     "/workspace/providerResourceId": `derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope`,
     "/workspace/cloudflareSandboxId": `derived:/workspace/providerResourceId`,
   };
+  addLlmRouteOrigins(origins, value.llm);
   return {
     ok: true,
     value: {
@@ -1078,7 +1176,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       dynamicResolvers: compiled.dynamicResolvers,
       target: value.target,
       client: value.client,
-      llm: value.llm,
+      llm: llmRoutes.default,
+      llmRoutes,
       workspace: {
         binding: value.workspace.binding,
         bindingRef,

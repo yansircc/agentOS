@@ -2,27 +2,19 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  boolArg,
   escapeRegExp,
   fail,
-  gitStatusShort,
-  gitValue,
   installManifestPath,
-  localConsumerMarkerName,
   mkdtempFixture,
-  parseArgs,
-  positionalArgs,
   publicPackageName,
   publicSpecifier,
   publishScope,
   readJson,
-  releaseVersion,
   repoRoot,
   sha256File,
   run,
   sourcePackageScope,
   surface,
-  unpackTarballInto,
   writeJson,
 } from "./support.mjs";
 import { catalog, packageImportsEffect, publishedRecords } from "./package-records.mjs";
@@ -30,18 +22,22 @@ import { agentCatalogProvenance, allFiles } from "./staging-build.mjs";
 import {
   packageDepsFromTarballs,
   packInternal,
-  readInstallManifest,
-  tarballPackageEntries,
   tarballsByPackage,
 } from "./pack-check.mjs";
+import {
+  consumerCheck as cliConsumerCheck,
+  consumerInstallCommand,
+  consumerStatus as cliConsumerStatus,
+  consumerStatusData,
+  installConsumer as cliInstallConsumer,
+  localConsumerMarkerPath,
+  packageTargetDir,
+  restoreConsumer as cliRestoreConsumer,
+  sourceIdentityFor,
+} from "../../packages/cli/src/consumer-overlay.mjs";
 
 const packageProtocolStringPattern = /(["'])workspace:\*\1|(["'])catalog:[^"']*\2/u;
 const agentosCliPath = () => path.join(repoRoot, "packages", "cli", "src", "main.mjs");
-
-export const consumerManifestFiles = (consumerRoot) =>
-  ["package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"].map(
-    (name) => path.join(consumerRoot, name),
-  );
 
 const runAgentosCli = (args, options = {}) =>
   spawnSync(process.execPath, [agentosCliPath(), ...args], {
@@ -51,8 +47,25 @@ const runAgentosCli = (args, options = {}) =>
     stdio: ["ignore", "pipe", "pipe"],
   });
 
+const stagedAgentosCliPath = () => {
+  const record = publishedRecords().find(
+    (candidate) => candidate.packageJson.name === "@agent-os/cli",
+  );
+  if (record === undefined) fail("missing @agent-os/cli package record");
+  return path.join(record.stageDir, "dist", "main.mjs");
+};
+
+const runPackagedAgentosCli = (args, options = {}) =>
+  spawnSync(process.execPath, [stagedAgentosCliPath(), ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: options.env ?? process.env,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
 const runAgentosJson = (args, expectedStatus = 0, options = {}) => {
-  const result = runAgentosCli([...args, "--json"], options);
+  const runner = options.runner ?? runAgentosCli;
+  const result = runner([...args, "--json"], options);
   if (result.status !== expectedStatus) {
     fail(
       `agentos ${args.join(" ")} --json exited ${result.status}, expected ${expectedStatus}\n${result.stdout ?? ""}${result.stderr ?? ""}`,
@@ -73,135 +86,23 @@ const runAgentosJson = (args, expectedStatus = 0, options = {}) => {
   }
 };
 
-export const snapshotFiles = (files) =>
-  new Map(files.map((file) => [file, fs.existsSync(file) ? fs.readFileSync(file) : undefined]));
+const consumerCommandContext = () => ({
+  packageRoot: path.join(repoRoot, "packages", "cli"),
+  sourceRoot: repoRoot,
+  defaultInstallManifestPath: installManifestPath,
+  produceInstallManifest: async () => {
+    packInternal();
+    return installManifestPath;
+  },
+});
 
-export const assertSnapshotUnchanged = (snapshot, context) => {
-  const changed = [];
-  for (const [file, before] of snapshot.entries()) {
-    const after = fs.existsSync(file) ? fs.readFileSync(file) : undefined;
-    if (
-      before === undefined
-        ? after !== undefined
-        : after === undefined || !Buffer.from(before).equals(after)
-    ) {
-      changed.push(path.relative(path.dirname(file), file) || file);
-    }
-  }
-  if (changed.length > 0) {
-    fail(`${context} changed consumer manifest/lock files:\n${changed.join("\n")}`);
-  }
-};
+export const installConsumer = (rawArgs) => cliInstallConsumer(rawArgs, consumerCommandContext());
 
-export const resolveConsumerRoot = (value) => {
-  if (typeof value !== "string" || value.length === 0) {
-    fail("consumer path is required");
-  }
-  const consumerRoot = path.resolve(process.cwd(), value);
-  if (!fs.existsSync(path.join(consumerRoot, "package.json"))) {
-    fail(`${consumerRoot}: missing package.json`);
-  }
-  return consumerRoot;
-};
+export const consumerStatus = (rawArgs) => cliConsumerStatus(rawArgs, consumerCommandContext());
 
-export const localConsumerMarkerPath = (consumerRoot) =>
-  path.join(consumerRoot, "node_modules", localConsumerMarkerName);
+export const consumerCheck = (rawArgs) => cliConsumerCheck(rawArgs, consumerCommandContext());
 
-const consumerPackageManagerName = (consumerRoot) => {
-  const packageJson = readJson(path.join(consumerRoot, "package.json"));
-  const packageManager =
-    typeof packageJson.packageManager === "string" ? packageJson.packageManager : "";
-  if (packageManager.startsWith("pnpm@")) return "pnpm";
-  if (packageManager.startsWith("npm@")) return "npm";
-  if (packageManager.startsWith("bun@")) return "bun";
-  if (packageManager.startsWith("yarn@")) return "yarn";
-  if (fs.existsSync(path.join(consumerRoot, "pnpm-lock.yaml"))) return "pnpm";
-  if (fs.existsSync(path.join(consumerRoot, "package-lock.json"))) return "npm";
-  if (fs.existsSync(path.join(consumerRoot, "bun.lock"))) return "bun";
-  if (fs.existsSync(path.join(consumerRoot, "bun.lockb"))) return "bun";
-  if (fs.existsSync(path.join(consumerRoot, "yarn.lock"))) return "yarn";
-  return null;
-};
-
-export const consumerInstallCommand = (consumerRoot) => {
-  const manager = consumerPackageManagerName(consumerRoot);
-  switch (manager) {
-    case "pnpm":
-      return {
-        manager,
-        cmd: "pnpm",
-        args: ["install", "--frozen-lockfile", "--ignore-scripts"],
-        env: { ...process.env, CI: "true", COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
-      };
-    case "npm":
-      return fs.existsSync(path.join(consumerRoot, "package-lock.json"))
-        ? {
-            manager,
-            cmd: "npm",
-            args: ["ci", "--ignore-scripts", "--no-audit", "--no-fund"],
-            env: process.env,
-          }
-        : {
-            manager,
-            cmd: "npm",
-            args: [
-              "install",
-              "--package-lock=false",
-              "--ignore-scripts",
-              "--no-audit",
-              "--no-fund",
-            ],
-            env: process.env,
-          };
-    case "bun":
-      return {
-        manager,
-        cmd: "bun",
-        args: ["install", "--frozen-lockfile", "--ignore-scripts"],
-        env: { ...process.env, CI: "true" },
-      };
-    case "yarn":
-      return {
-        manager,
-        cmd: "yarn",
-        args: ["install", "--immutable", "--ignore-scripts"],
-        env: { ...process.env, CI: "true" },
-      };
-    default:
-      return null;
-  }
-};
-
-export const nodeModulesRoot = (consumerRoot, options = {}) => {
-  const root = path.join(consumerRoot, "node_modules");
-  if (fs.existsSync(root)) return root;
-  if (options.install !== true) {
-    fail(
-      `${consumerRoot}: missing node_modules; run the consumer package manager install first, or rerun install-consumer without --no-install to let agentOS run a frozen install`,
-    );
-  }
-  const installCommand = consumerInstallCommand(consumerRoot);
-  if (installCommand === null) {
-    fail(
-      `${consumerRoot}: missing node_modules and no package manager/lockfile was detected; run the consumer install first`,
-    );
-  }
-  console.log(
-    `node_modules missing; running ${installCommand.cmd} ${installCommand.args.join(" ")} in ${consumerRoot}`,
-  );
-  run(installCommand.cmd, installCommand.args, {
-    cwd: consumerRoot,
-    capture: true,
-    env: installCommand.env,
-  });
-  if (!fs.existsSync(root)) {
-    fail(`${consumerRoot}: package manager install completed but node_modules is still missing`);
-  }
-  return root;
-};
-
-export const packageTargetDir = (nodeModules, packageName) =>
-  path.join(nodeModules, ...packageName.split("/"));
+export const restoreConsumer = (rawArgs) => cliRestoreConsumer(rawArgs, consumerCommandContext());
 
 const relativeFileSet = (root) =>
   new Set(allFiles(root).map((file) => path.relative(root, file).split(path.sep).join("/")));
@@ -246,385 +147,6 @@ export const assertInstalledAgentCatalog = (dir) => {
     if (provenance.package?.publicPackage !== ownerPackage) {
       fail(`${packageName}: installed catalog provenance public package mismatch`);
     }
-  }
-};
-
-const currentSourceIdentity = () => ({
-  repoRoot,
-  branch: gitValue(["branch", "--show-current"], "unknown"),
-  head: gitValue(["rev-parse", "HEAD"], "unknown"),
-  dirty: gitStatusShort().length > 0,
-});
-
-const markerArtifact = (manifest) => ({
-  kind: "local-tarball-overlay",
-  packageScope: publishScope(),
-  installManifest: {
-    path: path.relative(repoRoot, installManifestPath).split(path.sep).join("/"),
-    sha256: sha256File(installManifestPath),
-    version: manifest.version,
-    generatedBy: manifest.generatedBy,
-  },
-});
-
-const packageOverlayRows = (consumerRoot, marker) => {
-  const nodeModules = path.join(consumerRoot, "node_modules");
-  return Object.entries(marker.packages ?? {})
-    .map(([packageName, record]) => {
-      const target = packageTargetDir(nodeModules, packageName);
-      const targetExists = fs.existsSync(target);
-      const targetStatus = !targetExists
-        ? "missing"
-        : fs.lstatSync(target).isSymbolicLink()
-          ? "symlink"
-          : "installed";
-      const tarball = typeof record.tarball === "string" ? record.tarball : "";
-      const tarballExists = tarball.length > 0 && fs.existsSync(tarball);
-      const expectedSha = typeof record.sha256 === "string" ? record.sha256 : undefined;
-      const actualSha = tarballExists ? sha256File(tarball) : undefined;
-      return {
-        packageName,
-        target: record.target,
-        installed: targetStatus === "installed",
-        targetStatus,
-        tarball,
-        tarballStatus: tarballExists
-          ? expectedSha === undefined || expectedSha === actualSha
-            ? "verified"
-            : "sha_mismatch"
-          : "missing",
-        sha256: expectedSha,
-      };
-    })
-    .sort((left, right) => left.packageName.localeCompare(right.packageName));
-};
-
-const overlaySourceStatus = (marker, currentSource) => {
-  if (marker.source?.repoRoot !== repoRoot) return "foreign_source";
-  if (marker.source?.head !== currentSource.head) return "stale_source";
-  if (marker.source?.dirty !== currentSource.dirty) return "dirty_state_changed";
-  return "current_source";
-};
-
-const packageVersionStatus = (marker) =>
-  marker.packageVersion === releaseVersion() ? "release_version_match" : "release_version_mismatch";
-
-const npmLatestNotChecked = () => ({
-  status: "not_checked",
-  reason: "pass --check-npm to compare against the registry",
-});
-
-const npmLatestFor = (packageNames, registry) => {
-  const packages = {};
-  for (const packageName of packageNames) {
-    const args = ["view", packageName, "version", "--json"];
-    if (typeof registry === "string" && registry.length > 0) args.push("--registry", registry);
-    const result = spawnSync("npm", args, {
-      cwd: repoRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    packages[packageName] =
-      result.status === 0
-        ? { status: "resolved", version: JSON.parse(result.stdout.trim()) }
-        : { status: "unresolved", detail: result.stderr.trim() || result.stdout.trim() };
-  }
-  return { status: "checked", packages };
-};
-
-const consumerGateIssue = (code, severity, message, detail = {}) => ({
-  code,
-  severity,
-  message,
-  ...detail,
-});
-
-const consumerOverlayGate = (status) => {
-  const hardFailures = [];
-  const signals = [];
-  if (status.localOverlay.status === "missing") {
-    hardFailures.push(
-      consumerGateIssue(
-        "local_overlay_missing",
-        "hard",
-        "local consumer overlay marker is missing",
-        { markerPath: status.markerPath },
-      ),
-    );
-  }
-  if (status.localOverlay.status === "partial") {
-    hardFailures.push(
-      consumerGateIssue("local_overlay_partial", "hard", "local consumer overlay is partial"),
-    );
-  }
-  if (
-    status.localOverlay.sourceStatus !== undefined &&
-    status.localOverlay.sourceStatus !== "current_source"
-  ) {
-    hardFailures.push(
-      consumerGateIssue(
-        "local_overlay_source_not_current",
-        "hard",
-        `local consumer overlay source is ${status.localOverlay.sourceStatus}`,
-        { sourceStatus: status.localOverlay.sourceStatus },
-      ),
-    );
-  }
-  if (
-    status.packageVersion.status !== undefined &&
-    status.packageVersion.status !== "release_version_match"
-  ) {
-    hardFailures.push(
-      consumerGateIssue(
-        "local_overlay_release_version_mismatch",
-        "hard",
-        `local consumer overlay version is ${status.packageVersion.status}`,
-        { packageVersionStatus: status.packageVersion.status },
-      ),
-    );
-  }
-  for (const pkg of status.localOverlay.packages ?? []) {
-    if (pkg.targetStatus === "missing") {
-      hardFailures.push(
-        consumerGateIssue(
-          "local_overlay_package_missing",
-          "hard",
-          `${pkg.packageName} is missing from the consumer overlay`,
-          { packageName: pkg.packageName },
-        ),
-      );
-    }
-    if (pkg.targetStatus === "symlink") {
-      hardFailures.push(
-        consumerGateIssue(
-          "local_overlay_package_symlink",
-          "hard",
-          `${pkg.packageName} is a symlink, not packed package content`,
-          { packageName: pkg.packageName },
-        ),
-      );
-    }
-    if (pkg.tarballStatus !== "verified") {
-      hardFailures.push(
-        consumerGateIssue(
-          "local_overlay_tarball_not_verified",
-          "hard",
-          `${pkg.packageName} tarball status is ${pkg.tarballStatus}`,
-          { packageName: pkg.packageName, tarballStatus: pkg.tarballStatus },
-        ),
-      );
-    }
-  }
-  if (status.npmLatest.status === "not_checked") {
-    signals.push(
-      consumerGateIssue(
-        "npm_latest_not_checked",
-        "signal",
-        "npm latest was not checked; pass --check-npm to include registry observation",
-      ),
-    );
-  }
-  if (status.npmLatest.status === "checked") {
-    for (const [packageName, row] of Object.entries(status.npmLatest.packages ?? {})) {
-      if (row.status !== "resolved") {
-        signals.push(
-          consumerGateIssue(
-            "npm_latest_unresolved",
-            "signal",
-            `${packageName} npm latest could not be resolved`,
-            { packageName, status: row.status },
-          ),
-        );
-      }
-    }
-  }
-  return {
-    status: hardFailures.length === 0 ? "pass" : "fail",
-    hardFailures,
-    signals,
-  };
-};
-
-const withConsumerGate = (status) => ({
-  ...status,
-  gate: consumerOverlayGate(status),
-});
-
-export const consumerStatusData = (consumerRoot, options = {}) => {
-  const markerPath = localConsumerMarkerPath(consumerRoot);
-  const currentSource = currentSourceIdentity();
-  if (!fs.existsSync(markerPath)) {
-    return withConsumerGate({
-      schemaVersion: 1,
-      consumerRoot,
-      markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
-      localOverlay: { status: "missing" },
-      source: { current: currentSource },
-      packageVersion: { release: releaseVersion() },
-      npmLatest:
-        options.checkNpm === true ? npmLatestFor([], options.registry) : npmLatestNotChecked(),
-    });
-  }
-  const marker = readJson(markerPath);
-  const packages = packageOverlayRows(consumerRoot, marker);
-  const sourceStatus = overlaySourceStatus(marker, currentSource);
-  return withConsumerGate({
-    schemaVersion: 1,
-    consumerRoot,
-    markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
-    localOverlay: {
-      status: packages.every((pkg) => pkg.installed) ? "installed" : "partial",
-      sourceStatus,
-      generatedBy: marker.generatedBy,
-      installedAt: marker.installedAt,
-      artifact: marker.artifact ?? { kind: "legacy-local-overlay" },
-      packages,
-    },
-    source: {
-      current: currentSource,
-      overlay: marker.source,
-    },
-    packageVersion: {
-      release: releaseVersion(),
-      overlay: marker.packageVersion,
-      status: packageVersionStatus(marker),
-    },
-    npmLatest:
-      options.checkNpm === true
-        ? npmLatestFor(
-            packages.map((pkg) => pkg.packageName),
-            options.registry,
-          )
-        : npmLatestNotChecked(),
-  });
-};
-
-const printConsumerStatus = (status) => {
-  console.log(`consumer: ${status.consumerRoot}`);
-  console.log(`marker: ${status.markerPath}`);
-  console.log(`local overlay: ${status.localOverlay.status}`);
-  if (status.localOverlay.sourceStatus !== undefined) {
-    console.log(`source status: ${status.localOverlay.sourceStatus}`);
-  }
-  console.log(
-    `package version: overlay=${status.packageVersion.overlay ?? "none"} release=${status.packageVersion.release} status=${status.packageVersion.status ?? "none"}`,
-  );
-  console.log(`npm latest: ${status.npmLatest.status}`);
-  console.log(`gate: ${status.gate.status}`);
-  for (const pkg of status.localOverlay.packages ?? []) {
-    console.log(
-      `package ${pkg.packageName}: target=${pkg.targetStatus} tarball=${pkg.tarballStatus} sha256=${pkg.sha256}`,
-    );
-  }
-  for (const failure of status.gate.hardFailures) {
-    console.log(`failure ${failure.code}: ${failure.message}`);
-  }
-  for (const signal of status.gate.signals) {
-    console.log(`signal ${signal.code}: ${signal.message}`);
-  }
-};
-
-export const consumerStatus = (rawArgs) => {
-  const args = parseArgs(rawArgs);
-  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
-  const status = consumerStatusData(consumerRoot, {
-    checkNpm: boolArg(args, "check-npm"),
-    registry: args.registry,
-  });
-  if (boolArg(args, "json")) {
-    console.log(JSON.stringify(status, null, 2));
-    return;
-  }
-  printConsumerStatus(status);
-};
-
-export const consumerCheck = (rawArgs) => {
-  const args = parseArgs(rawArgs);
-  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
-  const status = consumerStatusData(consumerRoot, {
-    checkNpm: boolArg(args, "check-npm"),
-    registry: args.registry,
-  });
-  if (boolArg(args, "json")) {
-    console.log(JSON.stringify(status, null, 2));
-  } else {
-    printConsumerStatus(status);
-  }
-  if (status.gate.status !== "pass") {
-    process.exitCode = 1;
-  }
-};
-
-export const installConsumer = (rawArgs) => {
-  const args = parseArgs(rawArgs);
-  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
-  const snapshot = snapshotFiles(consumerManifestFiles(consumerRoot));
-  if (!boolArg(args, "skip-pack")) packInternal();
-  const manifest = readInstallManifest();
-  const entries = tarballPackageEntries(manifest);
-  const nodeModules = nodeModulesRoot(consumerRoot, { install: !boolArg(args, "no-install") });
-  const packages = {};
-  for (const entry of entries) {
-    const target = packageTargetDir(nodeModules, entry.packageName);
-    unpackTarballInto(entry.tarball, target);
-    packages[entry.packageName] = {
-      target: path.relative(consumerRoot, target).split(path.sep).join("/"),
-      tarball: entry.tarball,
-      sha256: entry.sha256,
-    };
-  }
-  writeJson(localConsumerMarkerPath(consumerRoot), {
-    schemaVersion: 1,
-    generatedBy: "agentos consumer install",
-    installedAt: new Date().toISOString(),
-    consumerRoot,
-    source: currentSourceIdentity(),
-    packageVersion: manifest.version,
-    artifact: markerArtifact(manifest),
-    packages,
-  });
-  assertSnapshotUnchanged(snapshot, "install-consumer");
-  const status = consumerStatusData(consumerRoot);
-  if (boolArg(args, "json")) {
-    console.log(JSON.stringify(status, null, 2));
-  } else {
-    console.log(
-      `installed ${entries.length} local agentOS packages into ${path.relative(repoRoot, consumerRoot) || consumerRoot}`,
-    );
-    console.log(
-      `wrote ${path.relative(consumerRoot, localConsumerMarkerPath(consumerRoot)).split(path.sep).join("/")}`,
-    );
-    printConsumerStatus(status);
-  }
-};
-
-export const restoreConsumer = (rawArgs) => {
-  const args = parseArgs(rawArgs);
-  const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
-  const nodeModules = nodeModulesRoot(consumerRoot);
-  const markerPath = localConsumerMarkerPath(consumerRoot);
-  if (!fs.existsSync(markerPath)) {
-    fail(`${markerPath}: no local agentOS overlay marker`);
-  }
-  const marker = readJson(markerPath);
-  const packageNames = Object.keys(marker.packages ?? {}).sort((left, right) =>
-    left.localeCompare(right),
-  );
-  if (packageNames.length === 0) fail(`${markerPath}: marker does not list packages`);
-  const snapshot = snapshotFiles(consumerManifestFiles(consumerRoot));
-  for (const packageName of packageNames) {
-    fs.rmSync(packageTargetDir(nodeModules, packageName), { recursive: true, force: true });
-  }
-  fs.rmSync(markerPath, { force: true });
-  if (!boolArg(args, "no-install")) {
-    run("npm", ["install"], { cwd: consumerRoot });
-  }
-  assertSnapshotUnchanged(snapshot, "restore-consumer");
-  const result = { schemaVersion: 1, restoredPackages: packageNames };
-  if (boolArg(args, "json")) {
-    console.log(JSON.stringify(result, null, 2));
-  } else {
-    console.log(`restored ${packageNames.length} local agentOS package overlays`);
   }
 };
 
@@ -2283,8 +1805,8 @@ export const assertConsumerOverlayStatus = () => {
   if (marker.generatedBy !== "agentos consumer install") {
     fail(`install-consumer marker did not record public command identity: ${marker.generatedBy}`);
   }
-  if (marker.artifact?.kind !== "local-tarball-overlay") {
-    fail("install-consumer marker did not record local-tarball-overlay artifact identity");
+  if (marker.artifact?.kind !== "install-manifest-overlay") {
+    fail("install-consumer marker did not record install-manifest-overlay artifact identity");
   }
   if (marker.artifact.installManifest?.sha256 !== sha256File(installManifestPath)) {
     fail("install-consumer marker did not record install manifest digest");
@@ -2308,6 +1830,26 @@ export const assertConsumerOverlayStatus = () => {
   const checked = runAgentosJson(["consumer", "check", dir], 0).json;
   if (JSON.stringify(checked.gate) !== JSON.stringify(status.gate)) {
     fail("consumer check and status did not share one overlay gate projection");
+  }
+  const packagedStatus = runAgentosJson(["consumer", "status", dir], 0, {
+    runner: runPackagedAgentosCli,
+  }).json;
+  if (packagedStatus.localOverlay.status !== "installed") {
+    fail(`packaged consumer status did not report installed overlay: ${packagedStatus.localOverlay.status}`);
+  }
+  if (packagedStatus.localOverlay.sourceStatus !== "not_checked") {
+    fail(
+      `packaged consumer status must not require source checkout identity: ${packagedStatus.localOverlay.sourceStatus}`,
+    );
+  }
+  if (packagedStatus.gate.status !== "pass") {
+    fail(`packaged consumer status gate did not pass: ${JSON.stringify(packagedStatus.gate)}`);
+  }
+  const packagedCheck = runAgentosJson(["consumer", "check", dir], 0, {
+    runner: runPackagedAgentosCli,
+  }).json;
+  if (JSON.stringify(packagedCheck.gate.hardFailures) !== JSON.stringify([])) {
+    fail(`packaged consumer check emitted hard failures: ${JSON.stringify(packagedCheck.gate)}`);
   }
   writeJson(markerPath, {
     ...marker,
@@ -2335,7 +1877,7 @@ export const assertConsumerOverlayStatus = () => {
   );
   const firstPackage = packageNames[0];
   if (firstPackage === undefined) fail("consumer overlay marker did not include packages");
-  const currentSource = currentSourceIdentity();
+  const currentSource = sourceIdentityFor(repoRoot);
   writeJson(markerPath, {
     ...marker,
     source: currentSource,
@@ -2411,6 +1953,21 @@ export const assertConsumerOverlayStatus = () => {
   }
   if (!missingNodeModulesFailed) {
     fail("install-consumer --no-install did not fail on missing node_modules");
+  }
+  const restoreDir = mkdtempFixture("agentos-packaged-consumer-restore-");
+  writeConsumerApp(restoreDir, {
+    effect: catalog().effect,
+    "@cloudflare/workers-types": catalog()["@cloudflare/workers-types"],
+  });
+  npmInstall(restoreDir);
+  runAgentosJson(["consumer", "install", restoreDir, "--from-manifest", installManifestPath], 0, {
+    runner: runPackagedAgentosCli,
+  });
+  runAgentosJson(["consumer", "restore", restoreDir, "--no-install"], 0, {
+    runner: runPackagedAgentosCli,
+  });
+  if (fs.existsSync(localConsumerMarkerPath(restoreDir))) {
+    fail("packaged consumer restore did not remove local overlay marker");
   }
   const pnpmDir = mkdtempFixture("agentos-pnpm-install-command-");
   writeJson(path.join(pnpmDir, "package.json"), {
