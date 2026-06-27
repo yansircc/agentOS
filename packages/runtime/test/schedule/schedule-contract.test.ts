@@ -5,6 +5,8 @@ import {
   cronMinuteExpression,
   defineSchedule,
   dispatchScheduleFire,
+  dispatchScheduleFireDelivery,
+  projectScheduleIngressDeliveryHistory,
   projectScheduleFireHistory,
   scheduleFireId,
   scheduledMinute,
@@ -457,6 +459,132 @@ describe("@agent-os/runtime/schedule", () => {
       "schedule.fire_requested",
       "schedule.fire_dispatched",
     ]);
+  });
+
+  it("dedupes schedule delivery before re-entering product ingress", async () => {
+    const identity = "schedule-delivery-dedupe-test";
+    const truthIdentity = inMemoryConversationTruthIdentity(identity);
+    const lowered = await lowerLocalAgentRuntime({
+      target: "node@1",
+      identity,
+      cwd: process.cwd(),
+    });
+    let calls = 0;
+    const schedule = defineSchedule({
+      cron: "* * * * *",
+      handler: (context) =>
+        context.sessions.submitTurn({
+          sessionRef: "session:delivery",
+          turnRef: context.fireId,
+          intent: "daily summary",
+          context: {},
+        }),
+    });
+    const deliveryRuntime: ScheduleRuntime = {
+      sessions: {
+        submitTurn: async () => {
+          calls += 1;
+          return { ...delivered, runId: calls };
+        },
+      },
+      workflows: runtime.workflows,
+    };
+    const input = {
+      ...truthIdentity,
+      runtime: deliveryRuntime,
+      schedule,
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:02:00.000Z",
+      appPrincipal,
+    } as const;
+
+    const first = await dispatchScheduleFireDelivery({
+      ...input,
+      history: lowered.runtime.events(),
+    });
+    expect(first.kind).toBe("attempt");
+    if (first.kind !== "attempt") expect.fail("expected first delivery attempt");
+    await lowered.commitScheduleFireDispatchWithDelivery(first);
+
+    const second = await dispatchScheduleFireDelivery({
+      ...input,
+      history: lowered.runtime.events(),
+    });
+
+    expect(second.kind).toBe("replay");
+    expect(calls).toBe(1);
+    expect(second.fireId).toBe(first.fireId);
+    const deliveries = projectScheduleIngressDeliveryHistory(lowered.runtime.events()).deliveries;
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]).toMatchObject({
+      status: "accepted",
+      deliveryKey: first.fireId,
+      attempt: 1,
+      slot: { kind: "schedule", id: "daily-summary" },
+    });
+    expect(projectScheduleFireHistory(lowered.runtime.events()).fires).toHaveLength(1);
+  });
+
+  it("retries schedule delivery after retryable handler failure with the same delivery key", async () => {
+    const identity = "schedule-delivery-retry-test";
+    const truthIdentity = inMemoryConversationTruthIdentity(identity);
+    const lowered = await lowerLocalAgentRuntime({
+      target: "node@1",
+      identity,
+      cwd: process.cwd(),
+    });
+    let calls = 0;
+    const schedule = defineSchedule({
+      cron: "* * * * *",
+      handler: (context) => {
+        calls += 1;
+        if (calls === 1) throw new Error("retry once");
+        return context.sessions.submitTurn({
+          sessionRef: "session:delivery",
+          turnRef: context.fireId,
+          intent: "daily summary",
+          context: {},
+        });
+      },
+    });
+    const deliveryRuntime: ScheduleRuntime = {
+      sessions: {
+        submitTurn: async () => ({ ...delivered, runId: calls }),
+      },
+      workflows: runtime.workflows,
+    };
+    const input = {
+      ...truthIdentity,
+      runtime: deliveryRuntime,
+      schedule,
+      scheduleId: "daily-summary",
+      scheduledAt: "2026-06-26T01:03:00.000Z",
+      appPrincipal,
+    } as const;
+
+    const first = await dispatchScheduleFireDelivery({
+      ...input,
+      history: lowered.runtime.events(),
+    });
+    expect(first.kind).toBe("attempt");
+    if (first.kind !== "attempt") expect.fail("expected first delivery attempt");
+    expect(first.schedule.ok).toBe(false);
+    await lowered.commitScheduleFireDispatchWithDelivery(first);
+
+    const second = await dispatchScheduleFireDelivery({
+      ...input,
+      history: lowered.runtime.events(),
+    });
+    expect(second.kind).toBe("attempt");
+    if (second.kind !== "attempt") expect.fail("expected retry delivery attempt");
+    expect(second.delivery.attempt).toBe(2);
+    expect(second.fireId).toBe(first.fireId);
+    await lowered.commitScheduleFireDispatchWithDelivery(second);
+
+    const deliveries = projectScheduleIngressDeliveryHistory(lowered.runtime.events()).deliveries;
+    expect(calls).toBe(2);
+    expect(deliveries.map((delivery) => delivery.status)).toEqual(["accepted", "failed"]);
+    expect(deliveries.map((delivery) => delivery.attempt)).toEqual([2, 1]);
   });
 
   it("projects generated local schedule fires through the manifest truth identity", async () => {

@@ -102,13 +102,16 @@ principal. That principal is the authority for deciding whether the handler may
 call `submit` or `dispatch`; provider payload identity remains data. The channel
 context exposes only `principal`, `submit`, and `dispatch`.
 
-Provider SDK clients, outbound provider calls, response URL handling,
-deduplication state, retries, and lifecycle policy are application-owned channel
-code or application-owned tools. Raw credentials, webhook tokens, and provider
-response URLs must be redacted before data is sent to `submit`, `dispatch`,
-model context, or durable events. Runtime does not provide generic webhook
-helpers, provider lifecycle helpers, provider-normalized universal events, or
-deduplication substrate for channels.
+Provider SDK clients, outbound provider calls, response URL handling, and
+lifecycle policy are application-owned channel code or application-owned tools.
+Runtime delivery facts are provider-neutral: generated targets may record a
+verified delivery key, attempts, receipts, retry status, and replay projection,
+but the key must come from channel code after provider verification. Raw
+credentials, webhook tokens, provider response URLs, provider-native bodies, and
+provider callback tokens must be redacted before data is sent to `submit`,
+`dispatch`, model context, or durable events. Runtime does not provide generic
+webhook helpers, provider lifecycle helpers, or provider-normalized universal
+events.
 
 `agent/schedules/<id>.ts` is an optional time ingress slot. The path stem is the
 schedule identity; there is no second schedule list in `agent.json` or
@@ -127,10 +130,12 @@ idempotency with the fire identity. Schedule fire events record handoff request
 and handoff outcome only; running or terminal status is projected from the
 linked session, workflow, and runtime run facts.
 
-Provider lifecycle, external side effects, outbound calls, and durable
-deduplication stay in app-owned code reached by the submitted session or
-workflow. Runtime does not provide cron evaluation, provider SDK lifecycle,
-external side-effect helpers, or schedule-specific deduplication substrate.
+Provider lifecycle, external side effects, and outbound calls stay in app-owned
+code reached by the submitted session or workflow. Runtime owns the
+provider-neutral delivery key, attempt, receipt, retry, and replay projection for
+the generated schedule fire identity. Runtime does not provide cron evaluation,
+provider SDK lifecycle, external side-effect helpers, or provider callback
+helpers.
 
 `workflows/<name>.ts` is an optional finite workflow authoring slot. The path
 stem is the workflow identity; there is no second workflow name in `agent.json`,

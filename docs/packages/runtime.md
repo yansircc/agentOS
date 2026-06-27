@@ -38,11 +38,13 @@ transactions, and pump execution.
 Schedule authoring is a product-level time ingress over sessions and workflows,
 not a runtime scheduler helper. Authored `defineSchedule` declarations use
 five-field UTC cron expressions. Generated targets map provider scheduled
-metadata to the compiled schedule registry and call the shared schedule fire
-dispatcher. Runtime schedule fire events record only requested/dispatched/failed
-handoff facts; schedule history projections join those facts to linked
-session/workflow/run projections for downstream status. Apps own external side
-effects and durable deduplication through the submitted product ingress.
+metadata to the compiled schedule registry and call the shared schedule delivery
+dispatcher. Runtime ingress delivery events record provider-neutral delivery
+attempts, receipts, retry state, and replay projection; schedule fire events
+record the requested, dispatched, or failed product handoff. Schedule history
+projections join those facts to linked session/workflow/run projections for
+downstream status. Apps own provider lifecycle, callback parsing, and external
+side effects reached through the submitted product ingress.
 
 Durable trigger acquire effects that touch external providers must be
 provider-idempotent. The trigger pump guarantees at-most-one terminal ledger

@@ -2562,6 +2562,68 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         },
       ],
     ]);
+
+    const deliveryResult = runTypeScript(
+      [
+        'import { dispatchGeneratedScheduleDelivery } from "./.agentos/generated/schedules.ts";',
+        "const calls = [];",
+        "const identity = { scopeRef: { kind: \"conversation\", scopeId: \"schedule-registry-scope\" }, effectAuthorityRef: { authorityClass: \"effect\", authorityId: \"schedule-registry-fixture\" } };",
+        "const runtime = Object.freeze({",
+        "  sessions: Object.freeze({",
+        "    submitTurn: async (input) => {",
+        '      calls.push(["session", input]);',
+        '      return { ok: true, status: "delivered", runId: 303, final: "done", eventCount: 4, tokensUsed: 0 };',
+        "    },",
+        "  }),",
+        "  workflows: Object.freeze({ run: async () => { throw new Error(\"workflow not expected\"); } }),",
+        "});",
+        "const first = await dispatchGeneratedScheduleDelivery({",
+        '  scheduleId: "daily",',
+        '  scheduledAt: "2026-06-26T10:20:42.000Z",',
+        '  appPrincipal: { authority: "app", subject: "tenant" },',
+        "  identity,",
+        "  runtime,",
+        "  history: [],",
+        "});",
+        "if (first.kind !== \"attempt\" || !first.schedule.ok) throw new Error(\"expected first schedule delivery attempt\");",
+        "const deliveryRequested = { id: 10, ts: 10, kind: first.delivery.requested.kind, scopeRef: first.delivery.requested.scopeRef, effectAuthorityRef: first.delivery.requested.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: first.delivery.requested.payload };",
+        "const deliveryAcceptedSpec = first.delivery.accept(10);",
+        "const deliveryAccepted = { id: 11, ts: 11, kind: deliveryAcceptedSpec.kind, scopeRef: deliveryAcceptedSpec.scopeRef, effectAuthorityRef: deliveryAcceptedSpec.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: deliveryAcceptedSpec.payload };",
+        "const scheduleRequested = { id: 12, ts: 12, kind: first.schedule.requested.kind, scopeRef: first.schedule.requested.scopeRef, effectAuthorityRef: first.schedule.requested.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: first.schedule.requested.payload };",
+        "const scheduleOutcomeSpec = first.schedule.outcome(12);",
+        "const scheduleOutcome = { id: 13, ts: 13, kind: scheduleOutcomeSpec.kind, scopeRef: scheduleOutcomeSpec.scopeRef, effectAuthorityRef: scheduleOutcomeSpec.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: scheduleOutcomeSpec.payload };",
+        "const second = await dispatchGeneratedScheduleDelivery({",
+        '  scheduleId: "daily",',
+        '  scheduledAt: "2026-06-26T10:20:42.000Z",',
+        '  appPrincipal: { authority: "app", subject: "tenant" },',
+        "  identity,",
+        "  runtime,",
+        "  history: [deliveryRequested, deliveryAccepted, scheduleRequested, scheduleOutcome],",
+        "});",
+        "console.log(JSON.stringify({ first: first.kind, second: second.kind, fireId: first.fireId, replayFireId: second.fireId, calls }));",
+      ].join("\n"),
+      { cwd: nodeRoot, resolveDir: nodeRoot },
+    );
+    assert.equal(deliveryResult.status, 0, deliveryResult.stderr);
+    const deliveryOutput = JSON.parse(deliveryResult.stdout);
+    assert.deepEqual(deliveryOutput, {
+      first: "attempt",
+      second: "replay",
+      fireId: output.result.fireId,
+      replayFireId: output.result.fireId,
+      calls: [
+        [
+          "session",
+          {
+            sessionRef: "daily-session",
+            turnRef: output.result.fireId,
+            idempotencyKey: output.result.fireId,
+            intent: "scheduled session",
+            context: { scheduledAt: "2026-06-26T10:20:00.000Z" },
+          },
+        ],
+      ],
+    });
   } finally {
     rmSync(cloudflareRoot, { recursive: true, force: true });
     rmSync(nodeRoot, { recursive: true, force: true });
