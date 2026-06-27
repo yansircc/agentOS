@@ -7,6 +7,7 @@ import {
   projectAgentSessions,
   projectAgentSessionTurnLinks,
   projectRunsPage,
+  projectRunInspection,
   projectRunStatus,
   projectRunTrace,
   projectSubmitResult,
@@ -360,6 +361,15 @@ describe("runtime run projectors", () => {
         toolName: "lookup",
       },
     });
+    expect(projectRunInspection(rows, 1)).toMatchObject({
+      request: {
+        kind: "waiting_for_input",
+        interruptId: "approval-1",
+        reason: "approval_required",
+        at: 20,
+      },
+      lastKnownEvent: { id: 2, ts: 20, kind: "agent.run.interrupted" },
+    });
 
     const resumedRows = [
       ...rows,
@@ -391,6 +401,36 @@ describe("runtime run projectors", () => {
           resumedAtEventId: 2,
         },
       ],
+    });
+    expect(projectRunInspection(resumedRows, 1)).toMatchObject({
+      request: { kind: "none" },
+      lastKnownEvent: { id: 3, ts: 30, kind: "agent.run.resumed" },
+    });
+  });
+
+  it("projects decision cancellation posture without owning product workbench state", () => {
+    const rows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "approval" })),
+      event(
+        2,
+        agentRunAbortedEvent({
+          ...runtimeIdentity,
+          kind: ABORT.DECISION_CANCELLED,
+          runId: 1,
+          tokensUsed: 1,
+          payload: { reason: "operator_cancelled", gateRef: "gate-1" },
+        }),
+      ),
+    ];
+
+    expect(projectRunInspection(rows, 1)).toMatchObject({
+      status: { kind: "aborted", at: 20, abortKind: "agent.aborted.cancelled" },
+      cancellation: {
+        kind: "cancelled",
+        at: 20,
+        event: "agent.aborted.cancelled",
+        reason: "operator_cancelled",
+      },
     });
   });
 
@@ -511,6 +551,95 @@ describe("runtime run projectors", () => {
       startedAt: 10,
     });
     expect(projectSubmitResult(rows, 1)).toBe(null);
+  });
+
+  it("projects run inspection from product links and diagnostic facts", () => {
+    const rows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "summarize" })),
+      event(
+        2,
+        agentSessionTurnSubmittedEvent({
+          ...runtimeIdentity,
+          sessionRef: "session:s1",
+          turnRef: "turn:s1:1",
+          runtimeRunId: 1,
+          idempotencyKey: "turn:s1:1",
+        }),
+      ),
+      event(
+        3,
+        toolExecutedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          toolCallId: "call-1",
+          name: "lookup",
+          args: "{}",
+          execution: { kind: "deterministic" },
+          result: { ok: true },
+          claim: livedClaim,
+        }),
+      ),
+      event(
+        4,
+        agentRunCompletedEvent({
+          ...runtimeIdentity,
+          runId: 1,
+          final: "done",
+          output: "done",
+          outputKind: "text",
+          tokensUsed: 1,
+        }),
+      ),
+      rawEvent(5, "runtime_diagnostic.handler_failed", {
+        capabilityId: "workspace",
+        handler: "workspace.handler",
+        reason: "handler failed",
+        requestedEventId: 3,
+      }),
+    ];
+
+    expect(
+      projectRunInspection(rows, 1, [
+        {
+          phase: "handler",
+          eventId: 3,
+          kind: "tool.executed",
+          identityKey: "conversation:projection-scope",
+          message: "handler timed out",
+        },
+      ]),
+    ).toMatchObject({
+      runId: 1,
+      status: { kind: "delivered", at: 40, event: "agent.run.completed" },
+      startedAt: 10,
+      terminal: { kind: "delivered", at: 40 },
+      lastKnownEvent: { id: 4, ts: 40, kind: "agent.run.completed" },
+      request: { kind: "none" },
+      cancellation: { kind: "none" },
+      productLink: {
+        kind: "session_turn",
+        eventId: 2,
+        submittedAt: 20,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+      },
+      diagnostics: [
+        {
+          source: "telemetry",
+          eventId: 3,
+          kind: "tool.executed",
+          message: "handler timed out",
+          phase: "handler",
+        },
+        {
+          source: "runtime_diagnostic",
+          eventId: 5,
+          kind: "runtime_diagnostic.handler_failed",
+          requestedEventId: 3,
+          message: "handler failed",
+        },
+      ],
+    });
   });
 
   it("lists product projections through the runtime projector owner", () => {

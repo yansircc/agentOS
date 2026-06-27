@@ -1,7 +1,13 @@
 import type {
   RunListPage,
   RunListSpec,
+  RunCancellationStatus,
+  RunInspection,
+  RunInspectionDiagnostic,
   RunInterruption,
+  RunLastKnownEvent,
+  RunProductLink,
+  RunRequestStatus,
   RunResume,
   RunStatus,
   RunStatusKind,
@@ -11,6 +17,7 @@ import type {
   RunTrace,
   RunTurn,
 } from "@agent-os/core/types";
+import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 import type { LedgerEvent } from "@agent-os/core/types";
 import { ABORT, reasonOf, type AbortKind } from "@agent-os/core/abort";
 import { defineProjectionSpec, project, projectionOutputOrFail } from "@agent-os/core/projection";
@@ -29,6 +36,9 @@ import {
   type WorkflowRunSubmittedPayload,
   type SubmitResult,
 } from "@agent-os/core/runtime-protocol";
+import { RUNTIME_DIAGNOSTIC_EVENT_PREFIX } from "./runtime-diagnostic-carrier/definition";
+
+export type { RunInspection, RunInspectionDiagnostic } from "@agent-os/core/types";
 
 export const RUN_BEARING_KINDS: ReadonlyArray<string> = [
   RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
@@ -352,6 +362,195 @@ export const projectRunStatus = (
       runId: normalizeRunId(rawRunId),
     }),
   );
+
+const runLastKnownEvent = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  runId: number,
+): RunLastKnownEvent | undefined => {
+  const last = runtimeEvents
+    .filter((event) => runtimeRunId(event) === runId)
+    .sort((left, right) => right.id - left.id)[0];
+  return last === undefined ? undefined : { id: last.id, ts: last.ts, kind: last.kind };
+};
+
+const runProductLink = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  runId: number,
+): RunProductLink | undefined => {
+  const linked = runtimeEvents.find(
+    (
+      event,
+    ): event is
+      | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
+      | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED> =>
+      (event.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED ||
+        event.kind === RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED) &&
+      event.payload.runtimeRunId === runId,
+  );
+  if (linked === undefined) return undefined;
+  if (linked.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED) {
+    return {
+      kind: "session_turn",
+      eventId: linked.id,
+      submittedAt: linked.ts,
+      sessionRef: linked.payload.sessionRef,
+      turnRef: linked.payload.turnRef,
+      ...(linked.payload.idempotencyKey === undefined
+        ? {}
+        : { idempotencyKey: linked.payload.idempotencyKey }),
+    };
+  }
+  return {
+    kind: "workflow_run",
+    eventId: linked.id,
+    submittedAt: linked.ts,
+    workflowId: linked.payload.workflowId,
+    workflowRunId: linked.payload.workflowRunId,
+    ...(linked.payload.idempotencyKey === undefined
+      ? {}
+      : { idempotencyKey: linked.payload.idempotencyKey }),
+    ...(linked.payload.inputDigest === undefined
+      ? {}
+      : { inputDigest: linked.payload.inputDigest }),
+  };
+};
+
+const payloadRecord = (payload: unknown): Readonly<Record<string, unknown>> =>
+  payload !== null && typeof payload === "object" && !Array.isArray(payload)
+    ? (payload as Readonly<Record<string, unknown>>)
+    : {};
+
+const stringField = (record: Readonly<Record<string, unknown>>, key: string): string | undefined =>
+  typeof record[key] === "string" && record[key].length > 0 ? record[key] : undefined;
+
+const numberField = (record: Readonly<Record<string, unknown>>, key: string): number | undefined =>
+  typeof record[key] === "number" && Number.isFinite(record[key])
+    ? (record[key] as number)
+    : undefined;
+
+const runtimeDiagnosticMessage = (
+  kind: string,
+  payload: Readonly<Record<string, unknown>>,
+): string => {
+  const suffix = kind.slice(RUNTIME_DIAGNOSTIC_EVENT_PREFIX.length);
+  switch (suffix) {
+    case "handler_missing":
+      return `handler missing for ${stringField(payload, "eventKind") ?? "unknown_event"}`;
+    case "handler_failed":
+      return stringField(payload, "reason") ?? "handler failed";
+    case "projection_timeout":
+      return `projection ${stringField(payload, "projectionKind") ?? "unknown_projection"} timed out`;
+    case "preflight_failed":
+      return stringField(payload, "reason") ?? "preflight failed";
+    default:
+      return suffix || kind;
+  }
+};
+
+const runDiagnostics = (
+  events: ReadonlyArray<LedgerEvent>,
+  runEventIds: ReadonlySet<number>,
+  telemetryDiagnostics: ReadonlyArray<TelemetryFanoutDiagnostic>,
+): ReadonlyArray<RunInspectionDiagnostic> => {
+  const diagnostics: RunInspectionDiagnostic[] = [];
+  for (const diagnostic of telemetryDiagnostics) {
+    if (!runEventIds.has(diagnostic.eventId)) continue;
+    diagnostics.push({
+      source: "telemetry",
+      eventId: diagnostic.eventId,
+      kind: diagnostic.kind,
+      message: diagnostic.message,
+      phase: diagnostic.phase,
+      identityKey: diagnostic.identityKey,
+    });
+  }
+  for (const event of events) {
+    if (!event.kind.startsWith(RUNTIME_DIAGNOSTIC_EVENT_PREFIX)) continue;
+    const payload = payloadRecord(event.payload);
+    const requestedEventId = numberField(payload, "requestedEventId");
+    if (requestedEventId === undefined || !runEventIds.has(requestedEventId)) continue;
+    diagnostics.push({
+      source: "runtime_diagnostic",
+      eventId: event.id,
+      kind: event.kind,
+      message: runtimeDiagnosticMessage(event.kind, payload),
+      requestedEventId,
+      payload: event.payload,
+    });
+  }
+  return diagnostics.sort((left, right) => left.eventId - right.eventId);
+};
+
+const runRequestStatus = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  runId: number,
+): RunRequestStatus => {
+  const activeInterruption = activeInterruptionFor(runtimeEvents, runId);
+  if (activeInterruption === undefined) return { kind: "none" };
+  const inputRequest = inputRequestRefFromInterruptedEvent(activeInterruption);
+  return {
+    kind: "waiting_for_input",
+    interruptId: activeInterruption.payload.interruptId,
+    reason: activeInterruption.payload.reason,
+    at: activeInterruption.ts,
+    ...(inputRequest.ok ? { descriptor: inputRequest.descriptor } : {}),
+  };
+};
+
+const cancellationStatus = (
+  runtimeEvents: ReadonlyArray<RuntimeLedgerEvent>,
+  runId: number,
+): RunCancellationStatus => {
+  const cancelled = runtimeEvents.find(
+    (event): event is RuntimeLedgerEventByKind<typeof ABORT.DECISION_CANCELLED> =>
+      event.kind === ABORT.DECISION_CANCELLED && event.payload.runId === runId,
+  );
+  if (cancelled === undefined) return { kind: "none" };
+  const payload = payloadRecord(cancelled.payload);
+  return {
+    kind: "cancelled",
+    at: cancelled.ts,
+    event: cancelled.kind,
+    ...(stringField(payload, "reason") === undefined
+      ? {}
+      : { reason: stringField(payload, "reason") }),
+  };
+};
+
+/**
+ * Projects runtime ledger and diagnostic facts into a UI-friendly run inspection view.
+ *
+ * The projection is read-only: ledger events own lifecycle facts, runtime diagnostics own
+ * diagnostic facts, and product links remain evidence correlation only.
+ *
+ * @public
+ */
+export const projectRunInspection = (
+  events: ReadonlyArray<LedgerEvent>,
+  rawRunId: number | string,
+  telemetryDiagnostics: ReadonlyArray<TelemetryFanoutDiagnostic> = [],
+): RunInspection => {
+  const runtimeEvents = runtimeEventsOf(events);
+  const runId = normalizeRunId(rawRunId);
+  const trace = projectRunTrace(events, runId);
+  const runEvents = runtimeEvents.filter((event) => runtimeRunId(event) === runId);
+  const runEventIds = new Set(runEvents.map((event) => event.id));
+  return {
+    runId,
+    status: runStatusFromRuntimeEvents(runtimeEvents, runId),
+    startedAt: trace.startedAt,
+    terminal: trace.terminal,
+    ...(runLastKnownEvent(runtimeEvents, runId) === undefined
+      ? {}
+      : { lastKnownEvent: runLastKnownEvent(runtimeEvents, runId) }),
+    request: runRequestStatus(runtimeEvents, runId),
+    cancellation: cancellationStatus(runtimeEvents, runId),
+    ...(runProductLink(runtimeEvents, runId) === undefined
+      ? {}
+      : { productLink: runProductLink(runtimeEvents, runId) }),
+    diagnostics: runDiagnostics(events, runEventIds, telemetryDiagnostics),
+  };
+};
 
 type TerminalAcc = {
   readonly kind: "delivered" | "aborted";

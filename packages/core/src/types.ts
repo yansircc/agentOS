@@ -261,6 +261,73 @@ export type RunStatus =
 
 export type RunStatusKind = RunStatus["kind"];
 
+export interface RunLastKnownEvent {
+  readonly id: number;
+  readonly ts: number;
+  readonly kind: string;
+}
+
+export type RunRequestStatus =
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "waiting_for_input";
+      readonly interruptId: string;
+      readonly reason: string;
+      readonly at: number;
+      readonly descriptor?: unknown;
+    };
+
+export type RunCancellationStatus =
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "cancelled";
+      readonly at: number;
+      readonly event: string;
+      readonly reason?: string;
+    };
+
+export type RunProductLink =
+  | {
+      readonly kind: "session_turn";
+      readonly eventId: number;
+      readonly submittedAt: number;
+      readonly sessionRef: string;
+      readonly turnRef: string;
+      readonly idempotencyKey?: string;
+    }
+  | {
+      readonly kind: "workflow_run";
+      readonly eventId: number;
+      readonly submittedAt: number;
+      readonly workflowId: string;
+      readonly workflowRunId: string;
+      readonly idempotencyKey?: string;
+      readonly inputDigest?: string;
+    };
+
+export interface RunInspectionDiagnostic {
+  readonly source: "telemetry" | "runtime_diagnostic";
+  readonly eventId: number;
+  readonly kind: string;
+  readonly message: string;
+  readonly phase?: string;
+  readonly identityKey?: string;
+  readonly requestedEventId?: number;
+  readonly payload?: unknown;
+}
+
+export interface RunInspection {
+  readonly runId: number;
+  readonly status: RunStatus;
+  readonly startedAt: number;
+  readonly terminal: RunTerminal | null;
+  readonly lastKnownEvent?: RunLastKnownEvent;
+  readonly request: RunRequestStatus;
+  readonly cancellation: RunCancellationStatus;
+  readonly productLink?: RunProductLink;
+  readonly diagnostics: ReadonlyArray<RunInspectionDiagnostic>;
+}
+
 export interface RunSummary {
   readonly runId: number;
   readonly startedAt: number;

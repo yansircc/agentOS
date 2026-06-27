@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { LedgerEvent } from "@agent-os/core/types";
 import {
+  agentSessionTurnSubmittedEvent,
+  agentRunAbortedEvent,
   agentRunCompletedEvent,
   agentRunInterruptedEvent,
   agentRunResumedEvent,
@@ -16,10 +18,12 @@ import {
   createAgentClientStore,
   isCurrentContinuationRef,
   isCurrentInputRequestRef,
+  projectAgentClientRunInspection,
   selectAgentClientSnapshot,
   type AgentClientCommandSpec,
   type AgentClientStreamSource,
 } from "../src/index";
+import { ABORT } from "@agent-os/core/abort";
 import {
   createWorkspaceAgentClientBridge,
   WORKSPACE_AGENT_PRODUCT_COMMAND,
@@ -94,6 +98,30 @@ const completedEvent = (id = 4): RuntimeLedgerEvent =>
     }),
   );
 
+const sessionLinkEvent = (id = 5): RuntimeLedgerEvent =>
+  runtimeEvent(
+    id,
+    agentSessionTurnSubmittedEvent({
+      ...identity,
+      sessionRef: "session:s1",
+      turnRef: "turn:s1:1",
+      runtimeRunId: 1,
+      idempotencyKey: "turn:s1:1",
+    }),
+  );
+
+const cancelledEvent = (id = 6): RuntimeLedgerEvent =>
+  runtimeEvent(
+    id,
+    agentRunAbortedEvent({
+      ...identity,
+      kind: ABORT.DECISION_CANCELLED,
+      runId: 1,
+      tokensUsed: 1,
+      payload: { reason: "operator_cancelled" },
+    }),
+  );
+
 describe("@agent-os/client", () => {
   it("owns a framework-neutral subscribe/getSnapshot store contract", () => {
     const store = createAgentClientStore({ count: 0 });
@@ -148,6 +176,44 @@ describe("@agent-os/client", () => {
     expect(isCurrentInputRequestRef(resumed, inputRequest.ref)).toBe(false);
     expect(resumed.run.inputRequests[0]?.status).toBe("resumed");
     expect(resumed.run.inputRequests[0]?.resumedAtEventId).toBe(3);
+  });
+
+  it("projects long-running run inspection from the replay snapshot", () => {
+    const client = createAgentClient({
+      initialEvents: [startedEvent(), sessionLinkEvent(), interruptedEvent()],
+    });
+    const interrupted = projectAgentClientRunInspection(client.getSnapshot());
+
+    expect(interrupted).toMatchObject({
+      runId: 1,
+      status: "interrupted",
+      lastKnownEvent: { id: 5, ts: 50, kind: "agent_session.turn_submitted" },
+      request: {
+        kind: "waiting_for_input",
+        interruptId: "interrupt-1",
+        reason: "approval_required",
+        at: 20,
+      },
+      cancellation: { kind: "none" },
+      productLink: {
+        kind: "session_turn",
+        eventId: 5,
+        submittedAt: 50,
+        sessionRef: "session:s1",
+        turnRef: "turn:s1:1",
+      },
+    });
+
+    client.appendEvents([cancelledEvent()]);
+    expect(projectAgentClientRunInspection(client.getSnapshot())).toMatchObject({
+      status: "aborted",
+      cancellation: {
+        kind: "cancelled",
+        at: 60,
+        event: "agent.aborted.cancelled",
+        reason: "operator_cancelled",
+      },
+    });
   });
 
   it("deduplicates replayed events and reconnects from the last runtime event id", async () => {

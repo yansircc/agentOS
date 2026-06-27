@@ -9,6 +9,13 @@ import {
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
 } from "@agent-os/core/runtime-protocol";
+import type {
+  RunCancellationStatus,
+  RunLastKnownEvent,
+  RunProductLink,
+  RunRequestStatus,
+} from "@agent-os/core/types";
+import { ABORT } from "@agent-os/core/abort";
 
 export type AgentClientListener = () => void;
 export type AgentClientUnsubscribe = () => void;
@@ -81,6 +88,15 @@ export interface AgentClientSnapshot {
   readonly lastEventId?: number;
   readonly connection: AgentClientConnectionSnapshot;
   readonly run: AgentClientRunSnapshot;
+}
+
+export interface AgentClientRunInspectionSnapshot {
+  readonly runId?: number;
+  readonly status: AgentClientRunStatus;
+  readonly lastKnownEvent?: RunLastKnownEvent;
+  readonly request: RunRequestStatus;
+  readonly cancellation: RunCancellationStatus;
+  readonly productLink?: RunProductLink;
 }
 
 export interface AgentClientStreamCursor {
@@ -194,6 +210,46 @@ const runIdFromEvent = (event: RuntimeLedgerEvent): number | undefined => {
     default:
       return isTerminalAbortEvent(event) ? event.payload.runId : undefined;
   }
+};
+
+const productLinkFromEvent = (
+  event: RuntimeLedgerEvent,
+  runId: number,
+): RunProductLink | undefined => {
+  if (
+    event.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED &&
+    event.payload.runtimeRunId === runId
+  ) {
+    return {
+      kind: "session_turn",
+      eventId: event.id,
+      submittedAt: event.ts,
+      sessionRef: event.payload.sessionRef,
+      turnRef: event.payload.turnRef,
+      ...(event.payload.idempotencyKey === undefined
+        ? {}
+        : { idempotencyKey: event.payload.idempotencyKey }),
+    };
+  }
+  if (
+    event.kind === RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED &&
+    event.payload.runtimeRunId === runId
+  ) {
+    return {
+      kind: "workflow_run",
+      eventId: event.id,
+      submittedAt: event.ts,
+      workflowId: event.payload.workflowId,
+      workflowRunId: event.payload.workflowRunId,
+      ...(event.payload.idempotencyKey === undefined
+        ? {}
+        : { idempotencyKey: event.payload.idempotencyKey }),
+      ...(event.payload.inputDigest === undefined
+        ? {}
+        : { inputDigest: event.payload.inputDigest }),
+    };
+  }
+  return undefined;
 };
 
 const refKey = (ref: {
@@ -335,6 +391,73 @@ export const isCurrentInputRequestRef = (
   snapshot.run.inputRequests.some(
     (request) => request.status === "pending" && refKey(request.ref) === refKey(ref),
   );
+
+const payloadReason = (event: RuntimeLedgerEvent): string | undefined => {
+  const payload = event.payload as { readonly reason?: unknown };
+  return typeof payload.reason === "string" && payload.reason.length > 0
+    ? payload.reason
+    : undefined;
+};
+
+export const projectAgentClientRunInspection = (
+  snapshot: AgentClientSnapshot,
+): AgentClientRunInspectionSnapshot => {
+  const runId = snapshot.run.runId;
+  if (runId === undefined) {
+    return {
+      status: snapshot.run.status,
+      request: { kind: "none" },
+      cancellation: { kind: "none" },
+    };
+  }
+  const runEvents = snapshot.events.filter((event) => runIdFromEvent(event) === runId);
+  const last = runEvents.sort((left, right) => right.id - left.id)[0];
+  const cancellationEvent = runEvents.find((event) => event.kind === ABORT.DECISION_CANCELLED);
+  const activeInputRequest = snapshot.run.inputRequests.find(
+    (request) => request.status === "pending",
+  );
+  const activeContinuation = snapshot.run.activeContinuationRef;
+  const activeInterruption = snapshot.events.find(
+    (event): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED> =>
+      event.kind === RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED &&
+      event.payload.runId === runId &&
+      event.payload.interruptId === activeContinuation?.interruptId,
+  );
+  const productLink = snapshot.events
+    .map((event) => productLinkFromEvent(event, runId))
+    .find((candidate): candidate is RunProductLink => candidate !== undefined);
+  return {
+    runId,
+    status: snapshot.run.status,
+    ...(last === undefined
+      ? {}
+      : { lastKnownEvent: { id: last.id, ts: last.ts, kind: last.kind } }),
+    request:
+      snapshot.run.status === "interrupted" && activeInterruption !== undefined
+        ? {
+            kind: "waiting_for_input",
+            interruptId: activeInterruption.payload.interruptId,
+            reason: activeInterruption.payload.reason,
+            at: activeInterruption.ts,
+            ...(activeInputRequest === undefined
+              ? {}
+              : { descriptor: activeInputRequest.descriptor }),
+          }
+        : { kind: "none" },
+    cancellation:
+      cancellationEvent === undefined
+        ? { kind: "none" }
+        : {
+            kind: "cancelled",
+            at: cancellationEvent.ts,
+            event: cancellationEvent.kind,
+            ...(payloadReason(cancellationEvent) === undefined
+              ? {}
+              : { reason: payloadReason(cancellationEvent) }),
+          },
+    ...(productLink === undefined ? {} : { productLink }),
+  };
+};
 
 const connectionSnapshot = (
   status: AgentClientConnectionStatus,
