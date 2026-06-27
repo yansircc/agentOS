@@ -97,11 +97,12 @@ principal. That principal is the authority for deciding whether the handler may
 call `submit` or `dispatch`; provider payload identity remains data. The channel
 context exposes only `principal`, `submit`, and `dispatch`.
 
-Provider SDK clients, outbound provider calls, response URL handling, and
-lifecycle policy are application-owned channel code or application-owned tools.
-Runtime delivery facts are provider-neutral: generated targets may record a
-verified delivery key, attempts, receipts, retry status, and replay projection,
-but the key must come from channel code after provider verification. Raw
+Provider SDK clients, outbound provider calls, response URL handling, delivery
+identity, dedupe, retry, receipts, replay policy, and lifecycle policy are
+application-owned channel code or application-owned tools. A channel may pass
+provider-verified evidence into `submit` or `dispatch`, but runtime does not
+assign a channel delivery key or automatically dedupe/retry channel requests
+until channel declarations expose a positive delivery-key contract. Raw
 credentials, webhook tokens, provider response URLs, provider-native bodies, and
 provider callback tokens must be redacted before data is sent to `submit`,
 `dispatch`, model context, or durable events. Runtime does not provide generic
