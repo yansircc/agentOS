@@ -13,3 +13,4 @@ dist/
 .agentos/eval-results/
 spikes/**
 .codex
+**/**/generated/
