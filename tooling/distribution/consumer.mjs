@@ -19,11 +19,7 @@ import {
 } from "./support.mjs";
 import { catalog, packageImportsEffect, publishedRecords } from "./package-records.mjs";
 import { agentCatalogProvenance, allFiles } from "./staging-build.mjs";
-import {
-  packageDepsFromTarballs,
-  packInternal,
-  tarballsByPackage,
-} from "./pack-check.mjs";
+import { packageDepsFromTarballs, packInternal, tarballsByPackage } from "./pack-check.mjs";
 import {
   consumerCheck as cliConsumerCheck,
   consumerInstallCommand,
@@ -1819,10 +1815,14 @@ export const assertConsumerOverlayStatus = () => {
     fail(`consumer status did not report installed overlay: ${status.localOverlay.status}`);
   }
   if (status.packageIntegrity.status !== "verified") {
-    fail(`consumer status did not report verified package integrity: ${status.packageIntegrity.status}`);
+    fail(
+      `consumer status did not report verified package integrity: ${status.packageIntegrity.status}`,
+    );
   }
   if (status.sourceFreshness.status !== "current_source") {
-    fail(`consumer status did not report current source freshness: ${status.sourceFreshness.status}`);
+    fail(
+      `consumer status did not report current source freshness: ${status.sourceFreshness.status}`,
+    );
   }
   if (status.localOverlay.sourceStatus !== "current_source") {
     fail(`consumer status did not report current source: ${status.localOverlay.sourceStatus}`);
@@ -1844,13 +1844,19 @@ export const assertConsumerOverlayStatus = () => {
     runner: runPackagedAgentosCli,
   }).json;
   if (packagedStatus.truthMode !== "local_overlay") {
-    fail(`packaged consumer status did not preserve local overlay truth mode: ${packagedStatus.truthMode}`);
+    fail(
+      `packaged consumer status did not preserve local overlay truth mode: ${packagedStatus.truthMode}`,
+    );
   }
   if (packagedStatus.localOverlay.status !== "installed") {
-    fail(`packaged consumer status did not report installed overlay: ${packagedStatus.localOverlay.status}`);
+    fail(
+      `packaged consumer status did not report installed overlay: ${packagedStatus.localOverlay.status}`,
+    );
   }
   if (packagedStatus.packageIntegrity.status !== "verified") {
-    fail(`packaged consumer status did not verify package integrity: ${packagedStatus.packageIntegrity.status}`);
+    fail(
+      `packaged consumer status did not verify package integrity: ${packagedStatus.packageIntegrity.status}`,
+    );
   }
   if (packagedStatus.sourceFreshness.status !== "not_checked") {
     fail(

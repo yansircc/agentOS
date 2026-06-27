@@ -422,9 +422,7 @@ const sourceFreshnessFor = (marker, currentSource) => {
 };
 
 const packageVersionStatus = (marker, packageVersion) =>
-  marker.packageVersion === packageVersion
-    ? "release_version_match"
-    : "release_version_mismatch";
+  marker.packageVersion === packageVersion ? "release_version_match" : "release_version_mismatch";
 
 const npmLatestNotChecked = () => ({
   status: "not_checked",
@@ -681,7 +679,9 @@ const installManifestPathForArgs = async (args, context) => {
   }
   if (boolArg(args, "skip-pack")) {
     if (typeof context.defaultInstallManifestPath !== "string") {
-      fail("agentos consumer install --skip-pack requires --from-manifest outside a source checkout");
+      fail(
+        "agentos consumer install --skip-pack requires --from-manifest outside a source checkout",
+      );
     }
     return context.defaultInstallManifestPath;
   }
@@ -712,7 +712,7 @@ export const installConsumer = async (rawArgs, context = {}) => {
   const source =
     typeof context.sourceRoot === "string"
       ? sourceIdentityFor(context.sourceRoot)
-      : manifest.source ?? undefined;
+      : (manifest.source ?? undefined);
   writeJson(localConsumerMarkerPath(consumerRoot), {
     schemaVersion: 1,
     generatedBy: "agentos consumer install",

@@ -157,7 +157,10 @@ const sourceConsumerProducer = () => {
   if (!existsSync(modulePath) || !existsSync(supportPath)) return undefined;
   return {
     sourceRoot: repoRootFromMain(),
-    defaultInstallManifestPath: path.join(repoRootFromMain(), "dist/internal-npm/install-manifest.json"),
+    defaultInstallManifestPath: path.join(
+      repoRootFromMain(),
+      "dist/internal-npm/install-manifest.json",
+    ),
     produceInstallManifest: async () => {
       const producer = await import(pathToFileURL(modulePath).href);
       producer.packInternal();
