@@ -213,11 +213,24 @@ void test("agentos consumer status and check share one overlay gate projection",
     const status = await runCli(["consumer", "status", root, "--json"]);
     assert.equal(status.status, 0, status.stderr);
     const statusProjection = JSON.parse(status.stdout);
+    assert.equal(statusProjection.truthMode, "npm_release");
     assert.equal(statusProjection.localOverlay.status, "missing");
+    assert.deepEqual(statusProjection.packageIntegrity, {
+      status: "not_checked",
+      reason: "local overlay marker is missing; consumer is using package-manager truth",
+    });
+    assert.deepEqual(statusProjection.sourceFreshness, {
+      status: "not_applicable",
+      checked: false,
+      gate: "pass",
+    });
     assert.equal(statusProjection.gate.status, "fail");
     assert.deepEqual(
-      statusProjection.gate.hardFailures.map((failure) => failure.code),
-      ["local_overlay_missing"],
+      statusProjection.gate.hardFailures.map((failure) => ({
+        code: failure.code,
+        dimension: failure.dimension,
+      })),
+      [{ code: "local_overlay_missing", dimension: "truth_mode" }],
     );
 
     const check = await runCli(["consumer", "check", root, "--json"]);

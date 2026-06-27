@@ -1812,8 +1812,17 @@ export const assertConsumerOverlayStatus = () => {
     fail("install-consumer marker did not record install manifest digest");
   }
   const status = runAgentosJson(["consumer", "status", dir]).json;
+  if (status.truthMode !== "local_overlay") {
+    fail(`consumer status did not report local overlay truth mode: ${status.truthMode}`);
+  }
   if (status.localOverlay.status !== "installed") {
     fail(`consumer status did not report installed overlay: ${status.localOverlay.status}`);
+  }
+  if (status.packageIntegrity.status !== "verified") {
+    fail(`consumer status did not report verified package integrity: ${status.packageIntegrity.status}`);
+  }
+  if (status.sourceFreshness.status !== "current_source") {
+    fail(`consumer status did not report current source freshness: ${status.sourceFreshness.status}`);
   }
   if (status.localOverlay.sourceStatus !== "current_source") {
     fail(`consumer status did not report current source: ${status.localOverlay.sourceStatus}`);
@@ -1834,8 +1843,19 @@ export const assertConsumerOverlayStatus = () => {
   const packagedStatus = runAgentosJson(["consumer", "status", dir], 0, {
     runner: runPackagedAgentosCli,
   }).json;
+  if (packagedStatus.truthMode !== "local_overlay") {
+    fail(`packaged consumer status did not preserve local overlay truth mode: ${packagedStatus.truthMode}`);
+  }
   if (packagedStatus.localOverlay.status !== "installed") {
     fail(`packaged consumer status did not report installed overlay: ${packagedStatus.localOverlay.status}`);
+  }
+  if (packagedStatus.packageIntegrity.status !== "verified") {
+    fail(`packaged consumer status did not verify package integrity: ${packagedStatus.packageIntegrity.status}`);
+  }
+  if (packagedStatus.sourceFreshness.status !== "not_checked") {
+    fail(
+      `packaged consumer status must report unchecked source freshness: ${packagedStatus.sourceFreshness.status}`,
+    );
   }
   if (packagedStatus.localOverlay.sourceStatus !== "not_checked") {
     fail(
@@ -1864,10 +1884,22 @@ export const assertConsumerOverlayStatus = () => {
       `consumer status did not expose stale source overlay: ${staleStatus.localOverlay.sourceStatus}`,
     );
   }
+  if (staleStatus.packageIntegrity.status !== "verified") {
+    fail(
+      `stale source must not change package integrity: ${JSON.stringify(staleStatus.packageIntegrity)}`,
+    );
+  }
+  if (staleStatus.sourceFreshness.status !== "stale_source") {
+    fail(
+      `consumer status did not expose stale source freshness: ${staleStatus.sourceFreshness.status}`,
+    );
+  }
   if (
     staleStatus.gate.status !== "fail" ||
     !staleStatus.gate.hardFailures.some(
-      (failure) => failure.code === "local_overlay_source_not_current",
+      (failure) =>
+        failure.code === "local_overlay_source_not_current" &&
+        failure.dimension === "source_freshness",
     )
   ) {
     fail(`consumer status gate did not fail stale source: ${JSON.stringify(staleStatus.gate)}`);
@@ -1890,10 +1922,21 @@ export const assertConsumerOverlayStatus = () => {
     },
   });
   const missingTarballStatus = runAgentosJson(["consumer", "check", dir], 1).json;
+  if (missingTarballStatus.sourceFreshness.status !== "current_source") {
+    fail(
+      `missing tarball must not change source freshness: ${JSON.stringify(missingTarballStatus.sourceFreshness)}`,
+    );
+  }
+  if (missingTarballStatus.packageIntegrity.status !== "failed") {
+    fail(
+      `missing tarball must fail package integrity: ${JSON.stringify(missingTarballStatus.packageIntegrity)}`,
+    );
+  }
   if (
     !missingTarballStatus.gate.hardFailures.some(
       (failure) =>
         failure.code === "local_overlay_tarball_not_verified" &&
+        failure.dimension === "package_integrity" &&
         failure.packageName === firstPackage &&
         failure.tarballStatus === "missing",
     )

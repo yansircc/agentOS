@@ -362,6 +362,65 @@ const overlaySourceStatus = (marker, currentSource) => {
   return "current_source";
 };
 
+const truthModeFor = (marker) => {
+  if (marker === undefined) return "npm_release";
+  if (marker.artifact?.kind === "install-manifest-overlay") return "local_overlay";
+  return "legacy_local_overlay";
+};
+
+const packageIntegrityFor = (marker, packages) => {
+  if (marker === undefined) {
+    return {
+      status: "not_checked",
+      reason: "local overlay marker is missing; consumer is using package-manager truth",
+    };
+  }
+  const failures = [];
+  if (packages.length === 0) {
+    failures.push({ code: "local_overlay_packages_missing", message: "marker lists no packages" });
+  }
+  for (const pkg of packages) {
+    if (pkg.targetStatus === "missing") {
+      failures.push({
+        code: "local_overlay_package_missing",
+        packageName: pkg.packageName,
+        targetStatus: pkg.targetStatus,
+      });
+    }
+    if (pkg.targetStatus === "symlink") {
+      failures.push({
+        code: "local_overlay_package_symlink",
+        packageName: pkg.packageName,
+        targetStatus: pkg.targetStatus,
+      });
+    }
+    if (pkg.tarballStatus !== "verified") {
+      failures.push({
+        code: "local_overlay_tarball_not_verified",
+        packageName: pkg.packageName,
+        tarballStatus: pkg.tarballStatus,
+      });
+    }
+  }
+  return {
+    status: failures.length === 0 ? "verified" : "failed",
+    packagesChecked: packages.length,
+    failures,
+  };
+};
+
+const sourceFreshnessFor = (marker, currentSource) => {
+  const status = overlaySourceStatus(marker ?? {}, currentSource);
+  return {
+    status,
+    checked: currentSource !== undefined,
+    gate: ["current_source", "not_checked"].includes(status) ? "pass" : "fail",
+    ...(status === "not_checked"
+      ? { reason: "source checkout identity is unavailable in this invocation" }
+      : {}),
+  };
+};
+
 const packageVersionStatus = (marker, packageVersion) =>
   marker.packageVersion === packageVersion
     ? "release_version_match"
@@ -389,9 +448,10 @@ const npmLatestFor = (packageNames, registry) => {
   return { status: "checked", packages };
 };
 
-const consumerGateIssue = (code, severity, message, detail = {}) => ({
+const consumerGateIssue = (code, severity, dimension, message, detail = {}) => ({
   code,
   severity,
+  dimension,
   message,
   ...detail,
 });
@@ -404,6 +464,7 @@ const consumerOverlayGate = (status) => {
       consumerGateIssue(
         "local_overlay_missing",
         "hard",
+        "truth_mode",
         "local consumer overlay marker is missing",
         { markerPath: status.markerPath },
       ),
@@ -411,27 +472,31 @@ const consumerOverlayGate = (status) => {
   }
   if (status.localOverlay.status === "partial") {
     hardFailures.push(
-      consumerGateIssue("local_overlay_partial", "hard", "local consumer overlay is partial"),
+      consumerGateIssue(
+        "local_overlay_partial",
+        "hard",
+        "package_integrity",
+        "local consumer overlay package installation is partial",
+      ),
     );
   }
-  if (
-    status.localOverlay.sourceStatus !== undefined &&
-    !["current_source", "not_checked"].includes(status.localOverlay.sourceStatus)
-  ) {
+  if (status.sourceFreshness?.gate === "fail") {
     hardFailures.push(
       consumerGateIssue(
         "local_overlay_source_not_current",
         "hard",
-        `local consumer overlay source is ${status.localOverlay.sourceStatus}`,
-        { sourceStatus: status.localOverlay.sourceStatus },
+        "source_freshness",
+        `local consumer overlay source freshness is ${status.sourceFreshness.status}`,
+        { sourceStatus: status.sourceFreshness.status },
       ),
     );
   }
-  if (status.localOverlay.sourceStatus === "not_checked") {
+  if (status.sourceFreshness?.status === "not_checked") {
     signals.push(
       consumerGateIssue(
         "local_overlay_source_not_checked",
         "signal",
+        "source_freshness",
         "local overlay source was not checked by this packaged CLI invocation",
       ),
     );
@@ -444,6 +509,7 @@ const consumerOverlayGate = (status) => {
       consumerGateIssue(
         "local_overlay_release_version_mismatch",
         "hard",
+        "release_identity",
         `local consumer overlay version is ${status.packageVersion.status}`,
         { packageVersionStatus: status.packageVersion.status },
       ),
@@ -455,6 +521,7 @@ const consumerOverlayGate = (status) => {
         consumerGateIssue(
           "local_overlay_package_missing",
           "hard",
+          "package_integrity",
           `${pkg.packageName} is missing from the consumer overlay`,
           { packageName: pkg.packageName },
         ),
@@ -465,6 +532,7 @@ const consumerOverlayGate = (status) => {
         consumerGateIssue(
           "local_overlay_package_symlink",
           "hard",
+          "package_integrity",
           `${pkg.packageName} is a symlink, not packed package content`,
           { packageName: pkg.packageName },
         ),
@@ -475,6 +543,7 @@ const consumerOverlayGate = (status) => {
         consumerGateIssue(
           "local_overlay_tarball_not_verified",
           "hard",
+          "package_integrity",
           `${pkg.packageName} tarball status is ${pkg.tarballStatus}`,
           { packageName: pkg.packageName, tarballStatus: pkg.tarballStatus },
         ),
@@ -486,6 +555,7 @@ const consumerOverlayGate = (status) => {
       consumerGateIssue(
         "npm_latest_not_checked",
         "signal",
+        "registry_observation",
         "npm latest was not checked; pass --check-npm to include registry observation",
       ),
     );
@@ -497,6 +567,7 @@ const consumerOverlayGate = (status) => {
           consumerGateIssue(
             "npm_latest_unresolved",
             "signal",
+            "registry_observation",
             `${packageName} npm latest could not be resolved`,
             { packageName, status: row.status },
           ),
@@ -526,7 +597,10 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
       schemaVersion: 1,
       consumerRoot,
       markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
+      truthMode: truthModeFor(undefined),
       localOverlay: { status: "missing" },
+      packageIntegrity: packageIntegrityFor(undefined, []),
+      sourceFreshness: { status: "not_applicable", checked: false, gate: "pass" },
       packageVersion: { release: metadata.packageVersion },
       npmLatest:
         options.checkNpm === true ? npmLatestFor([], options.registry) : npmLatestNotChecked(),
@@ -535,10 +609,13 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
   const marker = readJson(markerPath);
   const packages = packageOverlayRows(consumerRoot, marker);
   const sourceStatus = overlaySourceStatus(marker, currentSource);
+  const packageIntegrity = packageIntegrityFor(marker, packages);
+  const sourceFreshness = sourceFreshnessFor(marker, currentSource);
   return withConsumerGate({
     schemaVersion: 1,
     consumerRoot,
     markerPath: path.relative(consumerRoot, markerPath).split(path.sep).join("/"),
+    truthMode: truthModeFor(marker),
     localOverlay: {
       status: packages.every((pkg) => pkg.installed) ? "installed" : "partial",
       sourceStatus,
@@ -547,6 +624,8 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
       artifact: marker.artifact ?? { kind: "legacy-local-overlay" },
       packages,
     },
+    packageIntegrity,
+    sourceFreshness,
     source: {
       ...(currentSource === undefined ? {} : { current: currentSource }),
       overlay: marker.source,
@@ -569,7 +648,12 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
 const printConsumerStatus = (status) => {
   console.log(`consumer: ${status.consumerRoot}`);
   console.log(`marker: ${status.markerPath}`);
+  console.log(`truth mode: ${status.truthMode}`);
   console.log(`local overlay: ${status.localOverlay.status}`);
+  console.log(`package integrity: ${status.packageIntegrity.status}`);
+  if (status.sourceFreshness !== undefined) {
+    console.log(`source freshness: ${status.sourceFreshness.status}`);
+  }
   if (status.localOverlay.sourceStatus !== undefined) {
     console.log(`source status: ${status.localOverlay.sourceStatus}`);
   }
