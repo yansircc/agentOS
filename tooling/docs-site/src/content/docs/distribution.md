@@ -115,9 +115,29 @@ agentos consumer check /path/to/consumer --json
 
 `agentos consumer status` and `agentos consumer check` read the same marker
 projection. `status` is observational and exits successfully when the projection
-can be built; `check` exits nonzero when the projection contains hard failures
-such as missing overlay, stale source, partial packages, symlinked package
-content, missing or digest-mismatched tarballs, or release-version mismatch.
+can be built; `check` exits nonzero when the projection contains hard failures.
+
+The projection separates three release-truth modes:
+
+- `npm_release`: no local overlay marker is present; the consumer is using its
+  package manager and registry/lockfile truth.
+- `local_overlay`: the consumer has a current `agentos-install-manifest@1`
+  overlay marker written by `agentos consumer install`.
+- `legacy_local_overlay`: the consumer has an older marker shape that can still
+  be inspected but is not the current artifact contract.
+
+It also separates package integrity from source freshness. `packageIntegrity`
+reports installed package content, symlink rejection, tarball existence, and
+tarball digest verification. `sourceFreshness` reports whether the overlay was
+produced by the current source checkout, a stale checkout head, a dirty-state
+mismatch, a foreign repo, or a packaged CLI invocation where source identity is
+not available. A stale or dirty source checkout is a source-freshness failure,
+not evidence that the installed package tarballs are corrupted.
+
+Gate entries include a `dimension` such as `truth_mode`, `package_integrity`,
+`source_freshness`, `release_identity`, or `registry_observation`, so consumer
+automation can decide whether it is looking at a package problem, a source
+producer freshness problem, or an intentionally unchecked registry signal.
 Restore the consumer to registry truth with:
 
 ```sh

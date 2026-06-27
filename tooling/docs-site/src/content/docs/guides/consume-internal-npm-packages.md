@@ -112,6 +112,29 @@ testing a known older local artifact, not current source HEAD. Inspect with:
 pnpm run status:consumer /path/to/consumer
 ```
 
+For machine consumers, prefer the `agentos` binary with JSON output:
+
+```sh
+agentos consumer status /path/to/consumer --json
+agentos consumer check /path/to/consumer --json
+```
+
+The JSON projection has separate fields for:
+
+- `truthMode`: package-manager release truth, current install-manifest overlay,
+  or legacy overlay marker.
+- `packageIntegrity`: installed package content and tarball digest verification.
+- `sourceFreshness`: whether the local overlay was produced by the current
+  source checkout.
+- `gate.hardFailures[].dimension`: the failing axis, such as
+  `package_integrity` or `source_freshness`.
+
+Do not treat `sourceFreshness.status: "stale_source"` or
+`"dirty_state_changed"` as package corruption. It means the local overlay was
+produced by a different source checkout state. Re-run `agentos consumer install`
+when testing current source; use `agentos consumer restore` when the product
+should return to npm/lockfile truth.
+
 If `node_modules` is missing, `install:consumer` runs the consumer package
 manager install in frozen/non-interactive mode before overlaying packages.
 For pnpm consumers this sets `CI=true` and uses `pnpm install --frozen-lockfile`.
