@@ -3349,6 +3349,7 @@ void test("static target wires one dynamic capability registry for cloudflare an
       "  dynamicRunInputType: target.text.includes('DynamicCapabilityRunInput'),",
       "  resolverInputPassed: target.text.includes('generatedDynamicSubmitBindingsFor(event, dynamicCapability)') || target.text.includes('generatedDynamicSubmitBindingsFor(event, input.dynamicCapability)'),",
       "  productInputPassed: target.text.includes('input.dynamicCapability'),",
+      "  productSubmitHelperPreservesDynamicInput: /const submitRunInputFields = \\(input: SubmitRunInput\\): SubmitRunInput => \\(\\{[\\s\\S]*\\.\\.\\.\\(input\\.dynamicCapability === undefined \\? \\{\\} : \\{ dynamicCapability: input\\.dynamicCapability \\}\\),[\\s\\S]*\\}\\);/.test(target.text),",
       "  skillToolsFromProjection: target.text.includes('generatedFrameworkToolsFor(dynamicCapabilityProjection)'),",
       "  promptFromProjection: target.text.includes('generatedSystemPrompt(input.system, dynamicCapabilityProjection)'),",
       "  customToolRegistry: target.text.includes('const generatedCustomTools'),",

@@ -975,6 +975,7 @@ const submitRunInputFields = (input: SubmitRunInput): SubmitRunInput => ({
   ...(input.budget === undefined ? {} : { budget: input.budget }),
   ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
   ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  ...(input.dynamicCapability === undefined ? {} : { dynamicCapability: input.dynamicCapability }),
   ...(input.materials === undefined ? {} : { materials: input.materials }),
   ...(input.toolContext === undefined ? {} : { toolContext: input.toolContext }),
   ...(input.toolPolicy === undefined ? {} : { toolPolicy: input.toolPolicy }),
