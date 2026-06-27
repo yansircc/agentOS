@@ -71,7 +71,7 @@ const agentCatalogFixture = () => {
       catalogRoot: "agent-catalog/agentOS",
       sourcePackage: "@agent-os/cli",
       publicPackage: "@yansirplus/cli",
-      version: "0.5.17",
+      version: "0.5.18",
     },
     inputFiles: [input],
     outputFiles: [skill, packageMap],
@@ -79,7 +79,7 @@ const agentCatalogFixture = () => {
   const options = {
     provenance,
     root,
-    releaseVersion: "0.5.17",
+    releaseVersion: "0.5.18",
     publishedSourcePackageNames: new Set(["@agent-os/cli"]),
     publicPackageNameFor: (name) => (name === "@agent-os/cli" ? "@yansirplus/cli" : name),
     provenanceLabel: "fixture provenance",

@@ -1,11 +1,11 @@
 ---
 name: agentOS
-description: Generated installed catalog for agentOS 0.5.17 public packages, API intent, agent navigation, invariants, errors, and provenance.
+description: Generated installed catalog for agentOS 0.5.18 public packages, API intent, agent navigation, invariants, errors, and provenance.
 ---
 
 # agentOS
 
-This catalog is generated for `@yansirplus/cli` 0.5.17. Treat files under `references/` as installed-version facts; do not infer future API from chat context, archived CST events, or source checkouts.
+This catalog is generated for `@yansirplus/cli` 0.5.18. Treat files under `references/` as installed-version facts; do not infer future API from chat context, archived CST events, or source checkouts.
 
 ## Routes
 

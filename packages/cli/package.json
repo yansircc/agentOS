@@ -1,6 +1,6 @@
 {
   "name": "@agent-os/cli",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "private": true,
   "bin": {
     "agentos": "./src/main.mjs"

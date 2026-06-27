@@ -90,7 +90,7 @@
   },
   "packageManager": "pnpm@11.9.0",
   "agentOsRelease": {
-    "version": "0.5.17",
+    "version": "0.5.18",
     "npmScope": "@yansirplus",
     "npmAccess": "public"
   },
