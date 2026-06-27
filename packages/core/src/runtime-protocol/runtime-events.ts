@@ -59,6 +59,9 @@ export const RUNTIME_EVENT_KIND = {
   CHAT_INGESTED: "chat.ingested",
   AGENT_SESSION_TURN_SUBMITTED: "agent_session.turn_submitted",
   WORKFLOW_RUN_SUBMITTED: "workflow.run_submitted",
+  INGRESS_DELIVERY_REQUESTED: "ingress.delivery_requested",
+  INGRESS_DELIVERY_ACCEPTED: "ingress.delivery_accepted",
+  INGRESS_DELIVERY_FAILED: "ingress.delivery_failed",
   SCHEDULE_FIRE_REQUESTED: "schedule.fire_requested",
   SCHEDULE_FIRE_DISPATCHED: "schedule.fire_dispatched",
   SCHEDULE_FIRE_FAILED: "schedule.fire_failed",
@@ -156,6 +159,60 @@ export type WorkflowRunSubmittedPayload = {
   readonly runtimeRunId: number;
   readonly idempotencyKey?: string;
   readonly inputDigest?: string;
+  readonly traceContext?: TraceContext;
+};
+
+export type IngressDeliveryKind = "channel" | "schedule";
+
+export type IngressDeliveryPrincipalPayload = {
+  readonly authority: string;
+  readonly subject: string;
+  readonly claims?: Readonly<Record<string, unknown>>;
+};
+
+export type IngressDeliverySlotPayload = {
+  readonly kind: IngressDeliveryKind;
+  readonly id: string;
+  readonly route?: string;
+};
+
+export type IngressDeliveryRetryPolicyPayload = {
+  readonly maxAttempts: number;
+  readonly initialDelayMs: number;
+  readonly maxDelayMs: number;
+  readonly multiplier: number;
+};
+
+export type IngressDeliveryReceiptPayload = Pick<AnchorRef, "anchorId" | "anchorKind"> & {
+  readonly carrierRef?: string;
+};
+
+export type IngressDeliveryRequestedPayload = {
+  readonly deliveryKey: string;
+  readonly slot: IngressDeliverySlotPayload;
+  readonly principal: IngressDeliveryPrincipalPayload;
+  readonly attempt: number;
+  readonly retryPolicy?: IngressDeliveryRetryPolicyPayload;
+  readonly traceContext?: TraceContext;
+};
+
+export type IngressDeliveryAcceptedPayload = {
+  readonly requestedEventId: number;
+  readonly deliveryKey: string;
+  readonly slot: IngressDeliverySlotPayload;
+  readonly receipt: IngressDeliveryReceiptPayload;
+  readonly attempt: number;
+  readonly traceContext?: TraceContext;
+};
+
+export type IngressDeliveryFailedPayload = {
+  readonly requestedEventId: number;
+  readonly deliveryKey: string;
+  readonly slot: IngressDeliverySlotPayload;
+  readonly attempt: number;
+  readonly retryable: boolean;
+  readonly reason: string;
+  readonly nextAttemptAt?: number;
   readonly traceContext?: TraceContext;
 };
 
@@ -496,12 +553,71 @@ export const WorkflowRunSubmittedPayloadSchema: Schema.Decoder<WorkflowRunSubmit
     traceContext: Schema.optional(TraceContextSchema),
   });
 
-export const SchedulePrincipalPayloadSchema: Schema.Decoder<SchedulePrincipalPayload> =
+export const IngressDeliveryPrincipalPayloadSchema: Schema.Decoder<IngressDeliveryPrincipalPayload> =
   Schema.Struct({
     authority: nonEmptyString,
     subject: nonEmptyString,
     claims: Schema.optional(unknownRecord),
   });
+
+export const IngressDeliverySlotPayloadSchema: Schema.Decoder<IngressDeliverySlotPayload> =
+  Schema.Struct({
+    kind: Schema.Literals(["channel", "schedule"]),
+    id: nonEmptyString,
+    route: Schema.optional(nonEmptyString),
+  });
+
+export const IngressDeliveryRetryPolicyPayloadSchema: Schema.Decoder<IngressDeliveryRetryPolicyPayload> =
+  Schema.Struct({
+    maxAttempts: positiveInt,
+    initialDelayMs: positiveInt,
+    maxDelayMs: positiveInt,
+    multiplier: positiveInt,
+  });
+
+const IngressDeliveryReceiptAnchorKindSchema = Schema.Literals(["ledger_event", "external_receipt"]);
+
+export const IngressDeliveryReceiptPayloadSchema: Schema.Decoder<IngressDeliveryReceiptPayload> =
+  Schema.Struct({
+    anchorId: nonEmptyString,
+    anchorKind: IngressDeliveryReceiptAnchorKindSchema,
+    carrierRef: Schema.optional(nonEmptyString),
+  });
+
+export const IngressDeliveryRequestedPayloadSchema: Schema.Decoder<IngressDeliveryRequestedPayload> =
+  Schema.Struct({
+    deliveryKey: nonEmptyString,
+    slot: IngressDeliverySlotPayloadSchema,
+    principal: IngressDeliveryPrincipalPayloadSchema,
+    attempt: positiveInt,
+    retryPolicy: Schema.optional(IngressDeliveryRetryPolicyPayloadSchema),
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
+export const IngressDeliveryAcceptedPayloadSchema: Schema.Decoder<IngressDeliveryAcceptedPayload> =
+  Schema.Struct({
+    requestedEventId: positiveInt,
+    deliveryKey: nonEmptyString,
+    slot: IngressDeliverySlotPayloadSchema,
+    receipt: IngressDeliveryReceiptPayloadSchema,
+    attempt: positiveInt,
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
+export const IngressDeliveryFailedPayloadSchema: Schema.Decoder<IngressDeliveryFailedPayload> =
+  Schema.Struct({
+    requestedEventId: positiveInt,
+    deliveryKey: nonEmptyString,
+    slot: IngressDeliverySlotPayloadSchema,
+    attempt: positiveInt,
+    retryable: Schema.Boolean,
+    reason: nonEmptyString,
+    nextAttemptAt: Schema.optional(positiveInt),
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
+export const SchedulePrincipalPayloadSchema: Schema.Decoder<SchedulePrincipalPayload> =
+  IngressDeliveryPrincipalPayloadSchema;
 
 export const ScheduleFireRequestedPayloadSchema: Schema.Decoder<ScheduleFireRequestedPayload> =
   Schema.Struct({
@@ -704,6 +820,9 @@ export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.CHAT_INGESTED]: ChatIngestedPayload;
   readonly [RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED]: AgentSessionTurnSubmittedPayload;
   readonly [RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED]: WorkflowRunSubmittedPayload;
+  readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED]: IngressDeliveryRequestedPayload;
+  readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED]: IngressDeliveryAcceptedPayload;
+  readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED]: IngressDeliveryFailedPayload;
   readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED]: ScheduleFireRequestedPayload;
   readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED]: ScheduleFireDispatchedPayload;
   readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED]: ScheduleFireFailedPayload;
@@ -804,6 +923,18 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
       return Schema.decodeUnknownSync(WorkflowRunSubmittedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
+      return Schema.decodeUnknownSync(IngressDeliveryRequestedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED:
+      return Schema.decodeUnknownSync(IngressDeliveryAcceptedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED:
+      return Schema.decodeUnknownSync(IngressDeliveryFailedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
       return Schema.decodeUnknownSync(ScheduleFireRequestedPayloadSchema)(
         payload,
@@ -890,6 +1021,18 @@ const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
       ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       return Schema.decodeUnknownOption(WorkflowRunSubmittedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
+      return Schema.decodeUnknownOption(IngressDeliveryRequestedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED:
+      return Schema.decodeUnknownOption(IngressDeliveryAcceptedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED:
+      return Schema.decodeUnknownOption(IngressDeliveryFailedPayloadSchema)(
         payload,
       ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
@@ -992,6 +1135,11 @@ export type RuntimeLedgerTransitionIssueCode =
   | "runtime_compaction_source_kind_mismatch"
   | "runtime_compaction_source_turn_mismatch"
   | "runtime_resume_consumed_event_kind_mismatch"
+  | "runtime_ingress_delivery_attempt_sequence_mismatch"
+  | "runtime_ingress_delivery_duplicate_terminal"
+  | "runtime_ingress_delivery_outcome_duplicate"
+  | "runtime_ingress_delivery_source_kind_mismatch"
+  | "runtime_ingress_delivery_source_mismatch"
   | "runtime_schedule_fire_source_kind_mismatch"
   | "runtime_schedule_fire_source_mismatch"
   | "runtime_schedule_fire_product_idempotency_mismatch"
@@ -1166,6 +1314,38 @@ type RuntimeScheduleFireState = {
   >;
 };
 
+type RuntimeIngressDeliveryOutcomeEvent =
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED>;
+
+type RuntimeIngressDeliveryRequestState = {
+  readonly eventId: number;
+  readonly payload: IngressDeliveryRequestedPayload;
+  outcome?:
+    | {
+        readonly eventId: number;
+        readonly eventKind: typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED;
+        readonly payload: IngressDeliveryAcceptedPayload;
+      }
+    | {
+        readonly eventId: number;
+        readonly eventKind: typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED;
+        readonly payload: IngressDeliveryFailedPayload;
+      };
+};
+
+type RuntimeIngressDeliveryState = {
+  readonly requests: Map<number, RuntimeIngressDeliveryRequestState>;
+  readonly requestsByKey: Map<string, RuntimeIngressDeliveryRequestState>;
+  readonly outcomesByRequestedEventId: Map<
+    number,
+    {
+      readonly eventId: number;
+      readonly eventKind: RuntimeEventKind;
+    }
+  >;
+};
+
 const makeRuntimeRunState = (): RuntimeRunState => ({
   interruptions: new Map(),
 });
@@ -1182,11 +1362,196 @@ const makeRuntimeScheduleFireState = (): RuntimeScheduleFireState => ({
   outcomesByRequestedEventId: new Map(),
 });
 
+const makeRuntimeIngressDeliveryState = (): RuntimeIngressDeliveryState => ({
+  requests: new Map(),
+  requestsByKey: new Map(),
+  outcomesByRequestedEventId: new Map(),
+});
+
 const sessionTurnLinkKey = (payload: AgentSessionTurnSubmittedPayload): string =>
   `${payload.sessionRef}\u0000${payload.turnRef}`;
 
 const workflowRunLinkKey = (payload: WorkflowRunSubmittedPayload): string =>
   `${payload.workflowId}\u0000${payload.workflowRunId}`;
+
+const isIngressDeliveryEvent = (
+  event: RuntimeLedgerEvent,
+): event is
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED> =>
+  event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED ||
+  event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED ||
+  event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED;
+
+const isIngressDeliveryOutcomeEvent = (
+  event: RuntimeLedgerEvent,
+): event is RuntimeIngressDeliveryOutcomeEvent =>
+  event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED ||
+  event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED;
+
+const applyIngressDeliveryEvent = (
+  ingressDeliveries: RuntimeIngressDeliveryState,
+  event: RuntimeLedgerEvent,
+): void => {
+  if (event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED) {
+    const request = {
+      eventId: event.id,
+      payload: event.payload,
+    };
+    ingressDeliveries.requests.set(event.id, request);
+    ingressDeliveries.requestsByKey.set(event.payload.deliveryKey, request);
+    return;
+  }
+  if (!isIngressDeliveryOutcomeEvent(event)) return;
+  if (!ingressDeliveries.outcomesByRequestedEventId.has(event.payload.requestedEventId)) {
+    ingressDeliveries.outcomesByRequestedEventId.set(event.payload.requestedEventId, {
+      eventId: event.id,
+      eventKind: event.kind,
+    });
+  }
+  const request = ingressDeliveries.requests.get(event.payload.requestedEventId);
+  if (request !== undefined && request.outcome === undefined) {
+    request.outcome =
+      event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED
+        ? {
+            eventId: event.id,
+            eventKind: event.kind,
+            payload: event.payload,
+          }
+        : {
+            eventId: event.id,
+            eventKind: event.kind,
+            payload: event.payload,
+          };
+  }
+};
+
+const slotsMatch = (
+  left: IngressDeliverySlotPayload,
+  right: IngressDeliverySlotPayload,
+): boolean => left.kind === right.kind && left.id === right.id && left.route === right.route;
+
+const validateIngressDeliveryRequest = (
+  ingressDeliveries: RuntimeIngressDeliveryState,
+  event: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED>,
+  issues: RuntimeLedgerTransitionIssue[],
+): void => {
+  const previous = ingressDeliveries.requestsByKey.get(event.payload.deliveryKey);
+  if (previous === undefined) {
+    if (event.payload.attempt !== 1) {
+      issues.push(
+        runTransitionIssue(
+          "runtime_ingress_delivery_attempt_sequence_mismatch",
+          event,
+          "first ingress delivery request attempt must be 1",
+        ),
+      );
+      return;
+    }
+    applyIngressDeliveryEvent(ingressDeliveries, event);
+    return;
+  }
+
+  const retryableFailure =
+    previous.outcome?.eventKind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED &&
+    previous.outcome.payload.retryable === true;
+  if (!retryableFailure) {
+    issues.push(
+      runTransitionIssue(
+        "runtime_ingress_delivery_duplicate_terminal",
+        event,
+        "ingress delivery key cannot be requested again after an open or terminal delivery",
+        previous.outcome?.eventId ?? previous.eventId,
+        previous.outcome?.eventKind ?? RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED,
+      ),
+    );
+    return;
+  }
+
+  if (event.payload.attempt !== previous.payload.attempt + 1) {
+    issues.push(
+      runTransitionIssue(
+        "runtime_ingress_delivery_attempt_sequence_mismatch",
+        event,
+        "ingress delivery retry attempt must increment the previous attempt",
+        previous.eventId,
+        RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED,
+      ),
+    );
+    return;
+  }
+
+  applyIngressDeliveryEvent(ingressDeliveries, event);
+};
+
+const validateIngressDeliveryOutcome = (
+  priorById: ReadonlyMap<number, LedgerEvent>,
+  ingressDeliveries: RuntimeIngressDeliveryState,
+  event: RuntimeIngressDeliveryOutcomeEvent,
+  issues: RuntimeLedgerTransitionIssue[],
+): void => {
+  const requestedEventId = event.payload.requestedEventId;
+  const existingOutcome = ingressDeliveries.outcomesByRequestedEventId.get(requestedEventId);
+  if (existingOutcome !== undefined) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_ingress_delivery_outcome_duplicate",
+        event,
+        requestedEventId,
+        "ingress delivery request can record only one outcome",
+        existingOutcome.eventKind,
+      ),
+    );
+  }
+  const source = decodedRuntimeSourceEvent(priorById, event, requestedEventId, issues);
+  if (source === null) return;
+  if (source.kind !== RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_ingress_delivery_source_kind_mismatch",
+        event,
+        requestedEventId,
+        "ingress delivery outcome must reference ingress.delivery_requested",
+        source.kind,
+      ),
+    );
+    return;
+  }
+  const requested = source.payload;
+  if (
+    requested.deliveryKey !== event.payload.deliveryKey ||
+    requested.attempt !== event.payload.attempt ||
+    !slotsMatch(requested.slot, event.payload.slot)
+  ) {
+    issues.push(
+      sourceEventIssue(
+        "runtime_ingress_delivery_source_mismatch",
+        event,
+        requestedEventId,
+        "ingress delivery outcome must preserve deliveryKey, attempt, and slot",
+        source.kind,
+      ),
+    );
+    return;
+  }
+  applyIngressDeliveryEvent(ingressDeliveries, event);
+};
+
+const validateIngressDeliveryEvent = (
+  priorById: ReadonlyMap<number, LedgerEvent>,
+  ingressDeliveries: RuntimeIngressDeliveryState,
+  event: RuntimeLedgerEvent,
+  issues: RuntimeLedgerTransitionIssue[],
+): void => {
+  if (event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED) {
+    validateIngressDeliveryRequest(ingressDeliveries, event, issues);
+    return;
+  }
+  if (isIngressDeliveryOutcomeEvent(event)) {
+    validateIngressDeliveryOutcome(priorById, ingressDeliveries, event, issues);
+  }
+};
 
 const isScheduleFireEvent = (
   event: RuntimeLedgerEvent,
@@ -1369,6 +1734,10 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       return event.payload.runtimeRunId;
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED:
+    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED:
+      throw new TypeError("ingress delivery events are not runtime run-bound");
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
@@ -1439,9 +1808,14 @@ const consumedDecisionRef = (event: LedgerEvent): string | null => {
 const applyHistoricalRuntimeRunEvent = (
   states: Map<number, RuntimeRunState>,
   productLinks: RuntimeProductLinkState,
+  ingressDeliveries: RuntimeIngressDeliveryState,
   scheduleFires: RuntimeScheduleFireState,
   event: RuntimeLedgerEvent,
 ): void => {
+  if (isIngressDeliveryEvent(event)) {
+    applyIngressDeliveryEvent(ingressDeliveries, event);
+    return;
+  }
   if (isScheduleFireEvent(event)) {
     applyScheduleFireEvent(scheduleFires, event);
     return;
@@ -1510,13 +1884,20 @@ export const validateRuntimeLedgerTransitions = (input: {
   const priorById = new Map(input.history.map((event) => [event.id, event] as const));
   const runStates = new Map<number, RuntimeRunState>();
   const productLinks = makeRuntimeProductLinkState();
+  const ingressDeliveries = makeRuntimeIngressDeliveryState();
   const scheduleFires = makeRuntimeScheduleFireState();
   const issues: RuntimeLedgerTransitionIssue[] = [];
 
   for (const historical of input.history) {
     const decoded = decodeRuntimeLedgerEventSafe(historical);
     if (decoded?._tag === "runtime") {
-      applyHistoricalRuntimeRunEvent(runStates, productLinks, scheduleFires, decoded.event);
+      applyHistoricalRuntimeRunEvent(
+        runStates,
+        productLinks,
+        ingressDeliveries,
+        scheduleFires,
+        decoded.event,
+      );
     }
   }
 
@@ -1537,6 +1918,11 @@ export const validateRuntimeLedgerTransitions = (input: {
     }
 
     const event = decoded.event;
+    if (isIngressDeliveryEvent(event)) {
+      validateIngressDeliveryEvent(priorById, ingressDeliveries, event, issues);
+      priorById.set(event.id, event);
+      continue;
+    }
     if (isScheduleFireEvent(event)) {
       validateScheduleFireEvent(priorById, scheduleFires, event, issues);
       priorById.set(event.id, event);
@@ -1839,7 +2225,7 @@ const runtimeEvent = <K extends RuntimeEventKind>(
     payload: decodeRuntimePayload(kind, payload),
   } as RuntimeEventCommitSpecShapeByKind<K>);
 
-type RuntimeEventIdentitySpec = {
+export type RuntimeEventIdentitySpec = {
   readonly scopeRef: ScopeRef;
   readonly effectAuthorityRef: AuthorityRef;
   readonly scope?: never;
@@ -1909,6 +2295,279 @@ export const workflowRunSubmittedEvent = (
     ...(spec.inputDigest === undefined ? {} : { inputDigest: spec.inputDigest }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
+
+export const ingressDeliveryRequestedEvent = (
+  spec: RuntimeEventIdentitySpec & IngressDeliveryRequestedPayload,
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED, {
+    deliveryKey: spec.deliveryKey,
+    slot: spec.slot,
+    principal: spec.principal,
+    attempt: spec.attempt,
+    ...(spec.retryPolicy === undefined ? {} : { retryPolicy: spec.retryPolicy }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const ingressDeliveryAcceptedEvent = (
+  spec: RuntimeEventIdentitySpec & IngressDeliveryAcceptedPayload,
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED, {
+    requestedEventId: spec.requestedEventId,
+    deliveryKey: spec.deliveryKey,
+    slot: spec.slot,
+    receipt: spec.receipt,
+    attempt: spec.attempt,
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const ingressDeliveryFailedEvent = (
+  spec: RuntimeEventIdentitySpec & IngressDeliveryFailedPayload,
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED, {
+    requestedEventId: spec.requestedEventId,
+    deliveryKey: spec.deliveryKey,
+    slot: spec.slot,
+    attempt: spec.attempt,
+    retryable: spec.retryable,
+    reason: spec.reason,
+    ...(spec.nextAttemptAt === undefined ? {} : { nextAttemptAt: spec.nextAttemptAt }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export type IngressDeliveryStatus = "requested" | "accepted" | "failed";
+
+export type IngressDeliveryProjection = Readonly<{
+  deliveryKey: string;
+  slot: IngressDeliverySlotPayload;
+  principal: IngressDeliveryPrincipalPayload;
+  requestedEventId: number;
+  requestedAt: number;
+  attempt: number;
+}> &
+  (
+    | Readonly<{
+        status: "requested";
+      }>
+    | Readonly<{
+        status: "accepted";
+        outcomeEventId: number;
+        outcomeAt: number;
+        receipt: IngressDeliveryReceiptPayload;
+      }>
+    | Readonly<{
+        status: "failed";
+        outcomeEventId: number;
+        outcomeAt: number;
+        retryable: boolean;
+        reason: string;
+        nextAttemptAt?: number;
+      }>
+  );
+
+export type IngressDeliveryHistorySpec = Readonly<{
+  deliveryKey?: string;
+  slotKind?: IngressDeliveryKind;
+}>;
+
+export type IngressDeliveryHistoryProjection = Readonly<{
+  deliveryKey?: string;
+  slotKind?: IngressDeliveryKind;
+  deliveries: ReadonlyArray<IngressDeliveryProjection>;
+}>;
+
+export type IngressDeliveryAttemptPlan = Readonly<{
+  kind: "attempt";
+  deliveryKey: string;
+  attempt: number;
+  requested: RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED>;
+  accept: (
+    requestedEventId: number,
+    receipt?: IngressDeliveryReceiptPayload,
+  ) => RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED>;
+  fail: (
+    requestedEventId: number,
+    spec: {
+      readonly reason: string;
+      readonly retryable?: boolean;
+      readonly nextAttemptAt?: number;
+    },
+  ) => RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED>;
+}>;
+
+export type IngressDeliveryReplayPlan = Readonly<{
+  kind: "replay";
+  deliveryKey: string;
+  projection: IngressDeliveryProjection;
+}>;
+
+export type IngressDeliveryPlan = IngressDeliveryAttemptPlan | IngressDeliveryReplayPlan;
+
+export const ingressDeliveryLedgerReceipt = (spec: {
+  readonly deliveryKey: string;
+  readonly requestedEventId: number;
+}): IngressDeliveryReceiptPayload => ({
+  anchorId: `ingress.delivery:${encodeURIComponent(spec.deliveryKey)}:${spec.requestedEventId}`,
+  anchorKind: "ledger_event",
+});
+
+export const projectIngressDeliveryHistory = (
+  events: ReadonlyArray<LedgerEvent>,
+  spec: IngressDeliveryHistorySpec = {},
+): IngressDeliveryHistoryProjection => {
+  const runtimeEvents = [...ingressDeliveryRuntimeEventsOf(events)].sort(
+    (left, right) => left.id - right.id,
+  );
+  const outcomes = new Map<number, RuntimeIngressDeliveryOutcomeEvent>();
+  for (const event of runtimeEvents) {
+    if (isIngressDeliveryOutcomeEvent(event)) {
+      outcomes.set(event.payload.requestedEventId, event);
+    }
+  }
+  const deliveries = runtimeEvents
+    .filter(
+      (
+        event,
+      ): event is RuntimeLedgerEventByKind<
+        typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED
+      > =>
+        event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED &&
+        (spec.deliveryKey === undefined || event.payload.deliveryKey === spec.deliveryKey) &&
+        (spec.slotKind === undefined || event.payload.slot.kind === spec.slotKind),
+    )
+    .map((event) => ingressDeliveryProjectionFromEvent(event, outcomes.get(event.id)))
+    .sort((left, right) => right.requestedEventId - left.requestedEventId);
+
+  return {
+    ...(spec.deliveryKey === undefined ? {} : { deliveryKey: spec.deliveryKey }),
+    ...(spec.slotKind === undefined ? {} : { slotKind: spec.slotKind }),
+    deliveries,
+  };
+};
+
+export const planIngressDelivery = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly history: ReadonlyArray<LedgerEvent>;
+    readonly deliveryKey: string;
+    readonly slot: IngressDeliverySlotPayload;
+    readonly principal: IngressDeliveryPrincipalPayload;
+    readonly retryPolicy?: IngressDeliveryRetryPolicyPayload;
+    readonly traceContext?: TraceContext;
+  },
+): IngressDeliveryPlan => {
+  const latest = projectIngressDeliveryHistory(spec.history, {
+    deliveryKey: spec.deliveryKey,
+  }).deliveries[0];
+  if (latest !== undefined) {
+    if (latest.status !== "failed" || latest.retryable !== true) {
+      return { kind: "replay", deliveryKey: spec.deliveryKey, projection: latest };
+    }
+  }
+  const attempt = latest === undefined ? 1 : latest.attempt + 1;
+  const requested = ingressDeliveryRequestedEvent({
+    scopeRef: spec.scopeRef,
+    effectAuthorityRef: spec.effectAuthorityRef,
+    deliveryKey: spec.deliveryKey,
+    slot: spec.slot,
+    principal: spec.principal,
+    attempt,
+    ...(spec.retryPolicy === undefined ? {} : { retryPolicy: spec.retryPolicy }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+  return {
+    kind: "attempt",
+    deliveryKey: spec.deliveryKey,
+    attempt,
+    requested,
+    accept: (requestedEventId, receipt = ingressDeliveryLedgerReceipt({ deliveryKey: spec.deliveryKey, requestedEventId })) =>
+      ingressDeliveryAcceptedEvent({
+        scopeRef: spec.scopeRef,
+        effectAuthorityRef: spec.effectAuthorityRef,
+        requestedEventId,
+        deliveryKey: spec.deliveryKey,
+        slot: spec.slot,
+        receipt,
+        attempt,
+        ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+      }),
+    fail: (requestedEventId, failure) =>
+      ingressDeliveryFailedEvent({
+        scopeRef: spec.scopeRef,
+        effectAuthorityRef: spec.effectAuthorityRef,
+        requestedEventId,
+        deliveryKey: spec.deliveryKey,
+        slot: spec.slot,
+        attempt,
+        retryable: failure.retryable ?? false,
+        reason: failure.reason,
+        ...(failure.nextAttemptAt === undefined ? {} : { nextAttemptAt: failure.nextAttemptAt }),
+        ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+      }),
+  };
+};
+
+const ingressDeliveryRuntimeEventsOf = (
+  events: ReadonlyArray<LedgerEvent>,
+): ReadonlyArray<
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED>
+> => {
+  const decoded: Array<
+    | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED>
+    | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED>
+    | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED>
+  > = [];
+  for (const event of events) {
+    const result = decodeRuntimeLedgerEvent(event);
+    if (result._tag === "runtime" && isIngressDeliveryEvent(result.event)) {
+      decoded.push(result.event);
+    }
+  }
+  return decoded;
+};
+
+const ingressDeliveryProjectionFromEvent = (
+  requested: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED>,
+  outcome: RuntimeIngressDeliveryOutcomeEvent | undefined,
+): IngressDeliveryProjection => {
+  const base = {
+    deliveryKey: requested.payload.deliveryKey,
+    slot: requested.payload.slot,
+    principal: requested.payload.principal,
+    requestedEventId: requested.id,
+    requestedAt: requested.ts,
+    attempt: requested.payload.attempt,
+  } as const;
+
+  if (outcome === undefined) {
+    return {
+      ...base,
+      status: "requested",
+    };
+  }
+
+  if (outcome.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED) {
+    return {
+      ...base,
+      status: "accepted",
+      outcomeEventId: outcome.id,
+      outcomeAt: outcome.ts,
+      receipt: outcome.payload.receipt,
+    };
+  }
+
+  return {
+    ...base,
+    status: "failed",
+    outcomeEventId: outcome.id,
+    outcomeAt: outcome.ts,
+    retryable: outcome.payload.retryable,
+    reason: outcome.payload.reason,
+    ...(outcome.payload.nextAttemptAt === undefined
+      ? {}
+      : { nextAttemptAt: outcome.payload.nextAttemptAt }),
+  };
+};
 
 export const scheduleFireRequestedEvent = (
   spec: RuntimeEventIdentitySpec & {

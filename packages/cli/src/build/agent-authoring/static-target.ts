@@ -325,6 +325,7 @@ const staticTargetModules = (scope: string) => ({
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
+  coreTypes: publicPackageSpecifier(scope, "core/types"),
   coreTools: publicPackageSpecifier(scope, "core/tools"),
   sseHttp: publicPackageSpecifier(scope, "runtime/sse-http"),
   cloudflareSandbox: "@cloudflare/sandbox",
@@ -563,11 +564,12 @@ const renderScheduleRegistry = (
           )
           .join("\n")}\n]`;
   return `${scheduleImports}
-${renderNamedImport(["dispatchScheduleFire"], modules.runtimeSchedule)}
+${renderNamedImport(["dispatchScheduleFire", "dispatchScheduleFireDelivery"], modules.runtimeSchedule)}
 ${renderTypeImport(
   [
     "DefinedSchedule",
     "ScheduleDefinitionProjection",
+    "ScheduleFireDeliveryDispatchResult",
     "ScheduleFireDispatchResult",
     "SchedulePrincipal",
     "ScheduleRuntime",
@@ -575,6 +577,7 @@ ${renderTypeImport(
   modules.runtimeSchedule,
 )}
 ${renderTypeImport(["LedgerTruthIdentity"], modules.runtimeProtocol)}
+${renderTypeImport(["LedgerEvent"], modules.coreTypes)}
 
 type GeneratedScheduleDefinition = {
   readonly scheduleId: string;
@@ -594,6 +597,10 @@ export type GeneratedScheduleDispatchInput = GeneratedScheduleTriggerInput & {
   readonly identity: LedgerTruthIdentity;
 };
 
+export type GeneratedScheduleDeliveryDispatchInput = GeneratedScheduleDispatchInput & {
+  readonly history: ReadonlyArray<LedgerEvent>;
+};
+
 export const generatedSchedules = ${entries} as const satisfies ReadonlyArray<GeneratedScheduleDefinition>;
 export const generatedScheduleDefinitions = generatedSchedules.map(
   ({ scheduleId, path, cron }) => ({ scheduleId, path, cron }),
@@ -611,6 +618,25 @@ export const dispatchGeneratedSchedule = async (
     throw new Error(\`unknown generated schedule: \${input.scheduleId}\`);
   }
   return dispatchScheduleFire({
+    runtime: input.runtime,
+    schedule: entry.schedule,
+    scheduleId: entry.scheduleId,
+    appPrincipal: input.appPrincipal,
+    scheduledAt: input.scheduledAt,
+    scopeRef: input.identity.scopeRef,
+    effectAuthorityRef: input.identity.effectAuthorityRef,
+  });
+};
+
+export const dispatchGeneratedScheduleDelivery = async (
+  input: GeneratedScheduleDeliveryDispatchInput,
+): Promise<ScheduleFireDeliveryDispatchResult> => {
+  const entry = generatedScheduleRegistry.get(input.scheduleId);
+  if (entry === undefined) {
+    throw new Error(\`unknown generated schedule: \${input.scheduleId}\`);
+  }
+  return dispatchScheduleFireDelivery({
+    history: input.history,
     runtime: input.runtime,
     schedule: entry.schedule,
     scheduleId: entry.scheduleId,
@@ -1047,11 +1073,14 @@ const generatedScheduleRuntimeFor = (target: {
 
 const renderScheduleDurableObjectMethod = (): string => `
   dispatchSchedule(input: GeneratedScheduleTriggerInput): Promise<unknown> {
-    return dispatchGeneratedSchedule({
-      ...input,
-      identity: semanticTruthIdentity,
-      runtime: generatedScheduleRuntimeFor(this),
-    }).then((result) => this.commitScheduleFireDispatchFull(result));
+    return this.events(semanticTruthIdentity).then((history) =>
+      dispatchGeneratedScheduleDelivery({
+        ...input,
+        history,
+        identity: semanticTruthIdentity,
+        runtime: generatedScheduleRuntimeFor(this),
+      }).then((result) => this.commitScheduleFireDispatchFullWithDelivery(result)),
+    );
   }
 `;
 
@@ -1121,7 +1150,7 @@ const renderWorkspaceStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
-    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedSchedule"], "./schedules")] : []),
+    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")] : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(
       [
@@ -1587,7 +1616,7 @@ const renderChatStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
-    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedSchedule"], "./schedules")] : []),
+    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")] : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
     renderNamedImport(
@@ -1863,7 +1892,11 @@ const renderLocalAgentApp = (
     ...(hasSchedules
       ? [
           renderNamedImport(
-            ["dispatchGeneratedSchedule", "generatedScheduleDefinitions", "generatedScheduleIds"],
+            [
+              "dispatchGeneratedScheduleDelivery",
+              "generatedScheduleDefinitions",
+              "generatedScheduleIds",
+            ],
             "./schedules",
           ),
         ]
@@ -2193,12 +2226,15 @@ export const createLocalAgentApp = async (
   const triggerSchedule = async (
     input: GeneratedScheduleTriggerInput,
   ): Promise<ScheduleFireProjection> => {
-    const result = await dispatchGeneratedSchedule({
+    const result = await dispatchGeneratedScheduleDelivery({
       ...input,
+      history: lowered.runtime.events(),
       identity: semanticTruthIdentity,
       runtime: { sessions, workflows },
     });
-    await lowered.commitScheduleFireDispatch(result);
+    if (result.kind === "attempt") {
+      await lowered.commitScheduleFireDispatchWithDelivery(result);
+    }
     const projected = scheduleHistory({ scheduleId: input.scheduleId }).fires.find(
       (fire) => fire.fireId === result.fireId,
     );
@@ -3702,6 +3738,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
               source: "./schedules",
               imports: [
                 "dispatchGeneratedSchedule",
+                "dispatchGeneratedScheduleDelivery",
                 "generatedScheduleDefinitions",
                 "generatedSchedules",
               ],
@@ -3838,6 +3875,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             source: "./schedules",
             imports: [
               "dispatchGeneratedSchedule",
+              "dispatchGeneratedScheduleDelivery",
               "generatedScheduleDefinitions",
               "generatedSchedules",
             ],

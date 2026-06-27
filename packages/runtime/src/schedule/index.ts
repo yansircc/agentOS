@@ -4,10 +4,15 @@ import type { LedgerEvent } from "@agent-os/core/types";
 import {
   decodeRuntimeLedgerEvent,
   decodeSubmitResult,
+  planIngressDelivery,
+  projectIngressDeliveryHistory,
   RUNTIME_EVENT_KIND,
   scheduleFireDispatchedEvent,
   scheduleFireFailedEvent,
   scheduleFireRequestedEvent,
+  type IngressDeliveryAttemptPlan,
+  type IngressDeliveryProjection,
+  type IngressDeliveryReplayPlan,
   type RuntimeEventCommitSpecByKind,
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
@@ -142,6 +147,26 @@ export type ScheduleFireDispatchResult =
       outcome: (requestedEventId: number) => ScheduleFireFailedEventSpec;
       phase: ScheduleFireFailedPayload["phase"];
       reason: string;
+    }>;
+
+export type ScheduleFireDeliveryDispatchResult =
+  | Readonly<{
+      kind: "attempt";
+      fireId: string;
+      delivery: IngressDeliveryAttemptPlan;
+      schedule: ScheduleFireDispatchResult;
+    }>
+  | Readonly<{
+      kind: "replay";
+      fireId: string;
+      delivery: IngressDeliveryReplayPlan;
+      projection: IngressDeliveryProjection;
+    }>;
+
+export type ScheduleFireDeliveryDispatchInput<TResult = unknown> =
+  ScheduleFireDispatchInput<TResult> &
+    Readonly<{
+      history: ReadonlyArray<LedgerEvent>;
     }>;
 
 export type ScheduleDefinitionProjection = Readonly<{
@@ -441,6 +466,51 @@ export const dispatchScheduleFire = async <TResult = unknown>(
       }),
   };
 };
+
+export const dispatchScheduleFireDelivery = async <TResult = unknown>(
+  input: ScheduleFireDeliveryDispatchInput<TResult>,
+): Promise<ScheduleFireDeliveryDispatchResult> => {
+  const appPrincipal = normalizePrincipal(input.appPrincipal);
+  const scheduleId = nonEmptyString(input.scheduleId)
+    ? input.scheduleId
+    : failScheduleContract("Schedule dispatch requires scheduleId");
+  const scheduledAt = scheduledMinute(input.scheduledAt);
+  const fireId = scheduleFireId({ appPrincipal, scheduleId, scheduledAt });
+  const delivery = planIngressDelivery({
+    history: input.history,
+    scopeRef: input.scopeRef,
+    effectAuthorityRef: input.effectAuthorityRef,
+    deliveryKey: fireId,
+    slot: { kind: "schedule", id: scheduleId },
+    principal: appPrincipal,
+    ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
+  });
+  if (delivery.kind === "replay") {
+    return {
+      kind: "replay",
+      fireId,
+      delivery,
+      projection: delivery.projection,
+    };
+  }
+  const schedule = await dispatchScheduleFire({
+    ...input,
+    appPrincipal,
+    scheduleId,
+    scheduledAt,
+  });
+  return {
+    kind: "attempt",
+    fireId,
+    delivery,
+    schedule,
+  };
+};
+
+export const projectScheduleIngressDeliveryHistory = (
+  events: ReadonlyArray<LedgerEvent>,
+): ReturnType<typeof projectIngressDeliveryHistory> =>
+  projectIngressDeliveryHistory(events, { slotKind: "schedule" });
 
 export const projectScheduleFireHistory = (
   events: ReadonlyArray<LedgerEvent>,

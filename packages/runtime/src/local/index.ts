@@ -31,7 +31,7 @@ import { projectInspectionSnapshot, type InspectionSnapshot } from "../inspectio
 import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
 import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "../in-memory/llm";
 import { internalSubmitSpec } from "../internal-submit";
-import type { ScheduleFireDispatchResult } from "../schedule";
+import type { ScheduleFireDeliveryDispatchResult, ScheduleFireDispatchResult } from "../schedule";
 import { submitAgentEffect } from "../submit-agent";
 import type { SubmitAgentProductLink } from "../submit-agent";
 import {
@@ -125,6 +125,9 @@ export interface LoweredLocalAgentRuntime {
   ) => Promise<SubmitResult>;
   readonly commitScheduleFireDispatch: (
     result: ScheduleFireDispatchResult,
+  ) => Promise<ReadonlyArray<LedgerEvent>>;
+  readonly commitScheduleFireDispatchWithDelivery: (
+    result: ScheduleFireDeliveryDispatchResult,
   ) => Promise<ReadonlyArray<LedgerEvent>>;
 }
 
@@ -697,6 +700,25 @@ export const lowerLocalAgentRuntime = async (
           result.outcome(requestedEventId),
         ]),
       ),
+    commitScheduleFireDispatchWithDelivery: (result) =>
+      result.kind === "replay"
+        ? Promise.resolve([])
+        : Effect.runPromise(
+            resolved.resolved.state.commitPrepared((deliveryRequestedEventId) => {
+              const deliveryOutcome = result.schedule.ok
+                ? result.delivery.accept(deliveryRequestedEventId)
+                : result.delivery.fail(deliveryRequestedEventId, {
+                    reason: result.schedule.reason,
+                    retryable: result.schedule.phase !== "contract",
+                  });
+              return [
+                result.delivery.requested,
+                deliveryOutcome,
+                result.schedule.requested,
+                result.schedule.outcome(deliveryRequestedEventId + 2),
+              ];
+            }),
+          ),
   };
 };
 

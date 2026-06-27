@@ -100,7 +100,7 @@ import {
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import { submitAgentEffect, type SubmitAgentProductLink } from "../submit-agent";
-import type { ScheduleFireDispatchResult } from "../schedule";
+import type { ScheduleFireDeliveryDispatchResult, ScheduleFireDispatchResult } from "../schedule";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   agentRunAbortedEvent,
@@ -1131,6 +1131,47 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
             scopeRef: outcomeShape.scopeRef,
             effectAuthorityRef: outcomeShape.effectAuthorityRef,
             buildPayload: (context) => result.outcome(context.id(requested)).payload,
+          });
+        });
+        return events as ReadonlyArray<LedgerEventRpc>;
+      }),
+    );
+  }
+
+  protected commitScheduleFireDispatchFullWithDelivery(
+    result: ScheduleFireDeliveryDispatchResult,
+  ): Promise<ReadonlyArray<LedgerEventRpc>> {
+    if (result.kind === "replay") return Promise.resolve([]);
+    return this.runScoped((_scope) =>
+      Effect.gen(function* () {
+        const ledger = yield* Ledger;
+        const events = yield* ledger.commitPrepared((tx) => {
+          const deliveryRequested = tx.append(result.delivery.requested);
+          const deliveryOutcomeShape = result.schedule.ok
+            ? result.delivery.accept(1)
+            : result.delivery.fail(1, {
+                reason: result.schedule.reason,
+                retryable: result.schedule.phase !== "contract",
+              });
+          tx.append({
+            kind: deliveryOutcomeShape.kind,
+            scopeRef: deliveryOutcomeShape.scopeRef,
+            effectAuthorityRef: deliveryOutcomeShape.effectAuthorityRef,
+            buildPayload: (context) =>
+              result.schedule.ok
+                ? result.delivery.accept(context.id(deliveryRequested)).payload
+                : result.delivery.fail(context.id(deliveryRequested), {
+                    reason: result.schedule.reason,
+                    retryable: result.schedule.phase !== "contract",
+                  }).payload,
+          });
+          const scheduleRequested = tx.append(result.schedule.requested);
+          const scheduleOutcomeShape = result.schedule.outcome(1);
+          tx.append({
+            kind: scheduleOutcomeShape.kind,
+            scopeRef: scheduleOutcomeShape.scopeRef,
+            effectAuthorityRef: scheduleOutcomeShape.effectAuthorityRef,
+            buildPayload: (context) => result.schedule.outcome(context.id(scheduleRequested)).payload,
           });
         });
         return events as ReadonlyArray<LedgerEventRpc>;
