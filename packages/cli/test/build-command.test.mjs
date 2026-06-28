@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -31,6 +32,7 @@ const agentOsReleaseVersion = () => {
   const manifest = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   return manifest.agentOsRelease?.version ?? manifest.version;
 };
+const sha256Text = (text) => crypto.createHash("sha256").update(text).digest("hex");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
 const forbiddenCloudflareLifecycleTargetFragments = [
   /installCloudflareWorkspaceOperationProvider/,
@@ -406,6 +408,128 @@ void test("agentos consumer restore uses the consumer package manager", async ()
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(fakeBin, { recursive: true, force: true });
+  }
+});
+
+void test("agentos release status reports source, artifacts, and npm without writes", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-release-status-"));
+  const fakeBin = mkdtempSync(path.join(os.tmpdir(), "agentos-release-npm-"));
+  try {
+    const tarball = path.join(root, "agent-os-core.tgz");
+    const tarballBody = "packed core";
+    writeFileSync(tarball, tarballBody);
+    const manifestPath = path.join(root, "install-manifest.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify(
+        {
+          protocol: "agentos-install-manifest@1",
+          version: agentOsReleaseVersion(),
+          generatedBy: "agentos release status test",
+          tarballs: {
+            "@agent-os/core": {
+              spec: `file:${tarball}`,
+              sha256: sha256Text(tarballBody),
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const fakeNpm = path.join(fakeBin, "npm");
+    writeFileSync(
+      fakeNpm,
+      "#!/bin/sh\nprintf '%s\\n' '{\"latest\":\"0.5.18\",\"agentos-dev\":\"0.5.18-dev.0\"}'\n",
+    );
+    chmodSync(fakeNpm, 0o755);
+
+    const before = readFileSync(manifestPath, "utf8");
+    const result = await runCli(
+      ["release", "status", "--json", "--install-manifest", manifestPath, "--check-npm"],
+      {
+        env: {
+          ...process.env,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
+        },
+      },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    const status = JSON.parse(result.stdout);
+    assert.equal(status.schemaVersion, 1);
+    assert.equal(status.release.owner, "package.json#agentOsRelease");
+    assert.equal(status.release.version, agentOsReleaseVersion());
+    assert.equal(status.source.owner, "git");
+    assert.equal(status.artifacts.owner, "dist/internal-npm/install-manifest.json");
+    assert.equal(status.artifacts.status, "verified");
+    assert.equal(status.artifacts.packages[0]?.status, "verified");
+    assert.equal(status.npm.owner, "npm registry");
+    assert.equal(status.npm.status, "checked");
+    assert.equal(status.consumer, undefined);
+    assert.equal(readFileSync(manifestPath, "utf8"), before);
+    assert.equal(existsSync(path.join(root, ".agentos-release-truth.json")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(fakeBin, { recursive: true, force: true });
+  }
+});
+
+void test("agentos release status composes consumer projection without mutating consumer", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-release-consumer-"));
+  try {
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "agentos-release-consumer", private: true, type: "module" }, null, 2),
+    );
+    mkdirSync(path.join(root, "node_modules", "@agent-os", "runtime"), { recursive: true });
+    writeFileSync(
+      path.join(root, "node_modules", "@agent-os", "runtime", "package.json"),
+      JSON.stringify({ name: "@agent-os/runtime" }, null, 2),
+    );
+    const tarball = path.join(root, "agent-os-runtime.tgz");
+    const tarballBody = "packed runtime";
+    writeFileSync(tarball, tarballBody);
+    writeFileSync(
+      path.join(root, "node_modules", ".agentos-local.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          generatedBy: "agentos release status test",
+          installedAt: new Date().toISOString(),
+          source: repoSourceIdentity(),
+          packageVersion: agentOsReleaseVersion(),
+          artifact: { kind: "install-manifest-overlay" },
+          consumerRoot: root,
+          packages: {
+            "@agent-os/runtime": {
+              target: "node_modules/@agent-os/runtime",
+              tarball,
+              sha256: sha256Text(tarballBody),
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const packageBefore = readFileSync(path.join(root, "package.json"), "utf8");
+    const consumerStatusResult = await runCli(["consumer", "status", root, "--json"]);
+    const releaseStatusResult = await runCli(["release", "status", root, "--json"]);
+
+    assert.equal(consumerStatusResult.status, 0, consumerStatusResult.stderr);
+    assert.equal(releaseStatusResult.status, 0, releaseStatusResult.stderr);
+    const consumerStatus = JSON.parse(consumerStatusResult.stdout);
+    const releaseStatus = JSON.parse(releaseStatusResult.stdout);
+    assert.deepEqual(releaseStatus.consumer.gate, consumerStatus.gate);
+    assert.deepEqual(releaseStatus.consumer.packageIntegrity, consumerStatus.packageIntegrity);
+    assert.equal(readFileSync(path.join(root, "package.json"), "utf8"), packageBefore);
+    assert.equal(existsSync(path.join(root, "package-lock.json")), false);
+    assert.equal(existsSync(path.join(root, ".agentos-release-truth.json")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

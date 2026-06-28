@@ -11,6 +11,7 @@ import {
   installConsumer,
   restoreConsumer,
 } from "./consumer-overlay.mjs";
+import { releaseStatus } from "./release-status.mjs";
 import {
   algorithmicCheckerAcceptsArgs,
   hasAlgorithmicChecker,
@@ -55,6 +56,7 @@ Usage:
   agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
   agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
   agentos preflight llm [--cwd <path>] [--config <path>] [--route <binding-ref>] [--json]
+  agentos release status [path/to/consumer] [--json] [--check-npm] [--registry <url>] [--install-manifest <path>]
   agentos consumer install /path/to/consumer [--from-manifest <path>] [--no-install] [--skip-pack] [--json]
   agentos consumer status /path/to/consumer [--json] [--check-npm] [--registry <url>]
   agentos consumer check /path/to/consumer [--json] [--check-npm] [--registry <url>]
@@ -92,6 +94,7 @@ const fail = (message) => {
     message.startsWith("agentos dev:") ||
     message.startsWith("agentos eval:") ||
     message.startsWith("agentos preflight:") ||
+    message.startsWith("agentos release:") ||
     message.startsWith("agentos consumer:") ||
     message.startsWith("agentos check:") ||
     message.startsWith("agentos generate:")
@@ -189,6 +192,20 @@ const runConsumer = async (args) => {
       return;
     default:
       throw new Error("agentos consumer: choose one of install, status, check, restore");
+  }
+};
+
+const runRelease = async (args) => {
+  const [command, ...rest] = args;
+  const commandArgs = rest[0] === "--" ? rest.slice(1) : rest;
+  const sourceContext = sourceConsumerProducer() ?? {};
+  const context = { packageRoot: packageRootFromMain(), ...sourceContext };
+  switch (command) {
+    case "status":
+      releaseStatus(commandArgs, context);
+      return;
+    default:
+      throw new Error("agentos release: choose status");
   }
 };
 
@@ -340,6 +357,9 @@ const main = async () => {
     case "preflight":
       await runPreflight(rest);
       return;
+    case "release":
+      await runRelease(rest);
+      return;
     case "consumer":
       await runConsumer(rest);
       return;
@@ -351,7 +371,7 @@ const main = async () => {
       return;
     default:
       throw new Error(
-        "agentos: choose one of build, info, serve, dev, eval, preflight, consumer, check, generate",
+        "agentos: choose one of build, info, serve, dev, eval, preflight, release, consumer, check, generate",
       );
   }
 };
