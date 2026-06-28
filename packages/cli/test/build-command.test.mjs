@@ -18,6 +18,18 @@ import { buildSync } from "esbuild";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const cli = path.join(repoRoot, "packages/cli/src/main.mjs");
+const repoGitValue = (args) =>
+  spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" }).stdout.trim();
+const repoSourceIdentity = () => ({
+  repoRoot,
+  branch: repoGitValue(["branch", "--show-current"]),
+  head: repoGitValue(["rev-parse", "HEAD"]),
+  dirty: repoGitValue(["status", "--short"]).length > 0,
+});
+const agentOsReleaseVersion = () => {
+  const manifest = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  return manifest.agentOsRelease?.version ?? manifest.version;
+};
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
 const forbiddenCloudflareLifecycleTargetFragments = [
   /installCloudflareWorkspaceOperationProvider/,
@@ -241,6 +253,90 @@ void test("agentos consumer status and check share one overlay gate projection",
     assert.deepEqual(checkProjection.gate, statusProjection.gate);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos consumer check fails from packageIntegrity failures", async () => {
+  const emptyOverlayRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-empty-"));
+  const missingShaRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-sha-"));
+  try {
+    for (const root of [emptyOverlayRoot, missingShaRoot]) {
+      writeFileSync(
+        path.join(root, "package.json"),
+        JSON.stringify({ name: "agentos-consumer-cli", private: true, type: "module" }, null, 2),
+      );
+      mkdirSync(path.join(root, "node_modules"), { recursive: true });
+    }
+
+    const baseMarker = {
+      schemaVersion: 1,
+      generatedBy: "agentos consumer test",
+      installedAt: new Date().toISOString(),
+      source: repoSourceIdentity(),
+      packageVersion: agentOsReleaseVersion(),
+      artifact: { kind: "install-manifest-overlay" },
+    };
+
+    writeFileSync(
+      path.join(emptyOverlayRoot, "node_modules", ".agentos-local.json"),
+      JSON.stringify({ ...baseMarker, consumerRoot: emptyOverlayRoot, packages: {} }, null, 2),
+    );
+
+    const missingShaPackageRoot = path.join(
+      missingShaRoot,
+      "node_modules",
+      "@agent-os",
+      "runtime",
+    );
+    mkdirSync(missingShaPackageRoot, { recursive: true });
+    writeFileSync(
+      path.join(missingShaPackageRoot, "package.json"),
+      JSON.stringify({ name: "@agent-os/runtime" }, null, 2),
+    );
+    const tarball = path.join(missingShaRoot, "agent-os-runtime.tgz");
+    writeFileSync(tarball, "packed runtime");
+    writeFileSync(
+      path.join(missingShaRoot, "node_modules", ".agentos-local.json"),
+      JSON.stringify(
+        {
+          ...baseMarker,
+          consumerRoot: missingShaRoot,
+          packages: {
+            "@agent-os/runtime": {
+              target: "node_modules/@agent-os/runtime",
+              tarball,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const emptyCheck = await runCli(["consumer", "check", emptyOverlayRoot, "--json"]);
+    assert.equal(emptyCheck.status, 1);
+    const emptyProjection = JSON.parse(emptyCheck.stdout);
+    assert.equal(emptyProjection.packageIntegrity.status, "failed");
+    assert.deepEqual(
+      emptyProjection.gate.hardFailures.map((failure) => failure.code),
+      ["local_overlay_packages_missing"],
+    );
+
+    const missingShaCheck = await runCli(["consumer", "check", missingShaRoot, "--json"]);
+    assert.equal(missingShaCheck.status, 1);
+    const missingShaProjection = JSON.parse(missingShaCheck.stdout);
+    assert.equal(missingShaProjection.localOverlay.packages[0]?.tarballStatus, "sha_missing");
+    assert.equal(missingShaProjection.packageIntegrity.status, "failed");
+    assert.deepEqual(
+      missingShaProjection.gate.hardFailures.map((failure) => [
+        failure.code,
+        failure.tarballStatus,
+      ]),
+      [["local_overlay_tarball_not_verified", "sha_missing"]],
+    );
+  } finally {
+    rmSync(emptyOverlayRoot, { recursive: true, force: true });
+    rmSync(missingShaRoot, { recursive: true, force: true });
   }
 });
 

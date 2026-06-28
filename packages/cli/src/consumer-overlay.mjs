@@ -336,6 +336,7 @@ const packageOverlayRows = (consumerRoot, marker) => {
       const tarballExists = tarball.length > 0 && fs.existsSync(tarball);
       const expectedSha = typeof record.sha256 === "string" ? record.sha256 : undefined;
       const actualSha = tarballExists ? sha256File(tarball) : undefined;
+      const requiresSha = marker.artifact?.kind === "install-manifest-overlay";
       return {
         packageName,
         target: record.target,
@@ -343,9 +344,13 @@ const packageOverlayRows = (consumerRoot, marker) => {
         targetStatus,
         tarball,
         tarballStatus: tarballExists
-          ? expectedSha === undefined || expectedSha === actualSha
-            ? "verified"
-            : "sha_mismatch"
+          ? expectedSha === undefined
+            ? requiresSha
+              ? "sha_missing"
+              : "verified"
+            : expectedSha === actualSha
+              ? "verified"
+              : "sha_mismatch"
           : "missing",
         sha256: expectedSha,
       };
@@ -468,13 +473,14 @@ const consumerOverlayGate = (status) => {
       ),
     );
   }
-  if (status.localOverlay.status === "partial") {
+  for (const failure of status.packageIntegrity.failures ?? []) {
     hardFailures.push(
       consumerGateIssue(
-        "local_overlay_partial",
+        failure.code,
         "hard",
         "package_integrity",
-        "local consumer overlay package installation is partial",
+        failure.message ?? `local consumer overlay package integrity failed: ${failure.code}`,
+        failure,
       ),
     );
   }
@@ -512,41 +518,6 @@ const consumerOverlayGate = (status) => {
         { packageVersionStatus: status.packageVersion.status },
       ),
     );
-  }
-  for (const pkg of status.localOverlay.packages ?? []) {
-    if (pkg.targetStatus === "missing") {
-      hardFailures.push(
-        consumerGateIssue(
-          "local_overlay_package_missing",
-          "hard",
-          "package_integrity",
-          `${pkg.packageName} is missing from the consumer overlay`,
-          { packageName: pkg.packageName },
-        ),
-      );
-    }
-    if (pkg.targetStatus === "symlink") {
-      hardFailures.push(
-        consumerGateIssue(
-          "local_overlay_package_symlink",
-          "hard",
-          "package_integrity",
-          `${pkg.packageName} is a symlink, not packed package content`,
-          { packageName: pkg.packageName },
-        ),
-      );
-    }
-    if (pkg.tarballStatus !== "verified") {
-      hardFailures.push(
-        consumerGateIssue(
-          "local_overlay_tarball_not_verified",
-          "hard",
-          "package_integrity",
-          `${pkg.packageName} tarball status is ${pkg.tarballStatus}`,
-          { packageName: pkg.packageName, tarballStatus: pkg.tarballStatus },
-        ),
-      );
-    }
   }
   if (status.npmLatest.status === "not_checked") {
     signals.push(
