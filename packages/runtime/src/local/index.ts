@@ -44,6 +44,7 @@ import {
   type WorkspaceFileStat,
 } from "../workspace-env-core";
 import { defineWorkspaceSessionLease, type WorkspaceSessionLease } from "../workspace-session";
+import { Ledger } from "../ledger";
 import {
   abortErrorFor,
   checkSignal,
@@ -617,6 +618,70 @@ const submitLocalAgent = (
   );
 };
 
+const commitLocalScheduleFireDispatch = (
+  resolved: ResolvedRuntime,
+  result: ScheduleFireDispatchResult,
+): Promise<ReadonlyArray<LedgerEvent>> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const ledger = yield* Ledger;
+      const events = yield* ledger.commitPrepared((tx) => {
+        const requested = tx.append(result.requested);
+        const outcomeShape = result.outcome(1);
+        tx.append({
+          kind: outcomeShape.kind,
+          scopeRef: outcomeShape.scopeRef,
+          effectAuthorityRef: outcomeShape.effectAuthorityRef,
+          buildPayload: (context) => result.outcome(context.id(requested)).payload,
+        });
+      });
+      return events as ReadonlyArray<LedgerEvent>;
+    }).pipe(Effect.provide(resolved.layer)),
+  );
+
+const commitLocalScheduleFireDispatchWithDelivery = (
+  resolved: ResolvedRuntime,
+  result: ScheduleFireDeliveryDispatchResult,
+): Promise<ReadonlyArray<LedgerEvent>> =>
+  result.kind === "replay"
+    ? Promise.resolve([])
+    : Effect.runPromise(
+        Effect.gen(function* () {
+          const ledger = yield* Ledger;
+          const events = yield* ledger.commitPrepared((tx) => {
+            const deliveryRequested = tx.append(result.delivery.requested);
+            const deliveryOutcomeShape = result.schedule.ok
+              ? result.delivery.accept(1)
+              : result.delivery.fail(1, {
+                  reason: result.schedule.reason,
+                  retryable: result.schedule.phase !== "contract",
+                });
+            tx.append({
+              kind: deliveryOutcomeShape.kind,
+              scopeRef: deliveryOutcomeShape.scopeRef,
+              effectAuthorityRef: deliveryOutcomeShape.effectAuthorityRef,
+              buildPayload: (context) =>
+                result.schedule.ok
+                  ? result.delivery.accept(context.id(deliveryRequested)).payload
+                  : result.delivery.fail(context.id(deliveryRequested), {
+                      reason: result.schedule.reason,
+                      retryable: result.schedule.phase !== "contract",
+                    }).payload,
+            });
+            const scheduleRequested = tx.append(result.schedule.requested);
+            const scheduleOutcomeShape = result.schedule.outcome(1);
+            tx.append({
+              kind: scheduleOutcomeShape.kind,
+              scopeRef: scheduleOutcomeShape.scopeRef,
+              effectAuthorityRef: scheduleOutcomeShape.effectAuthorityRef,
+              buildPayload: (context) =>
+                result.schedule.outcome(context.id(scheduleRequested)).payload,
+            });
+          });
+          return events as ReadonlyArray<LedgerEvent>;
+        }).pipe(Effect.provide(resolved.layer)),
+      );
+
 const localAgentRuntimeFacade = (input: LocalAgentRuntimeFacadeInput): LocalAgentRuntime => ({
   submit: (submitInput) => submitLocalAgent(input, submitInput),
   events: (opts = {}) => input.resolved.state.snapshot(input.truthIdentity, opts),
@@ -694,31 +759,9 @@ export const lowerLocalAgentRuntime = async (
     submitWithProductLink: (submitInput, productLink) =>
       submitLocalAgent(facadeInput, submitInput, productLink),
     commitScheduleFireDispatch: (result) =>
-      Effect.runPromise(
-        resolved.resolved.state.commitPrepared((requestedEventId) => [
-          result.requested,
-          result.outcome(requestedEventId),
-        ]),
-      ),
+      commitLocalScheduleFireDispatch(resolved.resolved, result),
     commitScheduleFireDispatchWithDelivery: (result) =>
-      result.kind === "replay"
-        ? Promise.resolve([])
-        : Effect.runPromise(
-            resolved.resolved.state.commitPrepared((deliveryRequestedEventId) => {
-              const deliveryOutcome = result.schedule.ok
-                ? result.delivery.accept(deliveryRequestedEventId)
-                : result.delivery.fail(deliveryRequestedEventId, {
-                    reason: result.schedule.reason,
-                    retryable: result.schedule.phase !== "contract",
-                  });
-              return [
-                result.delivery.requested,
-                deliveryOutcome,
-                result.schedule.requested,
-                result.schedule.outcome(deliveryRequestedEventId + 2),
-              ];
-            }),
-          ),
+      commitLocalScheduleFireDispatchWithDelivery(resolved.resolved, result),
   };
 };
 

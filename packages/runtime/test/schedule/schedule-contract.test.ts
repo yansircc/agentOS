@@ -504,7 +504,13 @@ describe("@agent-os/runtime/schedule", () => {
     });
     expect(first.kind).toBe("attempt");
     if (first.kind !== "attempt") expect.fail("expected first delivery attempt");
-    await lowered.commitScheduleFireDispatchWithDelivery(first);
+    const committed = await lowered.commitScheduleFireDispatchWithDelivery(first);
+    const scheduleRequested = committed.find((event) => event.kind === "schedule.fire_requested");
+    const scheduleOutcome = committed.find((event) => event.kind === "schedule.fire_dispatched");
+    expect(scheduleRequested).toBeDefined();
+    expect(scheduleOutcome?.payload).toMatchObject({
+      requestedEventId: scheduleRequested?.id,
+    });
 
     const second = await dispatchScheduleFireDelivery({
       ...input,
