@@ -115,9 +115,17 @@ pnpm run status:consumer /path/to/consumer
 For machine consumers, prefer the `agentos` binary with JSON output:
 
 ```sh
+agentos release status /path/to/consumer --json
 agentos consumer status /path/to/consumer --json
 agentos consumer check /path/to/consumer --json
 ```
+
+Use `release status` for the one-screen release view: current source checkout,
+local install-manifest/tarball artifacts, optional npm dist-tags, and the
+consumer overlay/lock projection. It is read-only and derives every field from
+the existing owners; it does not create a release-truth file, run a package
+manager, publish packages, or mutate the consumer checkout. Use
+`consumer check` when CI needs the consumer overlay gate to fail closed.
 
 The JSON projection has separate fields for:
 

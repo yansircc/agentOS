@@ -117,6 +117,23 @@ agentos consumer check /path/to/consumer --json
 projection. `status` is observational and exits successfully when the projection
 can be built; `check` exits nonzero when the projection contains hard failures.
 
+Use `agentos release status` when the question is broader than one consumer
+overlay:
+
+```sh
+agentos release status /path/to/consumer --json
+agentos release status /path/to/consumer --json --check-npm
+```
+
+`release status` is a read-only projection over existing release facts. Git owns
+the source head, dirty bit, and upstream relation; `package.json`
+`agentOsRelease` owns the release identity; `dist/internal-npm` owns local
+install-manifest and tarball facts; npm owns registry/dist-tag observation; and
+the consumer package manager plus `.agentos-local.json` owns consumer install
+state. The command reports these axes together and exposes a derived `gate`, but
+it does not install, restore, publish, update lockfiles, or write a new
+release-truth record.
+
 The projection separates three release-truth modes:
 
 - `npm_release`: no local overlay marker is present; the consumer is using its
