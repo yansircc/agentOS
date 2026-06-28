@@ -761,7 +761,14 @@ export const restoreConsumer = (rawArgs) => {
   }
   fs.rmSync(markerPath, { force: true });
   if (!boolArg(args, "no-install")) {
-    run("npm", ["install"], { cwd: consumerRoot });
+    const installCommand = consumerInstallCommand(consumerRoot);
+    if (installCommand === null) {
+      fail(`${consumerRoot}: no package manager/lockfile was detected for consumer restore`);
+    }
+    run(installCommand.cmd, installCommand.args, {
+      cwd: consumerRoot,
+      env: installCommand.env,
+    });
   }
   assertSnapshotUnchanged(snapshot, "agentos consumer restore");
   const result = { schemaVersion: 1, restoredPackages: packageNames };

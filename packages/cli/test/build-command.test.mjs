@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -337,6 +338,74 @@ void test("agentos consumer check fails from packageIntegrity failures", async (
   } finally {
     rmSync(emptyOverlayRoot, { recursive: true, force: true });
     rmSync(missingShaRoot, { recursive: true, force: true });
+  }
+});
+
+void test("agentos consumer restore uses the consumer package manager", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-restore-"));
+  const fakeBin = mkdtempSync(path.join(os.tmpdir(), "agentos-fake-pm-"));
+  try {
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify(
+        { name: "agentos-consumer-restore", private: true, packageManager: "pnpm@10.0.0" },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    const packageRoot = path.join(root, "node_modules", "@agent-os", "runtime");
+    mkdirSync(packageRoot, { recursive: true });
+    writeFileSync(
+      path.join(packageRoot, "package.json"),
+      JSON.stringify({ name: "@agent-os/runtime" }, null, 2),
+    );
+    writeFileSync(
+      path.join(root, "node_modules", ".agentos-local.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          packages: {
+            "@agent-os/runtime": {
+              target: "node_modules/@agent-os/runtime",
+              tarball: "/tmp/agentos-runtime.tgz",
+              sha256: "0".repeat(64),
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const fakePnpm = path.join(fakeBin, "pnpm");
+    const sentinel = path.join(root, "pnpm-restore-args.txt");
+    writeFileSync(
+      fakePnpm,
+      "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AGENTOS_PNPM_SENTINEL\"\n",
+    );
+    chmodSync(fakePnpm, 0o755);
+
+    const restored = await runCli(["consumer", "restore", root, "--json"], {
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
+        AGENTOS_PNPM_SENTINEL: sentinel,
+      },
+    });
+
+    assert.equal(restored.status, 0, restored.stderr);
+    assert.deepEqual(JSON.parse(restored.stdout).restoredPackages, ["@agent-os/runtime"]);
+    assert.equal(existsSync(path.join(root, "package-lock.json")), false);
+    assert.deepEqual(readFileSync(sentinel, "utf8").trim().split("\n"), [
+      "install",
+      "--frozen-lockfile",
+      "--ignore-scripts",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(fakeBin, { recursive: true, force: true });
   }
 });
 
