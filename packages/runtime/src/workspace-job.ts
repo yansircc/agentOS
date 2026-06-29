@@ -14,7 +14,7 @@ import { submitAgentEffect } from "./submit-agent";
 import type { SubmitResult, SubmitSpec } from "@agent-os/core/runtime-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import { internalSubmitSpec } from "./internal-submit";
-import { runExternalEffectAttempt } from "./external-effect-runner";
+import { runExternalEffectAttempt } from "./external-effect";
 import {
   WORKSPACE_JOB_KIND,
   projectWorkspaceJob,
@@ -770,7 +770,11 @@ const runWorkspaceJobAttemptEffect = (
       spec,
       idempotencyKey: spec.idempotencyKey,
       readEvents: () => eventsFor(ledger, spec.identity),
-      projectByIdempotencyKey: projectWorkspaceJobByIdempotencyKey,
+      projectByIdempotencyKey: (events, idempotencyKey) => {
+        const projection = projectWorkspaceJobByIdempotencyKey(events, idempotencyKey);
+        if (projection.status === "missing") return { status: "missing" };
+        return { status: "found", attemptKey: projection.runId };
+      },
       projectCurrent: currentProjection,
       isRunningProjection: (projection) => projection.status === "running",
       activeSpecFromRunningProjection: (currentSpec, projection) => {
@@ -828,7 +832,7 @@ const runWorkspaceJobAttemptEffect = (
           );
           return { requestedEventId: requested.id, claim };
         }),
-      runRequested: ({ activeSpec, requestedEventId, claim }) =>
+      runRequested: ({ activeSpec, request: { requestedEventId, claim } }) =>
         Effect.gen(function* () {
           const failAndProject = (failure: WorkspaceJobFailure, submitRunId?: number) =>
             Effect.gen(function* () {

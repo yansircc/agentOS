@@ -125,13 +125,13 @@
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "3d6fe1382a92269165b6ae03825b0218e53026285c3d25c68f1b89715e3d71fd",
-      "byteSize": 29394
+      "sha256": "29bf0929fad02f26a4a03a3d95d8ecae6d9e1bd393b69312d4a150c12212ba64",
+      "byteSize": 30608
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "37e1cce967a970fb20787240bbf16e5f8ddb2dfe233ed3ef3ebd7c03fb19ba8b",
-      "byteSize": 26426
+      "sha256": "bd484dfea39f75fa97e2773e2ccec203163959261842516fb88cd13287bd708d",
+      "byteSize": 29411
     },
     {
       "path": "docs/start-here.md",
@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/surface.json",
-      "sha256": "fb5ba46faa17feedfc05dab2be8a0a03245a5007ed69069ca93cbfee2cc3150b",
-      "byteSize": 18171
+      "sha256": "83e13dee91fd2500ae3fa7b329f75061ec9789db92cff37184ffff6f9e7c2c9b",
+      "byteSize": 18787
     },
     {
       "path": "package.json",
@@ -170,8 +170,8 @@
     },
     {
       "path": "packages/runtime/package.json",
-      "sha256": "b2e4976838b9105498ec79f06dd5f76949605d2828b56238da434be1292a66fe",
-      "byteSize": 3875
+      "sha256": "ca961c4a5e4a1cb5bbc3fa58f7a69fc68a75f8f46705c6ed8c304ca0eb93b5f5",
+      "byteSize": 4008
     },
     {
       "path": "tooling/docs-site/package.json",
@@ -187,8 +187,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "e321b2f3f16b264bd8187a9809d92a7e1592c4b42d5690d60030cad1877f707d",
-      "byteSize": 13792
+      "sha256": "e8719838cd913a31385704fe7ffac346d7598840348fdecf351b840d37e4898e",
+      "byteSize": 14055
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/core.md",
@@ -197,8 +197,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "e48fc538b45713a844795a8d8b6c9b657a92be2f00b9a28333006abc0c0ef149",
-      "byteSize": 29396
+      "sha256": "90cdab9ff915e911fbc0997970c5b560f92989546e0cc3925170cbd6770f7ad3",
+      "byteSize": 30610
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",

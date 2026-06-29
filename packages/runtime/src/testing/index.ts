@@ -6,6 +6,7 @@ import {
   type WorkspaceExecResult,
   type WorkspaceFileStat,
 } from "../workspace-env-core";
+import { Effect } from "effect";
 import {
   checkSignal,
   isInside,
@@ -311,3 +312,182 @@ export const createInMemoryWorkspaceEnv = (
 
   return env;
 };
+
+export const EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS = [
+  {
+    id: "request_before_effect",
+    requirement: "caller-owned request evidence is recorded before the provider effect runs",
+  },
+  {
+    id: "duplicate_attempt_reuses_existing",
+    requirement:
+      "duplicate execution observes an existing attempt instead of duplicating the effect",
+  },
+  {
+    id: "running_replay_uses_caller_request",
+    requirement: "running replay reconstructs provider execution from caller-owned request state",
+  },
+  {
+    id: "crash_reconcile_from_projection",
+    requirement: "effect crash before terminal settlement can be reconciled from caller projection",
+  },
+  {
+    id: "witness_missing_or_provider_unknown_indeterminate",
+    requirement:
+      "missing witness or unknown provider state maps to caller-owned indeterminate flow",
+  },
+  {
+    id: "digest_or_contract_mismatch_fails_closed",
+    requirement: "digest or contract mismatch fails closed through caller validation",
+  },
+  {
+    id: "provider_evidence_cannot_change_canonical_ref",
+    requirement:
+      "provider evidence cannot rewrite caller-owned canonical operation or product refs",
+  },
+] as const;
+
+export type ExternalEffectConformanceScenario =
+  (typeof EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS)[number];
+
+export type ExternalEffectConformanceScenarioId = ExternalEffectConformanceScenario["id"];
+
+/**
+ * Structured issue produced by an external-effect conformance adapter.
+ *
+ * @public
+ */
+export interface ExternalEffectConformanceIssue {
+  readonly code: string;
+  readonly message: string;
+  readonly evidence?: unknown;
+}
+
+/**
+ * Result for one external-effect conformance scenario.
+ *
+ * @public
+ */
+export type ExternalEffectConformanceScenarioResult =
+  | {
+      readonly scenarioId: ExternalEffectConformanceScenarioId;
+      readonly status: "passed";
+      readonly summary?: string;
+      readonly evidence?: unknown;
+    }
+  | {
+      readonly scenarioId: ExternalEffectConformanceScenarioId;
+      readonly status: "failed";
+      readonly summary?: string;
+      readonly issues: ReadonlyArray<ExternalEffectConformanceIssue>;
+      readonly evidence?: unknown;
+    };
+
+/**
+ * Adapter implemented by a caller-specific external-effect system.
+ *
+ * The adapter owns all event, request, witness, provider, receipt, and product
+ * vocabulary. The testing helper only supplies the scenario contract and folds
+ * adapter output into a structured report.
+ *
+ * @public
+ */
+export interface ExternalEffectConformanceAdapter<E = never, R = never> {
+  readonly runScenario: (
+    scenario: ExternalEffectConformanceScenario,
+  ) => Effect.Effect<ExternalEffectConformanceScenarioResult, E, R>;
+}
+
+/**
+ * Normalized result for one external-effect conformance scenario.
+ *
+ * @public
+ */
+export interface ExternalEffectConformanceScenarioReport {
+  readonly scenario: ExternalEffectConformanceScenario;
+  readonly status: "passed" | "failed";
+  readonly summary?: string;
+  readonly issues: ReadonlyArray<ExternalEffectConformanceIssue>;
+  readonly evidence?: unknown;
+}
+
+/**
+ * Structured external-effect conformance report.
+ *
+ * @public
+ */
+export interface ExternalEffectConformanceReport {
+  readonly status: "passed" | "failed";
+  readonly scenarios: ReadonlyArray<ExternalEffectConformanceScenarioReport>;
+  readonly failures: ReadonlyArray<ExternalEffectConformanceScenarioReport>;
+}
+
+const failedScenarioReport = (
+  scenario: ExternalEffectConformanceScenario,
+  result: ExternalEffectConformanceScenarioResult,
+  issue: ExternalEffectConformanceIssue,
+): ExternalEffectConformanceScenarioReport => ({
+  scenario,
+  status: "failed",
+  summary: result.summary,
+  issues: [issue],
+  ...(result.evidence === undefined ? {} : { evidence: result.evidence }),
+});
+
+const scenarioReport = (
+  scenario: ExternalEffectConformanceScenario,
+  result: ExternalEffectConformanceScenarioResult,
+): ExternalEffectConformanceScenarioReport => {
+  if (result.scenarioId !== scenario.id) {
+    return failedScenarioReport(scenario, result, {
+      code: "scenario_id_mismatch",
+      message: `adapter returned ${result.scenarioId} for ${scenario.id}`,
+    });
+  }
+  if (result.status === "failed") {
+    const issues =
+      result.issues.length === 0
+        ? [
+            {
+              code: "scenario_failed_without_issue",
+              message: "adapter marked scenario failed without a structured issue",
+            },
+          ]
+        : result.issues;
+    return {
+      scenario,
+      status: "failed",
+      summary: result.summary,
+      issues,
+      ...(result.evidence === undefined ? {} : { evidence: result.evidence }),
+    };
+  }
+  return {
+    scenario,
+    status: "passed",
+    summary: result.summary,
+    issues: [],
+    ...(result.evidence === undefined ? {} : { evidence: result.evidence }),
+  };
+};
+
+/**
+ * Runs the vocabulary-neutral external-effect conformance scenario set.
+ *
+ * @public
+ */
+export const externalEffectConformance = <E = never, R = never>(
+  adapter: ExternalEffectConformanceAdapter<E, R>,
+): Effect.Effect<ExternalEffectConformanceReport, E, R> =>
+  Effect.forEach(EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS, (scenario) =>
+    adapter.runScenario(scenario).pipe(Effect.map((result) => scenarioReport(scenario, result))),
+  ).pipe(
+    Effect.map((scenarios) => {
+      const failures = scenarios.filter((scenario) => scenario.status === "failed");
+      return {
+        status: failures.length === 0 ? "passed" : "failed",
+        scenarios,
+        failures,
+      };
+    }),
+  );

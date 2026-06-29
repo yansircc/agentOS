@@ -192,6 +192,12 @@
           "optionalPeers": []
         },
         {
+          "subpath": "./external-effect",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
           "subpath": "./run-projector",
           "moduleBuckets": ["projection"],
           "targetProfiles": ["neutral"],

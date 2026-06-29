@@ -23,6 +23,18 @@ terminal runtime status, tool events, diagnostics, and evidence correlation.
 Product applications own product control-plane facts such as Change, Candidate,
 Grant, Intent, Receipt, approval, deployment, and product receipt records.
 
+## External Effect Boundary
+
+`./external-effect` is the public vocabulary-neutral runner for one
+idempotent external-effect attempt. It owns only the orchestration join between
+"no existing attempt" and "found existing attempt" over caller-owned `Event`,
+`Request`, `Projection`, and `AttemptKey` types.
+
+It does not own claim envelopes, ledger event records, receipt envelopes,
+witness models, record stores, idempotency-key derivation, provider material, or
+product control-plane vocabulary. Concrete callers supply those facts through
+their own carrier/projection contracts.
+
 ## Public exports
 
 - `.:AcquireCtx`
@@ -586,6 +598,10 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `./channel:put`
 - `./channel:del`
 - `./channel:patch`
+- `./external-effect:ExternalEffectAttemptLookup`
+- `./external-effect:ExternalEffectRequestedState`
+- `./external-effect:RunExternalEffectAttemptSpec`
+- `./external-effect:runExternalEffectAttempt`
 - `./schedule:CronMinuteExpression`
 - `./schedule:DefinedSchedule`
 - `./schedule:ScheduleContext`
@@ -722,8 +738,17 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `./telemetry-otlp:OtlpProjection`
 - `./telemetry-otlp:OtlpProjectionSpan`
 - `./telemetry-otlp:projectOtlpSpans`
+- `./testing:EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS`
 - `./testing:createInMemoryWorkspaceEnv`
 - `./testing:CreateInMemoryWorkspaceEnvOptions`
+- `./testing:ExternalEffectConformanceAdapter`
+- `./testing:ExternalEffectConformanceIssue`
+- `./testing:ExternalEffectConformanceReport`
+- `./testing:ExternalEffectConformanceScenario`
+- `./testing:ExternalEffectConformanceScenarioId`
+- `./testing:ExternalEffectConformanceScenarioReport`
+- `./testing:ExternalEffectConformanceScenarioResult`
+- `./testing:externalEffectConformance`
 - `./testing:InMemoryWorkspaceEnvError`
 - `./testing:InMemoryWorkspaceExecScript`
 - `./workspace-agent:defineWorkspaceAgentMount`

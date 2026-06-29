@@ -38,6 +38,10 @@
       "types": "./src/channel/index.ts",
       "default": "./src/channel/index.ts"
     },
+    "./external-effect": {
+      "types": "./src/external-effect/index.ts",
+      "default": "./src/external-effect/index.ts"
+    },
     "./schedule": {
       "types": "./src/schedule/index.ts",
       "default": "./src/schedule/index.ts"

@@ -167,20 +167,25 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { Effect } from "effect";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { runExternalEffectAttempt, type RunExternalEffectAttemptSpec } from "${publicSpecifier("@agent-os/runtime/external-effect")}";`,
       `import { bindWorkspaceToolsForRuntime } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
       `import { createLocalAgentRuntime } from "${publicSpecifier("@agent-os/runtime/local")}";`,
-      `import { createInMemoryWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
+      `import { EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS, createInMemoryWorkspaceEnv, externalEffectConformance } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { LlmTransport, type LlmTransportRouteDescriptor } from "${publicSpecifier("@agent-os/core/llm-protocol")}";`,
       `import type { SubmitRunInput } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
       `import { createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
+      "void runExternalEffectAttempt;",
       "void bindWorkspaceToolsForRuntime;",
       "void createLocalAgentRuntime;",
       "void createInMemoryWorkspaceEnv;",
+      "void externalEffectConformance;",
+      "void EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS;",
       "void deterministicToolExecution;",
       "type _SubmitRunInput = SubmitRunInput;",
+      "type _ExternalEffectSpec = RunExternalEffectAttemptSpec<{ readonly input: string }, never, { readonly status: 'ok' }, { readonly requestId: string }, string, never, never>;",
       "void createCloudflareWorkspaceJobResponse;",
       "void makeCloudflareWorkspaceEnv;",
       "void mountOpsApi;",
@@ -204,10 +209,12 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { ABORT } from "${publicSpecifier("@agent-os/core")}";`,
+      `import { Effect } from "effect";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { runExternalEffectAttempt } from "${publicSpecifier("@agent-os/runtime/external-effect")}";`,
       `import { AG_UI_WIRE_COMPATIBILITY } from "${publicSpecifier("@agent-os/runtime/ag-ui")}";`,
       `import { workspaceEnvMaterialRef } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
-      `import { createInMemoryWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
+      `import { EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS, createInMemoryWorkspaceEnv, externalEffectConformance } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "const testingEnv = createInMemoryWorkspaceEnv({",
@@ -217,7 +224,24 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "if (await testingEnv.readFile('packed.txt') !== 'testing surface') throw new Error('missing testing workspace file');",
       "const testingExec = await testingEnv.exec('pnpm test', { timeoutMs: 1000 });",
       "if (testingExec.stdout !== 'ok') throw new Error('missing testing workspace exec');",
-      "if (!compileAgentTree || !ABORT || !triggerParseOk || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
+      "const externalEffectProjection = await Effect.runPromise(runExternalEffectAttempt({",
+      "  spec: { value: 'packed' },",
+      "  idempotencyKey: 'packed-key',",
+      "  readEvents: () => Effect.succeed([]),",
+      "  projectByIdempotencyKey: () => ({ status: 'missing' }),",
+      "  projectCurrent: () => ({ status: 'unexpected' }),",
+      "  isRunningProjection: () => false,",
+      "  activeSpecFromRunningProjection: (spec) => spec,",
+      "  requestStateFromRunningProjection: () => ({ requestId: 'unexpected' }),",
+      "  request: (spec) => Effect.succeed({ requestId: spec.value }),",
+      "  runRequested: ({ request }) => Effect.succeed({ status: request.requestId }),",
+      "}));",
+      "if (externalEffectProjection.status !== 'packed') throw new Error('external-effect public runner failed');",
+      "const conformanceReport = await Effect.runPromise(externalEffectConformance({",
+      "  runScenario: (scenario) => Effect.succeed({ scenarioId: scenario.id, status: 'passed' }),",
+      "}));",
+      "if (conformanceReport.status !== 'passed' || conformanceReport.scenarios.length !== EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS.length) throw new Error('external-effect conformance report failed');",
+      "if (!compileAgentTree || !ABORT || !triggerParseOk || !runExternalEffectAttempt || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !externalEffectConformance || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
@@ -1767,6 +1791,42 @@ export const assertPackedPublicAssemblyEscapesAbsent = (dir) => {
   }
   if (!typecheckOutput.includes("createInMemoryRuntimeBackend")) {
     fail("packed public assembly negative typecheck did not reject raw backend graph input");
+  }
+
+  const externalEffectRunnerSpecifier = publicSpecifier("@agent-os/runtime/external-effect-runner");
+  fs.writeFileSync(
+    path.join(dir, "negative-external-effect-runner.ts"),
+    [
+      `import { runExternalEffectAttempt } from "${externalEffectRunnerSpecifier}";`,
+      "void runExternalEffectAttempt;",
+      "",
+    ].join("\n"),
+  );
+  writeJson(path.join(dir, "tsconfig.negative-external-effect-runner.json"), {
+    compilerOptions: {
+      target: "ES2022",
+      module: "NodeNext",
+      moduleResolution: "NodeNext",
+      strict: true,
+      skipLibCheck: true,
+    },
+    include: ["negative-external-effect-runner.ts"],
+  });
+  const externalEffectTypecheck = spawnSync(
+    "npm",
+    ["exec", "tsc", "--", "-p", "tsconfig.negative-external-effect-runner.json"],
+    {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  if (externalEffectTypecheck.status === 0) {
+    fail("packed external-effect runner private path unexpectedly typechecked");
+  }
+  const externalEffectOutput = `${externalEffectTypecheck.stdout}\n${externalEffectTypecheck.stderr}`;
+  if (!externalEffectOutput.includes("external-effect-runner")) {
+    fail("packed external-effect runner negative typecheck did not mention the private path");
   }
 
   fs.writeFileSync(

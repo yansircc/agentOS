@@ -35,6 +35,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/runtime/ag-ui", "packages/runtime/src/ag-ui.ts"],
   ["@agent-os/runtime/capability", "packages/runtime/src/capability/index.ts"],
   ["@agent-os/runtime/channel", "packages/runtime/src/channel/index.ts"],
+  ["@agent-os/runtime/external-effect", "packages/runtime/src/external-effect/index.ts"],
   ["@agent-os/runtime/cloudflare", "packages/runtime/src/cloudflare/index.ts"],
   ["@agent-os/runtime/cloudflare/do-rpc", "packages/runtime/src/cloudflare/do-rpc.ts"],
   ["@agent-os/runtime/cloudflare/ops-api", "packages/runtime/src/cloudflare/ops-api/index.ts"],
