@@ -151,6 +151,12 @@
       "bucket": "adapter"
     },
     {
+      "id": "runtime-workspace-session-adapter",
+      "match": "regex",
+      "value": "^packages/runtime/src/workspace-session\\.ts$",
+      "bucket": "adapter"
+    },
+    {
       "id": "runtime-capability-adapter",
       "match": "prefix",
       "value": "packages/runtime/src/capability/",

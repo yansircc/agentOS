@@ -830,246 +830,267 @@ const runWorkspaceJobAttemptEffect = (
         }),
       runRequested: ({ activeSpec, requestedEventId, claim }) =>
         Effect.gen(function* () {
-
-    const failAndProject = (failure: WorkspaceJobFailure, submitRunId?: number) =>
-      Effect.gen(function* () {
-        yield* commitFailed(boundaryEvents, activeSpec, requestedEventId, failure, submitRunId);
-        const after = yield* eventsFor(ledger, activeSpec.identity);
-        return currentProjection(after, activeSpec.runId);
-      });
-
-    let events = yield* eventsFor(ledger, activeSpec.identity);
-    let steps: WorkspaceJobStepProjection = projectWorkspaceJobSteps(events, activeSpec.runId);
-    if (steps.status === "missing") {
-      return currentProjection(events, activeSpec.runId);
-    }
-
-    if (steps.seedWritten === undefined) {
-      const seeded = yield* Effect.result(
-        writeSeedFiles(activeSpec.dataPlane, activeSpec.seedFiles ?? []),
-      );
-      if (seeded._tag === "Failure") {
-        return yield* failAndProject(failureFromDataPlane(seeded.failure));
-      }
-      yield* commitSeedWritten(boundaryEvents, activeSpec, requestedEventId);
-      events = yield* eventsFor(ledger, activeSpec.identity);
-      steps = projectWorkspaceJobSteps(events, activeSpec.runId);
-      if (steps.status === "missing") {
-        return currentProjection(events, activeSpec.runId);
-      }
-    }
-
-    const submitResultFromStep = (
-      submitRunId: number | undefined,
-    ): Effect.Effect<SubmitResult | undefined, WorkspaceJobDataPlaneFailed> => {
-      if (submitRunId === undefined) return Effect.succeed(undefined);
-      const projected = projectSubmitResult(events, submitRunId);
-      return projected === null
-        ? Effect.fail(
-            new WorkspaceJobDataPlaneFailed({
-              phase: "terminal_read",
-              cause: new Error("workspace job submit result is not reconstructable"),
-            }),
-          )
-        : Effect.succeed(projected);
-    };
-
-    let submitResult = yield* submitResultFromStep(
-      steps.artifactReadbackVerified?.submitRunId ??
-        steps.artifactWritten?.submitRunId ??
-        steps.terminalBuildAttempted?.submitRunId,
-    );
-    let finalized: WorkspaceJobFinalizedArtifact;
-
-    if (steps.artifactReadbackVerified !== undefined) {
-      const read = yield* Effect.result(
-        readFinalizedArtifact(activeSpec, {
-          path: steps.artifactReadbackVerified.path,
-          artifactRef: steps.artifactReadbackVerified.artifactRef,
-          schemaId: steps.artifactReadbackVerified.schemaId,
-          bytes: steps.artifactReadbackVerified.bytes,
-          sha256: steps.artifactReadbackVerified.sha256,
-          submitRunId: steps.artifactReadbackVerified.submitRunId,
-        }),
-      );
-      if (read._tag === "Failure") {
-        return yield* failAndProject(
-          failureFromDataPlane(read.failure),
-          steps.artifactReadbackVerified.submitRunId,
-        );
-      }
-      finalized = read.success;
-    } else if (steps.artifactWritten !== undefined) {
-      const read = yield* Effect.result(
-        readFinalizedArtifact(activeSpec, {
-          path: steps.artifactWritten.path,
-          artifactRef: steps.artifactWritten.artifactRef,
-          schemaId: steps.artifactWritten.schemaId,
-          bytes: steps.artifactWritten.bytes,
-          sha256: steps.artifactWritten.sha256,
-          submitRunId: steps.artifactWritten.submitRunId,
-        }),
-      );
-      if (read._tag === "Failure") {
-        return yield* failAndProject(
-          failureFromDataPlane(read.failure),
-          steps.artifactWritten.submitRunId,
-        );
-      }
-      finalized = read.success;
-      yield* commitArtifactReadbackVerified(
-        boundaryEvents,
-        activeSpec,
-        requestedEventId,
-        finalized,
-        steps.artifactWritten.submitRunId,
-      );
-      events = yield* eventsFor(ledger, activeSpec.identity);
-      steps = projectWorkspaceJobSteps(events, activeSpec.runId);
-    } else {
-      if (submitResult === undefined) {
-        const submitSpecResult = yield* Effect.result(
-          Effect.try({
-            try: () => {
-              const publicSubmitSpec = activeSpec.buildSubmitSpec({
-                runId: activeSpec.runId,
-                candidatePath: activeSpec.candidatePath,
-                attempt: activeSpec.attempt,
-              });
-              return internalSubmitSpec(publicSubmitSpec, {
-                scope: activeSpec.scope,
-                scopeRef: activeSpec.identity.scopeRef,
-              });
-            },
-            catch: () => requestFailure("submit_spec_builder_failed"),
-          }),
-        );
-        if (submitSpecResult._tag === "Failure") {
-          return yield* failAndProject(submitSpecResult.failure);
-        }
-        const submitSpec = submitSpecResult.success;
-        submitResult = yield* submitAgentEffect(submitSpec);
-      }
-      if (!submitResult.ok) {
-        return yield* failAndProject(submitFailure(submitResult.reason), submitResult.runId);
-      }
-
-      const built = yield* Effect.result(buildTerminalArtifact(activeSpec, submitResult));
-      if (built._tag === "Failure") {
-        return yield* failAndProject(failureFromDataPlane(built.failure), submitResult.runId);
-      }
-      yield* commitTerminalBuildAttempted(
-        boundaryEvents,
-        activeSpec,
-        requestedEventId,
-        submitResult.runId,
-        built.success,
-      );
-      const written = yield* Effect.result(
-        writeBuiltArtifact(activeSpec, submitResult, built.success),
-      );
-      if (written._tag === "Failure") {
-        return yield* failAndProject(failureFromDataPlane(written.failure), submitResult.runId);
-      }
-      yield* commitArtifactWritten(boundaryEvents, activeSpec, requestedEventId, written.success);
-      const read = yield* Effect.result(readFinalizedArtifact(activeSpec, written.success));
-      if (read._tag === "Failure") {
-        return yield* failAndProject(failureFromDataPlane(read.failure), submitResult.runId);
-      }
-      finalized = read.success;
-      yield* commitArtifactReadbackVerified(
-        boundaryEvents,
-        activeSpec,
-        requestedEventId,
-        finalized,
-        submitResult.runId,
-      );
-      events = yield* eventsFor(ledger, activeSpec.identity);
-      steps = projectWorkspaceJobSteps(events, activeSpec.runId);
-    }
-
-    if (steps.status === "missing") {
-      return currentProjection(events, activeSpec.runId);
-    }
-
-    if (submitResult === undefined) {
-      const submitRunId =
-        steps.artifactReadbackVerified?.submitRunId ?? steps.artifactWritten?.submitRunId;
-      submitResult = yield* submitResultFromStep(submitRunId);
-    }
-    if (submitResult === undefined || !submitResult.ok) {
-      return yield* failAndProject(
-        submitFailure(submitResult?.reason ?? "runtime_projection_missing"),
-        submitResult?.runId,
-      );
-    }
-
-    const finalizedEvent =
-      steps.terminalFinalized === undefined
-        ? yield* commitWorkspaceJob(
-            boundaryEvents,
-            WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
-            workspaceJobTerminalFinalizedPayload({
-              requestedEventId,
-              runId: activeSpec.runId,
-              idempotencyKey: activeSpec.idempotencyKey,
-              terminalArtifact: finalized.artifact,
-              claim: settleWorkspaceJobTerminalFinalized(claim, {
-                runId: activeSpec.runId,
+          const failAndProject = (failure: WorkspaceJobFailure, submitRunId?: number) =>
+            Effect.gen(function* () {
+              yield* commitFailed(
+                boundaryEvents,
+                activeSpec,
                 requestedEventId,
-                artifactRef: finalized.artifact.artifactRef,
+                failure,
+                submitRunId,
+              );
+              const after = yield* eventsFor(ledger, activeSpec.identity);
+              return currentProjection(after, activeSpec.runId);
+            });
+
+          let events = yield* eventsFor(ledger, activeSpec.identity);
+          let steps: WorkspaceJobStepProjection = projectWorkspaceJobSteps(
+            events,
+            activeSpec.runId,
+          );
+          if (steps.status === "missing") {
+            return currentProjection(events, activeSpec.runId);
+          }
+
+          if (steps.seedWritten === undefined) {
+            const seeded = yield* Effect.result(
+              writeSeedFiles(activeSpec.dataPlane, activeSpec.seedFiles ?? []),
+            );
+            if (seeded._tag === "Failure") {
+              return yield* failAndProject(failureFromDataPlane(seeded.failure));
+            }
+            yield* commitSeedWritten(boundaryEvents, activeSpec, requestedEventId);
+            events = yield* eventsFor(ledger, activeSpec.identity);
+            steps = projectWorkspaceJobSteps(events, activeSpec.runId);
+            if (steps.status === "missing") {
+              return currentProjection(events, activeSpec.runId);
+            }
+          }
+
+          const submitResultFromStep = (
+            submitRunId: number | undefined,
+          ): Effect.Effect<SubmitResult | undefined, WorkspaceJobDataPlaneFailed> => {
+            if (submitRunId === undefined) return Effect.succeed(undefined);
+            const projected = projectSubmitResult(events, submitRunId);
+            return projected === null
+              ? Effect.fail(
+                  new WorkspaceJobDataPlaneFailed({
+                    phase: "terminal_read",
+                    cause: new Error("workspace job submit result is not reconstructable"),
+                  }),
+                )
+              : Effect.succeed(projected);
+          };
+
+          let submitResult = yield* submitResultFromStep(
+            steps.artifactReadbackVerified?.submitRunId ??
+              steps.artifactWritten?.submitRunId ??
+              steps.terminalBuildAttempted?.submitRunId,
+          );
+          let finalized: WorkspaceJobFinalizedArtifact;
+
+          if (steps.artifactReadbackVerified !== undefined) {
+            const read = yield* Effect.result(
+              readFinalizedArtifact(activeSpec, {
+                path: steps.artifactReadbackVerified.path,
+                artifactRef: steps.artifactReadbackVerified.artifactRef,
+                schemaId: steps.artifactReadbackVerified.schemaId,
+                bytes: steps.artifactReadbackVerified.bytes,
+                sha256: steps.artifactReadbackVerified.sha256,
+                submitRunId: steps.artifactReadbackVerified.submitRunId,
               }),
-            }),
-          )
-        : ({ id: steps.terminalFinalized.eventId } as LedgerEvent);
+            );
+            if (read._tag === "Failure") {
+              return yield* failAndProject(
+                failureFromDataPlane(read.failure),
+                steps.artifactReadbackVerified.submitRunId,
+              );
+            }
+            finalized = read.success;
+          } else if (steps.artifactWritten !== undefined) {
+            const read = yield* Effect.result(
+              readFinalizedArtifact(activeSpec, {
+                path: steps.artifactWritten.path,
+                artifactRef: steps.artifactWritten.artifactRef,
+                schemaId: steps.artifactWritten.schemaId,
+                bytes: steps.artifactWritten.bytes,
+                sha256: steps.artifactWritten.sha256,
+                submitRunId: steps.artifactWritten.submitRunId,
+              }),
+            );
+            if (read._tag === "Failure") {
+              return yield* failAndProject(
+                failureFromDataPlane(read.failure),
+                steps.artifactWritten.submitRunId,
+              );
+            }
+            finalized = read.success;
+            yield* commitArtifactReadbackVerified(
+              boundaryEvents,
+              activeSpec,
+              requestedEventId,
+              finalized,
+              steps.artifactWritten.submitRunId,
+            );
+            events = yield* eventsFor(ledger, activeSpec.identity);
+            steps = projectWorkspaceJobSteps(events, activeSpec.runId);
+          } else {
+            if (submitResult === undefined) {
+              const submitSpecResult = yield* Effect.result(
+                Effect.try({
+                  try: () => {
+                    const publicSubmitSpec = activeSpec.buildSubmitSpec({
+                      runId: activeSpec.runId,
+                      candidatePath: activeSpec.candidatePath,
+                      attempt: activeSpec.attempt,
+                    });
+                    return internalSubmitSpec(publicSubmitSpec, {
+                      scope: activeSpec.scope,
+                      scopeRef: activeSpec.identity.scopeRef,
+                    });
+                  },
+                  catch: () => requestFailure("submit_spec_builder_failed"),
+                }),
+              );
+              if (submitSpecResult._tag === "Failure") {
+                return yield* failAndProject(submitSpecResult.failure);
+              }
+              const submitSpec = submitSpecResult.success;
+              submitResult = yield* submitAgentEffect(submitSpec);
+            }
+            if (!submitResult.ok) {
+              return yield* failAndProject(submitFailure(submitResult.reason), submitResult.runId);
+            }
 
-    const verdict = yield* Effect.result(verifyArtifact(activeSpec, finalized, submitResult));
-    if (verdict._tag === "Failure") {
-      return yield* failAndProject(verifierInfraFailure(verdict.failure.cause), submitResult.runId);
-    }
+            const built = yield* Effect.result(buildTerminalArtifact(activeSpec, submitResult));
+            if (built._tag === "Failure") {
+              return yield* failAndProject(failureFromDataPlane(built.failure), submitResult.runId);
+            }
+            yield* commitTerminalBuildAttempted(
+              boundaryEvents,
+              activeSpec,
+              requestedEventId,
+              submitResult.runId,
+              built.success,
+            );
+            const written = yield* Effect.result(
+              writeBuiltArtifact(activeSpec, submitResult, built.success),
+            );
+            if (written._tag === "Failure") {
+              return yield* failAndProject(
+                failureFromDataPlane(written.failure),
+                submitResult.runId,
+              );
+            }
+            yield* commitArtifactWritten(
+              boundaryEvents,
+              activeSpec,
+              requestedEventId,
+              written.success,
+            );
+            const read = yield* Effect.result(readFinalizedArtifact(activeSpec, written.success));
+            if (read._tag === "Failure") {
+              return yield* failAndProject(failureFromDataPlane(read.failure), submitResult.runId);
+            }
+            finalized = read.success;
+            yield* commitArtifactReadbackVerified(
+              boundaryEvents,
+              activeSpec,
+              requestedEventId,
+              finalized,
+              submitResult.runId,
+            );
+            events = yield* eventsFor(ledger, activeSpec.identity);
+            steps = projectWorkspaceJobSteps(events, activeSpec.runId);
+          }
 
-    if (verdict.success.ok) {
-      const verifiedClaim = settleWorkspaceJobVerified(claim, {
-        runId: activeSpec.runId,
-        requestedEventId,
-        terminalFinalizedEventId: finalizedEvent.id,
-      });
-      yield* commitWorkspaceJob(
-        boundaryEvents,
-        WORKSPACE_JOB_KIND.VERIFIED,
-        workspaceJobVerifiedPayload({
-          requestedEventId,
-          terminalFinalizedEventId: finalizedEvent.id,
-          runId: activeSpec.runId,
-          idempotencyKey: activeSpec.idempotencyKey,
-          checks: verdict.success.checks,
-          ...(verdict.success.summary === undefined ? {} : { summary: verdict.success.summary }),
-          claim: verifiedClaim,
-        }),
-      );
-    } else {
-      const rejectedClaim = rejectWorkspaceJobByVerifier(claim, {
-        runId: activeSpec.runId,
-        requestedEventId,
-        terminalFinalizedEventId: finalizedEvent.id,
-      });
-      yield* commitWorkspaceJob(
-        boundaryEvents,
-        WORKSPACE_JOB_KIND.VERIFIER_REJECTED,
-        workspaceJobVerifierRejectedPayload({
-          requestedEventId,
-          terminalFinalizedEventId: finalizedEvent.id,
-          runId: activeSpec.runId,
-          idempotencyKey: activeSpec.idempotencyKey,
-          checks: verdict.success.checks,
-          summary: verdict.success.reason,
-          claim: rejectedClaim,
-        }),
-      );
-    }
+          if (steps.status === "missing") {
+            return currentProjection(events, activeSpec.runId);
+          }
 
-    const after = yield* eventsFor(ledger, activeSpec.identity);
-    return currentProjection(after, activeSpec.runId);
+          if (submitResult === undefined) {
+            const submitRunId =
+              steps.artifactReadbackVerified?.submitRunId ?? steps.artifactWritten?.submitRunId;
+            submitResult = yield* submitResultFromStep(submitRunId);
+          }
+          if (submitResult === undefined || !submitResult.ok) {
+            return yield* failAndProject(
+              submitFailure(submitResult?.reason ?? "runtime_projection_missing"),
+              submitResult?.runId,
+            );
+          }
+
+          const finalizedEvent =
+            steps.terminalFinalized === undefined
+              ? yield* commitWorkspaceJob(
+                  boundaryEvents,
+                  WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
+                  workspaceJobTerminalFinalizedPayload({
+                    requestedEventId,
+                    runId: activeSpec.runId,
+                    idempotencyKey: activeSpec.idempotencyKey,
+                    terminalArtifact: finalized.artifact,
+                    claim: settleWorkspaceJobTerminalFinalized(claim, {
+                      runId: activeSpec.runId,
+                      requestedEventId,
+                      artifactRef: finalized.artifact.artifactRef,
+                    }),
+                  }),
+                )
+              : ({ id: steps.terminalFinalized.eventId } as LedgerEvent);
+
+          const verdict = yield* Effect.result(verifyArtifact(activeSpec, finalized, submitResult));
+          if (verdict._tag === "Failure") {
+            return yield* failAndProject(
+              verifierInfraFailure(verdict.failure.cause),
+              submitResult.runId,
+            );
+          }
+
+          if (verdict.success.ok) {
+            const verifiedClaim = settleWorkspaceJobVerified(claim, {
+              runId: activeSpec.runId,
+              requestedEventId,
+              terminalFinalizedEventId: finalizedEvent.id,
+            });
+            yield* commitWorkspaceJob(
+              boundaryEvents,
+              WORKSPACE_JOB_KIND.VERIFIED,
+              workspaceJobVerifiedPayload({
+                requestedEventId,
+                terminalFinalizedEventId: finalizedEvent.id,
+                runId: activeSpec.runId,
+                idempotencyKey: activeSpec.idempotencyKey,
+                checks: verdict.success.checks,
+                ...(verdict.success.summary === undefined
+                  ? {}
+                  : { summary: verdict.success.summary }),
+                claim: verifiedClaim,
+              }),
+            );
+          } else {
+            const rejectedClaim = rejectWorkspaceJobByVerifier(claim, {
+              runId: activeSpec.runId,
+              requestedEventId,
+              terminalFinalizedEventId: finalizedEvent.id,
+            });
+            yield* commitWorkspaceJob(
+              boundaryEvents,
+              WORKSPACE_JOB_KIND.VERIFIER_REJECTED,
+              workspaceJobVerifierRejectedPayload({
+                requestedEventId,
+                terminalFinalizedEventId: finalizedEvent.id,
+                runId: activeSpec.runId,
+                idempotencyKey: activeSpec.idempotencyKey,
+                checks: verdict.success.checks,
+                summary: verdict.success.reason,
+                claim: rejectedClaim,
+              }),
+            );
+          }
+
+          const after = yield* eventsFor(ledger, activeSpec.identity);
+          return currentProjection(after, activeSpec.runId);
         }),
     });
   });

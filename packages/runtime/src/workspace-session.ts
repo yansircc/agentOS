@@ -68,7 +68,9 @@ export class WorkspaceSessionLifecycleError extends Error {
 
 const requireNonEmpty = (value: string, field: string): string => {
   if (value.length === 0) {
-    throw new WorkspaceSessionLifecycleError(`workspace session ${field} is required`);
+    throw new WorkspaceSessionLifecycleError( // eff-ignore EFF025 reason="defineWorkspaceSessionLease is a synchronous contract factory; remove when the API becomes Effect-returning"
+      `workspace session ${field} is required`,
+    );
   }
   return value;
 };
@@ -76,7 +78,7 @@ const requireNonEmpty = (value: string, field: string): string => {
 const finitePositive = (value: number | undefined): number | undefined => {
   if (value === undefined) return undefined;
   if (!Number.isFinite(value) || value <= 0) {
-    throw new WorkspaceSessionLifecycleError("workspace session resource limits must be positive");
+    throw new WorkspaceSessionLifecycleError("workspace session resource limits must be positive"); // eff-ignore EFF025 reason="defineWorkspaceSessionLease is a synchronous contract factory; remove when the API becomes Effect-returning"
   }
   return value;
 };

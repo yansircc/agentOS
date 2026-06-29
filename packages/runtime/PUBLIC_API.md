@@ -578,6 +578,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./schedule:ScheduleFireDispatchedEventSpec`
 - `./schedule:ScheduleFireFailedEventSpec`
 - `./schedule:ScheduleFireDispatchResult`
+- `./schedule:ScheduleFireDeliveryDispatchInput`
+- `./schedule:ScheduleFireDeliveryDispatchResult`
 - `./schedule:ScheduleDefinitionProjection`
 - `./schedule:ScheduleFireStatus`
 - `./schedule:ScheduleFireSessionProductProjection`
@@ -599,7 +601,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./schedule:cronMinuteExpression`
 - `./schedule:defineSchedule`
 - `./schedule:dispatchScheduleFire`
+- `./schedule:dispatchScheduleFireDelivery`
 - `./schedule:projectScheduleFireHistory`
+- `./schedule:projectScheduleIngressDeliveryHistory`
 - `./schedule:scheduleFireId`
 - `./schedule:scheduledMinute`
 - `./in-memory:createInMemoryRuntimeBackend`

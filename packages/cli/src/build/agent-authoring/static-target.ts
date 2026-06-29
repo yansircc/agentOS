@@ -325,7 +325,6 @@ const staticTargetModules = (scope: string) => ({
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
-  coreTypes: publicPackageSpecifier(scope, "core/types"),
   coreTools: publicPackageSpecifier(scope, "core/tools"),
   sseHttp: publicPackageSpecifier(scope, "runtime/sse-http"),
   cloudflareSandbox: "@cloudflare/sandbox",
@@ -569,6 +568,7 @@ ${renderTypeImport(
   [
     "DefinedSchedule",
     "ScheduleDefinitionProjection",
+    "ScheduleFireDeliveryDispatchInput",
     "ScheduleFireDeliveryDispatchResult",
     "ScheduleFireDispatchResult",
     "SchedulePrincipal",
@@ -577,7 +577,6 @@ ${renderTypeImport(
   modules.runtimeSchedule,
 )}
 ${renderTypeImport(["LedgerTruthIdentity"], modules.runtimeProtocol)}
-${renderTypeImport(["LedgerEvent"], modules.coreTypes)}
 
 type GeneratedScheduleDefinition = {
   readonly scheduleId: string;
@@ -598,7 +597,7 @@ export type GeneratedScheduleDispatchInput = GeneratedScheduleTriggerInput & {
 };
 
 export type GeneratedScheduleDeliveryDispatchInput = GeneratedScheduleDispatchInput & {
-  readonly history: ReadonlyArray<LedgerEvent>;
+  readonly history: ScheduleFireDeliveryDispatchInput["history"];
 };
 
 export const generatedSchedules = ${entries} as const satisfies ReadonlyArray<GeneratedScheduleDefinition>;
@@ -1159,7 +1158,9 @@ const renderWorkspaceStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
-    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")] : []),
+    ...(hasSchedules
+      ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")]
+      : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(
       [
@@ -1635,7 +1636,9 @@ const renderChatStaticTarget = (
   const imports = [
     `import semanticDeclarations from "./manifest.json";`,
     `import deploymentProvenance from "./deployment.json";`,
-    ...(hasSchedules ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")] : []),
+    ...(hasSchedules
+      ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")]
+      : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
     renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
     renderNamedImport(

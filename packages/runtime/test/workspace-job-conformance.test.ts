@@ -21,38 +21,40 @@ const claimFrom = (payload: unknown) =>
   (payload as { readonly claim?: Record<string, unknown> }).claim;
 
 describe("workspace-job external-effect conformance", () => {
-  it.effect("settles readback witness failures through existing indeterminate claim vocabulary", () =>
-    Effect.gen(function* () {
-      const services = makeServices();
-      const projection = yield* runJob(
-        makeJobSpec({
-          dataPlane: makeDataPlane({
-            readTerminalArtifact: async () => {
-              throw new Error("provider witness missing");
-            },
+  it.effect(
+    "settles readback witness failures through existing indeterminate claim vocabulary",
+    () =>
+      Effect.gen(function* () {
+        const services = makeServices();
+        const projection = yield* runJob(
+          makeJobSpec({
+            dataPlane: makeDataPlane({
+              readTerminalArtifact: async () => {
+                throw new Error("provider witness missing");
+              },
+            }),
           }),
-        }),
-        services,
-      );
+          services,
+        );
 
-      expect(projection.status).toBe("reconcile_required");
-      const event = services.events.find(
-        (candidate) => candidate.kind === WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
-      );
-      expect(event).toBeDefined();
-      const claim = claimFrom(event?.payload);
-      expect(claim).toMatchObject({
-        phase: "indeterminate",
-        operationRef: "workspace_job:job-1",
-        originRef: { originId: "create-1", originKind: "workspace_job" },
-        indeterminateRef: {
-          indeterminateKind: "reconcile_required",
-          carrierRef: "workspace_job:carrier:workspace-job",
-        },
-      });
-      expect(claim?.anchorRef).toBeUndefined();
-      expect(claim?.rejectionRef).toBeUndefined();
-    }),
+        expect(projection.status).toBe("reconcile_required");
+        const event = services.events.find(
+          (candidate) => candidate.kind === WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
+        );
+        expect(event).toBeDefined();
+        const claim = claimFrom(event?.payload);
+        expect(claim).toMatchObject({
+          phase: "indeterminate",
+          operationRef: "workspace_job:job-1",
+          originRef: { originId: "create-1", originKind: "workspace_job" },
+          indeterminateRef: {
+            indeterminateKind: "reconcile_required",
+            carrierRef: "workspace_job:carrier:workspace-job",
+          },
+        });
+        expect(claim?.anchorRef).toBeUndefined();
+        expect(claim?.rejectionRef).toBeUndefined();
+      }),
   );
 
   it.effect("keeps provider evidence out of operationRef and origin identity", () =>

@@ -592,6 +592,8 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `./schedule:ScheduleFireDispatchedEventSpec`
 - `./schedule:ScheduleFireFailedEventSpec`
 - `./schedule:ScheduleFireDispatchResult`
+- `./schedule:ScheduleFireDeliveryDispatchInput`
+- `./schedule:ScheduleFireDeliveryDispatchResult`
 - `./schedule:ScheduleDefinitionProjection`
 - `./schedule:ScheduleFireStatus`
 - `./schedule:ScheduleFireSessionProductProjection`
@@ -613,7 +615,9 @@ Grant, Intent, Receipt, approval, deployment, and product receipt records.
 - `./schedule:cronMinuteExpression`
 - `./schedule:defineSchedule`
 - `./schedule:dispatchScheduleFire`
+- `./schedule:dispatchScheduleFireDelivery`
 - `./schedule:projectScheduleFireHistory`
+- `./schedule:projectScheduleIngressDeliveryHistory`
 - `./schedule:scheduleFireId`
 - `./schedule:scheduledMinute`
 - `./in-memory:createInMemoryRuntimeBackend`

@@ -285,12 +285,7 @@ void test("agentos consumer check fails from packageIntegrity failures", async (
       JSON.stringify({ ...baseMarker, consumerRoot: emptyOverlayRoot, packages: {} }, null, 2),
     );
 
-    const missingShaPackageRoot = path.join(
-      missingShaRoot,
-      "node_modules",
-      "@agent-os",
-      "runtime",
-    );
+    const missingShaPackageRoot = path.join(missingShaRoot, "node_modules", "@agent-os", "runtime");
     mkdirSync(missingShaPackageRoot, { recursive: true });
     writeFileSync(
       path.join(missingShaPackageRoot, "package.json"),
@@ -383,10 +378,7 @@ void test("agentos consumer restore uses the consumer package manager", async ()
 
     const fakePnpm = path.join(fakeBin, "pnpm");
     const sentinel = path.join(root, "pnpm-restore-args.txt");
-    writeFileSync(
-      fakePnpm,
-      "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$AGENTOS_PNPM_SENTINEL\"\n",
-    );
+    writeFileSync(fakePnpm, '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$AGENTOS_PNPM_SENTINEL"\n');
     chmodSync(fakePnpm, 0o755);
 
     const restored = await runCli(["consumer", "restore", root, "--json"], {
@@ -441,7 +433,7 @@ void test("agentos release status reports source, artifacts, and npm without wri
     const fakeNpm = path.join(fakeBin, "npm");
     writeFileSync(
       fakeNpm,
-      "#!/bin/sh\nprintf '%s\\n' '{\"latest\":\"0.5.18\",\"agentos-dev\":\"0.5.18-dev.0\"}'\n",
+      '#!/bin/sh\nprintf \'%s\\n\' \'{"latest":"0.5.18","agentos-dev":"0.5.18-dev.0"}\'\n',
     );
     chmodSync(fakeNpm, 0o755);
 
@@ -2856,7 +2848,7 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
       [
         'import { dispatchGeneratedScheduleDelivery } from "./.agentos/generated/schedules.ts";',
         "const calls = [];",
-        "const identity = { scopeRef: { kind: \"conversation\", scopeId: \"schedule-registry-scope\" }, effectAuthorityRef: { authorityClass: \"effect\", authorityId: \"schedule-registry-fixture\" } };",
+        'const identity = { scopeRef: { kind: "conversation", scopeId: "schedule-registry-scope" }, effectAuthorityRef: { authorityClass: "effect", authorityId: "schedule-registry-fixture" } };',
         "const runtime = Object.freeze({",
         "  sessions: Object.freeze({",
         "    submitTurn: async (input) => {",
@@ -2864,7 +2856,7 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         '      return { ok: true, status: "delivered", runId: 303, final: "done", eventCount: 4, tokensUsed: 0 };',
         "    },",
         "  }),",
-        "  workflows: Object.freeze({ run: async () => { throw new Error(\"workflow not expected\"); } }),",
+        '  workflows: Object.freeze({ run: async () => { throw new Error("workflow not expected"); } }),',
         "});",
         "const first = await dispatchGeneratedScheduleDelivery({",
         '  scheduleId: "daily",',
@@ -2874,13 +2866,13 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
         "  runtime,",
         "  history: [],",
         "});",
-        "if (first.kind !== \"attempt\" || !first.schedule.ok) throw new Error(\"expected first schedule delivery attempt\");",
-        "const deliveryRequested = { id: 10, ts: 10, kind: first.delivery.requested.kind, scopeRef: first.delivery.requested.scopeRef, effectAuthorityRef: first.delivery.requested.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: first.delivery.requested.payload };",
+        'if (first.kind !== "attempt" || !first.schedule.ok) throw new Error("expected first schedule delivery attempt");',
+        'const deliveryRequested = { id: 10, ts: 10, kind: first.delivery.requested.kind, scopeRef: first.delivery.requested.scopeRef, effectAuthorityRef: first.delivery.requested.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: first.delivery.requested.payload };',
         "const deliveryAcceptedSpec = first.delivery.accept(10);",
-        "const deliveryAccepted = { id: 11, ts: 11, kind: deliveryAcceptedSpec.kind, scopeRef: deliveryAcceptedSpec.scopeRef, effectAuthorityRef: deliveryAcceptedSpec.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: deliveryAcceptedSpec.payload };",
-        "const scheduleRequested = { id: 12, ts: 12, kind: first.schedule.requested.kind, scopeRef: first.schedule.requested.scopeRef, effectAuthorityRef: first.schedule.requested.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: first.schedule.requested.payload };",
+        'const deliveryAccepted = { id: 11, ts: 11, kind: deliveryAcceptedSpec.kind, scopeRef: deliveryAcceptedSpec.scopeRef, effectAuthorityRef: deliveryAcceptedSpec.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: deliveryAcceptedSpec.payload };',
+        'const scheduleRequested = { id: 12, ts: 12, kind: first.schedule.requested.kind, scopeRef: first.schedule.requested.scopeRef, effectAuthorityRef: first.schedule.requested.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: first.schedule.requested.payload };',
         "const scheduleOutcomeSpec = first.schedule.outcome(12);",
-        "const scheduleOutcome = { id: 13, ts: 13, kind: scheduleOutcomeSpec.kind, scopeRef: scheduleOutcomeSpec.scopeRef, effectAuthorityRef: scheduleOutcomeSpec.effectAuthorityRef, factOwnerRef: \"@agent-os/runtime\", payload: scheduleOutcomeSpec.payload };",
+        'const scheduleOutcome = { id: 13, ts: 13, kind: scheduleOutcomeSpec.kind, scopeRef: scheduleOutcomeSpec.scopeRef, effectAuthorityRef: scheduleOutcomeSpec.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: scheduleOutcomeSpec.payload };',
         "const second = await dispatchGeneratedScheduleDelivery({",
         '  scheduleId: "daily",',
         '  scheduledAt: "2026-06-26T10:20:42.000Z",',

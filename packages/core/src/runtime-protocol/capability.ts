@@ -184,8 +184,7 @@ export type DynamicCapabilityPhasePolicyAccess =
 export const DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON =
   "capability_phase_policy_denied" as const;
 
-export const DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE =
-  "dynamic_capability_phase_policy" as const;
+export const DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE = "dynamic_capability_phase_policy" as const;
 
 export interface DynamicCapabilityRunInput {
   readonly phase?: string;
@@ -216,8 +215,7 @@ export interface DynamicCapabilityPhasePolicyDeniedDiagnostic {
   readonly category?: DynamicCapabilityPhasePolicyAccess;
 }
 
-export type DynamicCapabilityProjectionDiagnostic =
-  DynamicCapabilityPhasePolicyDeniedDiagnostic;
+export type DynamicCapabilityProjectionDiagnostic = DynamicCapabilityPhasePolicyDeniedDiagnostic;
 
 export interface DynamicCapabilityEventRef {
   readonly name: DynamicCapabilityEventName;
@@ -436,16 +434,10 @@ const parseDynamicCapabilityProjectionDiagnostics = (
       item.category === undefined
         ? undefined
         : parseRequiredDiagnosticString(`${itemPath}/category`, item.category, issues);
-    if (
-      reason !== undefined &&
-      reason !== DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON
-    ) {
+    if (reason !== undefined && reason !== DYNAMIC_CAPABILITY_PHASE_POLICY_DENIED_REASON) {
       issues.push({ path: `${itemPath}/reason`, reason: "diagnostic_field_value_required" });
     }
-    if (
-      source !== undefined &&
-      source !== DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE
-    ) {
+    if (source !== undefined && source !== DYNAMIC_CAPABILITY_PHASE_POLICY_SOURCE) {
       issues.push({ path: `${itemPath}/source`, reason: "diagnostic_field_value_required" });
     }
     if (
@@ -712,8 +704,7 @@ const policyAllowsTool = (
   tool: DynamicCapabilityPhasePolicyTool | undefined,
   allowedCategories: ReadonlySet<DynamicCapabilityPhasePolicyAccess>,
 ): boolean =>
-  tool !== undefined &&
-  (tool.categories ?? []).some((category) => allowedCategories.has(category));
+  tool !== undefined && (tool.categories ?? []).some((category) => allowedCategories.has(category));
 
 export const lowerDynamicCapabilityPhasePolicy = (input: {
   readonly catalog: DynamicCapabilityCompiledCatalog;

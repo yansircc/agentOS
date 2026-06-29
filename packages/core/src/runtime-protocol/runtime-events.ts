@@ -581,7 +581,10 @@ export const IngressDeliveryRetryPolicyPayloadSchema: Schema.Decoder<IngressDeli
     multiplier: positiveInt,
   });
 
-const IngressDeliveryReceiptAnchorKindSchema = Schema.Literals(["ledger_event", "external_receipt"]);
+const IngressDeliveryReceiptAnchorKindSchema = Schema.Literals([
+  "ledger_event",
+  "external_receipt",
+]);
 
 export const IngressDeliveryReceiptPayloadSchema: Schema.Decoder<IngressDeliveryReceiptPayload> =
   Schema.Struct({
@@ -1439,10 +1442,8 @@ const applyIngressDeliveryEvent = (
   }
 };
 
-const slotsMatch = (
-  left: IngressDeliverySlotPayload,
-  right: IngressDeliverySlotPayload,
-): boolean => left.kind === right.kind && left.id === right.id && left.route === right.route;
+const slotsMatch = (left: IngressDeliverySlotPayload, right: IngressDeliverySlotPayload): boolean =>
+  left.kind === right.kind && left.id === right.id && left.route === right.route;
 
 const validateIngressDeliveryRequest = (
   ingressDeliveries: RuntimeIngressDeliveryState,
@@ -2439,9 +2440,7 @@ export const projectIngressDeliveryHistory = (
     .filter(
       (
         event,
-      ): event is RuntimeLedgerEventByKind<
-        typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED
-      > =>
+      ): event is RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED> =>
         event.kind === RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED &&
         (spec.deliveryKey === undefined || event.payload.deliveryKey === spec.deliveryKey) &&
         (spec.slotKind === undefined || event.payload.slot.kind === spec.slotKind),
@@ -2490,7 +2489,10 @@ export const planIngressDelivery = (
     deliveryKey: spec.deliveryKey,
     attempt,
     requested,
-    accept: (requestedEventId, receipt = ingressDeliveryLedgerReceipt({ deliveryKey: spec.deliveryKey, requestedEventId })) =>
+    accept: (
+      requestedEventId,
+      receipt = ingressDeliveryLedgerReceipt({ deliveryKey: spec.deliveryKey, requestedEventId }),
+    ) =>
       ingressDeliveryAcceptedEvent({
         scopeRef: spec.scopeRef,
         effectAuthorityRef: spec.effectAuthorityRef,

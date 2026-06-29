@@ -1172,7 +1172,8 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
             kind: scheduleOutcomeShape.kind,
             scopeRef: scheduleOutcomeShape.scopeRef,
             effectAuthorityRef: scheduleOutcomeShape.effectAuthorityRef,
-            buildPayload: (context) => result.schedule.outcome(context.id(scheduleRequested)).payload,
+            buildPayload: (context) =>
+              result.schedule.outcome(context.id(scheduleRequested)).payload,
           });
         });
         return events as ReadonlyArray<LedgerEventRpc>;
