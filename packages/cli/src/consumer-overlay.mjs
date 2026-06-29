@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { workspacePackagePaths } from "./lib/workspace-manifest.mjs";
+
 export const installManifestProtocol = "agentos-install-manifest@1";
 export const localConsumerMarkerName = ".agentos-local.json";
 
@@ -111,6 +113,59 @@ export const consumerManifestFiles = (consumerRoot) =>
   ["package.json", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"].map(
     (name) => path.join(consumerRoot, name),
   );
+
+const packageNameForRoot = (consumerRoot) => {
+  const file = path.join(consumerRoot, "package.json");
+  if (!fs.existsSync(file)) return undefined;
+  const name = readJson(file).name;
+  return typeof name === "string" && name.length > 0 ? name : undefined;
+};
+
+const consumerWorkspaceLayout = (consumerRoot) => {
+  const manifest = path.join(consumerRoot, "pnpm-workspace.yaml");
+  const root = {
+    kind: "root",
+    relativePath: ".",
+    consumerRoot,
+    packageName: packageNameForRoot(consumerRoot),
+  };
+  if (!fs.existsSync(manifest)) {
+    return { status: "not_workspace", roots: [root] };
+  }
+  try {
+    const roots = [
+      root,
+      ...workspacePackagePaths(consumerRoot).map((relativePath) => {
+        const packageRoot = path.join(consumerRoot, relativePath);
+        return {
+          kind: "workspace-package",
+          relativePath,
+          consumerRoot: packageRoot,
+          packageName: packageNameForRoot(packageRoot),
+        };
+      }),
+    ];
+    return {
+      status: "workspace",
+      manifestPath: path.relative(consumerRoot, manifest).split(path.sep).join("/"),
+      roots,
+    };
+  } catch (error) {
+    return {
+      status: "invalid",
+      manifestPath: path.relative(consumerRoot, manifest).split(path.sep).join("/"),
+      error: error instanceof Error ? error.message : String(error),
+      roots: [root],
+    };
+  }
+};
+
+const consumerWorkspaceManifestFiles = (layout) =>
+  [
+    ...new Set(
+      layout.roots.flatMap((root) => consumerManifestFiles(root.consumerRoot)),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
 
 export const snapshotFiles = (files) =>
   new Map(files.map((file) => [file, fs.existsSync(file) ? fs.readFileSync(file) : undefined]));
@@ -462,6 +517,38 @@ const consumerGateIssue = (code, severity, dimension, message, detail = {}) => (
 const consumerOverlayGate = (status) => {
   const hardFailures = [];
   const signals = [];
+  if (status.workspaceOverlay?.status === "invalid") {
+    hardFailures.push(
+      consumerGateIssue(
+        "workspace_layout_invalid",
+        "hard",
+        "workspace_layout",
+        "consumer workspace manifest could not be projected",
+        {
+          manifestPath: status.workspaceOverlay.manifestPath,
+          error: status.workspaceOverlay.error,
+        },
+      ),
+    );
+  }
+  for (const root of status.workspaceOverlay?.roots ?? []) {
+    if (root.relativePath === ".") continue;
+    if (root.gate?.status !== "pass") {
+      hardFailures.push(
+        consumerGateIssue(
+          "workspace_consumer_root_failed",
+          "hard",
+          "workspace_resolver",
+          `workspace consumer root ${root.relativePath} does not have a passing local overlay`,
+          {
+            relativePath: root.relativePath,
+            packageName: root.packageName,
+            gate: root.gate,
+          },
+        ),
+      );
+    }
+  }
   if (status.localOverlay.status === "missing") {
     hardFailures.push(
       consumerGateIssue(
@@ -556,7 +643,7 @@ const withConsumerGate = (status) => ({
   gate: consumerOverlayGate(status),
 });
 
-export const consumerStatusData = (consumerRoot, options = {}) => {
+const consumerStatusDataForRoot = (consumerRoot, options = {}) => {
   const metadata = packageMetadata(options.packageRoot);
   const markerPath = localConsumerMarkerPath(consumerRoot);
   const currentSource =
@@ -614,6 +701,52 @@ export const consumerStatusData = (consumerRoot, options = {}) => {
   });
 };
 
+const workspaceRootStatusSummary = (root, status) => ({
+  kind: root.kind,
+  relativePath: root.relativePath,
+  consumerRoot: root.consumerRoot,
+  ...(root.packageName === undefined ? {} : { packageName: root.packageName }),
+  truthMode: status.truthMode,
+  localOverlay: status.localOverlay,
+  packageIntegrity: status.packageIntegrity,
+  sourceFreshness: status.sourceFreshness,
+  packageVersion: status.packageVersion,
+  gate: status.gate,
+});
+
+export const consumerStatusData = (consumerRoot, options = {}) => {
+  const status = consumerStatusDataForRoot(consumerRoot, options);
+  if (options.workspace === false) return status;
+  const layout = consumerWorkspaceLayout(consumerRoot);
+  if (layout.status === "not_workspace") return status;
+  const roots =
+    layout.status === "invalid"
+      ? [workspaceRootStatusSummary(layout.roots[0], status)]
+      : layout.roots.map((root) =>
+          workspaceRootStatusSummary(
+            root,
+            root.relativePath === "."
+              ? status
+              : consumerStatusDataForRoot(root.consumerRoot, options),
+          ),
+        );
+  const workspaceStatus =
+    layout.status === "invalid"
+      ? "invalid"
+      : roots.every((root) => root.gate.status === "pass")
+        ? "verified"
+        : "failed";
+  return withConsumerGate({
+    ...status,
+    workspaceOverlay: {
+      status: workspaceStatus,
+      manifestPath: layout.manifestPath,
+      roots,
+      ...(layout.error === undefined ? {} : { error: layout.error }),
+    },
+  });
+};
+
 const printConsumerStatus = (status) => {
   console.log(`consumer: ${status.consumerRoot}`);
   console.log(`marker: ${status.markerPath}`);
@@ -630,6 +763,14 @@ const printConsumerStatus = (status) => {
     `package version: overlay=${status.packageVersion.overlay ?? "none"} release=${status.packageVersion.release} status=${status.packageVersion.status ?? "none"}`,
   );
   console.log(`npm latest: ${status.npmLatest.status}`);
+  if (status.workspaceOverlay !== undefined) {
+    console.log(`workspace overlay: ${status.workspaceOverlay.status}`);
+    for (const root of status.workspaceOverlay.roots ?? []) {
+      console.log(
+        `workspace ${root.relativePath}: gate=${root.gate.status} overlay=${root.localOverlay.status}`,
+      );
+    }
+  }
   console.log(`gate: ${status.gate.status}`);
   for (const pkg of status.localOverlay.packages ?? []) {
     console.log(
@@ -666,40 +807,50 @@ export const installConsumer = async (rawArgs, context = {}) => {
   const args = parseArgs(rawArgs);
   const consumerRoot = resolveConsumerRoot(positionalArgs(args)[0]);
   const manifestPath = await installManifestPathForArgs(args, context);
-  const snapshot = snapshotFiles(consumerManifestFiles(consumerRoot));
+  const workspaceLayout = consumerWorkspaceLayout(consumerRoot);
+  if (workspaceLayout.status === "invalid") {
+    fail(`${consumerRoot}: ${workspaceLayout.error}`);
+  }
+  const snapshot = snapshotFiles(consumerWorkspaceManifestFiles(workspaceLayout));
   const { manifest } = readInstallManifest(manifestPath);
   const entries = tarballPackageEntries(manifest);
-  const nodeModules = nodeModulesRoot(consumerRoot, { install: !boolArg(args, "no-install") });
-  const packages = {};
-  for (const entry of entries) {
-    const target = packageTargetDir(nodeModules, entry.packageName);
-    unpackTarballInto(entry.tarball, target);
-    packages[entry.packageName] = {
-      target: path.relative(consumerRoot, target).split(path.sep).join("/"),
-      tarball: entry.tarball,
-      sha256: entry.sha256,
-    };
-  }
+  nodeModulesRoot(consumerRoot, { install: !boolArg(args, "no-install") });
   const source =
     typeof context.sourceRoot === "string"
       ? sourceIdentityFor(context.sourceRoot)
       : (manifest.source ?? undefined);
-  writeJson(localConsumerMarkerPath(consumerRoot), {
-    schemaVersion: 1,
-    generatedBy: "agentos consumer install",
-    installedAt: new Date().toISOString(),
-    consumerRoot,
-    ...(source === undefined ? {} : { source }),
-    packageVersion: manifest.version,
-    artifact: markerArtifact(manifestPath, manifest),
-    packages,
-  });
+  const installedAt = new Date().toISOString();
+  for (const root of workspaceLayout.roots) {
+    const nodeModules = path.join(root.consumerRoot, "node_modules");
+    const packages = {};
+    for (const entry of entries) {
+      const target = packageTargetDir(nodeModules, entry.packageName);
+      unpackTarballInto(entry.tarball, target);
+      packages[entry.packageName] = {
+        target: path.relative(root.consumerRoot, target).split(path.sep).join("/"),
+        tarball: entry.tarball,
+        sha256: entry.sha256,
+      };
+    }
+    writeJson(localConsumerMarkerPath(root.consumerRoot), {
+      schemaVersion: 1,
+      generatedBy: "agentos consumer install",
+      installedAt,
+      consumerRoot: root.consumerRoot,
+      ...(source === undefined ? {} : { source }),
+      packageVersion: manifest.version,
+      artifact: markerArtifact(manifestPath, manifest),
+      packages,
+    });
+  }
   assertSnapshotUnchanged(snapshot, "agentos consumer install");
   const status = consumerStatusData(consumerRoot, { sourceRoot: context.sourceRoot });
   if (boolArg(args, "json")) {
     console.log(JSON.stringify(status, null, 2));
   } else {
-    console.log(`installed ${entries.length} local agentOS packages into ${consumerRoot}`);
+    console.log(
+      `installed ${entries.length} local agentOS packages into ${workspaceLayout.roots.length} consumer root(s)`,
+    );
     console.log(
       `wrote ${path.relative(consumerRoot, localConsumerMarkerPath(consumerRoot)).split(path.sep).join("/")}`,
     );

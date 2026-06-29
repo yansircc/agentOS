@@ -33,6 +33,7 @@ const agentOsReleaseVersion = () => {
   return manifest.agentOsRelease?.version ?? manifest.version;
 };
 const sha256Text = (text) => crypto.createHash("sha256").update(text).digest("hex");
+const sha256File = (file) => crypto.createHash("sha256").update(readFileSync(file)).digest("hex");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
 const forbiddenCloudflareLifecycleTargetFragments = [
   /installCloudflareWorkspaceOperationProvider/,
@@ -46,6 +47,23 @@ const assertNoCloudflareLifecycleTargetWiring = (target) => {
   for (const fragment of forbiddenCloudflareLifecycleTargetFragments) {
     assert.doesNotMatch(target, fragment);
   }
+};
+
+const writePackedPackageTarball = (root, packageName) => {
+  const src = path.join(root, "tarball-src");
+  const packageDir = path.join(src, "package");
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(
+    path.join(packageDir, "package.json"),
+    JSON.stringify({ name: packageName, version: agentOsReleaseVersion(), type: "module" }, null, 2),
+  );
+  const tarball = path.join(root, `${packageName.replace(/[^a-z0-9]+/giu, "-")}.tgz`);
+  const result = spawnSync("tar", ["-czf", tarball, "-C", src, "package"], {
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  rmSync(src, { recursive: true, force: true });
+  return { tarball, sha256: sha256File(tarball) };
 };
 
 const runTypeScript = (source, { cwd = repoRoot, resolveDir = repoRoot } = {}) => {
@@ -335,6 +353,163 @@ void test("agentos consumer check fails from packageIntegrity failures", async (
   } finally {
     rmSync(emptyOverlayRoot, { recursive: true, force: true });
     rmSync(missingShaRoot, { recursive: true, force: true });
+  }
+});
+
+void test("agentos consumer check fails when a workspace package overlay is missing", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-workspace-"));
+  try {
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify(
+        { name: "agentos-consumer-workspace", private: true, packageManager: "pnpm@10.0.0" },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+    mkdirSync(path.join(root, "apps", "product-loop"), { recursive: true });
+    writeFileSync(
+      path.join(root, "apps", "product-loop", "package.json"),
+      JSON.stringify({ name: "product-loop", private: true }, null, 2),
+    );
+    mkdirSync(path.join(root, "node_modules", "@yansirplus", "runtime"), { recursive: true });
+    writeFileSync(
+      path.join(root, "node_modules", "@yansirplus", "runtime", "package.json"),
+      JSON.stringify({ name: "@yansirplus/runtime" }, null, 2),
+    );
+    const tarball = path.join(root, "yansirplus-runtime.tgz");
+    const tarballBody = "packed runtime";
+    writeFileSync(tarball, tarballBody);
+    writeFileSync(
+      path.join(root, "node_modules", ".agentos-local.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          generatedBy: "agentos consumer test",
+          installedAt: new Date().toISOString(),
+          source: repoSourceIdentity(),
+          packageVersion: agentOsReleaseVersion(),
+          artifact: { kind: "install-manifest-overlay" },
+          consumerRoot: root,
+          packages: {
+            "@yansirplus/runtime": {
+              target: "node_modules/@yansirplus/runtime",
+              tarball,
+              sha256: sha256Text(tarballBody),
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const check = await runCli(["consumer", "check", root, "--json"]);
+    assert.equal(check.status, 1);
+    const projection = JSON.parse(check.stdout);
+    assert.equal(projection.packageIntegrity.status, "verified");
+    assert.equal(projection.workspaceOverlay.status, "failed");
+    assert.deepEqual(
+      projection.workspaceOverlay.roots.map((entry) => [entry.relativePath, entry.gate.status]),
+      [
+        [".", "pass"],
+        ["apps/product-loop", "fail"],
+      ],
+    );
+    assert.ok(
+      projection.gate.hardFailures.some(
+        (failure) =>
+          failure.code === "workspace_consumer_root_failed" &&
+          failure.relativePath === "apps/product-loop",
+      ),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("agentos consumer install overlays discovered workspace package resolver roots", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-workspace-install-"));
+  try {
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify(
+        { name: "agentos-consumer-workspace-install", private: true, packageManager: "pnpm@10.0.0" },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+    mkdirSync(path.join(root, "apps", "product-loop"), { recursive: true });
+    writeFileSync(
+      path.join(root, "apps", "product-loop", "package.json"),
+      JSON.stringify({ name: "product-loop", private: true }, null, 2),
+    );
+    mkdirSync(path.join(root, "node_modules"), { recursive: true });
+    const packed = writePackedPackageTarball(root, "@yansirplus/runtime");
+    const manifestPath = path.join(root, "install-manifest.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify(
+        {
+          protocol: "agentos-install-manifest@1",
+          version: agentOsReleaseVersion(),
+          generatedBy: "agentos consumer workspace install test",
+          tarballs: {
+            "@yansirplus/runtime": {
+              spec: `file:${packed.tarball}`,
+              sha256: packed.sha256,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const install = await runCli([
+      "consumer",
+      "install",
+      root,
+      "--from-manifest",
+      manifestPath,
+      "--no-install",
+      "--json",
+    ]);
+
+    assert.equal(install.status, 0, install.stderr);
+    const projection = JSON.parse(install.stdout);
+    assert.equal(projection.workspaceOverlay.status, "verified");
+    assert.deepEqual(
+      projection.workspaceOverlay.roots.map((entry) => [entry.relativePath, entry.gate.status]),
+      [
+        [".", "pass"],
+        ["apps/product-loop", "pass"],
+      ],
+    );
+    assert.equal(
+      existsSync(
+        path.join(root, "apps", "product-loop", "node_modules", ".agentos-local.json"),
+      ),
+      true,
+    );
+    assert.equal(
+      existsSync(
+        path.join(
+          root,
+          "apps",
+          "product-loop",
+          "node_modules",
+          "@yansirplus",
+          "runtime",
+          "package.json",
+        ),
+      ),
+      true,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

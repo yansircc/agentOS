@@ -91,6 +91,13 @@ consumer `package.json` or lockfile. If `node_modules` is missing, the command
 runs the consumer package manager install in frozen/non-interactive mode before
 applying the overlay; pass `--no-install` to fail closed instead.
 
+When the consumer path has a `pnpm-workspace.yaml`, the workspace manifest is
+the workspace-layout source of truth. `agentos consumer install` discovers the
+workspace package roots from that manifest and overlays every discovered
+package-local resolver root as well as the workspace root. `consumer status` and
+`consumer check` report `workspaceOverlay.roots[]`; a passing root marker does
+not hide a stale or missing package-local marker under a workspace package.
+
 Read the current consumer state with:
 
 ```sh
@@ -111,6 +118,9 @@ agentos consumer check /path/to/consumer --json
 `agentos consumer status` and `agentos consumer check` read the same marker
 projection. `status` is observational and exits successfully when the projection
 can be built; `check` exits nonzero when the projection contains hard failures.
+For workspace consumers, a package-local resolver failure is a hard
+`workspace_resolver` failure even if the workspace root overlay itself is
+current.
 
 Use `agentos release status` when the question is broader than one consumer
 overlay:
