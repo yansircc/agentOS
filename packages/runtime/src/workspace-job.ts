@@ -14,6 +14,7 @@ import { submitAgentEffect } from "./submit-agent";
 import type { SubmitResult, SubmitSpec } from "@agent-os/core/runtime-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import { internalSubmitSpec } from "./internal-submit";
+import { runExternalEffectAttempt } from "./external-effect-runner";
 import {
   WORKSPACE_JOB_KIND,
   projectWorkspaceJob,
@@ -765,61 +766,70 @@ const runWorkspaceJobAttemptEffect = (
   Effect.gen(function* () {
     const ledger = yield* Ledger;
     const boundaryEvents = yield* BoundaryEventsTag;
-    const before = yield* eventsFor(ledger, spec.identity);
-    const existing = projectWorkspaceJobByIdempotencyKey(before, spec.idempotencyKey);
-    let activeSpec = spec;
-    let requestedEventId: number;
-    let claim;
-
-    if (existing.status === "found") {
-      const projection = currentProjection(before, existing.runId);
-      if (projection.status !== "running") {
-        return projection;
-      }
-      activeSpec = {
-        ...spec,
-        runId: projection.runId,
-        idempotencyKey: projection.request.idempotencyKey,
-        terminalSchemaId: projection.request.terminalSchemaId,
-        ...(projection.request.workspaceRef === undefined
-          ? {}
-          : { workspaceRef: projection.request.workspaceRef }),
-        ...(projection.request.inputRef === undefined
-          ? {}
-          : { inputRef: projection.request.inputRef }),
-        ...(projection.request.inputHash === undefined
-          ? {}
-          : { inputHash: projection.request.inputHash }),
-        attempt: attemptFromRequest(projection.request),
-      };
-      requestedEventId = projection.requestedEventId;
-      claim = projection.request.claim;
-    } else {
-      claim = workspaceJobPreClaim({
-        runId: activeSpec.runId,
-        idempotencyKey: activeSpec.idempotencyKey,
-        scopeRef: activeSpec.identity.scopeRef,
-        effectAuthorityRef: activeSpec.identity.effectAuthorityRef,
-      });
-      const requested = yield* commitWorkspaceJob(
-        boundaryEvents,
-        WORKSPACE_JOB_KIND.REQUESTED,
-        workspaceJobRequestedPayload({
-          runId: activeSpec.runId,
-          idempotencyKey: activeSpec.idempotencyKey,
-          requestedBy: activeSpec.requestedBy,
-          terminalSchemaId: activeSpec.terminalSchemaId,
-          claim,
-          ...(activeSpec.workspaceRef === undefined
+    return yield* runExternalEffectAttempt({
+      spec,
+      idempotencyKey: spec.idempotencyKey,
+      readEvents: () => eventsFor(ledger, spec.identity),
+      projectByIdempotencyKey: projectWorkspaceJobByIdempotencyKey,
+      projectCurrent: currentProjection,
+      isRunningProjection: (projection) => projection.status === "running",
+      activeSpecFromRunningProjection: (currentSpec, projection) => {
+        if (projection.status !== "running") return currentSpec;
+        return {
+          ...currentSpec,
+          runId: projection.runId,
+          idempotencyKey: projection.request.idempotencyKey,
+          terminalSchemaId: projection.request.terminalSchemaId,
+          ...(projection.request.workspaceRef === undefined
             ? {}
-            : { workspaceRef: activeSpec.workspaceRef }),
-          ...(activeSpec.inputRef === undefined ? {} : { inputRef: activeSpec.inputRef }),
-          ...(activeSpec.inputHash === undefined ? {} : { inputHash: activeSpec.inputHash }),
-          attempt: activeSpec.attempt,
+            : { workspaceRef: projection.request.workspaceRef }),
+          ...(projection.request.inputRef === undefined
+            ? {}
+            : { inputRef: projection.request.inputRef }),
+          ...(projection.request.inputHash === undefined
+            ? {}
+            : { inputHash: projection.request.inputHash }),
+          attempt: attemptFromRequest(projection.request),
+        };
+      },
+      requestStateFromRunningProjection: (projection) => {
+        if (projection.status !== "running") {
+          throw new TypeError("workspace-job external-effect runner expected running projection");
+        }
+        return {
+          requestedEventId: projection.requestedEventId,
+          claim: projection.request.claim,
+        };
+      },
+      request: (activeSpec) =>
+        Effect.gen(function* () {
+          const claim = workspaceJobPreClaim({
+            runId: activeSpec.runId,
+            idempotencyKey: activeSpec.idempotencyKey,
+            scopeRef: activeSpec.identity.scopeRef,
+            effectAuthorityRef: activeSpec.identity.effectAuthorityRef,
+          });
+          const requested = yield* commitWorkspaceJob(
+            boundaryEvents,
+            WORKSPACE_JOB_KIND.REQUESTED,
+            workspaceJobRequestedPayload({
+              runId: activeSpec.runId,
+              idempotencyKey: activeSpec.idempotencyKey,
+              requestedBy: activeSpec.requestedBy,
+              terminalSchemaId: activeSpec.terminalSchemaId,
+              claim,
+              ...(activeSpec.workspaceRef === undefined
+                ? {}
+                : { workspaceRef: activeSpec.workspaceRef }),
+              ...(activeSpec.inputRef === undefined ? {} : { inputRef: activeSpec.inputRef }),
+              ...(activeSpec.inputHash === undefined ? {} : { inputHash: activeSpec.inputHash }),
+              attempt: activeSpec.attempt,
+            }),
+          );
+          return { requestedEventId: requested.id, claim };
         }),
-      );
-      requestedEventId = requested.id;
-    }
+      runRequested: ({ activeSpec, requestedEventId, claim }) =>
+        Effect.gen(function* () {
 
     const failAndProject = (failure: WorkspaceJobFailure, submitRunId?: number) =>
       Effect.gen(function* () {
@@ -1060,6 +1070,8 @@ const runWorkspaceJobAttemptEffect = (
 
     const after = yield* eventsFor(ledger, activeSpec.identity);
     return currentProjection(after, activeSpec.runId);
+        }),
+    });
   });
 
 /**
