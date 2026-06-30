@@ -115,6 +115,27 @@ check:
 agentos consumer check /path/to/consumer --json
 ```
 
+Use the doctor form when a product repo needs the local diagnosis in one
+read-only projection:
+
+```sh
+agentos consumer doctor /path/to/consumer
+agentos consumer doctor /path/to/consumer --json
+```
+
+`consumer doctor` does not write files, install packages, restore overlays, or
+create a new release-truth record. It folds the existing `consumer status/check`
+and `release status` projections so package export equivalence, source
+freshness, package integrity, npm observation, and workspace package-local roots
+can be read together. Its gate is derived from the existing release and consumer
+hard failures; signals remain signals.
+
+Private/deep import classification is owned by installed package
+`package.json#exports`, the same source fact used by export-equivalence checks.
+If doctor cannot build consumer import-graph evidence from existing resolver
+facts, it reports `privateImports.status: "not_checked"` rather than using a
+hand-maintained private path list.
+
 `agentos consumer status` and `agentos consumer check` read the same marker
 projection. `status` is observational and exits successfully when the projection
 can be built; `check` exits nonzero when the projection contains hard failures.

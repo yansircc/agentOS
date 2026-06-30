@@ -333,6 +333,7 @@ void test("agentos consumer help is a successful lightweight startup path", asyn
   const result = await runCli(["consumer", "--help"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /agentos consumer status/);
+  assert.match(result.stdout, /agentos consumer doctor/);
 });
 
 void test("agentos consumer status and check share one overlay gate projection", async () => {
@@ -372,6 +373,29 @@ void test("agentos consumer status and check share one overlay gate projection",
     const checkProjection = JSON.parse(check.stdout);
     assert.equal(checkProjection.localOverlay.status, statusProjection.localOverlay.status);
     assert.deepEqual(checkProjection.gate, statusProjection.gate);
+
+    const doctor = await runCli(["consumer", "doctor", root, "--json"]);
+    assert.equal(doctor.status, 0, doctor.stderr);
+    const doctorProjection = JSON.parse(doctor.stdout);
+    assert.equal(doctorProjection.schemaVersion, 1);
+    assert.equal(doctorProjection.consumerRoot, root);
+    assert.equal(doctorProjection.release.release.version, agentOsReleaseVersion());
+    assert.equal(doctorProjection.consumer.truthMode, "npm_release");
+    assert.equal(doctorProjection.projections.workspaceOverlay, undefined);
+    assert.equal(doctorProjection.projections.privateImports.status, "not_checked");
+    assert.equal(
+      doctorProjection.projections.privateImports.owner,
+      "installed package.json#exports",
+    );
+    assert.equal(doctorProjection.gate.status, "fail");
+    assert.deepEqual(
+      doctorProjection.gate.hardFailures.map((failure) => ({
+        code: failure.code,
+        dimension: failure.dimension,
+      })),
+      [{ code: "local_overlay_missing", dimension: "consumer" }],
+    );
+    assert.equal(existsSync(path.join(root, ".agentos-doctor.json")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -526,6 +550,27 @@ void test("agentos consumer check fails when a workspace package overlay is miss
         (failure) =>
           failure.code === "workspace_consumer_root_failed" &&
           failure.relativePath === "apps/product-loop",
+      ),
+    );
+
+    const doctor = await runCli(["consumer", "doctor", root, "--json"]);
+    assert.equal(doctor.status, 0, doctor.stderr);
+    const doctorProjection = JSON.parse(doctor.stdout);
+    assert.equal(doctorProjection.projections.workspaceOverlay.status, "failed");
+    assert.deepEqual(
+      doctorProjection.projections.workspaceOverlay.roots.map((entry) => [
+        entry.relativePath,
+        entry.gate.status,
+      ]),
+      [
+        [".", "pass"],
+        ["apps/product-loop", "fail"],
+      ],
+    );
+    assert.ok(
+      doctorProjection.gate.hardFailures.some(
+        (failure) =>
+          failure.code === "workspace_consumer_root_failed" && failure.dimension === "consumer",
       ),
     );
   } finally {

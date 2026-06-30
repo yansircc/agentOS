@@ -11,6 +11,7 @@ import {
   installConsumer,
   restoreConsumer,
 } from "./consumer-overlay.mjs";
+import { consumerDoctor } from "./consumer-doctor.mjs";
 import { releaseStatus } from "./release-status.mjs";
 
 const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -47,6 +48,7 @@ Usage:
   agentos consumer install /path/to/consumer [--from-manifest <path>] [--no-install] [--skip-pack] [--json]
   agentos consumer status /path/to/consumer [--json] [--check-npm] [--registry <url>]
   agentos consumer check /path/to/consumer [--json] [--check-npm] [--registry <url>]
+  agentos consumer doctor /path/to/consumer [--json] [--check-npm] [--registry <url>]
   agentos consumer restore /path/to/consumer [--no-install] [--json]
   agentos check all
   agentos check default
@@ -196,11 +198,14 @@ const runConsumer = async (args) => {
     case "check":
       consumerCheck(commandArgs, context);
       return;
+    case "doctor":
+      consumerDoctor(commandArgs, context);
+      return;
     case "restore":
       restoreConsumer(commandArgs, context);
       return;
     default:
-      throw new Error("agentos consumer: choose one of install, status, check, restore");
+      throw new Error("agentos consumer: choose one of install, status, check, doctor, restore");
   }
 };
 
