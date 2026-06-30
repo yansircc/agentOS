@@ -3,7 +3,11 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { consumerStatusData, resolveConsumerRoot } from "./consumer-overlay.mjs";
+import {
+  consumerStatusData,
+  exportEquivalenceForInstallManifest,
+  resolveConsumerRoot,
+} from "./consumer-overlay.mjs";
 
 const releaseStatusSchemaVersion = 1;
 
@@ -221,6 +225,35 @@ const artifactProjection = (manifestPath) => {
   }
 };
 
+const releaseExportEquivalenceProjection = (manifestPath, context) => {
+  if (typeof manifestPath !== "string" || !fs.existsSync(manifestPath)) {
+    return {
+      status: "not_checked",
+      packagesChecked: 0,
+      packages: [],
+      failures: [],
+      reason: "install manifest is unavailable",
+    };
+  }
+  try {
+    const manifest = readJson(manifestPath);
+    return exportEquivalenceForInstallManifest(manifest, { sourceRoot: context.sourceRoot });
+  } catch (error) {
+    return {
+      status: "failed",
+      packagesChecked: 0,
+      packages: [],
+      failures: [
+        {
+          code: "export_install_manifest_unreadable",
+          comparison: "manifest",
+          error: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+};
+
 const npmProjection = (packages, options) => {
   if (options.checkNpm !== true) {
     return {
@@ -292,6 +325,17 @@ const releaseGate = (projection) => {
         "signal",
         "artifacts",
         `local package artifacts are ${projection.artifacts.status}`,
+      ),
+    );
+  }
+  for (const failure of projection.exportEquivalence?.failures ?? []) {
+    hardFailures.push(
+      issue(
+        failure.code,
+        "hard",
+        "export_equivalence",
+        `release export equivalence failed: ${failure.code}`,
+        { exportIssue: failure },
       ),
     );
   }
@@ -396,6 +440,7 @@ export const releaseStatusData = (input = {}) => {
     },
     source: gitSourceProjection(context.sourceRoot),
     artifacts: artifactProjection(manifestPath),
+    exportEquivalence: releaseExportEquivalenceProjection(manifestPath, context),
     npm: npmProjection(packages, {
       checkNpm: input.checkNpm,
       registry: input.registry,
@@ -432,6 +477,7 @@ const printReleaseStatus = (status) => {
     }
   }
   console.log(`artifacts: ${status.artifacts.status}`);
+  console.log(`export equivalence: ${status.exportEquivalence.status}`);
   console.log(`npm: ${status.npm.status}`);
   console.log(`consumer: ${status.consumer?.truthMode ?? "not_checked"}`);
   console.log(`gate: ${status.gate.status}`);

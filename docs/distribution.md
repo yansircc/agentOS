@@ -156,10 +156,20 @@ mismatch, a foreign repo, or a packaged CLI invocation where source identity is
 not available. A stale or dirty source checkout is a source-freshness failure,
 not evidence that the installed package tarballs are corrupted.
 
+`exportEquivalence` is the package surface projection. It compares only
+existing package manifests: source `package.json#exports` when a source checkout
+is available, packed tarball `package/package.json#exports`, and installed
+`node_modules/<package>/package.json#exports`. It reports missing or extra
+subpaths and target-kind drift, such as a packed package still pointing at
+`src/` or an installed package missing a subpath present in the packed tarball.
+It does not introduce a new export catalog or infer public API intent from the
+filesystem.
+
 Gate entries include a `dimension` such as `truth_mode`, `package_integrity`,
-`source_freshness`, `release_identity`, or `registry_observation`, so consumer
-automation can decide whether it is looking at a package problem, a source
-producer freshness problem, or an intentionally unchecked registry signal.
+`export_equivalence`, `source_freshness`, `release_identity`, or
+`registry_observation`, so consumer automation can decide whether it is looking
+at a package problem, a source producer freshness problem, an export surface
+drift, or an intentionally unchecked registry signal.
 Restore the consumer to registry truth with:
 
 ```sh

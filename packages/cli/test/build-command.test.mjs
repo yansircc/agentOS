@@ -49,13 +49,68 @@ const assertNoCloudflareLifecycleTargetWiring = (target) => {
   }
 };
 
-const writePackedPackageTarball = (root, packageName) => {
+const sourceNameForPublicPackage = (packageName) => {
+  const release = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  const publicScope = release.agentOsRelease?.npmScope;
+  if (typeof publicScope === "string" && packageName.startsWith(`${publicScope}/`)) {
+    return `@agent-os/${packageName.slice(publicScope.length + 1)}`;
+  }
+  return packageName.startsWith("@agent-os/") ? packageName : undefined;
+};
+
+const distTargetForSource = (target, ext) =>
+  target.startsWith("./src/") && target.endsWith(".ts")
+    ? `./dist/${target.slice("./src/".length, -".ts".length)}.${ext}`
+    : target;
+
+const projectedPackedExportsFor = (packageName) => {
+  const sourceName = sourceNameForPublicPackage(packageName);
+  if (sourceName === undefined) return undefined;
+  const packageDir = sourceName.split("/")[1];
+  const manifestPath = path.join(repoRoot, "packages", packageDir, "package.json");
+  if (!existsSync(manifestPath)) return undefined;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  if (manifest.exports === undefined || manifest.exports === null) return undefined;
+  if (typeof manifest.exports === "string") {
+    return {
+      ".": {
+        types: distTargetForSource(manifest.exports, "d.ts"),
+        default: distTargetForSource(manifest.exports, "js"),
+      },
+    };
+  }
+  return Object.fromEntries(
+    Object.entries(manifest.exports).map(([subpath, target]) => {
+      const sourceTarget =
+        typeof target === "string" ? target : (target.default ?? target.import ?? target.types);
+      return [
+        subpath,
+        {
+          types: distTargetForSource(sourceTarget, "d.ts"),
+          default: distTargetForSource(sourceTarget, "js"),
+        },
+      ];
+    }),
+  );
+};
+
+const writePackedPackageTarball = (root, packageName, options = {}) => {
   const src = path.join(root, "tarball-src");
   const packageDir = path.join(src, "package");
   mkdirSync(packageDir, { recursive: true });
   writeFileSync(
     path.join(packageDir, "package.json"),
-    JSON.stringify({ name: packageName, version: agentOsReleaseVersion(), type: "module" }, null, 2),
+    JSON.stringify(
+      {
+        name: packageName,
+        version: agentOsReleaseVersion(),
+        type: "module",
+        exports:
+          options.exports === undefined ? projectedPackedExportsFor(packageName) : options.exports,
+      },
+      null,
+      2,
+    ),
   );
   const tarball = path.join(root, `${packageName.replace(/[^a-z0-9]+/giu, "-")}.tgz`);
   const result = spawnSync("tar", ["-czf", tarball, "-C", src, "package"], {
@@ -303,14 +358,13 @@ void test("agentos consumer check fails from packageIntegrity failures", async (
       JSON.stringify({ ...baseMarker, consumerRoot: emptyOverlayRoot, packages: {} }, null, 2),
     );
 
-    const missingShaPackageRoot = path.join(missingShaRoot, "node_modules", "@agent-os", "runtime");
+    const missingShaPackageRoot = path.join(missingShaRoot, "node_modules", "@example", "runtime");
     mkdirSync(missingShaPackageRoot, { recursive: true });
     writeFileSync(
       path.join(missingShaPackageRoot, "package.json"),
-      JSON.stringify({ name: "@agent-os/runtime" }, null, 2),
+      JSON.stringify({ name: "@example/runtime" }, null, 2),
     );
-    const tarball = path.join(missingShaRoot, "agent-os-runtime.tgz");
-    writeFileSync(tarball, "packed runtime");
+    const packed = writePackedPackageTarball(missingShaRoot, "@example/runtime");
     writeFileSync(
       path.join(missingShaRoot, "node_modules", ".agentos-local.json"),
       JSON.stringify(
@@ -318,9 +372,9 @@ void test("agentos consumer check fails from packageIntegrity failures", async (
           ...baseMarker,
           consumerRoot: missingShaRoot,
           packages: {
-            "@agent-os/runtime": {
-              target: "node_modules/@agent-os/runtime",
-              tarball,
+            "@example/runtime": {
+              target: "node_modules/@example/runtime",
+              tarball: packed.tarball,
             },
           },
         },
@@ -374,13 +428,18 @@ void test("agentos consumer check fails when a workspace package overlay is miss
       JSON.stringify({ name: "product-loop", private: true }, null, 2),
     );
     mkdirSync(path.join(root, "node_modules", "@yansirplus", "runtime"), { recursive: true });
+    const runtimeExports = projectedPackedExportsFor("@yansirplus/runtime");
     writeFileSync(
       path.join(root, "node_modules", "@yansirplus", "runtime", "package.json"),
-      JSON.stringify({ name: "@yansirplus/runtime" }, null, 2),
+      JSON.stringify(
+        { name: "@yansirplus/runtime", version: agentOsReleaseVersion(), exports: runtimeExports },
+        null,
+        2,
+      ),
     );
-    const tarball = path.join(root, "yansirplus-runtime.tgz");
-    const tarballBody = "packed runtime";
-    writeFileSync(tarball, tarballBody);
+    const packed = writePackedPackageTarball(root, "@yansirplus/runtime", {
+      exports: runtimeExports,
+    });
     writeFileSync(
       path.join(root, "node_modules", ".agentos-local.json"),
       JSON.stringify(
@@ -395,8 +454,8 @@ void test("agentos consumer check fails when a workspace package overlay is miss
           packages: {
             "@yansirplus/runtime": {
               target: "node_modules/@yansirplus/runtime",
-              tarball,
-              sha256: sha256Text(tarballBody),
+              tarball: packed.tarball,
+              sha256: packed.sha256,
             },
           },
         },
@@ -513,6 +572,74 @@ void test("agentos consumer install overlays discovered workspace package resolv
   }
 });
 
+void test("agentos consumer check fails on packed-vs-installed export drift", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-export-drift-"));
+  try {
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "agentos-consumer-export-drift", private: true }, null, 2),
+    );
+    const packedExports = {
+      ".": { types: "./dist/index.d.ts", default: "./dist/index.js" },
+      "./extra": { types: "./dist/extra.d.ts", default: "./dist/extra.js" },
+    };
+    const installedExports = {
+      ".": { types: "./dist/index.d.ts", default: "./dist/index.js" },
+    };
+    const packageRoot = path.join(root, "node_modules", "@example", "runtime");
+    mkdirSync(packageRoot, { recursive: true });
+    writeFileSync(
+      path.join(packageRoot, "package.json"),
+      JSON.stringify(
+        { name: "@example/runtime", version: agentOsReleaseVersion(), exports: installedExports },
+        null,
+        2,
+      ),
+    );
+    const packed = writePackedPackageTarball(root, "@example/runtime", { exports: packedExports });
+    writeFileSync(
+      path.join(root, "node_modules", ".agentos-local.json"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          generatedBy: "agentos consumer export drift test",
+          installedAt: new Date().toISOString(),
+          source: repoSourceIdentity(),
+          packageVersion: agentOsReleaseVersion(),
+          artifact: { kind: "install-manifest-overlay" },
+          consumerRoot: root,
+          packages: {
+            "@example/runtime": {
+              target: "node_modules/@example/runtime",
+              tarball: packed.tarball,
+              sha256: packed.sha256,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const check = await runCli(["consumer", "check", root, "--json"]);
+    assert.equal(check.status, 1);
+    const projection = JSON.parse(check.stdout);
+    assert.equal(projection.packageIntegrity.status, "verified");
+    assert.equal(projection.exportEquivalence.status, "failed");
+    assert.ok(
+      projection.gate.hardFailures.some(
+        (failure) =>
+          failure.code === "export_packed_installed_subpath_drift" &&
+          failure.dimension === "export_equivalence" &&
+          failure.packageName === "@example/runtime" &&
+          failure.missingSubpaths.includes("./extra"),
+      ),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test("agentos consumer restore uses the consumer package manager", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-restore-"));
   const fakeBin = mkdtempSync(path.join(os.tmpdir(), "agentos-fake-pm-"));
@@ -582,9 +709,7 @@ void test("agentos release status reports source, artifacts, and npm without wri
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-release-status-"));
   const fakeBin = mkdtempSync(path.join(os.tmpdir(), "agentos-release-npm-"));
   try {
-    const tarball = path.join(root, "agent-os-core.tgz");
-    const tarballBody = "packed core";
-    writeFileSync(tarball, tarballBody);
+    const packed = writePackedPackageTarball(root, "@yansirplus/core");
     const manifestPath = path.join(root, "install-manifest.json");
     writeFileSync(
       manifestPath,
@@ -594,9 +719,9 @@ void test("agentos release status reports source, artifacts, and npm without wri
           version: agentOsReleaseVersion(),
           generatedBy: "agentos release status test",
           tarballs: {
-            "@agent-os/core": {
-              spec: `file:${tarball}`,
-              sha256: sha256Text(tarballBody),
+            "@yansirplus/core": {
+              spec: `file:${packed.tarball}`,
+              sha256: packed.sha256,
             },
           },
         },
@@ -643,6 +768,61 @@ void test("agentos release status reports source, artifacts, and npm without wri
   }
 });
 
+void test("agentos release status fails on source-vs-packed export drift", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-release-export-drift-"));
+  try {
+    const packed = writePackedPackageTarball(root, "@yansirplus/runtime", {
+      exports: {
+        ".": { types: "./dist/index.d.ts", default: "./dist/index.js" },
+      },
+    });
+    const manifestPath = path.join(root, "install-manifest.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify(
+        {
+          protocol: "agentos-install-manifest@1",
+          version: agentOsReleaseVersion(),
+          generatedBy: "agentos release export drift test",
+          tarballs: {
+            "@yansirplus/runtime": {
+              spec: `file:${packed.tarball}`,
+              sha256: packed.sha256,
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const result = await runCli([
+      "release",
+      "status",
+      "--json",
+      "--install-manifest",
+      manifestPath,
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    const status = JSON.parse(result.stdout);
+    assert.equal(status.artifacts.status, "verified");
+    assert.equal(status.exportEquivalence.status, "failed");
+    assert.equal(status.gate.status, "fail");
+    assert.ok(
+      status.gate.hardFailures.some(
+        (failure) =>
+          failure.code === "export_source_packed_subpath_drift" &&
+          failure.dimension === "export_equivalence" &&
+          failure.exportIssue.packageName === "@yansirplus/runtime" &&
+          failure.exportIssue.missingSubpaths.includes("./external-effect"),
+      ),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test("agentos release status composes consumer projection without mutating consumer", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-release-consumer-"));
   try {
@@ -650,14 +830,19 @@ void test("agentos release status composes consumer projection without mutating 
       path.join(root, "package.json"),
       JSON.stringify({ name: "agentos-release-consumer", private: true, type: "module" }, null, 2),
     );
-    mkdirSync(path.join(root, "node_modules", "@agent-os", "runtime"), { recursive: true });
+    mkdirSync(path.join(root, "node_modules", "@yansirplus", "runtime"), { recursive: true });
+    const runtimeExports = projectedPackedExportsFor("@yansirplus/runtime");
     writeFileSync(
-      path.join(root, "node_modules", "@agent-os", "runtime", "package.json"),
-      JSON.stringify({ name: "@agent-os/runtime" }, null, 2),
+      path.join(root, "node_modules", "@yansirplus", "runtime", "package.json"),
+      JSON.stringify(
+        { name: "@yansirplus/runtime", version: agentOsReleaseVersion(), exports: runtimeExports },
+        null,
+        2,
+      ),
     );
-    const tarball = path.join(root, "agent-os-runtime.tgz");
-    const tarballBody = "packed runtime";
-    writeFileSync(tarball, tarballBody);
+    const packed = writePackedPackageTarball(root, "@yansirplus/runtime", {
+      exports: runtimeExports,
+    });
     writeFileSync(
       path.join(root, "node_modules", ".agentos-local.json"),
       JSON.stringify(
@@ -670,10 +855,10 @@ void test("agentos release status composes consumer projection without mutating 
           artifact: { kind: "install-manifest-overlay" },
           consumerRoot: root,
           packages: {
-            "@agent-os/runtime": {
-              target: "node_modules/@agent-os/runtime",
-              tarball,
-              sha256: sha256Text(tarballBody),
+            "@yansirplus/runtime": {
+              target: "node_modules/@yansirplus/runtime",
+              tarball: packed.tarball,
+              sha256: packed.sha256,
             },
           },
         },

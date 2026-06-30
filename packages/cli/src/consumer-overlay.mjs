@@ -344,6 +344,9 @@ const fileSpecPath = (spec) => {
   return spec.slice("file:".length);
 };
 
+const optionalFileSpecPath = (spec) =>
+  typeof spec === "string" && spec.startsWith("file:") ? spec.slice("file:".length) : undefined;
+
 export const tarballPackageEntries = (manifest) =>
   Object.entries(manifest.tarballs)
     .map(([packageName, entry]) => {
@@ -375,6 +378,330 @@ const markerArtifact = (manifestPath, manifest) => ({
     generatedBy: manifest.generatedBy,
   },
 });
+
+const sourcePackageScope = "@agent-os";
+
+const releaseNpmScope = (sourceRoot) => {
+  if (typeof sourceRoot !== "string") return undefined;
+  const manifestPath = path.join(sourceRoot, "package.json");
+  if (!fs.existsSync(manifestPath)) return undefined;
+  const manifest = readJson(manifestPath);
+  return typeof manifest.agentOsRelease?.npmScope === "string"
+    ? manifest.agentOsRelease.npmScope
+    : undefined;
+};
+
+const publicPackageName = (sourceName, npmScope) => {
+  if (typeof npmScope !== "string" || !sourceName.startsWith(`${sourcePackageScope}/`)) {
+    return sourceName;
+  }
+  return `${npmScope}/${sourceName.slice(sourcePackageScope.length + 1)}`;
+};
+
+const sourceManifestPathForPackage = (packageName, sourceRoot) => {
+  if (typeof sourceRoot !== "string") return undefined;
+  const surfacePath = path.join(sourceRoot, "docs", "surface.json");
+  if (!fs.existsSync(surfacePath)) return undefined;
+  const npmScope = releaseNpmScope(sourceRoot);
+  const surface = readJson(surfacePath);
+  for (const pkg of surface.packages ?? []) {
+    if (pkg?.published !== true || typeof pkg.name !== "string" || typeof pkg.path !== "string") {
+      continue;
+    }
+    if (packageName !== pkg.name && packageName !== publicPackageName(pkg.name, npmScope)) {
+      continue;
+    }
+    const manifestPath = path.join(sourceRoot, pkg.path, "package.json");
+    return fs.existsSync(manifestPath) ? manifestPath : undefined;
+  }
+  return undefined;
+};
+
+const collectExportTargetStrings = (value, output = []) => {
+  if (typeof value === "string") {
+    output.push(value);
+    return output;
+  }
+  if (value === null || typeof value !== "object") return output;
+  for (const child of Object.values(value)) collectExportTargetStrings(child, output);
+  return output;
+};
+
+const exportTargetKind = (target) => {
+  if (target.startsWith("./src/") && target.endsWith(".ts")) return "source-ts";
+  if (target.startsWith("./src/") && target.endsWith(".mjs")) return "source-mjs";
+  if (target.startsWith("./dist/") && target.endsWith(".d.ts")) return "dist-dts";
+  if (target.startsWith("./dist/") && target.endsWith(".js")) return "dist-js";
+  if (target.startsWith("./dist/") && target.endsWith(".mjs")) return "dist-mjs";
+  if (target.startsWith("./") && !target.includes("..") && target.endsWith(".json")) {
+    return "json-asset";
+  }
+  if (target.startsWith("./")) return "relative-other";
+  return "specifier-other";
+};
+
+const exportEntryKind = (targetKinds) => {
+  if (targetKinds.length === 0) return "empty";
+  if (targetKinds.every((kind) => kind.startsWith("source-"))) return "source-module";
+  if (targetKinds.every((kind) => kind.startsWith("dist-"))) return "dist-module";
+  if (targetKinds.every((kind) => kind === "json-asset")) return "json-asset";
+  return "mixed";
+};
+
+const exportSetForManifest = (manifest) => {
+  const exportsValue = manifest.exports ?? manifest.main;
+  const entries =
+    typeof exportsValue === "string"
+      ? [[".", exportsValue]]
+      : exportsValue !== null && typeof exportsValue === "object"
+        ? Object.entries(exportsValue)
+        : [];
+  return Object.fromEntries(
+    entries
+      .map(([subpath, value]) => {
+        const targets = collectExportTargetStrings(value).sort((left, right) =>
+          left.localeCompare(right),
+        );
+        const targetKinds = [...new Set(targets.map(exportTargetKind))].sort((left, right) =>
+          left.localeCompare(right),
+        );
+        return [
+          subpath,
+          {
+            targetKinds,
+            entryKind: exportEntryKind(targetKinds),
+          },
+        ];
+      })
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+};
+
+const readPackageJsonProjection = (manifestPath) => {
+  if (typeof manifestPath !== "string") return { status: "unavailable" };
+  if (!fs.existsSync(manifestPath)) return { status: "missing", manifestPath };
+  try {
+    const manifest = readJson(manifestPath);
+    return {
+      status: "available",
+      manifestPath,
+      packageName: manifest.name,
+      exports: exportSetForManifest(manifest),
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      manifestPath,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
+const readTarballPackageJsonProjection = (tarball) => {
+  if (typeof tarball !== "string" || tarball.length === 0) {
+    return { status: "unavailable" };
+  }
+  if (!fs.existsSync(tarball)) return { status: "missing", tarball };
+  const tmp = fs.mkdtempSync(path.join(fs.realpathSync("/tmp"), "agentos-export-tarball-"));
+  try {
+    const result = spawnSync("tar", ["-xzf", tarball, "-C", tmp, "package/package.json"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (result.status !== 0) {
+      return {
+        status: "failed",
+        tarball,
+        error: result.stderr.trim() || result.stdout.trim() || `tar exited ${result.status}`,
+      };
+    }
+    const projection = readPackageJsonProjection(path.join(tmp, "package", "package.json"));
+    return { ...projection, manifestPath: "package/package.json", tarball };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+};
+
+const sortedExportKeys = (exports) =>
+  Object.keys(exports ?? {}).sort((left, right) => left.localeCompare(right));
+
+const compareSubpathSets = (leftExports, rightExports) => {
+  const left = new Set(sortedExportKeys(leftExports));
+  const right = new Set(sortedExportKeys(rightExports));
+  return {
+    missing: [...left].filter((subpath) => !right.has(subpath)),
+    extra: [...right].filter((subpath) => !left.has(subpath)),
+  };
+};
+
+const expectedPackedKindForSource = (sourceKind) => {
+  if (sourceKind === "source-module") return "dist-module";
+  return sourceKind;
+};
+
+const compareSourcePackedExports = (source, packed) => {
+  const subpaths = compareSubpathSets(source.exports, packed.exports);
+  const targetKindDrift = [];
+  for (const subpath of sortedExportKeys(source.exports)) {
+    if (packed.exports?.[subpath] === undefined) continue;
+    const expected = expectedPackedKindForSource(source.exports[subpath].entryKind);
+    const actual = packed.exports[subpath].entryKind;
+    if (actual !== expected) {
+      targetKindDrift.push({
+        subpath,
+        sourceKind: source.exports[subpath].entryKind,
+        expectedPackedKind: expected,
+        actualPackedKind: actual,
+      });
+    }
+  }
+  return {
+    status:
+      subpaths.missing.length === 0 &&
+      subpaths.extra.length === 0 &&
+      targetKindDrift.length === 0
+        ? "pass"
+        : "fail",
+    subpaths,
+    targetKindDrift,
+  };
+};
+
+const compareEquivalentExports = (left, right) => {
+  const subpaths = compareSubpathSets(left.exports, right.exports);
+  const targetKindDrift = [];
+  for (const subpath of sortedExportKeys(left.exports)) {
+    if (right.exports?.[subpath] === undefined) continue;
+    const leftKind = left.exports[subpath].entryKind;
+    const rightKind = right.exports[subpath].entryKind;
+    if (leftKind !== rightKind) {
+      targetKindDrift.push({ subpath, leftKind, rightKind });
+    }
+  }
+  return {
+    status:
+      subpaths.missing.length === 0 &&
+      subpaths.extra.length === 0 &&
+      targetKindDrift.length === 0
+        ? "pass"
+        : "fail",
+    subpaths,
+    targetKindDrift,
+  };
+};
+
+const exportFailure = (code, packageName, comparison, detail = {}) => ({
+  code,
+  packageName,
+  comparison,
+  ...detail,
+});
+
+const exportEquivalenceForPackage = (entry, options = {}) => {
+  const source = readPackageJsonProjection(
+    sourceManifestPathForPackage(entry.packageName, options.sourceRoot),
+  );
+  const packed = readTarballPackageJsonProjection(entry.tarball);
+  const installed = readPackageJsonProjection(entry.installedManifestPath);
+  const failures = [];
+  const comparisons = {};
+  if (packed.status !== "available") {
+    failures.push(
+      exportFailure("export_packed_manifest_unavailable", entry.packageName, "packed", {
+        status: packed.status,
+        error: packed.error,
+      }),
+    );
+  }
+  if (entry.installedManifestPath !== undefined && installed.status !== "available") {
+    failures.push(
+      exportFailure("export_installed_manifest_unavailable", entry.packageName, "installed", {
+        status: installed.status,
+        error: installed.error,
+      }),
+    );
+  }
+  if (source.status === "available" && packed.status === "available") {
+    const comparison = compareSourcePackedExports(source, packed);
+    comparisons.sourcePacked = comparison;
+    if (comparison.subpaths.missing.length > 0 || comparison.subpaths.extra.length > 0) {
+      failures.push(
+        exportFailure("export_source_packed_subpath_drift", entry.packageName, "source_packed", {
+          missingSubpaths: comparison.subpaths.missing,
+          extraSubpaths: comparison.subpaths.extra,
+        }),
+      );
+    }
+    if (comparison.targetKindDrift.length > 0) {
+      failures.push(
+        exportFailure(
+          "export_source_packed_target_kind_drift",
+          entry.packageName,
+          "source_packed",
+          { targetKindDrift: comparison.targetKindDrift },
+        ),
+      );
+    }
+  }
+  if (packed.status === "available" && installed.status === "available") {
+    const comparison = compareEquivalentExports(packed, installed);
+    comparisons.packedInstalled = comparison;
+    if (comparison.subpaths.missing.length > 0 || comparison.subpaths.extra.length > 0) {
+      failures.push(
+        exportFailure(
+          "export_packed_installed_subpath_drift",
+          entry.packageName,
+          "packed_installed",
+          {
+            missingSubpaths: comparison.subpaths.missing,
+            extraSubpaths: comparison.subpaths.extra,
+          },
+        ),
+      );
+    }
+    if (comparison.targetKindDrift.length > 0) {
+      failures.push(
+        exportFailure(
+          "export_packed_installed_target_kind_drift",
+          entry.packageName,
+          "packed_installed",
+          { targetKindDrift: comparison.targetKindDrift },
+        ),
+      );
+    }
+  }
+  return {
+    packageName: entry.packageName,
+    source,
+    packed,
+    ...(entry.installedManifestPath === undefined ? {} : { installed }),
+    comparisons,
+    status: failures.length === 0 ? "verified" : "failed",
+    failures,
+  };
+};
+
+export const exportEquivalenceProjection = (entries, options = {}) => {
+  const packages = entries
+    .map((entry) => exportEquivalenceForPackage(entry, options))
+    .sort((left, right) => left.packageName.localeCompare(right.packageName));
+  const failures = packages.flatMap((pkg) => pkg.failures);
+  return {
+    status: packages.length === 0 ? "not_checked" : failures.length === 0 ? "verified" : "failed",
+    packagesChecked: packages.length,
+    packages,
+    failures,
+  };
+};
+
+export const exportEquivalenceForInstallManifest = (manifest, options = {}) =>
+  exportEquivalenceProjection(
+    Object.entries(manifest.tarballs ?? {}).map(([packageName, entry]) => ({
+      packageName,
+      tarball: optionalFileSpecPath(entry?.spec),
+    })),
+    options,
+  );
 
 const packageOverlayRows = (consumerRoot, marker) => {
   const nodeModules = path.join(consumerRoot, "node_modules");
@@ -571,6 +898,17 @@ const consumerOverlayGate = (status) => {
       ),
     );
   }
+  for (const failure of status.exportEquivalence?.failures ?? []) {
+    hardFailures.push(
+      consumerGateIssue(
+        failure.code,
+        "hard",
+        "export_equivalence",
+        `local consumer overlay export equivalence failed: ${failure.code}`,
+        failure,
+      ),
+    );
+  }
   if (status.sourceFreshness?.gate === "fail") {
     hardFailures.push(
       consumerGateIssue(
@@ -664,6 +1002,19 @@ const consumerStatusDataForRoot = (consumerRoot, options = {}) => {
   }
   const marker = readJson(markerPath);
   const packages = packageOverlayRows(consumerRoot, marker);
+  const exportEquivalence = exportEquivalenceProjection(
+    packages.map((pkg) => ({
+      packageName: pkg.packageName,
+      tarball: pkg.tarball,
+      installedManifestPath: path.join(
+        consumerRoot,
+        "node_modules",
+        ...pkg.packageName.split("/"),
+        "package.json",
+      ),
+    })),
+    { sourceRoot: options.sourceRoot },
+  );
   const sourceStatus = overlaySourceStatus(marker, currentSource);
   const packageIntegrity = packageIntegrityFor(marker, packages);
   const sourceFreshness = sourceFreshnessFor(marker, currentSource);
@@ -681,6 +1032,7 @@ const consumerStatusDataForRoot = (consumerRoot, options = {}) => {
       packages,
     },
     packageIntegrity,
+    exportEquivalence,
     sourceFreshness,
     source: {
       ...(currentSource === undefined ? {} : { current: currentSource }),
@@ -709,6 +1061,7 @@ const workspaceRootStatusSummary = (root, status) => ({
   truthMode: status.truthMode,
   localOverlay: status.localOverlay,
   packageIntegrity: status.packageIntegrity,
+  exportEquivalence: status.exportEquivalence,
   sourceFreshness: status.sourceFreshness,
   packageVersion: status.packageVersion,
   gate: status.gate,
@@ -753,6 +1106,9 @@ const printConsumerStatus = (status) => {
   console.log(`truth mode: ${status.truthMode}`);
   console.log(`local overlay: ${status.localOverlay.status}`);
   console.log(`package integrity: ${status.packageIntegrity.status}`);
+  if (status.exportEquivalence !== undefined) {
+    console.log(`export equivalence: ${status.exportEquivalence.status}`);
+  }
   if (status.sourceFreshness !== undefined) {
     console.log(`source freshness: ${status.sourceFreshness.status}`);
   }

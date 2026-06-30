@@ -127,10 +127,13 @@ The JSON projection has separate fields for:
 - `truthMode`: package-manager release truth, current install-manifest overlay,
   or legacy overlay marker.
 - `packageIntegrity`: installed package content and tarball digest verification.
+- `exportEquivalence`: source, packed tarball, and installed package
+  `package.json#exports` comparison. It fails on missing or extra subpaths and
+  target-kind drift without creating a second export source of truth.
 - `sourceFreshness`: whether the local overlay was produced by the current
   source checkout.
 - `gate.hardFailures[].dimension`: the failing axis, such as
-  `package_integrity` or `source_freshness`.
+  `package_integrity`, `export_equivalence`, or `source_freshness`.
 - `workspaceOverlay.roots[]`: when the consumer root has `pnpm-workspace.yaml`,
   every package-local resolver root discovered from the workspace manifest. A
   root overlay pass is not enough; stale or missing package-local overlays fail

@@ -1879,6 +1879,11 @@ export const assertConsumerOverlayStatus = () => {
       `consumer status did not report verified package integrity: ${status.packageIntegrity.status}`,
     );
   }
+  if (status.exportEquivalence?.status !== "verified") {
+    fail(
+      `consumer status did not report verified export equivalence: ${status.exportEquivalence?.status}`,
+    );
+  }
   if (status.sourceFreshness.status !== "current_source") {
     fail(
       `consumer status did not report current source freshness: ${status.sourceFreshness.status}`,
@@ -1916,6 +1921,11 @@ export const assertConsumerOverlayStatus = () => {
   if (packagedStatus.packageIntegrity.status !== "verified") {
     fail(
       `packaged consumer status did not verify package integrity: ${packagedStatus.packageIntegrity.status}`,
+    );
+  }
+  if (packagedStatus.exportEquivalence?.status !== "verified") {
+    fail(
+      `packaged consumer status did not verify export equivalence: ${packagedStatus.exportEquivalence?.status}`,
     );
   }
   if (packagedStatus.sourceFreshness.status !== "not_checked") {
