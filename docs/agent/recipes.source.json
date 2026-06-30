@@ -103,6 +103,27 @@
         "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"
       ],
       "next": ["recipe.provider-material-binding", "recipe.full-small-agent-app"]
+    },
+    {
+      "id": "recipe.durable-external-effect",
+      "title": "Compose a durable external effect",
+      "intents": [
+        "Use the public external-effect runner without importing private runtime paths",
+        "Keep product receipt, witness, reconcile, and provider evidence semantics caller-owned"
+      ],
+      "tutorial": "docs/tutorials/durable-external-effect.md",
+      "noRouteReason": "composition recipe over existing public substrate; external-effect runner has no agent primitive route in this chain",
+      "primitives": [
+        "primitive.kernel.EffectClaim",
+        "primitive.kernel.BoundaryContract",
+        "primitive.runtime.Ledger"
+      ],
+      "commands": ["pnpm --filter @agent-os/runtime test"],
+      "evidence": [
+        "packages/runtime/test/external-effect-conformance.test.ts",
+        "packages/runtime/test/workspace-job-conformance.test.ts"
+      ],
+      "next": ["recipe.projection-reader", "recipe.tool-schema-authority"]
     }
   ]
 }

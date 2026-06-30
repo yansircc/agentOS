@@ -21,10 +21,11 @@ This is the generated owner compiler from natural-language intent to allowed sub
 
 ## Coverage
 
-| Recipe                                    | Status                                                                                                            |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `recipe.natural-language-workspace-agent` | `primitive.agent-authoring.linkWorkspaceStaticTarget`                                                             |
-| `recipe.hello-ledger-event`               | no route: tutorial-only ledger identity exercise; product workflows should route through a higher-level primitive |
-| `recipe.projection-reader`                | `primitive.runtime.defineProjection`                                                                              |
-| `recipe.streaming-chatbot`                | `primitive.ag-ui.projectLedgerSseToAgUiSse`                                                                       |
-| `recipe.tool-schema-authority`            | `primitive.kernel.defineProductTool`                                                                              |
+| Recipe                                    | Status                                                                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `recipe.natural-language-workspace-agent` | `primitive.agent-authoring.linkWorkspaceStaticTarget`                                                                          |
+| `recipe.hello-ledger-event`               | no route: tutorial-only ledger identity exercise; product workflows should route through a higher-level primitive              |
+| `recipe.projection-reader`                | `primitive.runtime.defineProjection`                                                                                           |
+| `recipe.streaming-chatbot`                | `primitive.ag-ui.projectLedgerSseToAgUiSse`                                                                                    |
+| `recipe.tool-schema-authority`            | `primitive.kernel.defineProductTool`                                                                                           |
+| `recipe.durable-external-effect`          | no route: composition recipe over existing public substrate; external-effect runner has no agent primitive route in this chain |

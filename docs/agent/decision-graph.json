@@ -497,6 +497,11 @@
       {
         "id": "recipe.tool-schema-authority",
         "routePrimitives": ["primitive.kernel.defineProductTool"]
+      },
+      {
+        "id": "recipe.durable-external-effect",
+        "routePrimitives": [],
+        "noRouteReason": "composition recipe over existing public substrate; external-effect runner has no agent primitive route in this chain"
       }
     ],
     "primitives": [

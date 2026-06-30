@@ -709,7 +709,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./telemetry-otlp:OtlpProjection`
 - `./telemetry-otlp:OtlpProjectionSpan`
 - `./telemetry-otlp:projectOtlpSpans`
+- `./testing:EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS`
 - `./testing:EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS`
+- `./testing:EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS`
 - `./testing:createInMemoryWorkspaceEnv`
 - `./testing:CreateInMemoryWorkspaceEnvOptions`
 - `./testing:ExternalEffectConformanceAdapter`
@@ -718,6 +720,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./testing:ExternalEffectConformanceReport`
 - `./testing:ExternalEffectConformanceScenario`
 - `./testing:ExternalEffectConformanceScenarioId`
+- `./testing:ExternalEffectConformanceScenarioOwnership`
 - `./testing:ExternalEffectConformanceScenarioReport`
 - `./testing:ExternalEffectConformanceScenarioResult`
 - `./testing:externalEffectConformance`

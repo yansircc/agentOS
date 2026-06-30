@@ -140,6 +140,7 @@ Start at [docs/start-here.md](docs/start-here.md). It is the generated route fro
 | Build a materialized projection reader                  | [docs/tutorials/projection-reader.md](docs/tutorials/projection-reader.md)                                     |
 | Stream an agent run                                     | [docs/tutorials/streaming-chatbot.md](docs/tutorials/streaming-chatbot.md)                                     |
 | Add a tool with schema, admission, and execution domain | [docs/tutorials/tool-schema-authority.md](docs/tutorials/tool-schema-authority.md)                             |
+| Compose a durable external effect                       | [docs/tutorials/durable-external-effect.md](docs/tutorials/durable-external-effect.md)                         |
 
 <!-- agent-docs-navigation:end -->
 

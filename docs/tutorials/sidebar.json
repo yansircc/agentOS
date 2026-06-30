@@ -55,6 +55,10 @@
     {
       "label": "A14 Tutorial IA / Consistency Reviewer",
       "slug": "tutorials/tutorial-ia-consistency-reviewer"
+    },
+    {
+      "label": "A15 Durable External Effect",
+      "slug": "tutorials/durable-external-effect"
     }
   ]
 }

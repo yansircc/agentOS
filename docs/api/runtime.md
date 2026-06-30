@@ -41,6 +41,18 @@ receipts, and external-system outcomes to each scenario's required observation
 keys. The helper validates the report shape; it does not define product facts or
 durable-operation vocabulary.
 
+The scenario set is partitioned by executable owner. Runner-owned join
+scenarios are limited to `request_before_effect`,
+`duplicate_attempt_reuses_existing`, `running_replay_uses_caller_request`, and
+`running_replay_does_not_duplicate_request`; tests may prove those solely by
+calling the existing runner surface with caller-supplied functions. Crash
+reconcile, witness/provider indeterminate handling, digest or contract mismatch,
+invalid projection rejection, error-channel preservation, R-channel
+non-leakage, and canonical-ref protection remain adapter-observed. The
+conformance report can require observations for those cases, but agentOS does
+not execute or define the caller's receipt, witness, provider, reconcile, or
+product-control-plane lifecycle.
+
 ## Public exports
 
 - `.:AcquireCtx`
@@ -746,7 +758,9 @@ durable-operation vocabulary.
 - `./telemetry-otlp:OtlpProjection`
 - `./telemetry-otlp:OtlpProjectionSpan`
 - `./telemetry-otlp:projectOtlpSpans`
+- `./testing:EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS`
 - `./testing:EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS`
+- `./testing:EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS`
 - `./testing:createInMemoryWorkspaceEnv`
 - `./testing:CreateInMemoryWorkspaceEnvOptions`
 - `./testing:ExternalEffectConformanceAdapter`
@@ -755,6 +769,7 @@ durable-operation vocabulary.
 - `./testing:ExternalEffectConformanceReport`
 - `./testing:ExternalEffectConformanceScenario`
 - `./testing:ExternalEffectConformanceScenarioId`
+- `./testing:ExternalEffectConformanceScenarioOwnership`
 - `./testing:ExternalEffectConformanceScenarioReport`
 - `./testing:ExternalEffectConformanceScenarioResult`
 - `./testing:externalEffectConformance`

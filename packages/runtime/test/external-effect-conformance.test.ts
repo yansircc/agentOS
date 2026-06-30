@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { defineExternalEffectAttempt } from "../src/external-effect";
+import { defineExternalEffectAttempt, runExternalEffectAttempt } from "../src/external-effect";
 import {
+  EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS,
   EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS,
+  EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS,
   externalEffectConformance,
   type ExternalEffectConformanceEvidence,
   type ExternalEffectConformanceAdapter,
@@ -74,6 +76,141 @@ describe("external-effect testing conformance", () => {
       expect(source).not.toContain(forbidden);
     }
   });
+
+  it("partitions conformance scenarios by executable owner", () => {
+    expect(EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS.map((scenario) => scenario.id)).toEqual([
+      "request_before_effect",
+      "duplicate_attempt_reuses_existing",
+      "running_replay_uses_caller_request",
+      "running_replay_does_not_duplicate_request",
+    ]);
+    expect(EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS.map((scenario) => scenario.id)).toEqual([
+      "crash_reconcile_from_projection",
+      "witness_missing_or_provider_unknown_indeterminate",
+      "digest_or_contract_mismatch_fails_closed",
+      "invalid_projection_fails_closed",
+      "error_channel_preserved",
+      "r_channel_non_leakage",
+      "provider_evidence_cannot_change_canonical_ref",
+    ]);
+
+    const partitionedIds = new Set([
+      ...EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS.map((scenario) => scenario.id),
+      ...EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS.map((scenario) => scenario.id),
+    ]);
+    expect(partitionedIds.size).toBe(EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS.length);
+    expect([...partitionedIds].sort()).toEqual(
+      EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS.map((scenario) => scenario.id).sort(),
+    );
+  });
+
+  it.effect("proves runner-owned join scenarios through the existing runner surface", () =>
+    Effect.gen(function* () {
+      const requestBeforeEffect: string[] = [];
+      const created = yield* runExternalEffectAttempt<
+        ExampleSpec,
+        ExampleEvent,
+        ExampleProjection,
+        ExampleRequest,
+        string,
+        never,
+        never
+      >({
+        spec: { value: "created" },
+        idempotencyKey: "key-created",
+        readEvents: () => Effect.succeed([]),
+        projectByIdempotencyKey: () => ({ status: "missing" }),
+        projectCurrent: () => ({ status: "done", value: "unexpected" }),
+        isRunningProjection: (current) => current.status === "running",
+        activeSpecFromRunningProjection: (spec) => spec,
+        requestStateFromRunningProjection: () => ({ requestId: "unexpected" }),
+        request: (spec) =>
+          Effect.sync(() => {
+            requestBeforeEffect.push("request");
+            return { requestId: spec.value };
+          }),
+        runRequested: ({ request }) =>
+          Effect.sync(() => {
+            requestBeforeEffect.push("effect");
+            return { status: "done", value: request.requestId } satisfies ExampleProjection;
+          }),
+      });
+
+      expect(created).toEqual({ status: "done", value: "created" });
+      expect(requestBeforeEffect).toEqual(["request", "effect"]);
+
+      const duplicateCalls: string[] = [];
+      const duplicate = yield* runExternalEffectAttempt<
+        ExampleSpec,
+        ExampleEvent,
+        ExampleProjection,
+        ExampleRequest,
+        string,
+        never,
+        never
+      >({
+        spec: { value: "duplicate" },
+        idempotencyKey: "key-duplicate",
+        readEvents: () =>
+          Effect.succeed([{ idempotencyKey: "key-duplicate", attemptKey: "attempt-1" }]),
+        projectByIdempotencyKey: () => ({ status: "found", attemptKey: "attempt-1" }),
+        projectCurrent: () => ({ status: "done", value: "existing" }),
+        isRunningProjection: (current) => current.status === "running",
+        activeSpecFromRunningProjection: (spec) => spec,
+        requestStateFromRunningProjection: () => ({ requestId: "unexpected" }),
+        request: () =>
+          Effect.sync(() => {
+            duplicateCalls.push("request");
+            return { requestId: "unexpected" };
+          }),
+        runRequested: () =>
+          Effect.sync(() => {
+            duplicateCalls.push("effect");
+            return { status: "done", value: "unexpected" } satisfies ExampleProjection;
+          }),
+      });
+
+      expect(duplicate).toEqual({ status: "done", value: "existing" });
+      expect(duplicateCalls).toEqual([]);
+
+      const runningReplayCalls: string[] = [];
+      const runningReplay = yield* runExternalEffectAttempt<
+        ExampleSpec,
+        ExampleEvent,
+        ExampleProjection,
+        ExampleRequest,
+        string,
+        never,
+        never
+      >({
+        spec: { value: "incoming" },
+        idempotencyKey: "key-running",
+        readEvents: () =>
+          Effect.succeed([{ idempotencyKey: "key-running", attemptKey: "attempt-2" }]),
+        projectByIdempotencyKey: () => ({ status: "found", attemptKey: "attempt-2" }),
+        projectCurrent: () => ({ status: "running", request: { requestId: "existing-request" } }),
+        isRunningProjection: (current) => current.status === "running",
+        activeSpecFromRunningProjection: () => ({ value: "active-from-projection" }),
+        requestStateFromRunningProjection: (projection) => {
+          if (projection.status !== "running") throw new Error("expected running projection");
+          return projection.request;
+        },
+        request: () =>
+          Effect.sync(() => {
+            runningReplayCalls.push("request");
+            return { requestId: "new-request" };
+          }),
+        runRequested: ({ activeSpec, request }) =>
+          Effect.sync(() => {
+            runningReplayCalls.push(`${activeSpec.value}:${request.requestId}`);
+            return { status: "done", value: request.requestId } satisfies ExampleProjection;
+          }),
+      });
+
+      expect(runningReplay).toEqual({ status: "done", value: "existing-request" });
+      expect(runningReplayCalls).toEqual(["active-from-projection:existing-request"]);
+    }),
+  );
 
   it.effect("defineExternalEffectAttempt fixes caller types without owning effect channels", () =>
     Effect.gen(function* () {

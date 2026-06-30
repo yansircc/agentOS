@@ -2,7 +2,7 @@
 
 ## Goal
 
-Review the tutorial ladder as one information architecture, not fourteen
+Review the tutorial ladder as one information architecture, not fifteen
 independent pages.
 
 ## What You Build
@@ -77,6 +77,7 @@ A11 ops
 A12 deploy
 A13 full app
 A14 review
+A15 external effect
 ```
 
 The sidebar must match the same order. If a future tutorial appears in

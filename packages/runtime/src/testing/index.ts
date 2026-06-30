@@ -316,59 +316,70 @@ export const createInMemoryWorkspaceEnv = (
 export const EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS = [
   {
     id: "request_before_effect",
+    ownership: "runner_join",
     requirement: "caller-owned request evidence is recorded before the provider effect runs",
     requiredObservations: ["request_recorded_before_effect"],
   },
   {
     id: "duplicate_attempt_reuses_existing",
+    ownership: "runner_join",
     requirement:
       "duplicate execution observes an existing attempt instead of duplicating the effect",
     requiredObservations: ["existing_attempt_observed", "effect_not_duplicated"],
   },
   {
     id: "running_replay_uses_caller_request",
+    ownership: "runner_join",
     requirement: "running replay reconstructs provider execution from caller-owned request state",
     requiredObservations: ["running_projection_observed", "caller_request_reused"],
   },
   {
     id: "running_replay_does_not_duplicate_request",
+    ownership: "runner_join",
     requirement: "running replay uses the existing request state without recording a new request",
     requiredObservations: ["running_projection_observed", "request_not_duplicated"],
   },
   {
     id: "crash_reconcile_from_projection",
+    ownership: "adapter_observed",
     requirement: "effect crash before terminal settlement can be reconciled from caller projection",
     requiredObservations: ["reconcile_from_projection"],
   },
   {
     id: "witness_missing_or_provider_unknown_indeterminate",
+    ownership: "adapter_observed",
     requirement:
       "missing witness or unknown provider state maps to caller-owned indeterminate flow",
     requiredObservations: ["indeterminate_when_witness_or_external_state_unknown"],
   },
   {
     id: "digest_or_contract_mismatch_fails_closed",
+    ownership: "adapter_observed",
     requirement: "digest or contract mismatch fails closed through caller validation",
     requiredObservations: ["contract_mismatch_failed_closed"],
   },
   {
     id: "invalid_projection_fails_closed",
+    ownership: "adapter_observed",
     requirement: "invalid caller projection is rejected instead of being treated as terminal",
     requiredObservations: ["invalid_projection_rejected"],
   },
   {
     id: "error_channel_preserved",
+    ownership: "adapter_observed",
     requirement: "caller-owned error channel remains distinguishable from terminal projection data",
     requiredObservations: ["error_channel_preserved"],
   },
   {
     id: "r_channel_non_leakage",
+    ownership: "adapter_observed",
     requirement:
       "Effect environment requirements remain outside scenario evidence and failure payloads",
     requiredObservations: ["environment_channel_not_reported_as_domain_failure"],
   },
   {
     id: "provider_evidence_cannot_change_canonical_ref",
+    ownership: "adapter_observed",
     requirement:
       "provider evidence cannot rewrite caller-owned canonical operation or product refs",
     requiredObservations: ["external_evidence_did_not_change_canonical_ref"],
@@ -379,6 +390,39 @@ export type ExternalEffectConformanceScenario =
   (typeof EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS)[number];
 
 export type ExternalEffectConformanceScenarioId = ExternalEffectConformanceScenario["id"];
+
+export type ExternalEffectConformanceScenarioOwnership =
+  ExternalEffectConformanceScenario["ownership"];
+
+const externalEffectScenariosByOwnership = (
+  ownership: ExternalEffectConformanceScenarioOwnership,
+): ReadonlyArray<ExternalEffectConformanceScenario> =>
+  EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS.filter((scenario) => scenario.ownership === ownership);
+
+/**
+ * Conformance scenarios whose executable proof is owned by the public runner
+ * join algebra itself.
+ *
+ * These scenarios may be checked by calling `runExternalEffectAttempt` with
+ * caller-supplied functions. They must not grow claim, ledger, receipt,
+ * witness, provider, or reconcile vocabulary.
+ *
+ * @public
+ */
+export const EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS =
+  externalEffectScenariosByOwnership("runner_join");
+
+/**
+ * Conformance scenarios that remain adapter-observed.
+ *
+ * The caller maps its product events, receipts, witnesses, provider state, and
+ * reconcile semantics to these observation keys. The testing package folds the
+ * report; it does not execute or define those lifecycles.
+ *
+ * @public
+ */
+export const EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS =
+  externalEffectScenariosByOwnership("adapter_observed");
 
 /**
  * Structured issue produced by an external-effect conformance adapter.
