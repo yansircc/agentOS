@@ -494,7 +494,11 @@ void test("agentos consumer install overlays discovered workspace package resolv
     writeFileSync(
       path.join(root, "package.json"),
       JSON.stringify(
-        { name: "agentos-consumer-workspace-install", private: true, packageManager: "pnpm@10.0.0" },
+        {
+          name: "agentos-consumer-workspace-install",
+          private: true,
+          packageManager: "pnpm@10.0.0",
+        },
         null,
         2,
       ),
@@ -548,9 +552,7 @@ void test("agentos consumer install overlays discovered workspace package resolv
       ],
     );
     assert.equal(
-      existsSync(
-        path.join(root, "apps", "product-loop", "node_modules", ".agentos-local.json"),
-      ),
+      existsSync(path.join(root, "apps", "product-loop", "node_modules", ".agentos-local.json")),
       true,
     );
     assert.equal(

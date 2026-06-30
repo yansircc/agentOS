@@ -116,9 +116,9 @@ describe("external-effect testing conformance", () => {
       expect(report.scenarios.map((entry) => entry.scenario.id)).toEqual(
         EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS.map((scenario) => scenario.id),
       );
-      expect(report.scenarios.every((entry) => entry.scenario.requiredObservations.length > 0)).toBe(
-        true,
-      );
+      expect(
+        report.scenarios.every((entry) => entry.scenario.requiredObservations.length > 0),
+      ).toBe(true);
       expect(report.scenarios.every((entry) => entry.issues.length === 0)).toBe(true);
     }),
   );

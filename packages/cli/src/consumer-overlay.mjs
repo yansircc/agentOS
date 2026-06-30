@@ -161,11 +161,9 @@ const consumerWorkspaceLayout = (consumerRoot) => {
 };
 
 const consumerWorkspaceManifestFiles = (layout) =>
-  [
-    ...new Set(
-      layout.roots.flatMap((root) => consumerManifestFiles(root.consumerRoot)),
-    ),
-  ].sort((left, right) => left.localeCompare(right));
+  [...new Set(layout.roots.flatMap((root) => consumerManifestFiles(root.consumerRoot)))].sort(
+    (left, right) => left.localeCompare(right),
+  );
 
 export const snapshotFiles = (files) =>
   new Map(files.map((file) => [file, fs.existsSync(file) ? fs.readFileSync(file) : undefined]));
@@ -557,9 +555,7 @@ const compareSourcePackedExports = (source, packed) => {
   }
   return {
     status:
-      subpaths.missing.length === 0 &&
-      subpaths.extra.length === 0 &&
-      targetKindDrift.length === 0
+      subpaths.missing.length === 0 && subpaths.extra.length === 0 && targetKindDrift.length === 0
         ? "pass"
         : "fail",
     subpaths,
@@ -580,9 +576,7 @@ const compareEquivalentExports = (left, right) => {
   }
   return {
     status:
-      subpaths.missing.length === 0 &&
-      subpaths.extra.length === 0 &&
-      targetKindDrift.length === 0
+      subpaths.missing.length === 0 && subpaths.extra.length === 0 && targetKindDrift.length === 0
         ? "pass"
         : "fail",
     subpaths,
