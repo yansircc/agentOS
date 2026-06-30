@@ -43,6 +43,27 @@ const forbiddenCloudflareLifecycleTargetFragments = [
   /workspace-job-profile/,
 ];
 
+const staticRelativeImportSpecifiers = (source) =>
+  [...source.matchAll(/^\s*import\s+(?:[^'"]+\s+from\s+)?["'](\.[^"']+)["'];?/gmu)].map(
+    (match) => match[1],
+  );
+
+const staticRelativeImportClosure = (entry) => {
+  const visited = new Set();
+  const visit = (file) => {
+    if (visited.has(file)) return;
+    visited.add(file);
+    const source = readFileSync(file, "utf8");
+    for (const specifier of staticRelativeImportSpecifiers(source)) {
+      visit(path.resolve(path.dirname(file), specifier));
+    }
+  };
+  visit(entry);
+  return [...visited].sort();
+};
+
+const repoRelative = (file) => path.relative(repoRoot, file).split(path.sep).join("/");
+
 const assertNoCloudflareLifecycleTargetWiring = (target) => {
   for (const fragment of forbiddenCloudflareLifecycleTargetFragments) {
     assert.doesNotMatch(target, fragment);
@@ -288,6 +309,30 @@ void test("agentos --version derives from the release source fact", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), rootPackage.agentOsRelease.version);
+});
+
+void test("agentos non-check startup import graph excludes repo-check modules and typescript", () => {
+  const closure = staticRelativeImportClosure(cli);
+  const forbiddenStartupModules = closure
+    .map(repoRelative)
+    .filter(
+      (file) =>
+        file.startsWith("packages/cli/src/check/") ||
+        file.startsWith("packages/cli/src/generate/") ||
+        file === "packages/cli/src/runner.mjs",
+    );
+  assert.deepEqual(forbiddenStartupModules, []);
+
+  const typescriptImporters = closure
+    .filter((file) => /\bfrom\s+["']typescript["']/.test(readFileSync(file, "utf8")))
+    .map(repoRelative);
+  assert.deepEqual(typescriptImporters, []);
+});
+
+void test("agentos consumer help is a successful lightweight startup path", async () => {
+  const result = await runCli(["consumer", "--help"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /agentos consumer status/);
 });
 
 void test("agentos consumer status and check share one overlay gate projection", async () => {

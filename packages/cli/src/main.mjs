@@ -12,19 +12,6 @@ import {
   restoreConsumer,
 } from "./consumer-overlay.mjs";
 import { releaseStatus } from "./release-status.mjs";
-import {
-  algorithmicCheckerAcceptsArgs,
-  hasAlgorithmicChecker,
-  runAlgorithmicChecker,
-} from "./check/algorithmic-checks.mjs";
-import {
-  deriveAffectedGates,
-  printAffectedGates,
-  runAffectedGates,
-} from "./check/gate-selector.mjs";
-import { runDefaultGate } from "./check/default-gate.mjs";
-import { runEffectScanGate } from "./check/effect-scan-gate.mjs";
-import { listGuards, runGroup, runGuard } from "./runner.mjs";
 
 const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -110,6 +97,9 @@ const expectNoExtraArgs = (args, command) => {
   }
 };
 
+const isHelpCommand = (command) =>
+  command === undefined || command === "--help" || command === "-h";
+
 const runBuildRunner = async (command, args) => {
   const runner = fileURLToPath(new URL("./build/build-cli.ts", import.meta.url));
   const bundled = await bundleModuleForNode(runner, {
@@ -154,6 +144,21 @@ const runEval = async (args) => runBuildRunner("eval", args);
 
 const runPreflight = async (args) => runBuildRunner("preflight", args);
 
+const loadRunner = () => import("./runner.mjs");
+
+const runCheckGroup = async (group) => {
+  const { runGroup } = await loadRunner();
+  await runGroup(group);
+};
+
+const loadAlgorithmicChecks = () => import("./check/algorithmic-checks.mjs");
+
+const loadGateSelector = () => import("./check/gate-selector.mjs");
+
+const loadDefaultGate = () => import("./check/default-gate.mjs");
+
+const loadEffectScanGate = () => import("./check/effect-scan-gate.mjs");
+
 const sourceConsumerProducer = () => {
   const modulePath = path.join(repoRootFromMain(), "tooling/distribution/pack-check.mjs");
   const supportPath = path.join(repoRootFromMain(), "tooling/distribution/support.mjs");
@@ -174,6 +179,10 @@ const sourceConsumerProducer = () => {
 
 const runConsumer = async (args) => {
   const [command, ...rest] = args;
+  if (isHelpCommand(command)) {
+    printHelp();
+    return;
+  }
   const commandArgs = rest[0] === "--" ? rest.slice(1) : rest;
   const sourceContext = sourceConsumerProducer() ?? {};
   const context = { packageRoot: packageRootFromMain(), ...sourceContext };
@@ -197,6 +206,10 @@ const runConsumer = async (args) => {
 
 const runRelease = async (args) => {
   const [command, ...rest] = args;
+  if (isHelpCommand(command)) {
+    printHelp();
+    return;
+  }
   const commandArgs = rest[0] === "--" ? rest.slice(1) : rest;
   const sourceContext = sourceConsumerProducer() ?? {};
   const context = { packageRoot: packageRootFromMain(), ...sourceContext };
@@ -211,18 +224,25 @@ const runRelease = async (args) => {
 
 const runCheck = async (args) => {
   const [command, ...rest] = args;
+  if (isHelpCommand(command)) {
+    printHelp();
+    return;
+  }
   switch (command) {
     case "all":
       expectNoExtraArgs(rest, "agentos check all");
-      await runGroup("all");
+      await runCheckGroup("all");
       return;
     case "default":
       expectNoExtraArgs(rest, "agentos check default");
-      await runDefaultGate();
+      {
+        const { runDefaultGate } = await loadDefaultGate();
+        await runDefaultGate();
+      }
       return;
     case "structural":
       expectNoExtraArgs(rest, "agentos check structural");
-      await runGroup("all");
+      await runCheckGroup("all");
       return;
     case "affected": {
       let base;
@@ -249,6 +269,8 @@ const runCheck = async (args) => {
           throw new Error(`agentos check affected: unexpected argument ${arg}`);
         }
       }
+      const { deriveAffectedGates, printAffectedGates, runAffectedGates } =
+        await loadGateSelector();
       const result = deriveAffectedGates({ base, head });
       printAffectedGates(result, { json });
       if (run) runAffectedGates(result);
@@ -256,45 +278,56 @@ const runCheck = async (args) => {
     }
     case "docs":
       expectNoExtraArgs(rest, "agentos check docs");
-      await runGroup("check-docs");
+      await runCheckGroup("check-docs");
       return;
     case "effect-scan":
-      runEffectScanGate(rest, { defaultRepoRoot: repoRootFromMain() });
+      {
+        const { runEffectScanGate } = await loadEffectScanGate();
+        runEffectScanGate(rest, { defaultRepoRoot: repoRootFromMain() });
+      }
       return;
     case "effect-manifests":
       expectNoExtraArgs(rest, "agentos check effect-manifests");
-      await runGroup("check-effect-manifests");
+      await runCheckGroup("check-effect-manifests");
       return;
     case "release":
       expectNoExtraArgs(rest, "agentos check release");
-      await runGroup("release");
+      await runCheckGroup("release");
       return;
     case "site":
       expectNoExtraArgs(rest, "agentos check site");
-      await runGroup("check-site");
+      await runCheckGroup("check-site");
       return;
     case "guard-coverage":
       expectNoExtraArgs(rest, "agentos check guard-coverage");
-      await runGroup("guard-coverage");
+      await runCheckGroup("guard-coverage");
       return;
     case "guard": {
       const [ruleId, ...extra] = rest;
       if (ruleId === undefined) throw new Error("agentos check guard: missing <rule-id>");
       expectNoExtraArgs(extra, "agentos check guard");
+      const { runGuard } = await loadRunner();
       await runGuard(ruleId);
       return;
     }
     case "guards":
       expectNoExtraArgs(rest, "agentos check guards");
-      for (const id of listGuards()) console.log(id);
+      {
+        const { listGuards } = await loadRunner();
+        for (const id of listGuards()) console.log(id);
+      }
       return;
     default:
-      if (command !== undefined && hasAlgorithmicChecker(command)) {
-        if (!algorithmicCheckerAcceptsArgs(command)) {
-          expectNoExtraArgs(rest, `agentos check ${command}`);
+      {
+        const { algorithmicCheckerAcceptsArgs, hasAlgorithmicChecker, runAlgorithmicChecker } =
+          await loadAlgorithmicChecks();
+        if (command !== undefined && hasAlgorithmicChecker(command)) {
+          if (!algorithmicCheckerAcceptsArgs(command)) {
+            expectNoExtraArgs(rest, `agentos check ${command}`);
+          }
+          await runAlgorithmicChecker(command, rest);
+          return;
         }
-        await runAlgorithmicChecker(command, rest);
-        return;
       }
       throw new Error(
         "agentos check: choose one of all, default, structural, affected, docs, effect-scan, effect-manifests, release, site, guard-coverage, guard, guards, or an algorithmic checker id",
@@ -304,22 +337,26 @@ const runCheck = async (args) => {
 
 const runGenerate = async (args) => {
   const [command, ...rest] = args;
+  if (isHelpCommand(command)) {
+    printHelp();
+    return;
+  }
   switch (command) {
     case "docs":
       expectNoExtraArgs(rest, "agentos generate docs");
-      await runGroup("generate-docs");
+      await runCheckGroup("generate-docs");
       return;
     case "effect-manifests":
       expectNoExtraArgs(rest, "agentos generate effect-manifests");
-      await runGroup("generate-effect-manifests");
+      await runCheckGroup("generate-effect-manifests");
       return;
     case "site":
       if (rest[0] === "--watch") {
         expectNoExtraArgs(rest.slice(1), "agentos generate site --watch");
-        await runGroup("generate-site-watch");
+        await runCheckGroup("generate-site-watch");
       } else {
         expectNoExtraArgs(rest, "agentos generate site");
-        await runGroup("generate-site");
+        await runCheckGroup("generate-site");
       }
       return;
     default:
