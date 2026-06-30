@@ -113,23 +113,23 @@ through the ledger boundary.
    ```ts
    import { BoundaryEvents, Ledger, WitnessPort } from "@yansirplus/runtime";
 
-   const boundaryEvents = yield* BoundaryEvents;
-   const ledger = yield* Ledger;
+   const boundaryEvents = yield * BoundaryEvents;
+   const ledger = yield * Ledger;
 
-   const committed = yield* boundaryEvents.commit(
-     productCarrier.boundaryContract,
-     productCarrier.events.completed,
-     {
+   const committed =
+     yield *
+     boundaryEvents.commit(productCarrier.boundaryContract, productCarrier.events.completed, {
        productRef: intent.productRef,
        receiptRef: projection.receiptRef,
        claim: completedClaim,
-     },
-   );
+     });
 
-   const events = yield* ledger.events({
-     scopeRef: committed.scopeRef,
-     effectAuthorityRef: committed.effectAuthorityRef,
-   });
+   const events =
+     yield *
+     ledger.events({
+       scopeRef: committed.scopeRef,
+       effectAuthorityRef: committed.effectAuthorityRef,
+     });
    ```
 
    `BoundaryEvents` checks the carrier contract before appending the fact.
@@ -146,9 +146,7 @@ through the ledger boundary.
      externalEffectConformance,
    } from "@yansirplus/runtime/testing";
 
-   const report = await Effect.runPromise(
-     externalEffectConformance(productExternalEffectAdapter),
-   );
+   const report = await Effect.runPromise(externalEffectConformance(productExternalEffectAdapter));
    ```
 
    The four runner-join scenarios are executable checks over the existing runner
