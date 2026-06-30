@@ -32,6 +32,13 @@ export interface RunExternalEffectAttemptSpec<Spec, Event, Projection, Request, 
   ) => Effect.Effect<Projection, E, R>;
 }
 
+export type DefinedExternalEffectAttempt<Spec, Event, Projection, Request, AttemptKey> = <
+  E = never,
+  R = never,
+>(
+  runner: RunExternalEffectAttemptSpec<Spec, Event, Projection, Request, AttemptKey, E, R>,
+) => Effect.Effect<Projection, E, R>;
+
 /**
  * Reusable idempotent external-effect attempt runner.
  *
@@ -59,3 +66,22 @@ export const runExternalEffectAttempt = <Spec, Event, Projection, Request, Attem
     const request = yield* runner.request(runner.spec);
     return yield* runner.runRequested({ activeSpec: runner.spec, request });
   });
+
+/**
+ * Defines a typed external-effect attempt runner for one caller-owned algebra.
+ *
+ * This is only a TypeScript ergonomics helper. It fixes the caller's `Spec`,
+ * `Event`, `Projection`, `Request`, and `AttemptKey` types once, then delegates
+ * to `runExternalEffectAttempt` so the `E` and `R` channels still come from the
+ * supplied effects.
+ */
+export const defineExternalEffectAttempt =
+  <Spec, Event, Projection, Request, AttemptKey = string>(): DefinedExternalEffectAttempt<
+    Spec,
+    Event,
+    Projection,
+    Request,
+    AttemptKey
+  > =>
+  (runner) =>
+    runExternalEffectAttempt(runner);

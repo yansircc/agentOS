@@ -125,8 +125,8 @@
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "29bf0929fad02f26a4a03a3d95d8ecae6d9e1bd393b69312d4a150c12212ba64",
-      "byteSize": 30608
+      "sha256": "e24656ecdd2ae5b99a36cbeb85cd5e65e84ee0880ede55a46afa3311ec7b30bd",
+      "byteSize": 31356
     },
     {
       "path": "docs/runtime-packages.md",
@@ -197,8 +197,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "90cdab9ff915e911fbc0997970c5b560f92989546e0cc3925170cbd6770f7ad3",
-      "byteSize": 30610
+      "sha256": "447552c27308476057d2a609bbaf5592e9b64558e795a0ff63e69c14a818b033",
+      "byteSize": 31358
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",

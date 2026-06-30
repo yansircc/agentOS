@@ -30,10 +30,21 @@ idempotent external-effect attempt. It owns only the orchestration join between
 "no existing attempt" and "found existing attempt" over caller-owned `Event`,
 `Request`, `Projection`, and `AttemptKey` types.
 
+`defineExternalEffectAttempt` is only a type-fixing helper over the same
+runner. It lets callers bind their `Spec`, `Event`, `Projection`, `Request`,
+and `AttemptKey` algebra once while leaving the Effect `E` and `R` channels to
+the supplied effects.
+
 It does not own claim envelopes, ledger event records, receipt envelopes,
 witness models, record stores, idempotency-key derivation, provider material, or
 product control-plane vocabulary. Concrete callers supply those facts through
 their own carrier/projection contracts.
+
+`./testing` exposes external-effect conformance as an adapter-driven report.
+Adapters must map their caller-owned events, requests, projections, witnesses,
+receipts, and external-system outcomes to each scenario's required observation
+keys. The helper validates the report shape; it does not define product facts or
+durable-operation vocabulary.
 
 ## Public exports
 
@@ -600,6 +611,8 @@ their own carrier/projection contracts.
 - `./channel:patch`
 - `./external-effect:ExternalEffectAttemptLookup`
 - `./external-effect:ExternalEffectRequestedState`
+- `./external-effect:DefinedExternalEffectAttempt`
+- `./external-effect:defineExternalEffectAttempt`
 - `./external-effect:RunExternalEffectAttemptSpec`
 - `./external-effect:runExternalEffectAttempt`
 - `./schedule:CronMinuteExpression`
@@ -742,6 +755,7 @@ their own carrier/projection contracts.
 - `./testing:createInMemoryWorkspaceEnv`
 - `./testing:CreateInMemoryWorkspaceEnvOptions`
 - `./testing:ExternalEffectConformanceAdapter`
+- `./testing:ExternalEffectConformanceEvidence`
 - `./testing:ExternalEffectConformanceIssue`
 - `./testing:ExternalEffectConformanceReport`
 - `./testing:ExternalEffectConformanceScenario`

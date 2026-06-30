@@ -132,10 +132,17 @@ The JSON projection has separate fields for:
 - `truthMode`: package-manager release truth, current install-manifest overlay,
   or legacy overlay marker.
 - `packageIntegrity`: installed package content and tarball digest verification.
+- `exportEquivalence`: source, packed tarball, and installed package
+  `package.json#exports` comparison. It fails on missing or extra subpaths and
+  target-kind drift without creating a second export source of truth.
 - `sourceFreshness`: whether the local overlay was produced by the current
   source checkout.
 - `gate.hardFailures[].dimension`: the failing axis, such as
-  `package_integrity` or `source_freshness`.
+  `package_integrity`, `export_equivalence`, or `source_freshness`.
+- `workspaceOverlay.roots[]`: when the consumer root has `pnpm-workspace.yaml`,
+  every package-local resolver root discovered from the workspace manifest. A
+  root overlay pass is not enough; stale or missing package-local overlays fail
+  `consumer check` with `dimension: "workspace_resolver"`.
 
 Do not treat `sourceFreshness.status: "stale_source"` or
 `"dirty_state_changed"` as package corruption. It means the local overlay was
@@ -146,7 +153,10 @@ should return to npm/lockfile truth.
 If `node_modules` is missing, `install:consumer` runs the consumer package
 manager install in frozen/non-interactive mode before overlaying packages.
 For pnpm consumers this sets `CI=true` and uses `pnpm install --frozen-lockfile`.
-Pass `--no-install` to fail closed instead. Restore with:
+If the consumer root is a pnpm workspace, the install overlays the workspace
+root and each discovered package root so package-local resolution sees the same
+current package surface. Pass `--no-install` to fail closed instead. Restore
+with:
 
 ```sh
 pnpm run restore:consumer /path/to/consumer

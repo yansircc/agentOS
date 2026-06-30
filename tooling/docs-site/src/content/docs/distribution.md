@@ -96,6 +96,13 @@ consumer `package.json` or lockfile. If `node_modules` is missing, the command
 runs the consumer package manager install in frozen/non-interactive mode before
 applying the overlay; pass `--no-install` to fail closed instead.
 
+When the consumer path has a `pnpm-workspace.yaml`, the workspace manifest is
+the workspace-layout source of truth. `agentos consumer install` discovers the
+workspace package roots from that manifest and overlays every discovered
+package-local resolver root as well as the workspace root. `consumer status` and
+`consumer check` report `workspaceOverlay.roots[]`; a passing root marker does
+not hide a stale or missing package-local marker under a workspace package.
+
 Read the current consumer state with:
 
 ```sh
@@ -116,6 +123,9 @@ agentos consumer check /path/to/consumer --json
 `agentos consumer status` and `agentos consumer check` read the same marker
 projection. `status` is observational and exits successfully when the projection
 can be built; `check` exits nonzero when the projection contains hard failures.
+For workspace consumers, a package-local resolver failure is a hard
+`workspace_resolver` failure even if the workspace root overlay itself is
+current.
 
 Use `agentos release status` when the question is broader than one consumer
 overlay:
@@ -151,10 +161,20 @@ mismatch, a foreign repo, or a packaged CLI invocation where source identity is
 not available. A stale or dirty source checkout is a source-freshness failure,
 not evidence that the installed package tarballs are corrupted.
 
+`exportEquivalence` is the package surface projection. It compares only
+existing package manifests: source `package.json#exports` when a source checkout
+is available, packed tarball `package/package.json#exports`, and installed
+`node_modules/<package>/package.json#exports`. It reports missing or extra
+subpaths and target-kind drift, such as a packed package still pointing at
+`src/` or an installed package missing a subpath present in the packed tarball.
+It does not introduce a new export catalog or infer public API intent from the
+filesystem.
+
 Gate entries include a `dimension` such as `truth_mode`, `package_integrity`,
-`source_freshness`, `release_identity`, or `registry_observation`, so consumer
-automation can decide whether it is looking at a package problem, a source
-producer freshness problem, or an intentionally unchecked registry signal.
+`export_equivalence`, `source_freshness`, `release_identity`, or
+`registry_observation`, so consumer automation can decide whether it is looking
+at a package problem, a source producer freshness problem, an export surface
+drift, or an intentionally unchecked registry signal.
 Restore the consumer to registry truth with:
 
 ```sh

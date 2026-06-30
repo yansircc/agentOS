@@ -317,33 +317,61 @@ export const EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS = [
   {
     id: "request_before_effect",
     requirement: "caller-owned request evidence is recorded before the provider effect runs",
+    requiredObservations: ["request_recorded_before_effect"],
   },
   {
     id: "duplicate_attempt_reuses_existing",
     requirement:
       "duplicate execution observes an existing attempt instead of duplicating the effect",
+    requiredObservations: ["existing_attempt_observed", "effect_not_duplicated"],
   },
   {
     id: "running_replay_uses_caller_request",
     requirement: "running replay reconstructs provider execution from caller-owned request state",
+    requiredObservations: ["running_projection_observed", "caller_request_reused"],
+  },
+  {
+    id: "running_replay_does_not_duplicate_request",
+    requirement: "running replay uses the existing request state without recording a new request",
+    requiredObservations: ["running_projection_observed", "request_not_duplicated"],
   },
   {
     id: "crash_reconcile_from_projection",
     requirement: "effect crash before terminal settlement can be reconciled from caller projection",
+    requiredObservations: ["reconcile_from_projection"],
   },
   {
     id: "witness_missing_or_provider_unknown_indeterminate",
     requirement:
       "missing witness or unknown provider state maps to caller-owned indeterminate flow",
+    requiredObservations: ["indeterminate_when_witness_or_external_state_unknown"],
   },
   {
     id: "digest_or_contract_mismatch_fails_closed",
     requirement: "digest or contract mismatch fails closed through caller validation",
+    requiredObservations: ["contract_mismatch_failed_closed"],
+  },
+  {
+    id: "invalid_projection_fails_closed",
+    requirement: "invalid caller projection is rejected instead of being treated as terminal",
+    requiredObservations: ["invalid_projection_rejected"],
+  },
+  {
+    id: "error_channel_preserved",
+    requirement: "caller-owned error channel remains distinguishable from terminal projection data",
+    requiredObservations: ["error_channel_preserved"],
+  },
+  {
+    id: "r_channel_non_leakage",
+    requirement:
+      "Effect environment requirements remain outside scenario evidence and failure payloads",
+    requiredObservations: ["environment_channel_not_reported_as_domain_failure"],
   },
   {
     id: "provider_evidence_cannot_change_canonical_ref",
     requirement:
       "provider evidence cannot rewrite caller-owned canonical operation or product refs",
+    requiredObservations: ["external_evidence_did_not_change_canonical_ref"],
   },
 ] as const;
 
@@ -364,6 +392,20 @@ export interface ExternalEffectConformanceIssue {
 }
 
 /**
+ * Vocabulary-neutral evidence supplied by a caller-specific conformance adapter.
+ *
+ * Each scenario declares `requiredObservations`. The adapter maps its own event,
+ * request, projection, witness, receipt, and external-system vocabulary to these
+ * observation keys.
+ *
+ * @public
+ */
+export interface ExternalEffectConformanceEvidence {
+  readonly observations: Readonly<Record<string, boolean>>;
+  readonly detail?: unknown;
+}
+
+/**
  * Result for one external-effect conformance scenario.
  *
  * @public
@@ -373,14 +415,14 @@ export type ExternalEffectConformanceScenarioResult =
       readonly scenarioId: ExternalEffectConformanceScenarioId;
       readonly status: "passed";
       readonly summary?: string;
-      readonly evidence?: unknown;
+      readonly evidence: ExternalEffectConformanceEvidence;
     }
   | {
       readonly scenarioId: ExternalEffectConformanceScenarioId;
       readonly status: "failed";
       readonly summary?: string;
       readonly issues: ReadonlyArray<ExternalEffectConformanceIssue>;
-      readonly evidence?: unknown;
+      readonly evidence?: ExternalEffectConformanceEvidence;
     };
 
 /**
@@ -408,7 +450,7 @@ export interface ExternalEffectConformanceScenarioReport {
   readonly status: "passed" | "failed";
   readonly summary?: string;
   readonly issues: ReadonlyArray<ExternalEffectConformanceIssue>;
-  readonly evidence?: unknown;
+  readonly evidence?: ExternalEffectConformanceEvidence;
 }
 
 /**
@@ -461,6 +503,16 @@ const scenarioReport = (
       issues,
       ...(result.evidence === undefined ? {} : { evidence: result.evidence }),
     };
+  }
+  const missingObservations = scenario.requiredObservations.filter(
+    (observation) => result.evidence.observations[observation] !== true,
+  );
+  if (missingObservations.length > 0) {
+    return failedScenarioReport(scenario, result, {
+      code: "scenario_required_observation_missing",
+      message: `adapter passed ${scenario.id} without required observations`,
+      evidence: { missingObservations },
+    });
   }
   return {
     scenario,

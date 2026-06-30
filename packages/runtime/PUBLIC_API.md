@@ -569,6 +569,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./channel:patch`
 - `./external-effect:ExternalEffectAttemptLookup`
 - `./external-effect:ExternalEffectRequestedState`
+- `./external-effect:DefinedExternalEffectAttempt`
+- `./external-effect:defineExternalEffectAttempt`
 - `./external-effect:RunExternalEffectAttemptSpec`
 - `./external-effect:runExternalEffectAttempt`
 - `./schedule:CronMinuteExpression`
@@ -711,6 +713,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./testing:createInMemoryWorkspaceEnv`
 - `./testing:CreateInMemoryWorkspaceEnvOptions`
 - `./testing:ExternalEffectConformanceAdapter`
+- `./testing:ExternalEffectConformanceEvidence`
 - `./testing:ExternalEffectConformanceIssue`
 - `./testing:ExternalEffectConformanceReport`
 - `./testing:ExternalEffectConformanceScenario`
