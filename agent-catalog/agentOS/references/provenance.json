@@ -9,7 +9,7 @@
   "package": {
     "sourcePackage": "@agent-os/cli",
     "publicPackage": "@yansirplus/cli",
-    "version": "0.5.18",
+    "version": "0.5.19",
     "publicScope": "@yansirplus",
     "catalogRoot": "agent-catalog/agentOS"
   },
@@ -145,32 +145,32 @@
     },
     {
       "path": "package.json",
-      "sha256": "d86a1ed0fb88066d8327b7c326b80fdcb99c16fa63eb139d2eeb2d1e7a027253",
+      "sha256": "02940aa4cd34acac3b0b5bb1f39927754e94a23ce9b2a70a155004acb2e3afd4",
       "byteSize": 5045
     },
     {
       "path": "packages/cli/package.json",
-      "sha256": "3fa07c3f932eac0047fa550bbbc013a928cdb2db11e1c9d23cf5f4228d1f3f18",
+      "sha256": "1c2159ba24e9ef008bea31a4f6eed0b884f1b882479536ef4a0fcf8626696f57",
       "byteSize": 691
     },
     {
       "path": "packages/client/package.json",
-      "sha256": "a8329150270bbf1195e358a840f363c9b8f485a236f77a4b2516f0439bb113cf",
+      "sha256": "d408d2940177fd71f73c9041d87043c476544738df9a7945eb09f2c99995ebb9",
       "byteSize": 1246
     },
     {
       "path": "packages/core/package.json",
-      "sha256": "4bed19a3c87b2b5f1daeb0739a2ece0676c1411bcf4d61a86af59b55e549c3db",
+      "sha256": "d034f01df3a182485df8fc213441b0aaeaf3ab0cf2ea10fc2364f1ee8f11df42",
       "byteSize": 3570
     },
     {
       "path": "packages/evals/package.json",
-      "sha256": "d2c57c28ba456507d0b6ada8e3b1c856b33a52d7bdad369f63faf6bf86f0570f",
+      "sha256": "d1b6aed4f7db19c6052b9ec9358e720ced7b106ef4ad2bd6d7cc9d37b0ab161d",
       "byteSize": 532
     },
     {
       "path": "packages/runtime/package.json",
-      "sha256": "ca961c4a5e4a1cb5bbc3fa58f7a69fc68a75f8f46705c6ed8c304ca0eb93b5f5",
+      "sha256": "b1ab0889c3af19999d41f66da04e54f99c24e1b3c76f88845a6b80653e17eed3",
       "byteSize": 4008
     },
     {
@@ -182,12 +182,12 @@
   "outputFiles": [
     {
       "path": "agent-catalog/agentOS/SKILL.md",
-      "sha256": "e4f29c47a69e4e099fa3161ca30a2ee407af1d0b90dd06c67a01d1f71c492638",
+      "sha256": "a4acb0b6cdfbfa2accd1189d49f6993801dffd63be0972911b87218efee53999",
       "byteSize": 1048
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "e8719838cd913a31385704fe7ffac346d7598840348fdecf351b840d37e4898e",
+      "sha256": "da752eace7b9c924dfae92c3bb613caaf9dc2c6e367ddc444e892439d3ec8f0e",
       "byteSize": 14055
     },
     {
