@@ -26,7 +26,7 @@
     },
     "packages/cli": {
       "name": "@agent-os/cli",
-      "version": "0.5.21",
+      "version": "0.5.22",
       "bin": {
         "agentos": "./src/main.mjs",
       },
@@ -47,7 +47,7 @@
     },
     "packages/client": {
       "name": "@agent-os/client",
-      "version": "0.5.21",
+      "version": "0.5.22",
       "dependencies": {
         "@agent-os/core": "workspace:*",
       },
@@ -72,7 +72,7 @@
     },
     "packages/core": {
       "name": "@agent-os/core",
-      "version": "0.5.21",
+      "version": "0.5.22",
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/vitest": "catalog:",
@@ -89,7 +89,7 @@
     },
     "packages/evals": {
       "name": "@agent-os/evals",
-      "version": "0.5.21",
+      "version": "0.5.22",
       "devDependencies": {
         "@types/node": "catalog:",
         "typescript": "catalog:",
@@ -99,7 +99,7 @@
     },
     "packages/runtime": {
       "name": "@agent-os/runtime",
-      "version": "0.5.21",
+      "version": "0.5.22",
       "dependencies": {
         "@agent-os/core": "workspace:*",
         "effect": "catalog:",
