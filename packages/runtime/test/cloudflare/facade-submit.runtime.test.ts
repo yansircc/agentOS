@@ -170,6 +170,9 @@ describe("defineAgentDO facade submit", () => {
       expect.fail("expected interrupted result with input request");
     }
     const inputRequest = first.inputRequest;
+    const pendingSettlement = await runInDurableObject(stub, (instance) =>
+      instance.inspectInputRequest({ ref: inputRequest.ref }),
+    );
     const eventReader = stub as unknown as {
       readonly events: (
         identity: ReturnType<typeof testTruthIdentity>,
@@ -181,6 +184,11 @@ describe("defineAgentDO facade submit", () => {
     expect(toolAuthorityEvents.some((event) => event.kind === "decision_gate.requested")).toBe(
       false,
     );
+    expect(pendingSettlement).toMatchObject({
+      status: "pending",
+      ref: inputRequest.ref,
+      request: { kind: "approval" },
+    });
 
     const resumed = await runInDurableObject(stub, (instance) =>
       instance.resumeInputRequest({
@@ -193,9 +201,16 @@ describe("defineAgentDO facade submit", () => {
       }),
     );
 
+    const consumedSettlement = await runInDurableObject(stub, (instance) =>
+      instance.inspectInputRequest({ ref: inputRequest.ref }),
+    );
     const events = await eventReader.events(testTruthIdentity(scope));
 
     expect(resumed).toMatchObject({ ok: true, final: "facade done" });
+    expect(consumedSettlement).toMatchObject({
+      status: "consumed",
+      decisionRef: "decision/facade-resume",
+    });
     expect(events.map((event) => event.kind)).toEqual([
       "agent.run.started",
       "chat.ingested",

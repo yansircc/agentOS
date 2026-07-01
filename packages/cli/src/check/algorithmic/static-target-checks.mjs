@@ -150,6 +150,10 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
         method: "decideInputRequest",
         parser: "decideInputRequestFromUnknown",
       },
+      INSPECT_INPUT_REQUEST: {
+        method: "inspectInputRequest",
+        parser: "inspectInputRequestFromUnknown",
+      },
       CUSTOM: {
         method: "customCommand",
         parser: "customInputFromUnknown",
@@ -175,6 +179,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "SUBMIT",
       "RESUME_INPUT_REQUEST",
       "DECIDE_INPUT_REQUEST",
+      "INSPECT_INPUT_REQUEST",
       "CUSTOM",
     ];
     const workspaceOnlyGeneratedCommandKeys = ["READ_STATE", "READ_FILE", "RESET", "DESTROY"];

@@ -17,6 +17,7 @@ import {
   type InputRequestDescriptor,
   type InputRequestKind,
   type InputRequestRef,
+  type InputRequestSettlement,
   type RuntimeLedgerEventByKind,
   type SubmitResumeDecision,
 } from "@agent-os/core/runtime-protocol";
@@ -246,6 +247,69 @@ export const projectInputRequests = (
     refs.push(ref.ref);
   }
   return refs.sort((left, right) => left.interruptionEventId - right.interruptionEventId);
+};
+
+export const projectInputRequestSettlement = (
+  events: ReadonlyArray<LedgerEvent>,
+  ref: InputRequestRef,
+): InputRequestSettlement => {
+  const projection = projectInputRequest(events, ref);
+  switch (projection.status) {
+    case "missing_interruption":
+      return { status: "not_found", ref: projection.ref };
+    case "pending":
+      return {
+        status: "pending",
+        ref: projection.ref,
+        request: projection.request,
+      };
+    case "approved":
+      return {
+        status: "approved",
+        ref: projection.ref,
+        request: projection.request,
+        decisionRef: projection.decision.decisionRef,
+        decidedBy: projection.decision.decidedBy,
+        decidedAtEventId: projection.decisionEventId,
+      };
+    case "rejected":
+      return {
+        status: "rejected",
+        ref: projection.ref,
+        request: projection.request,
+        decisionRef: projection.decision.decisionRef,
+        decidedBy: projection.decision.decidedBy,
+        decidedAtEventId: projection.decisionEventId,
+        ...(projection.decision.reason === undefined ? {} : { reason: projection.decision.reason }),
+      };
+    case "cancelled":
+      return {
+        status: "cancelled",
+        ref: projection.ref,
+        request: projection.request,
+        closeRef: projection.cancelled.closeRef,
+        ...(projection.cancelled.reason === undefined
+          ? {}
+          : { reason: projection.cancelled.reason }),
+      };
+    case "expired":
+      return {
+        status: "expired",
+        ref: projection.ref,
+        request: projection.request,
+        closeRef: projection.expired.closeRef,
+        ...(projection.expired.reason === undefined ? {} : { reason: projection.expired.reason }),
+      };
+    case "consumed":
+      return {
+        status: "consumed",
+        ref: projection.ref,
+        request: projection.request,
+        decisionRef: projection.consumed.decisionRef,
+        consumedBy: projection.consumed.consumedBy,
+        consumedAtEventId: projection.consumedEventId,
+      };
+  }
 };
 
 export const submitResumeDecisionFromInputRequestProjection = (

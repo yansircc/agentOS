@@ -308,6 +308,7 @@ const cloudflareTargetFor = (target: AgentOsConfigTarget): AgentOsConfigCloudfla
 };
 
 const staticTargetModules = (scope: string) => ({
+  runtimeRoot: publicPackageSpecifier(scope, "runtime"),
   runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
   cloudflareDoRuntime: publicPackageSpecifier(scope, "runtime/cloudflare"),
   localRuntime: publicPackageSpecifier(scope, "runtime/local"),
@@ -1200,7 +1201,13 @@ const renderWorkspaceStaticTarget = (
     ),
     renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
     renderTypeImport(
-      ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
+      [
+        "AgentManifest",
+        "AgentSubmitBindings",
+        "InputRequestSettlement",
+        "SubmitResult",
+        "SubmitRunInput",
+      ],
       modules.runtimeProtocol,
     ),
     ...(hasDynamicCapability
@@ -1234,6 +1241,7 @@ const renderWorkspaceStaticTarget = (
         "WorkspaceAgentDecideInputRequestCommandInput",
         "WorkspaceAgentCustomCommandInput",
         "WorkspaceAgentFileEntry",
+        "WorkspaceAgentInspectInputRequestCommandInput",
         "WorkspaceAgentMutationCommandOutput",
         "WorkspaceAgentReadStateCommandInput",
         "WorkspaceAgentReadStateCommandOutput",
@@ -1541,6 +1549,12 @@ ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
     );
   }
 
+  inspectInputRequest(
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+  ): Promise<InputRequestSettlement> {
+    return this.inspectInputRequestScoped(input);
+  }
+
   customCommand(input: WorkspaceAgentCustomCommandInput): Promise<unknown> {
     return Effect.runPromise(
       unsafeRunToolByName(
@@ -1663,7 +1677,13 @@ const renderChatStaticTarget = (
     ),
     renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
     renderTypeImport(
-      ["AgentManifest", "AgentSubmitBindings", "SubmitResult", "SubmitRunInput"],
+      [
+        "AgentManifest",
+        "AgentSubmitBindings",
+        "InputRequestSettlement",
+        "SubmitResult",
+        "SubmitRunInput",
+      ],
       modules.runtimeProtocol,
     ),
     ...(hasDynamicCapability
@@ -1696,6 +1716,7 @@ const renderChatStaticTarget = (
       [
         "WorkspaceAgentCustomCommandInput",
         "WorkspaceAgentDecideInputRequestCommandInput",
+        "WorkspaceAgentInspectInputRequestCommandInput",
         "WorkspaceAgentResumeInputRequestCommandInput",
       ],
       modules.workspaceAgentHost,
@@ -1869,6 +1890,12 @@ ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
     );
   }
 
+  inspectInputRequest(
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+  ): Promise<InputRequestSettlement> {
+    return this.inspectInputRequestScoped(input);
+  }
+
   customCommand(input: WorkspaceAgentCustomCommandInput): Promise<unknown> {
     return Effect.runPromise(
       unsafeRunToolByName(
@@ -1935,6 +1962,7 @@ const renderLocalAgentApp = (
       : []),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
+    renderNamedImport(["projectInputRequestSettlement"], modules.runtimeRoot),
     renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
     ...(hasSchedules
       ? [renderNamedImport(["projectScheduleFireHistory"], modules.runtimeSchedule)]
@@ -1957,7 +1985,10 @@ const renderLocalAgentApp = (
       ],
       modules.runtimeRunProjector,
     ),
-    renderTypeImport(["AgentManifest", "SubmitResult", "SubmitRunInput"], modules.runtimeProtocol),
+    renderTypeImport(
+      ["AgentManifest", "InputRequestSettlement", "SubmitResult", "SubmitRunInput"],
+      modules.runtimeProtocol,
+    ),
     renderTypeImport(
       [
         "AgentSubmitBindings",
@@ -1996,7 +2027,10 @@ const renderLocalAgentApp = (
       ["CreateLocalAgentRuntimeOptions", "LocalAgentRuntime", "LocalAgentSubmitInput"],
       modules.localRuntime,
     ),
-    renderTypeImport(["WorkspaceAgentCustomCommandInput"], modules.workspaceAgentHost),
+    renderTypeImport(
+      ["WorkspaceAgentCustomCommandInput", "WorkspaceAgentInspectInputRequestCommandInput"],
+      modules.workspaceAgentHost,
+    ),
     renderNamedImport(
       [
         ...(hasSkills ? ["defineProductTool"] : []),
@@ -2124,6 +2158,9 @@ const generatedLocalSubmitInputFromRunInput = async (
 
 export interface LocalAgentAppRuntime extends LocalAgentRuntime {
   readonly inspectRun: (runId: number | string) => RunInspection;
+  readonly inspectInputRequest: (
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+  ) => InputRequestSettlement;
 }
 
 export interface LocalAgentApp {
@@ -2230,6 +2267,7 @@ export const createLocalAgentApp = async (
     ...lowered.runtime,
     inspectRun: (runId) =>
       projectRunInspection(lowered.runtime.events(), runId, lowered.runtime.diagnostics()),
+    inspectInputRequest: (input) => projectInputRequestSettlement(lowered.runtime.events(), input.ref),
   };
   ${
     hasChannels
@@ -2583,6 +2621,7 @@ ${renderTypeImport(
     "WorkspaceAgentDestroyCommandInput",
     "WorkspaceAgentCommandOutputByName",
     "WorkspaceAgentDecideInputRequestCommandInput",
+    "WorkspaceAgentInspectInputRequestCommandInput",
     "WorkspaceAgentReadFileCommandInput",
     "WorkspaceAgentResumeInputRequestCommandInput",
     "WorkspaceAgentReadStateCommandInput",
@@ -2621,6 +2660,9 @@ type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly decideInputRequest: (
     input: WorkspaceAgentDecideInputRequestCommandInput,
   ) => Promise<SubmitResult>;
+  readonly inspectInputRequest: (
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]>;
   readonly customCommand: (
     input: WorkspaceAgentCustomCommandInput,
   ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
@@ -2869,6 +2911,14 @@ const decideInputRequestFromUnknown = (
   return fail(400, "unsupported decideInputRequest decision");
 };
 
+const inspectInputRequestFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentInspectInputRequestCommandInput> => {
+  if (!isRecord(value)) return fail(400, "invalid inspectInputRequest command input");
+  if (!isInputRequestRef(value.ref)) return fail(400, "invalid inspectInputRequest ref");
+  return { ok: true, value: { ref: value.ref } };
+};
+
 const customInputFromUnknown = (
   value: unknown,
 ): GeneratedResult<WorkspaceAgentCustomCommandInput> => {
@@ -3042,6 +3092,12 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
       ? runtime.decideInputRequest(decideInput.value)
       : rejectFailure(decideInput);
   }
+  if (name === WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST) {
+    const inspectInput = inspectInputRequestFromUnknown(input);
+    return inspectInput.ok
+      ? runtime.inspectInputRequest(inspectInput.value)
+      : rejectFailure(inspectInput);
+  }
   if (name === WORKSPACE_AGENT_COMMAND.CUSTOM) {
     const customInput = customInputFromUnknown(input);
     return customInput.ok ? runtime.customCommand(customInput.value) : rejectFailure(customInput);
@@ -3104,6 +3160,7 @@ ${renderTypeImport(
     "WorkspaceAgentCommandOutputByName",
     "WorkspaceAgentCustomCommandInput",
     "WorkspaceAgentDecideInputRequestCommandInput",
+    "WorkspaceAgentInspectInputRequestCommandInput",
     "WorkspaceAgentResumeInputRequestCommandInput",
   ],
   modules.workspaceAgentHost,
@@ -3118,6 +3175,9 @@ type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly decideInputRequest: (
     input: WorkspaceAgentDecideInputRequestCommandInput,
   ) => Promise<SubmitResult>;
+  readonly inspectInputRequest: (
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]>;
   readonly customCommand: (
     input: WorkspaceAgentCustomCommandInput,
   ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
@@ -3282,6 +3342,14 @@ const decideInputRequestFromUnknown = (
   return fail(400, "unsupported decideInputRequest decision");
 };
 
+const inspectInputRequestFromUnknown = (
+  value: unknown,
+): GeneratedResult<WorkspaceAgentInspectInputRequestCommandInput> => {
+  if (!isRecord(value)) return fail(400, "invalid inspectInputRequest command input");
+  if (!isInputRequestRef(value.ref)) return fail(400, "invalid inspectInputRequest ref");
+  return { ok: true, value: { ref: value.ref } };
+};
+
 const customInputFromUnknown = (
   value: unknown,
 ): GeneratedResult<WorkspaceAgentCustomCommandInput> => {
@@ -3378,6 +3446,12 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
     return decideInput.ok
       ? runtime.decideInputRequest(decideInput.value)
       : rejectFailure(decideInput);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST) {
+    const inspectInput = inspectInputRequestFromUnknown(input);
+    return inspectInput.ok
+      ? runtime.inspectInputRequest(inspectInput.value)
+      : rejectFailure(inspectInput);
   }
   if (name === WORKSPACE_AGENT_COMMAND.CUSTOM) {
     const customInput = customInputFromUnknown(input);
@@ -3539,6 +3613,7 @@ ${renderTypeImport(
     "WorkspaceAgentCommandOutputByName",
     "WorkspaceAgentCustomCommandInput",
     "WorkspaceAgentDecideInputRequestCommandInput",
+    "WorkspaceAgentInspectInputRequestCommandInput",
     "WorkspaceAgentResumeInputRequestCommandInput",
   ],
   modules.workspaceAgentClient,
@@ -3564,6 +3639,12 @@ export interface GeneratedAgentClient {
   ): Promise<
     WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST]
   >;
+  inspectInputRequest(
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<
+    WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]
+  >;
   custom(
     input: WorkspaceAgentCustomCommandInput,
     options?: AgentClientCommandOptions,
@@ -3579,6 +3660,9 @@ export interface GeneratedAgentClient {
     },
     decideInputRequest(input, commandOptions) {
       return client.invoke(WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST, input, commandOptions);
+    },
+    inspectInputRequest(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST, input, commandOptions);
     },
     custom(input, commandOptions) {
       return client.invoke(WORKSPACE_AGENT_COMMAND.CUSTOM, input, commandOptions);

@@ -3,6 +3,7 @@ import type {
   AgentManifestProjection,
   InputRequestAnswer,
   InputRequestRef,
+  InputRequestSettlement,
   RecordedInputRequestRef,
   RuntimeLedgerEvent,
   SubmitResult,
@@ -32,6 +33,7 @@ export const WORKSPACE_AGENT_COMMAND = {
   SUBMIT: "submit",
   RESUME_INPUT_REQUEST: "resumeInputRequest",
   DECIDE_INPUT_REQUEST: "decideInputRequest",
+  INSPECT_INPUT_REQUEST: "inspectInputRequest",
   READ_STATE: "readState",
   READ_FILE: "readFile",
   RESET: "reset",
@@ -130,6 +132,10 @@ export interface WorkspaceAgentDecideInputRequestCommandInput {
   readonly decision: WorkspaceAgentInputRequestDecision;
 }
 
+export interface WorkspaceAgentInspectInputRequestCommandInput {
+  readonly ref: InputRequestRef;
+}
+
 export interface WorkspaceAgentReadStateCommandInput {
   readonly includeHidden?: boolean;
 }
@@ -170,6 +176,7 @@ export type WorkspaceAgentCommandInputByName = {
   readonly [WORKSPACE_AGENT_COMMAND.SUBMIT]: WorkspaceAgentSubmitCommandInput;
   readonly [WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST]: WorkspaceAgentResumeInputRequestCommandInput;
   readonly [WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST]: WorkspaceAgentDecideInputRequestCommandInput;
+  readonly [WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]: WorkspaceAgentInspectInputRequestCommandInput;
   readonly [WORKSPACE_AGENT_COMMAND.READ_STATE]: WorkspaceAgentReadStateCommandInput;
   readonly [WORKSPACE_AGENT_COMMAND.READ_FILE]: WorkspaceAgentReadFileCommandInput;
   readonly [WORKSPACE_AGENT_COMMAND.RESET]: WorkspaceAgentResetCommandInput;
@@ -181,6 +188,7 @@ export type WorkspaceAgentCommandOutputByName = {
   readonly [WORKSPACE_AGENT_COMMAND.SUBMIT]: SubmitResult;
   readonly [WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST]: SubmitResult;
   readonly [WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST]: SubmitResult;
+  readonly [WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]: InputRequestSettlement;
   readonly [WORKSPACE_AGENT_COMMAND.READ_STATE]: WorkspaceAgentReadStateCommandOutput;
   readonly [WORKSPACE_AGENT_COMMAND.READ_FILE]: WorkspaceAgentReadFileCommandOutput;
   readonly [WORKSPACE_AGENT_COMMAND.RESET]: WorkspaceAgentMutationCommandOutput;

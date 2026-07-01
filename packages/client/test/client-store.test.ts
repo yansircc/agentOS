@@ -26,6 +26,7 @@ import {
 import { ABORT } from "@agent-os/core/abort";
 import {
   createWorkspaceAgentClientBridge,
+  WORKSPACE_AGENT_COMMAND,
   WORKSPACE_AGENT_PRODUCT_COMMAND,
   type WorkspaceAgentProductProjectionTypes,
 } from "../src/workspace-agent";
@@ -385,6 +386,45 @@ describe("@agent-os/client", () => {
       {
         name: WORKSPACE_AGENT_PRODUCT_COMMAND.LIST_WORKFLOW_RUNS,
         input: { workflowId: "report" },
+      },
+    ]);
+  });
+
+  it("routes input-request settlement inspection through the runtime command surface", async () => {
+    const snapshot = createAgentClient({
+      initialEvents: [startedEvent(), interruptedEvent()],
+    }).getSnapshot();
+    const ref = snapshot.run.inputRequests[0]?.ref;
+    if (ref === undefined) expect.fail("expected pending input request ref");
+
+    const calls: Array<{ readonly name: string; readonly input: unknown }> = [];
+    const bridge = createWorkspaceAgentClientBridge({
+      rpcInvoker: async (name, input) => {
+        calls.push({ name, input });
+        return {
+          status: "pending",
+          ref,
+          request: {
+            ref,
+            kind: "approval",
+            subjectRef: "subject-1",
+            toolCallId: "tool-call-1",
+            toolName: "write_file",
+            resumeSchema: { type: "object" },
+          },
+        };
+      },
+    });
+
+    await expect(bridge.inspectInputRequest({ ref })).resolves.toMatchObject({
+      status: "pending",
+      ref,
+      request: { subjectRef: "subject-1" },
+    });
+    expect(calls).toEqual([
+      {
+        name: WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST,
+        input: { ref },
       },
     ]);
   });

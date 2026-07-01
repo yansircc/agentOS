@@ -18,6 +18,7 @@ export type {
   WorkspaceAgentFilesProjection,
   WorkspaceAgentFilesProjectionShape,
   WorkspaceAgentGeneratedMount,
+  WorkspaceAgentInspectInputRequestCommandInput,
   WorkspaceAgentMutationCommandOutput,
   WorkspaceAgentProjectionName,
   WorkspaceAgentProjectionRead,

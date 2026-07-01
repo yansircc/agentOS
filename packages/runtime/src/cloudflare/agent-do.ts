@@ -73,6 +73,7 @@ import type {
   AgentSubmitBindings,
   AttemptKey,
   CapabilityLease,
+  InputRequestSettlement,
   SubmitResult,
   SubmitRunInput,
   SubmitSpec,
@@ -139,6 +140,7 @@ import {
 import { isScopeRef, scopeRefKey } from "@agent-os/core/effect-claim";
 import type {
   WorkspaceAgentDecideInputRequestCommandInput,
+  WorkspaceAgentInspectInputRequestCommandInput,
   WorkspaceAgentResumeInputRequestCommandInput,
 } from "@agent-os/core/workspace-agent";
 import { projectAdmissionLease, projectQuotaState, projectResourceState } from "./projections";
@@ -177,7 +179,7 @@ import {
   decisionGateSettlementRef,
   projectDecisionGate,
 } from "../decision-gate";
-import { projectInputRequest } from "../input-request";
+import { projectInputRequest, projectInputRequestSettlement } from "../input-request";
 import {
   chatInputForResume,
   declaredToolIntents,
@@ -263,6 +265,9 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   readonly decideInputRequest: (
     spec: WorkspaceAgentDecideInputRequestCommandInput,
   ) => Promise<SubmitResult>;
+  readonly inspectInputRequest: (
+    spec: WorkspaceAgentInspectInputRequestCommandInput,
+  ) => Promise<InputRequestSettlement>;
   readonly runWorkspaceJob: (spec: AgentWorkspaceJobSpec) => Promise<WorkspaceJobProjection>;
 }
 
@@ -725,6 +730,32 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       );
     }
     return this.closeInputRequest(spec);
+  }
+
+  protected inspectInputRequestScoped(
+    spec: WorkspaceAgentInspectInputRequestCommandInput,
+  ): Promise<InputRequestSettlement> {
+    return this.scopedPromise((scope) => {
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
+      }
+      if (scopeRefKey(spec.ref.scopeRef) !== scopeRefKey(truthIdentity.scopeRef)) {
+        return Promise.reject(
+          new UnsupportedScopeRef({ scopeId: scopeRefKey(spec.ref.scopeRef), position: "source" }),
+        );
+      }
+      const runtimeIdentity = eventIdentity(truthIdentity, RUNTIME_FACT_OWNER);
+      return this.runScopedEffect(
+        scope,
+        Effect.gen(function* () {
+          const ledger = yield* Ledger;
+          const events = yield* ledger.events(runtimeIdentity);
+          return projectInputRequestSettlement(events, spec.ref);
+        }),
+        runtimeIdentity,
+      );
+    });
   }
 
   private closeInputRequest(
@@ -1451,6 +1482,12 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     decideInputRequest(spec: WorkspaceAgentDecideInputRequestCommandInput): Promise<SubmitResult> {
       return this.decideInputRequestWithBindings(spec, this._mount.driverConfig.bindings);
+    }
+
+    inspectInputRequest(
+      spec: WorkspaceAgentInspectInputRequestCommandInput,
+    ): Promise<InputRequestSettlement> {
+      return this.inspectInputRequestScoped(spec);
     }
 
     runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {

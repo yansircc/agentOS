@@ -48,6 +48,56 @@ export interface InputRequestDescriptor {
   readonly resumeSchema: unknown;
 }
 
+export type InputRequestSettlement =
+  | {
+      readonly status: "not_found";
+      readonly ref: InputRequestRef;
+    }
+  | {
+      readonly status: "pending";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+    }
+  | {
+      readonly status: "approved";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+      readonly decisionRef: string;
+      readonly decidedBy: string;
+      readonly decidedAtEventId: number;
+    }
+  | {
+      readonly status: "rejected";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+      readonly decisionRef: string;
+      readonly decidedBy: string;
+      readonly decidedAtEventId: number;
+      readonly reason?: string;
+    }
+  | {
+      readonly status: "cancelled";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+      readonly closeRef: string;
+      readonly reason?: string;
+    }
+  | {
+      readonly status: "expired";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+      readonly closeRef: string;
+      readonly reason?: string;
+    }
+  | {
+      readonly status: "consumed";
+      readonly ref: InputRequestRef;
+      readonly request: InputRequestDescriptor;
+      readonly decisionRef: string;
+      readonly consumedBy: string;
+      readonly consumedAtEventId: number;
+    };
+
 export type InputRequestRefFromInterruptionResult =
   | {
       readonly ok: true;

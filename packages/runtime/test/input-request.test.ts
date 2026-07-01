@@ -11,6 +11,7 @@ import {
 } from "@agent-os/core/runtime-protocol";
 import {
   projectInputRequest,
+  projectInputRequestSettlement,
   projectInputRequests,
   submitResumeDecisionFromInputRequestProjection,
 } from "../src/input-request";
@@ -183,6 +184,154 @@ describe("runtime InputRequest projection", () => {
         interruptionEventId: ref.interruptionEventId + 1,
         afterEventId: ref.afterEventId + 1,
       },
+    });
+  });
+
+  it("projects public settlement statuses from the canonical input-request projection", () => {
+    const pending = requestedEvents();
+    const ref = refFrom(pending);
+
+    expect(projectInputRequestSettlement(pending, ref)).toMatchObject({
+      status: "pending",
+      ref,
+      request: { kind: "approval", subjectRef: "tool:publish" },
+    });
+
+    const approved: ReadonlyArray<LedgerEvent> = [
+      ...pending,
+      {
+        id: 4,
+        ts: 40,
+        kind: DECISION_GATE_KIND.DECIDED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          decisionRef: "decision/ours",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      },
+    ];
+    expect(projectInputRequestSettlement(approved, ref)).toMatchObject({
+      status: "approved",
+      decisionRef: "decision/ours",
+      decidedBy: "operator/alice",
+      decidedAtEventId: 4,
+    });
+
+    const consumedByAnotherDecision: ReadonlyArray<LedgerEvent> = [
+      ...pending,
+      {
+        id: 4,
+        ts: 40,
+        kind: DECISION_GATE_KIND.DECIDED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          decisionRef: "decision/other",
+          decision: "approved",
+          decidedBy: "operator/bob",
+        },
+      },
+      {
+        id: 5,
+        ts: 50,
+        kind: DECISION_GATE_KIND.CONSUMED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          decisionRef: "decision/other",
+          consumedBy: "agent.run:1",
+          claim: settleDecisionGateConsumed(claim, {
+            gateRef: "decision_gate:publish",
+            eventId: 4,
+          }),
+        },
+      },
+    ];
+    expect(projectInputRequestSettlement(consumedByAnotherDecision, ref)).toMatchObject({
+      status: "consumed",
+      decisionRef: "decision/other",
+      consumedBy: "agent.run:1",
+      consumedAtEventId: 5,
+    });
+
+    const rejected: ReadonlyArray<LedgerEvent> = [
+      ...pending,
+      {
+        id: 4,
+        ts: 40,
+        kind: DECISION_GATE_KIND.DECIDED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          decisionRef: "decision/reject",
+          decision: "rejected",
+          decidedBy: "operator/bob",
+          reason: "not_allowed",
+          rejectionRef: {
+            rejectionId: "decision_gate:input-request-runtime-test",
+            rejectionKind: "policy_denied",
+            reason: "not_allowed",
+          },
+        },
+      },
+    ];
+    expect(projectInputRequestSettlement(rejected, ref)).toMatchObject({
+      status: "rejected",
+      decisionRef: "decision/reject",
+      decidedBy: "operator/bob",
+      reason: "not_allowed",
+    });
+
+    const cancelled: ReadonlyArray<LedgerEvent> = [
+      ...pending,
+      {
+        id: 4,
+        ts: 40,
+        kind: DECISION_GATE_KIND.CANCELLED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          closeRef: "cancel/1",
+          reason: "operator_cancelled",
+        },
+      },
+    ];
+    expect(projectInputRequestSettlement(cancelled, ref)).toMatchObject({
+      status: "cancelled",
+      closeRef: "cancel/1",
+      reason: "operator_cancelled",
+    });
+
+    const expired: ReadonlyArray<LedgerEvent> = [
+      ...pending,
+      {
+        id: 4,
+        ts: 40,
+        kind: DECISION_GATE_KIND.EXPIRED,
+        ...eventIdentity,
+        payload: {
+          gateRef: "decision_gate:publish",
+          closeRef: "expire/1",
+          reason: "deadline",
+        },
+      },
+    ];
+    expect(projectInputRequestSettlement(expired, ref)).toMatchObject({
+      status: "expired",
+      closeRef: "expire/1",
+      reason: "deadline",
+    });
+
+    const staleRef = {
+      ...ref,
+      interruptionEventId: ref.interruptionEventId + 1,
+      afterEventId: ref.afterEventId + 1,
+    };
+    expect(projectInputRequestSettlement(pending, staleRef)).toEqual({
+      status: "not_found",
+      ref: staleRef,
     });
   });
 

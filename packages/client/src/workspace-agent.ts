@@ -10,6 +10,7 @@ import {
   type WorkspaceAgentCustomCommandInput,
   type WorkspaceAgentDecideInputRequestCommandInput,
   type WorkspaceAgentDestroyCommandInput,
+  type WorkspaceAgentInspectInputRequestCommandInput,
   type WorkspaceAgentMutationCommandOutput,
   type WorkspaceAgentReadFileCommandInput,
   type WorkspaceAgentReadFileCommandOutput,
@@ -35,6 +36,7 @@ export type {
   WorkspaceAgentDecideInputRequestCommandInput,
   WorkspaceAgentDestroyCommandInput,
   WorkspaceAgentFileEntry,
+  WorkspaceAgentInspectInputRequestCommandInput,
   WorkspaceAgentMutationCommandOutput,
   WorkspaceAgentProjectionName,
   WorkspaceAgentReadFileCommandInput,
@@ -199,6 +201,12 @@ export interface WorkspaceAgentClientBridge<
   ): Promise<
     WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST]
   >;
+  inspectInputRequest(
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+    options?: AgentClientCommandOptions,
+  ): Promise<
+    WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]
+  >;
   readState(
     input?: WorkspaceAgentReadStateCommandInput,
     options?: AgentClientCommandOptions,
@@ -275,6 +283,9 @@ export const createWorkspaceAgentClientBridge = <
     },
     decideInputRequest(input, commandOptions) {
       return client.invoke(WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST, input, commandOptions);
+    },
+    inspectInputRequest(input, commandOptions) {
+      return client.invoke(WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST, input, commandOptions);
     },
     readState(input = {}, commandOptions) {
       return client.invoke(WORKSPACE_AGENT_COMMAND.READ_STATE, input, commandOptions);

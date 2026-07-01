@@ -23,7 +23,11 @@ import {
   type LlmMaterialEnvKind,
 } from "./agent-authoring/config";
 import { importBundledModule } from "../lib/ts-module-loader.mjs";
-import { WORKSPACE_AGENT_COMMAND } from "@agent-os/core/workspace-agent";
+import { isInputRequestRef } from "@agent-os/core/runtime-protocol";
+import {
+  WORKSPACE_AGENT_COMMAND,
+  type WorkspaceAgentInspectInputRequestCommandInput,
+} from "@agent-os/core/workspace-agent";
 import type { MaterialRef } from "@agent-os/core/material-ref";
 import {
   preflightOpenAiCompatibleProviderMaterial,
@@ -1176,6 +1180,9 @@ interface LocalAgentApp {
     readonly diagnostics: () => ReadonlyArray<unknown>;
     readonly inspect: () => unknown;
     readonly inspectRun?: (runId: number | string) => unknown;
+    readonly inspectInputRequest?: (
+      input: WorkspaceAgentInspectInputRequestCommandInput,
+    ) => unknown;
   };
   readonly sessions?: {
     readonly submitTurn: (input: unknown) => Promise<unknown>;
@@ -1382,6 +1389,16 @@ const invokeLocalAgentCommand = async (
       throw new HttpFailure(400, "invalid runtime run identity");
     }
     return app.runtime.inspectRun(rawRunId);
+  }
+  if (name === WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST) {
+    if (app.runtime.inspectInputRequest === undefined) {
+      throw new HttpFailure(501, "input request inspection is unavailable");
+    }
+    const record = commandInputRecord(input, "inspectInputRequest");
+    if (!isInputRequestRef(record.ref)) {
+      throw new HttpFailure(400, "invalid inspectInputRequest ref");
+    }
+    return app.runtime.inspectInputRequest({ ref: record.ref });
   }
   if (name === PRODUCT_COMMAND.SUBMIT_SESSION_TURN) {
     if (app.sessions === undefined) throw new HttpFailure(501, "sessions are unavailable");

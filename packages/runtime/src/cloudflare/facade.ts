@@ -1,11 +1,16 @@
 import type { ExtensionDeclaration } from "@agent-os/core/extensions";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/core/types";
 import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
-import { type AgentManifest, type SubmitResult } from "@agent-os/core/runtime-protocol";
+import {
+  type AgentManifest,
+  type InputRequestSettlement,
+  type SubmitResult,
+} from "@agent-os/core/runtime-protocol";
 import type { LlmTransport } from "@agent-os/core/llm-protocol";
 import type { RefResolverService } from "@agent-os/core/ref-resolver";
 import type {
   WorkspaceAgentDecideInputRequestCommandInput,
+  WorkspaceAgentInspectInputRequestCommandInput,
   WorkspaceAgentResumeInputRequestCommandInput,
 } from "@agent-os/core/workspace-agent";
 import type { Layer } from "effect";
@@ -65,6 +70,9 @@ export interface AgentFacadeRuntimeClientWithSubmit extends AgentFacadeRuntimeCl
   readonly decideInputRequest: (
     spec: WorkspaceAgentDecideInputRequestCommandInput,
   ) => Promise<SubmitResult>;
+  readonly inspectInputRequest: (
+    spec: WorkspaceAgentInspectInputRequestCommandInput,
+  ) => Promise<InputRequestSettlement>;
 }
 
 export type AgentDOClass<
@@ -247,6 +255,12 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
         spec: WorkspaceAgentDecideInputRequestCommandInput,
       ): Promise<SubmitResult> {
         return this.decideInputRequestWithBindings(spec, this._submitBindings);
+      }
+
+      inspectInputRequest(
+        spec: WorkspaceAgentInspectInputRequestCommandInput,
+      ): Promise<InputRequestSettlement> {
+        return this.inspectInputRequestScoped(spec);
       }
 
       runWorkspaceJob(spec: AgentWorkspaceJobSpec): Promise<WorkspaceJobProjection> {
