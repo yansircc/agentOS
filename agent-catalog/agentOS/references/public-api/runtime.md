@@ -723,6 +723,7 @@ product-control-plane lifecycle.
 - `./run-projector:projectAgentSession`
 - `./run-projector:projectAgentSessions`
 - `./run-projector:projectAgentSessionTurnLinks`
+- `./run-projector:projectInputRequestSettlement`
 - `./run-projector:projectRunsPage`
 - `./run-projector:projectRunInspection`
 - `./run-projector:projectRunStatus`

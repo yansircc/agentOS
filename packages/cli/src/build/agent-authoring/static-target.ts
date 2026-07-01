@@ -308,7 +308,6 @@ const cloudflareTargetFor = (target: AgentOsConfigTarget): AgentOsConfigCloudfla
 };
 
 const staticTargetModules = (scope: string) => ({
-  runtimeRoot: publicPackageSpecifier(scope, "runtime"),
   runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
   cloudflareDoRuntime: publicPackageSpecifier(scope, "runtime/cloudflare"),
   localRuntime: publicPackageSpecifier(scope, "runtime/local"),
@@ -1962,7 +1961,7 @@ const renderLocalAgentApp = (
       : []),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
-    renderNamedImport(["projectInputRequestSettlement"], modules.runtimeRoot),
+    renderNamedImport(["projectInputRequestSettlement"], modules.runtimeRunProjector),
     renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
     ...(hasSchedules
       ? [renderNamedImport(["projectScheduleFireHistory"], modules.runtimeSchedule)]

@@ -37,6 +37,7 @@ import {
   type SubmitResult,
 } from "@agent-os/core/runtime-protocol";
 import { RUNTIME_DIAGNOSTIC_EVENT_PREFIX } from "./runtime-diagnostic-carrier/definition";
+export { projectInputRequestSettlement } from "./input-request";
 
 export type { RunInspection, RunInspectionDiagnostic } from "@agent-os/core/types";
 
