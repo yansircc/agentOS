@@ -186,6 +186,7 @@
 - `.:decodeResourceTerminalPayloadSync`
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
+- `.:decodeRuntimeLedgerEventSafe`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:decodeSubmitResult`
 - `.:decodeToolArgs`
@@ -500,6 +501,7 @@
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:parseBackendProtocolLedgerEventRpc`
+- `.:parseBackendProtocolLedgerEventRpcJson`
 - `.:parseDispatchBindingRef`
 - `.:parseDispatchIndeterminateClaim`
 - `.:parseDispatchLivedClaim`
@@ -980,6 +982,7 @@
 - `./backend-protocol:isBackendProtocolProjectionKey`
 - `./backend-protocol:isBackendProtocolTruthIdentity`
 - `./backend-protocol:parseBackendProtocolLedgerEventRpc`
+- `./backend-protocol:parseBackendProtocolLedgerEventRpcJson`
 - `./backend-protocol:parseDispatchBindingRef`
 - `./backend-protocol:parseDispatchIndeterminateClaim`
 - `./backend-protocol:parseDispatchLivedClaim`
@@ -1341,6 +1344,7 @@
 - `./runtime-protocol:DecodedOutput`
 - `./runtime-protocol:decodeRuntimeEventPayload`
 - `./runtime-protocol:decodeRuntimeLedgerEvent`
+- `./runtime-protocol:decodeRuntimeLedgerEventSafe`
 - `./runtime-protocol:DecodeRuntimeLedgerEventResult`
 - `./runtime-protocol:decodeSubmitResult`
 - `./runtime-protocol:defineAgentBindings`

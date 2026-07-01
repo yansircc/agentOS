@@ -190,6 +190,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:decodeResourceTerminalPayloadSync`
 - `.:decodeRuntimeEventPayload`
 - `.:decodeRuntimeLedgerEvent`
+- `.:decodeRuntimeLedgerEventSafe`
 - `.:DecodeRuntimeLedgerEventResult`
 - `.:decodeSubmitResult`
 - `.:decodeToolArgs`
@@ -504,6 +505,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:Outcome`
 - `.:OutcomeClass`
 - `.:parseBackendProtocolLedgerEventRpc`
+- `.:parseBackendProtocolLedgerEventRpcJson`
 - `.:parseDispatchBindingRef`
 - `.:parseDispatchIndeterminateClaim`
 - `.:parseDispatchLivedClaim`
@@ -984,6 +986,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./backend-protocol:isBackendProtocolProjectionKey`
 - `./backend-protocol:isBackendProtocolTruthIdentity`
 - `./backend-protocol:parseBackendProtocolLedgerEventRpc`
+- `./backend-protocol:parseBackendProtocolLedgerEventRpcJson`
 - `./backend-protocol:parseDispatchBindingRef`
 - `./backend-protocol:parseDispatchIndeterminateClaim`
 - `./backend-protocol:parseDispatchLivedClaim`
@@ -1345,6 +1348,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:DecodedOutput`
 - `./runtime-protocol:decodeRuntimeEventPayload`
 - `./runtime-protocol:decodeRuntimeLedgerEvent`
+- `./runtime-protocol:decodeRuntimeLedgerEventSafe`
 - `./runtime-protocol:DecodeRuntimeLedgerEventResult`
 - `./runtime-protocol:decodeSubmitResult`
 - `./runtime-protocol:defineAgentBindings`

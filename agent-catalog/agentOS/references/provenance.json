@@ -120,8 +120,8 @@
     },
     {
       "path": "docs/api/core.md",
-      "sha256": "46c131e73c5411a4ac7fa2970413ca70a9edc35e36f6cc1dbe31524c4bb12bd0",
-      "byteSize": 69990
+      "sha256": "830173fb337248d73d421cb75896e9964c4fdfcb23aa7c519fb93b308d7cf7b5",
+      "byteSize": 70184
     },
     {
       "path": "docs/api/runtime.md",
@@ -192,8 +192,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/core.md",
-      "sha256": "e485e4017c0a33116d36f0e9c387fc8ca860188d53ae429c5a983a888da5982c",
-      "byteSize": 69992
+      "sha256": "3b4535a599e1a6f9a181c8edcc003730874e61e54596459ccca4ec8556d76b6b",
+      "byteSize": 70186
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
