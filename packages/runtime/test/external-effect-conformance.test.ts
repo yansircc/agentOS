@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { defineExternalEffectAttempt, runExternalEffectAttempt } from "../src/external-effect";
+import {
+  defineExternalEffectAttempt,
+  projectExternalEffectAttempt,
+  runExternalEffectAttempt,
+  type ExternalEffectKnownAttemptProjectionStatus,
+} from "../src/external-effect";
 import {
   EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS,
   EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS,
@@ -17,8 +22,13 @@ import {
 type ExampleSpec = { readonly value: string };
 type ExampleEvent = { readonly idempotencyKey: string; readonly attemptKey: string };
 type ExampleProjection =
-  | { readonly status: "running"; readonly request: ExampleRequest }
-  | { readonly status: "done"; readonly value: string };
+  | {
+      readonly status: "running";
+      readonly request: ExampleRequest;
+      readonly evidenceRefs?: ReadonlyArray<string>;
+    }
+  | { readonly status: "done"; readonly value: string; readonly evidenceRefs?: ReadonlyArray<string> }
+  | { readonly status: "indeterminate"; readonly evidenceRefs: ReadonlyArray<string> };
 type ExampleRequest = { readonly requestId: string };
 
 const evidenceFor = (
@@ -92,6 +102,7 @@ describe("external-effect testing conformance", () => {
       "error_channel_preserved",
       "r_channel_non_leakage",
       "provider_evidence_cannot_change_canonical_ref",
+      "receipt_backed_attempt_projection_preserves_caller_vocabulary",
     ]);
 
     const partitionedIds = new Set([
@@ -243,6 +254,86 @@ describe("external-effect testing conformance", () => {
       expect(projection).toEqual({ status: "done", value: "typed" });
     }),
   );
+
+  it("projects caller-owned attempts into neutral status and evidence refs", () => {
+    const events: ReadonlyArray<ExampleEvent> = [
+      { idempotencyKey: "key-running", attemptKey: "attempt-running" },
+      { idempotencyKey: "key-settled", attemptKey: "attempt-settled" },
+    ];
+    const projectByIdempotencyKey = (
+      history: ReadonlyArray<ExampleEvent>,
+      idempotencyKey: string,
+    ) => {
+      const event = history.find((entry) => entry.idempotencyKey === idempotencyKey);
+      return event === undefined
+        ? ({ status: "missing" } as const)
+        : ({ status: "found", attemptKey: event.attemptKey } as const);
+    };
+    const statusFromProjection = (
+      projection: ExampleProjection,
+    ): ExternalEffectKnownAttemptProjectionStatus => {
+      if (projection.status === "running") return "running";
+      if (projection.status === "done") return "settled";
+      return "indeterminate";
+    };
+    const evidenceRefsFromProjection = (projection: ExampleProjection): ReadonlyArray<string> =>
+      projection.evidenceRefs ?? [];
+
+    expect(
+      projectExternalEffectAttempt<ExampleEvent, ExampleProjection, string, string>({
+        idempotencyKey: "key-missing",
+        events,
+        projectByIdempotencyKey,
+        projectCurrent: () => ({ status: "done", value: "unexpected" }),
+        statusFromProjection,
+        evidenceRefsFromProjection,
+      }),
+    ).toEqual({
+      idempotencyKey: "key-missing",
+      status: "missing",
+      evidenceRefs: [],
+    });
+
+    expect(
+      projectExternalEffectAttempt<ExampleEvent, ExampleProjection, string, string>({
+        idempotencyKey: "key-running",
+        events,
+        projectByIdempotencyKey,
+        projectCurrent: () => ({
+          status: "running",
+          request: { requestId: "request-1" },
+          evidenceRefs: ["caller.request:1"],
+        }),
+        statusFromProjection,
+        evidenceRefsFromProjection,
+      }),
+    ).toEqual({
+      idempotencyKey: "key-running",
+      status: "running",
+      attemptKey: "attempt-running",
+      evidenceRefs: ["caller.request:1"],
+    });
+
+    expect(
+      projectExternalEffectAttempt<ExampleEvent, ExampleProjection, string, string>({
+        idempotencyKey: "key-settled",
+        events,
+        projectByIdempotencyKey,
+        projectCurrent: () => ({
+          status: "done",
+          value: "ok",
+          evidenceRefs: ["caller.receipt:1"],
+        }),
+        statusFromProjection,
+        evidenceRefsFromProjection,
+      }),
+    ).toEqual({
+      idempotencyKey: "key-settled",
+      status: "settled",
+      attemptKey: "attempt-settled",
+      evidenceRefs: ["caller.receipt:1"],
+    });
+  });
 
   it.effect("returns a passing structured report when every scenario passes", () =>
     Effect.gen(function* () {

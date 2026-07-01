@@ -9,6 +9,68 @@ export type ExternalEffectAttemptLookup<AttemptKey = string> =
       readonly attemptKey: AttemptKey;
     };
 
+export type ExternalEffectAttemptProjectionStatus =
+  | "missing"
+  | "running"
+  | "settled"
+  | "failed"
+  | "indeterminate";
+
+export type ExternalEffectKnownAttemptProjectionStatus = Exclude<
+  ExternalEffectAttemptProjectionStatus,
+  "missing"
+>;
+
+export type ExternalEffectAttemptProjection<AttemptKey = string, EvidenceRef = string> =
+  | {
+      readonly idempotencyKey: string;
+      readonly status: "missing";
+      readonly evidenceRefs: readonly [];
+    }
+  | {
+      readonly idempotencyKey: string;
+      readonly status: ExternalEffectKnownAttemptProjectionStatus;
+      readonly attemptKey: AttemptKey;
+      readonly evidenceRefs: ReadonlyArray<EvidenceRef>;
+    };
+
+export interface ProjectExternalEffectAttemptSpec<Event, Projection, AttemptKey, EvidenceRef> {
+  readonly idempotencyKey: string;
+  readonly events: ReadonlyArray<Event>;
+  readonly projectByIdempotencyKey: (
+    events: ReadonlyArray<Event>,
+    idempotencyKey: string,
+  ) => ExternalEffectAttemptLookup<AttemptKey>;
+  readonly projectCurrent: (events: ReadonlyArray<Event>, attemptKey: AttemptKey) => Projection;
+  readonly statusFromProjection: (
+    projection: Projection,
+  ) => ExternalEffectKnownAttemptProjectionStatus;
+  readonly evidenceRefsFromProjection: (projection: Projection) => ReadonlyArray<EvidenceRef>;
+}
+
+/**
+ * Projects a caller-owned external-effect attempt into a UI-neutral status.
+ *
+ * The caller still owns event history, attempt identity, projection validity,
+ * evidence ref shape, and terminal meaning. This helper only joins those
+ * caller-owned functions into one repeatable attempt projection.
+ */
+export const projectExternalEffectAttempt = <Event, Projection, AttemptKey, EvidenceRef>(
+  spec: ProjectExternalEffectAttemptSpec<Event, Projection, AttemptKey, EvidenceRef>,
+): ExternalEffectAttemptProjection<AttemptKey, EvidenceRef> => {
+  const existing = spec.projectByIdempotencyKey(spec.events, spec.idempotencyKey);
+  if (existing.status === "missing") {
+    return { idempotencyKey: spec.idempotencyKey, status: "missing", evidenceRefs: [] };
+  }
+  const projection = spec.projectCurrent(spec.events, existing.attemptKey);
+  return {
+    idempotencyKey: spec.idempotencyKey,
+    status: spec.statusFromProjection(projection),
+    attemptKey: existing.attemptKey,
+    evidenceRefs: spec.evidenceRefsFromProjection(projection),
+  };
+};
+
 export interface ExternalEffectRequestedState<Spec, Request> {
   readonly activeSpec: Spec;
   readonly request: Request;

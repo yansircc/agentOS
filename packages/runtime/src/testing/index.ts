@@ -384,6 +384,16 @@ export const EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS = [
       "provider evidence cannot rewrite caller-owned canonical operation or product refs",
     requiredObservations: ["external_evidence_did_not_change_canonical_ref"],
   },
+  {
+    id: "receipt_backed_attempt_projection_preserves_caller_vocabulary",
+    ownership: "adapter_observed",
+    requirement:
+      "receipt-backed attempt UI projection exposes neutral attempt status and caller-owned evidence refs",
+    requiredObservations: [
+      "attempt_projection_uses_caller_owned_evidence_refs",
+      "product_receipt_semantics_not_redefined",
+    ],
+  },
 ] as const;
 
 export type ExternalEffectConformanceScenario =
