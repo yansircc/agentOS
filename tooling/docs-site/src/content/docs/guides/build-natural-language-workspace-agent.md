@@ -280,6 +280,34 @@ Generated `client.ts` rides on `@agent-os/client` and the selected framework
 bridge. Browser-direct streams and server bridges inject `streamSource` and
 `rpcInvoker`; they do not copy the client state machine.
 
+Runtime ledger input must enter the client through a runtime decoder. Product
+reports, timeline rows, and UI milestones are separate product facts and must
+not be wrapped as `RuntimeLedgerEvent`.
+
+```ts
+import {
+  createAgentClient,
+  createAgentClientRuntimeLedgerStreamSource,
+  projectAgentClientRunInspection,
+} from "@agent-os/client";
+
+const runtime = createAgentClient({
+  streamSource: createAgentClientRuntimeLedgerStreamSource({
+    open: ({ afterEventId }, options) =>
+      backend.streamLedgerEvents({ afterId: afterEventId, signal: options?.signal }),
+  }),
+  rpcInvoker: productCommandInvoker,
+});
+
+await runtime.connect();
+const runtimeInspection = projectAgentClientRunInspection(runtime.getSnapshot());
+```
+
+`streamLedgerEvents` returns raw ledger-event RPC frames from the runtime
+backend. The client decoder accepts only runtime-protocol ledger events. Product
+commands can share the `rpcInvoker`, but product lifecycle truth stays in the
+product command/report surface that owns those facts.
+
 Generated workspace clients expose product lifecycle methods above the runtime
 run substrate:
 
@@ -318,6 +346,13 @@ should not derive session or workflow lifecycle by renaming raw run status.
 
 Product UI starts after the generated client. Timeline rows, file review
 panels, layout, and product-specific visual state belong in `app/`.
+
+For approval or review flows, the product shell should expose one backend
+command that commits the product decision and then resumes or closes the
+runtime input request. Frontends should not issue one product decision command
+and one independent runtime resume command. The UI reads both projections:
+agentOS client snapshots for runtime interruption/resume/completion, and the
+product report for candidate, approval, publication, or receipt facts.
 
 ## Product Link Boundary
 

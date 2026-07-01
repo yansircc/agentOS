@@ -13,12 +13,12 @@ optional React/Svelte subpath bridges.
 
 ## Audience
 
-| Entrypoint                         | Audience                           | Capability                       |
-| ---------------------------------- | ---------------------------------- | -------------------------------- |
-| `@agent-os/client`                 | `default-direct`                   | transport-neutral client store   |
-| `@agent-os/client/react`           | `default-direct`                   | React client adapter             |
-| `@agent-os/client/svelte`          | `default-direct`, `generated-only` | Svelte client adapter            |
-| `@agent-os/client/workspace-agent` | `generated-only`                   | generated workspace agent client |
+| Entrypoint                         | Audience                           | Capability                                                       |
+| ---------------------------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| `@agent-os/client`                 | `default-direct`                   | transport-neutral client store and runtime ledger stream decoder |
+| `@agent-os/client/react`           | `default-direct`                   | React client adapter                                             |
+| `@agent-os/client/svelte`          | `default-direct`, `generated-only` | Svelte client adapter                                            |
+| `@agent-os/client/workspace-agent` | `generated-only`                   | generated workspace agent client                                 |
 
 ## Invariant
 

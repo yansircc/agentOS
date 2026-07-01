@@ -180,7 +180,7 @@
       "path": "packages/runtime",
       "status": "{releaseLine} public",
       "role": "Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry.",
-      "boundary": "runtime root exports only backend-neutral ledger/projection/service algebra. Platform/provider, testing, and wire-projection integrations live behind explicit subpath exports: ./ag-ui, ./channel, ./external-effect, ./schedule, ./cloudflare, ./cloudflare/do-rpc, ./in-memory, ./local, ./node, ./llm-effect-ai, ./telemetry-otlp, and ./testing; root JS and root declarations must not leak subpath-only peers. The ./ag-ui subpath is a browser-safe projection over runtime-protocol Recorded vocabulary, not the client state model. The ./channel subpath is a pure authored ingress contract for generated targets: define routes, verify provider requests into principals, and receive a restricted submit/dispatch context; channel dedupe, retry, receipt, and replay identity remain app/provider-owned until channel declarations expose a positive delivery-key contract. The ./external-effect subpath is a vocabulary-neutral orchestration join for idempotent external-effect attempts over caller-owned event, request, projection, and attempt-key types; it must not own claim, ledger event, receipt, witness, store, idempotency derivation, provider material, or product control-plane vocabulary. The ./schedule subpath is a pure authored time-ingress contract for generated targets: define UTC cron declarations, receive a restricted schedule context over product sessions/workflows, dispatch one product handoff, project schedule fire history from schedule fire events plus linked session/workflow/run projections, and use runtime-owned provider-neutral delivery facts for generated schedule ingress: verified delivery key, attempt, receipt, retry status, and replay projection. These authored ingress subpaths are distinct from attached-stream outbound frame channels and must not own provider SDK lifecycle, webhook helpers, provider-normalized events, AgentManifest facts, runtime Scheduler substrate facts, provider callback parsing, raw provider payload storage, or external side-effect lifecycle.",
+      "boundary": "runtime root exports only backend-neutral ledger/projection/service algebra. Platform/provider, testing, and wire-projection integrations live behind explicit subpath exports: ./ag-ui, ./channel, ./external-effect, ./schedule, ./cloudflare, ./cloudflare/do-rpc, ./in-memory, ./local, ./node, ./llm-effect-ai, ./telemetry-otlp, and ./testing; root JS and root declarations must not leak subpath-only peers. The ./ag-ui subpath is a browser-safe projection over runtime-protocol Recorded vocabulary, not the client state model. The ./channel subpath is a pure authored ingress contract for generated targets: define routes, verify provider requests into principals, and receive a restricted submit/dispatch context; channel dedupe, retry, receipt, and replay identity remain app/provider-owned until channel declarations expose a positive delivery-key contract. The ./external-effect subpath is a vocabulary-neutral orchestration join and neutral attempt projection for idempotent external-effect attempts over caller-owned event, request, projection, evidence-ref, and attempt-key types; it must not own claim, ledger event, receipt, witness, store, idempotency derivation, provider material, or product control-plane vocabulary. The ./schedule subpath is a pure authored time-ingress contract for generated targets: define UTC cron declarations, receive a restricted schedule context over product sessions/workflows, dispatch one product handoff, project schedule fire history from schedule fire events plus linked session/workflow/run projections, and use runtime-owned provider-neutral delivery facts for generated schedule ingress: verified delivery key, attempt, receipt, retry status, and replay projection. These authored ingress subpaths are distinct from attached-stream outbound frame channels and must not own provider SDK lifecycle, webhook helpers, provider-normalized events, AgentManifest facts, runtime Scheduler substrate facts, provider callback parsing, raw provider payload storage, or external side-effect lifecycle.",
       "need": "Runtime substrate and statically linked adapter subpaths",
       "apiSource": "docs/api/runtime.md",
       "readmeStatus": "{releaseLine} active development. Runtime root is backend-neutral; optional integrations are selected by explicit subpath and optional peer dependencies.",
@@ -239,7 +239,7 @@
         {
           "subpath": "./external-effect",
           "audiences": ["advanced"],
-          "capability": "vocabulary-neutral idempotent external-effect attempt runner",
+          "capability": "vocabulary-neutral idempotent external-effect attempt runner and attempt projection",
           "surfaceClass": "stable-contract"
         },
         {
@@ -327,11 +327,11 @@
       "name": "@agent-os/client",
       "path": "packages/client",
       "status": "{releaseLine} public",
-      "role": "transport-neutral agent client store, typed command surface, and optional framework subpath bridges",
-      "boundary": "framework-neutral root client state machine surface plus React/Svelte subpath adapters; root consumes runtime-protocol Recorded projections and injected transports with no React, Svelte, AG-UI, or product UI dependency",
+      "role": "transport-neutral agent client store, decoded runtime ledger stream adapter, typed command surface, and optional framework subpath bridges",
+      "boundary": "framework-neutral root client state machine surface plus React/Svelte subpath adapters; root consumes runtime-protocol Recorded projections through positive ledger-event decoding and injected transports with no React, Svelte, AG-UI, or product UI dependency",
       "need": "Agent client core and framework bridges",
       "readmeStatus": "{releaseLine} active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; the package owns the transport-neutral root client state machine and optional React/Svelte subpaths.",
-      "apiStatus": "{releaseLine} active development for the canonical agent client package. Root exports cover framework-neutral stores, transport injection contracts, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation; `./react` and `./svelte` are optional-peer subpath adapters.",
+      "apiStatus": "{releaseLine} active development for the canonical agent client package. Root exports cover framework-neutral stores, transport injection contracts, positive runtime ledger-event decoding, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation; `./react` and `./svelte` are optional-peer subpath adapters.",
       "apiSource": "docs/api/client.md",
       "primary": true,
       "published": true,
@@ -339,7 +339,7 @@
         {
           "subpath": ".",
           "audiences": ["default-direct"],
-          "capability": "transport-neutral client store"
+          "capability": "transport-neutral client store and runtime ledger stream decoder"
         },
         {
           "subpath": "./react",

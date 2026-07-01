@@ -2,7 +2,7 @@
 
 # @agent-os/client Public API
 
-Status: 0.5.x active development for the canonical agent client package. Root exports cover framework-neutral stores, transport injection contracts, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation; `./react` and `./svelte` are optional-peer subpath adapters.
+Status: 0.5.x active development for the canonical agent client package. Root exports cover framework-neutral stores, transport injection contracts, positive runtime ledger-event decoding, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation; `./react` and `./svelte` are optional-peer subpath adapters.
 
 ## Public exports
 
@@ -13,13 +13,20 @@ Status: 0.5.x active development for the canonical agent client package. Root ex
 - `.:AgentClientConnectionStatus`
 - `.:AgentClientController`
 - `.:AgentClientInputRequestSnapshot`
+- `.:AgentClientLedgerEventRpcStreamSource`
 - `.:AgentClientListener`
 - `.:AgentClientRpcInvoker`
+- `.:AgentClientRuntimeLedgerDecodeError`
+- `.:AgentClientRuntimeLedgerDecodeFailure`
+- `.:AgentClientRuntimeLedgerDecodeFailureReason`
+- `.:AgentClientRuntimeLedgerDecodeResult`
 - `.:AgentClientRunInspectionSnapshot`
 - `.:AgentClientRunSnapshot`
 - `.:AgentClientRunStatus`
 - `.:AgentClientSelector`
 - `.:AgentClientSnapshot`
+- `.:AgentClientSseEvent`
+- `.:AgentClientSseStreamSource`
 - `.:AgentClientStore`
 - `.:AgentClientStoreController`
 - `.:AgentClientStreamCursor`
@@ -28,9 +35,13 @@ Status: 0.5.x active development for the canonical agent client package. Root ex
 - `.:AgentClientUnsubscribe`
 - `.:appendRuntimeEventsToSnapshot`
 - `.:createAgentClient`
+- `.:createAgentClientRuntimeLedgerSseStreamSource`
+- `.:createAgentClientRuntimeLedgerStreamSource`
 - `.:CreateAgentClientOptions`
 - `.:createAgentClientStore`
 - `.:createInitialAgentClientSnapshot`
+- `.:decodeAgentClientRuntimeLedgerEvent`
+- `.:decodeAgentClientRuntimeLedgerSseEvent`
 - `.:isCurrentContinuationRef`
 - `.:isCurrentInputRequestRef`
 - `.:projectAgentClientRunInspection`

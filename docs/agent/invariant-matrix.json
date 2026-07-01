@@ -106,6 +106,7 @@
       "errors": [
         "agent_os.aead_sealed_codec_failure",
         "agent_os.backend_protocol_parse_failure",
+        "agent_os.client_runtime_ledger_event_decode_failure",
         "agent_os.dispatch_payload_parse_failure",
         "agent_os.effect_ai_aborted",
         "agent_os.effect_ai_prompt_error",
@@ -124,6 +125,7 @@
         "docs/boundary-contract.md",
         "docs/concepts/agent-schema.md",
         "docs/concepts/carriers-and-material.md",
+        "docs/packages/client.md",
         "docs/packages/core.md",
         "docs/packages/runtime.md",
         "docs/README.md"

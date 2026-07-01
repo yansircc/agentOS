@@ -25,6 +25,10 @@ idempotent external-effect attempt. It owns only the orchestration join between
 "no existing attempt" and "found existing attempt" over caller-owned `Event`,
 `Request`, `Projection`, and `AttemptKey` types.
 
+`projectExternalEffectAttempt` projects caller-owned attempt events into a
+neutral status plus caller-owned evidence refs. It does not define receipt
+schema, witness schema, terminal product meaning, or a record store.
+
 `defineExternalEffectAttempt` is only a type-fixing helper over the same
 runner. It lets callers bind their `Spec`, `Event`, `Projection`, `Request`,
 and `AttemptKey` algebra once while leaving the Effect `E` and `R` channels to
@@ -48,7 +52,8 @@ scenarios are limited to `request_before_effect`,
 calling the existing runner surface with caller-supplied functions. Crash
 reconcile, witness/provider indeterminate handling, digest or contract mismatch,
 invalid projection rejection, error-channel preservation, R-channel
-non-leakage, and canonical-ref protection remain adapter-observed. The
+non-leakage, canonical-ref protection, and receipt-backed neutral attempt
+projection remain adapter-observed. The
 conformance report can require observations for those cases, but agentOS does
 not execute or define the caller's receipt, witness, provider, reconcile, or
 product-control-plane lifecycle.
@@ -619,9 +624,14 @@ product-control-plane lifecycle.
 - `./channel:del`
 - `./channel:patch`
 - `./external-effect:ExternalEffectAttemptLookup`
+- `./external-effect:ExternalEffectAttemptProjection`
+- `./external-effect:ExternalEffectAttemptProjectionStatus`
+- `./external-effect:ExternalEffectKnownAttemptProjectionStatus`
 - `./external-effect:ExternalEffectRequestedState`
 - `./external-effect:DefinedExternalEffectAttempt`
 - `./external-effect:defineExternalEffectAttempt`
+- `./external-effect:ProjectExternalEffectAttemptSpec`
+- `./external-effect:projectExternalEffectAttempt`
 - `./external-effect:RunExternalEffectAttemptSpec`
 - `./external-effect:runExternalEffectAttempt`
 - `./schedule:CronMinuteExpression`

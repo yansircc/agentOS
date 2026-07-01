@@ -570,9 +570,14 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./channel:del`
 - `./channel:patch`
 - `./external-effect:ExternalEffectAttemptLookup`
+- `./external-effect:ExternalEffectAttemptProjection`
+- `./external-effect:ExternalEffectAttemptProjectionStatus`
+- `./external-effect:ExternalEffectKnownAttemptProjectionStatus`
 - `./external-effect:ExternalEffectRequestedState`
 - `./external-effect:DefinedExternalEffectAttempt`
 - `./external-effect:defineExternalEffectAttempt`
+- `./external-effect:ProjectExternalEffectAttemptSpec`
+- `./external-effect:projectExternalEffectAttempt`
 - `./external-effect:RunExternalEffectAttemptSpec`
 - `./external-effect:runExternalEffectAttempt`
 - `./schedule:CronMinuteExpression`

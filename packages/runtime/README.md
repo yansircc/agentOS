@@ -24,7 +24,7 @@ algebra, durable trigger authoring, and ledger-derived projections.
 | `@agent-os/runtime/cloudflare/ops-api`              | `advanced`                   | Cloudflare ops API bridge                                                                  |
 | `@agent-os/runtime/capability`                      | `generated-only`, `advanced` | capability contract declarations and install graph resolver                                |
 | `@agent-os/runtime/channel`                         | `generated-only`, `advanced` | pure verified inbound channel contract for generated targets                               |
-| `@agent-os/runtime/external-effect`                 | `advanced`                   | vocabulary-neutral idempotent external-effect attempt runner                               |
+| `@agent-os/runtime/external-effect`                 | `advanced`                   | vocabulary-neutral idempotent external-effect attempt runner and attempt projection        |
 | `@agent-os/runtime/schedule`                        | `generated-only`, `advanced` | pure UTC time ingress contract and schedule fire history projection for generated targets  |
 | `@agent-os/runtime/in-memory`                       | `advanced`                   | in-memory runtime adapter                                                                  |
 | `@agent-os/runtime/local`                           | `generated-only`, `advanced` | local node workspace runtime lowerer and dev/test facade                                   |

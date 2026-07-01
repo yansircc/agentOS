@@ -41,6 +41,13 @@
       ]
     },
     {
+      "tag": "agent_os.client_runtime_ledger_event_decode_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/client.md",
+      "fix": "Feed client runtime streams through the runtime ledger decoder and reject product UI facts or malformed ledger frames before updating the client store.",
+      "sourceFiles": ["packages/client/src/index.ts"]
+    },
+    {
       "tag": "agent_os.cloudflare_ledger_schema_error",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/durable-truth.md",

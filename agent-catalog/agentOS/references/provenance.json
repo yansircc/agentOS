@@ -35,13 +35,13 @@
     },
     {
       "path": "docs/agent/error-metadata.source.json",
-      "sha256": "6cd59f000dc30f60a9ed9823b7a0733d5bcf495d544803b025580b3c27020a40",
-      "byteSize": 21759
+      "sha256": "dbcd9ae1270b0141b16736dbe3c10ad34f9fa208db15469b176420cbc11299b7",
+      "byteSize": 22125
     },
     {
       "path": "docs/agent/errors.json",
-      "sha256": "939229df05f67cecb8166a5716e73d3dcee017a311f6fd6802c466c78a082db7",
-      "byteSize": 25336
+      "sha256": "6bcff3128e6c311366e643817bc449e7e19621547bb17d7efb6372f25adeec9b",
+      "byteSize": 25757
     },
     {
       "path": "docs/agent/external-vocabulary.source.json",
@@ -55,8 +55,8 @@
     },
     {
       "path": "docs/agent/invariant-matrix.json",
-      "sha256": "9aa62077a27c2c6b26b4c02d9fe7b4efdcd01c56977720ee631260c266d290e8",
-      "byteSize": 15110
+      "sha256": "83b57dae5bb9a237c72a8704715f85f223928c24638a2a3cece04d667d11955a",
+      "byteSize": 15208
     },
     {
       "path": "docs/agent/invariants.source.json",
@@ -115,8 +115,8 @@
     },
     {
       "path": "docs/api/client.md",
-      "sha256": "cbe6f866667148a394ad2eab8f2459707318c359166205f2782869f9d466ad73",
-      "byteSize": 3418
+      "sha256": "3f567b8abb95facf61d7f48da0d5eb0089af946a44e6992150f8fc370f4a0a41",
+      "byteSize": 3888
     },
     {
       "path": "docs/api/core.md",
@@ -125,13 +125,13 @@
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "b90ff7a1205671b5bc4230af69cea2a32a52fe02b51e61c9d1fb87fd2ff01226",
-      "byteSize": 32488
+      "sha256": "adf0456446f9ba53e9d789444473a6dbc84b98aa4dcd52e14ecfc4078fa8febe",
+      "byteSize": 33036
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "bd484dfea39f75fa97e2773e2ccec203163959261842516fb88cd13287bd708d",
-      "byteSize": 29411
+      "sha256": "32d3c8f6f046c0986cef2c93ed66401c3aa4afc84ce780ada8231f3a4fe0ab3f",
+      "byteSize": 29771
     },
     {
       "path": "docs/start-here.md",
@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/surface.json",
-      "sha256": "83e13dee91fd2500ae3fa7b329f75061ec9789db92cff37184ffff6f9e7c2c9b",
-      "byteSize": 18787
+      "sha256": "e3072589be27431e4e7a190cea69e8abbcf3b0f3d713b63a7c01ea9361b3eb01",
+      "byteSize": 19007
     },
     {
       "path": "package.json",
@@ -187,7 +187,7 @@
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "578acd55c2c4dc25a5c226286cc12046e15e739d2cc850e39a49a2aed657716b",
+      "sha256": "7facd8fb8120b5cbdea9e5c509f6ad6fdf14517a55fec3b758c0bd6b55523fe3",
       "byteSize": 14055
     },
     {
@@ -197,13 +197,13 @@
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "149702306aef7ca02b3e92023ecd22d390163b5ac4884b89534ca2bde24889f1",
-      "byteSize": 32490
+      "sha256": "024f06d8e8d2dd1d667a3c5eb3ce06201353e486f0a05380fdcb059e852a2df1",
+      "byteSize": 33038
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",
-      "sha256": "c6307110e9fd81e004a090c74abdc0fba0d6b7d248f1bffeb90047e16abf22bb",
-      "byteSize": 3420
+      "sha256": "9c6768931dd667cff20536f01dd07602f66a2638afb98ebefa902f1ca48b6741",
+      "byteSize": 3890
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/cli.md",
@@ -232,13 +232,13 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/errors.json",
-      "sha256": "939229df05f67cecb8166a5716e73d3dcee017a311f6fd6802c466c78a082db7",
-      "byteSize": 25336
+      "sha256": "6bcff3128e6c311366e643817bc449e7e19621547bb17d7efb6372f25adeec9b",
+      "byteSize": 25757
     },
     {
       "path": "agent-catalog/agentOS/references/agent/invariant-matrix.json",
-      "sha256": "9aa62077a27c2c6b26b4c02d9fe7b4efdcd01c56977720ee631260c266d290e8",
-      "byteSize": 15110
+      "sha256": "83b57dae5bb9a237c72a8704715f85f223928c24638a2a3cece04d667d11955a",
+      "byteSize": 15208
     }
   ],
   "outputHashScope": "all generated files except references/provenance.json to avoid a self-referential hash",

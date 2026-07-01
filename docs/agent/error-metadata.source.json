@@ -140,6 +140,12 @@
       "fix": "Decode backend protocol payloads at the protocol boundary and reject malformed external input before it reaches runtime logic."
     },
     {
+      "tag": "agent_os.client_runtime_ledger_event_decode_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/client.md",
+      "fix": "Feed client runtime streams through the runtime ledger decoder and reject product UI facts or malformed ledger frames before updating the client store."
+    },
+    {
       "tag": "agent_os.cloudflare_worker_bundle_resolution_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/runtime.md",

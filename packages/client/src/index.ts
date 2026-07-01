@@ -123,7 +123,7 @@ export type AgentClientRuntimeLedgerDecodeFailureReason =
   | "sse_data_invalid_json";
 
 export interface AgentClientRuntimeLedgerDecodeFailure {
-  readonly _tag: "agent_os.client.runtime_ledger_event_decode_failure";
+  readonly _tag: "agent_os.client_runtime_ledger_event_decode_failure";
   readonly reason: AgentClientRuntimeLedgerDecodeFailureReason;
   readonly message: string;
 }
@@ -205,7 +205,7 @@ const runtimeLedgerDecodeFailure = (
   reason: AgentClientRuntimeLedgerDecodeFailureReason,
   message: string,
 ): AgentClientRuntimeLedgerDecodeFailure => ({
-  _tag: "agent_os.client.runtime_ledger_event_decode_failure",
+  _tag: "agent_os.client_runtime_ledger_event_decode_failure",
   reason,
   message,
 });
