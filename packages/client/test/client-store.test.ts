@@ -16,6 +16,10 @@ import {
   appendRuntimeEventsToSnapshot,
   createAgentClient,
   createAgentClientStore,
+  createAgentClientRuntimeLedgerSseStreamSource,
+  createAgentClientRuntimeLedgerStreamSource,
+  decodeAgentClientRuntimeLedgerEvent,
+  decodeAgentClientRuntimeLedgerSseEvent,
   isCurrentContinuationRef,
   isCurrentInputRequestRef,
   projectAgentClientRunInspection,
@@ -36,8 +40,7 @@ const identity = {
   effectAuthorityRef: { authorityClass: "test", authorityId: "client-test" },
 };
 
-const runtimeEvent = (id: number, spec: RuntimeEventCommitSpec): RuntimeLedgerEvent => {
-  const decoded = decodeRuntimeLedgerEvent({
+const runtimeLedgerRpc = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
     id,
     ts: id * 10,
     kind: spec.kind,
@@ -45,59 +48,65 @@ const runtimeEvent = (id: number, spec: RuntimeEventCommitSpec): RuntimeLedgerEv
     factOwnerRef: RUNTIME_FACT_OWNER,
     effectAuthorityRef: spec.effectAuthorityRef,
     payload: spec.payload,
-  } satisfies LedgerEvent);
+  });
+
+const runtimeEvent = (id: number, spec: RuntimeEventCommitSpec): RuntimeLedgerEvent => {
+  const decoded = decodeRuntimeLedgerEvent(runtimeLedgerRpc(id, spec));
   if (decoded._tag !== "runtime") expect.fail("expected runtime event");
   return decoded.event;
 };
 
+const startedEventSpec = (): RuntimeEventCommitSpec =>
+  agentRunStartedEvent({ ...identity, intent: "test" });
+
 const startedEvent = (id = 1): RuntimeLedgerEvent =>
-  runtimeEvent(id, agentRunStartedEvent({ ...identity, intent: "test" }));
+  runtimeEvent(id, startedEventSpec());
+
+const interruptedEventSpec = (): RuntimeEventCommitSpec =>
+  agentRunInterruptedEvent({
+    ...identity,
+    runId: 1,
+    turn: { id: 1, index: 0 },
+    interruptId: "interrupt-1",
+    reason: "approval_required",
+    resumeSchema: { type: "object" },
+    tokensUsed: 10,
+    decision: {
+      gateRef: "gate-1",
+      subjectRef: "subject-1",
+      toolCallId: "tool-call-1",
+      toolName: "write_file",
+    },
+  });
 
 const interruptedEvent = (id = 2): RuntimeLedgerEvent =>
-  runtimeEvent(
-    id,
-    agentRunInterruptedEvent({
-      ...identity,
-      runId: 1,
-      turn: { id: 1, index: 0 },
-      interruptId: "interrupt-1",
-      reason: "approval_required",
-      resumeSchema: { type: "object" },
-      tokensUsed: 10,
-      decision: {
-        gateRef: "gate-1",
-        subjectRef: "subject-1",
-        toolCallId: "tool-call-1",
-        toolName: "write_file",
-      },
-    }),
-  );
+  runtimeEvent(id, interruptedEventSpec());
+
+const resumedEventSpec = (): RuntimeEventCommitSpec =>
+  agentRunResumedEvent({
+    ...identity,
+    runId: 1,
+    turn: { id: 1, index: 0 },
+    interruptId: "interrupt-1",
+    resume: { kind: "approval", approved: true },
+    resumedAtEventId: 4,
+  });
 
 const resumedEvent = (id = 3): RuntimeLedgerEvent =>
-  runtimeEvent(
-    id,
-    agentRunResumedEvent({
-      ...identity,
-      runId: 1,
-      turn: { id: 1, index: 0 },
-      interruptId: "interrupt-1",
-      resume: { kind: "approval", approved: true },
-      resumedAtEventId: 4,
-    }),
-  );
+  runtimeEvent(id, resumedEventSpec());
+
+const completedEventSpec = (): RuntimeEventCommitSpec =>
+  agentRunCompletedEvent({
+    ...identity,
+    runId: 1,
+    final: "done",
+    output: "done",
+    outputKind: "text",
+    tokensUsed: 11,
+  });
 
 const completedEvent = (id = 4): RuntimeLedgerEvent =>
-  runtimeEvent(
-    id,
-    agentRunCompletedEvent({
-      ...identity,
-      runId: 1,
-      final: "done",
-      output: "done",
-      outputKind: "text",
-      tokensUsed: 11,
-    }),
-  );
+  runtimeEvent(id, completedEventSpec());
 
 const sessionLinkEvent = (id = 5): RuntimeLedgerEvent =>
   runtimeEvent(
@@ -237,6 +246,108 @@ describe("@agent-os/client", () => {
     expect(client.getSnapshot().events.map((event) => event.id)).toEqual([1, 2, 4]);
     expect(client.getSnapshot().connection.status).toBe("closed");
     expect(client.getSnapshot().run.status).toBe("completed");
+  });
+
+  it("decodes LedgerEventRpc stream frames before appending runtime events", async () => {
+    const cursors: Array<number | undefined> = [];
+    const source = createAgentClientRuntimeLedgerStreamSource({
+      open(cursor) {
+        cursors.push(cursor.afterEventId);
+        return (async function* () {
+          yield runtimeLedgerRpc(2, interruptedEventSpec());
+          yield runtimeLedgerRpc(4, completedEventSpec());
+        })();
+      },
+    });
+    const client = createAgentClient({ initialEvents: [startedEvent()], streamSource: source });
+
+    await client.connect();
+
+    expect(cursors).toEqual([1]);
+    expect(client.getSnapshot().events.map((event) => event.id)).toEqual([1, 2, 4]);
+    expect(client.getSnapshot().run.status).toBe("completed");
+  });
+
+  it("decodes runtime ledger SSE data through the same positive runtime contract", async () => {
+    const decoded = decodeAgentClientRuntimeLedgerSseEvent({
+      data: JSON.stringify(runtimeLedgerRpc(1, startedEventSpec())),
+    });
+    expect(decoded).toMatchObject({ ok: true, event: { kind: "agent.run.started", id: 1 } });
+
+    const source = createAgentClientRuntimeLedgerSseStreamSource({
+      open() {
+        return (async function* () {
+          yield { data: JSON.stringify(runtimeLedgerRpc(1, startedEventSpec())) };
+          yield { data: JSON.stringify(runtimeLedgerRpc(4, completedEventSpec())) };
+        })();
+      },
+    });
+    const client = createAgentClient({ streamSource: source });
+
+    await client.connect();
+
+    expect(client.getSnapshot().events.map((event) => event.kind)).toEqual([
+      "agent.run.started",
+      "agent.run.completed",
+    ]);
+  });
+
+  it("rejects product UI and non-runtime ledger events at the client wire boundary", () => {
+    expect(
+      decodeAgentClientRuntimeLedgerEvent({
+        seq: 1,
+        runId: "CH-42-run-001",
+        kind: "workbench.candidate.ready",
+        title: "候选已准备",
+      }),
+    ).toMatchObject({
+      ok: false,
+      failure: { reason: "ledger_event_malformed" },
+    });
+
+    expect(
+      decodeAgentClientRuntimeLedgerEvent({
+        id: 99,
+        ts: 990,
+        kind: "workbench.candidate.ready",
+        scopeRef: identity.scopeRef,
+        factOwnerRef: "zeroY3",
+        effectAuthorityRef: identity.effectAuthorityRef,
+        payload: { candidateRef: "candidate:CH-42:run-001:1" },
+      } satisfies LedgerEvent),
+    ).toMatchObject({
+      ok: false,
+      failure: { reason: "non_runtime_event" },
+    });
+
+    expect(
+      decodeAgentClientRuntimeLedgerSseEvent({ data: "{not json" }),
+    ).toMatchObject({
+      ok: false,
+      failure: { reason: "sse_data_invalid_json" },
+    });
+  });
+
+  it("fails a runtime stream when a runtime event payload does not decode", async () => {
+    const source = createAgentClientRuntimeLedgerStreamSource({
+      open() {
+        return (async function* () {
+          yield {
+            ...runtimeLedgerRpc(4, completedEventSpec()),
+            payload: { final: "missing required runId" },
+          };
+        })();
+      },
+    });
+    const client = createAgentClient({ streamSource: source });
+
+    await client.connect();
+
+    expect(client.getSnapshot().connection).toMatchObject({
+      status: "failed",
+      error: "runtime ledger event payload failed runtime-protocol decode",
+    });
+    expect(client.getSnapshot().events).toEqual([]);
   });
 
   it("consumes an already-aborted AbortSignal before opening a stream", async () => {

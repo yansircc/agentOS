@@ -1,5 +1,6 @@
 import {
   continuationRefFromInterruptedEvent,
+  decodeRuntimeLedgerEvent as decodeRuntimeLedgerProtocolEvent,
   inputRequestRefFromInterruptedEvent,
   RUNTIME_ABORT_EVENT_KINDS,
   RUNTIME_EVENT_KIND,
@@ -9,6 +10,7 @@ import {
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
 } from "@agent-os/core/runtime-protocol";
+import { parseBackendProtocolLedgerEventRpc } from "@agent-os/core/backend-protocol";
 import type {
   RunCancellationStatus,
   RunLastKnownEvent,
@@ -114,6 +116,47 @@ export interface AgentClientStreamSource {
   ): AsyncIterable<RuntimeLedgerEvent>;
 }
 
+export type AgentClientRuntimeLedgerDecodeFailureReason =
+  | "ledger_event_malformed"
+  | "non_runtime_event"
+  | "runtime_payload_invalid"
+  | "sse_data_invalid_json";
+
+export interface AgentClientRuntimeLedgerDecodeFailure {
+  readonly _tag: "agent_os.client.runtime_ledger_event_decode_failure";
+  readonly reason: AgentClientRuntimeLedgerDecodeFailureReason;
+  readonly message: string;
+}
+
+export type AgentClientRuntimeLedgerDecodeResult =
+  | { readonly ok: true; readonly event: RuntimeLedgerEvent }
+  | { readonly ok: false; readonly failure: AgentClientRuntimeLedgerDecodeFailure };
+
+export class AgentClientRuntimeLedgerDecodeError extends Error {
+  readonly failure: AgentClientRuntimeLedgerDecodeFailure;
+
+  constructor(failure: AgentClientRuntimeLedgerDecodeFailure) {
+    super(failure.message);
+    this.name = "AgentClientRuntimeLedgerDecodeError";
+    this.failure = failure;
+  }
+}
+
+export interface AgentClientLedgerEventRpcStreamSource {
+  open(cursor: AgentClientStreamCursor, options?: AgentClientStreamOptions): AsyncIterable<unknown>;
+}
+
+export interface AgentClientSseEvent {
+  readonly data: string;
+}
+
+export interface AgentClientSseStreamSource {
+  open(
+    cursor: AgentClientStreamCursor,
+    options?: AgentClientStreamOptions,
+  ): AsyncIterable<AgentClientSseEvent>;
+}
+
 export interface AgentClientCommandOptions {
   readonly signal?: AbortSignal;
 }
@@ -157,6 +200,102 @@ const INITIAL_RUN: AgentClientRunSnapshot = {
   pendingContinuations: [],
   inputRequests: [],
 };
+
+const runtimeLedgerDecodeFailure = (
+  reason: AgentClientRuntimeLedgerDecodeFailureReason,
+  message: string,
+): AgentClientRuntimeLedgerDecodeFailure => ({
+  _tag: "agent_os.client.runtime_ledger_event_decode_failure",
+  reason,
+  message,
+});
+
+const runtimeLedgerDecodeError = (
+  failure: AgentClientRuntimeLedgerDecodeFailure,
+): AgentClientRuntimeLedgerDecodeError => new AgentClientRuntimeLedgerDecodeError(failure);
+
+export const decodeAgentClientRuntimeLedgerEvent = (
+  value: unknown,
+): AgentClientRuntimeLedgerDecodeResult => {
+  const parsed = parseBackendProtocolLedgerEventRpc(value);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      failure: runtimeLedgerDecodeFailure("ledger_event_malformed", parsed.failure.reason),
+    };
+  }
+
+  try {
+    const decoded = decodeRuntimeLedgerProtocolEvent(parsed.value);
+    if (decoded._tag === "non_runtime") {
+      return {
+        ok: false,
+        failure: runtimeLedgerDecodeFailure(
+          "non_runtime_event",
+          "ledger event kind is not owned by runtime protocol",
+        ),
+      };
+    }
+    return { ok: true, event: decoded.event };
+  } catch {
+    return {
+      ok: false,
+      failure: runtimeLedgerDecodeFailure(
+        "runtime_payload_invalid",
+        "runtime ledger event payload failed runtime-protocol decode",
+      ),
+    };
+  }
+};
+
+export const decodeAgentClientRuntimeLedgerSseEvent = (
+  frame: AgentClientSseEvent,
+): AgentClientRuntimeLedgerDecodeResult => {
+  try {
+    return decodeAgentClientRuntimeLedgerEvent(JSON.parse(frame.data) as unknown);
+  } catch {
+    return {
+      ok: false,
+      failure: runtimeLedgerDecodeFailure(
+        "sse_data_invalid_json",
+        "runtime ledger SSE data must be JSON",
+      ),
+    };
+  }
+};
+
+const decodeRuntimeLedgerStream = async function* <Wire>(
+  source: AsyncIterable<Wire>,
+  decode: (value: Wire) => AgentClientRuntimeLedgerDecodeResult,
+): AsyncIterable<RuntimeLedgerEvent> {
+  for await (const value of source) {
+    const decoded = decode(value);
+    if (!decoded.ok) throw runtimeLedgerDecodeError(decoded.failure);
+    yield decoded.event;
+  }
+};
+
+export const createAgentClientRuntimeLedgerStreamSource = (
+  source: AgentClientLedgerEventRpcStreamSource,
+): AgentClientStreamSource => ({
+  open(cursor, options) {
+    return decodeRuntimeLedgerStream(
+      source.open(cursor, options),
+      decodeAgentClientRuntimeLedgerEvent,
+    );
+  },
+});
+
+export const createAgentClientRuntimeLedgerSseStreamSource = (
+  source: AgentClientSseStreamSource,
+): AgentClientStreamSource => ({
+  open(cursor, options) {
+    return decodeRuntimeLedgerStream(
+      source.open(cursor, options),
+      decodeAgentClientRuntimeLedgerSseEvent,
+    );
+  },
+});
 
 export const createInitialAgentClientSnapshot = (
   events: ReadonlyArray<RuntimeLedgerEvent> = [],
