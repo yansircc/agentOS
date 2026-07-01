@@ -1184,7 +1184,7 @@ export class RuntimeLedgerTransitionRejected extends Data.TaggedError(
   readonly issues: ReadonlyArray<RuntimeLedgerTransitionIssue>;
 }> {}
 
-const decodeRuntimeLedgerEventSafe = (
+export const decodeRuntimeLedgerEventSafe = (
   event: LedgerEvent,
 ): DecodeRuntimeLedgerEventResult | null => {
   if (!isRuntimeEventKind(event.kind)) {

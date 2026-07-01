@@ -31,6 +31,7 @@ import {
   durableTriggerDuePayload,
   parseDurableTriggerRetryPolicy,
   parseBackendProtocolLedgerEventRpc,
+  parseBackendProtocolLedgerEventRpcJson,
   parseIntentPointerDuePayload,
   parseScheduledEventIntentPayload,
   parseRequestedPayload,
@@ -257,6 +258,26 @@ describe("@agent-os/backend-protocol", () => {
     expect(legacyScope.ok).toBe(false);
     if (legacyScope.ok) return;
     expect(legacyScope.failure.reason).toBe("ledger event must not include legacy scope");
+  });
+
+  it("parses ledger event RPC JSON at the protocol boundary", () => {
+    const event = {
+      id: 1,
+      ts: 1,
+      kind: "app.handled",
+      ...eventIdentity("receiver"),
+      payload: { ok: true },
+    };
+
+    expect(parseBackendProtocolLedgerEventRpcJson(JSON.stringify(event))).toMatchObject({
+      ok: true,
+      value: event,
+    });
+
+    expect(parseBackendProtocolLedgerEventRpcJson("{not json")).toMatchObject({
+      ok: false,
+      failure: { reason: "ledger event JSON malformed" },
+    });
   });
 
   it("owns retry, cause, and due-work pointer vocabulary", () => {

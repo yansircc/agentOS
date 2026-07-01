@@ -1,4 +1,4 @@
-import { Result, Predicate, Schema, pipe } from "effect";
+import { Option, Result, Predicate, Schema, pipe } from "effect";
 import {
   authorityRefKey,
   factOwnerKey,
@@ -1131,6 +1131,16 @@ export const parseBackendProtocolLedgerEventRpc = (
     effectAuthorityRef: value.effectAuthorityRef,
     payload: value.payload,
   });
+};
+
+export const parseBackendProtocolLedgerEventRpcJson = (
+  data: string,
+): BackendProtocolParseResult<BackendProtocolLedgerEventRpc> => {
+  const decoded = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)(data);
+  if (Option.isNone(decoded)) {
+    return backendProtocolParseFail("ledger event JSON malformed");
+  }
+  return parseBackendProtocolLedgerEventRpc(decoded.value);
 };
 
 export const dispatchPayloadParseFailure = (reason: string): DispatchPayloadParseFailure => ({

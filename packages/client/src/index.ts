@@ -1,6 +1,6 @@
 import {
   continuationRefFromInterruptedEvent,
-  decodeRuntimeLedgerEvent as decodeRuntimeLedgerProtocolEvent,
+  decodeRuntimeLedgerEventSafe as decodeRuntimeLedgerProtocolEventSafe,
   inputRequestRefFromInterruptedEvent,
   RUNTIME_ABORT_EVENT_KINDS,
   RUNTIME_EVENT_KIND,
@@ -10,7 +10,11 @@ import {
   type RuntimeLedgerEvent,
   type RuntimeLedgerEventByKind,
 } from "@agent-os/core/runtime-protocol";
-import { parseBackendProtocolLedgerEventRpc } from "@agent-os/core/backend-protocol";
+import {
+  parseBackendProtocolLedgerEventRpc,
+  parseBackendProtocolLedgerEventRpcJson,
+  type BackendProtocolLedgerEventRpc,
+} from "@agent-os/core/backend-protocol";
 import type {
   RunCancellationStatus,
   RunLastKnownEvent,
@@ -225,19 +229,14 @@ export const decodeAgentClientRuntimeLedgerEvent = (
     };
   }
 
-  try {
-    const decoded = decodeRuntimeLedgerProtocolEvent(parsed.value);
-    if (decoded._tag === "non_runtime") {
-      return {
-        ok: false,
-        failure: runtimeLedgerDecodeFailure(
-          "non_runtime_event",
-          "ledger event kind is not owned by runtime protocol",
-        ),
-      };
-    }
-    return { ok: true, event: decoded.event };
-  } catch {
+  return decodeAgentClientRuntimeLedgerEventRpc(parsed.value);
+};
+
+const decodeAgentClientRuntimeLedgerEventRpc = (
+  value: BackendProtocolLedgerEventRpc,
+): AgentClientRuntimeLedgerDecodeResult => {
+  const decoded = decodeRuntimeLedgerProtocolEventSafe(value);
+  if (decoded === null) {
     return {
       ok: false,
       failure: runtimeLedgerDecodeFailure(
@@ -246,14 +245,23 @@ export const decodeAgentClientRuntimeLedgerEvent = (
       ),
     };
   }
+  if (decoded._tag === "non_runtime") {
+    return {
+      ok: false,
+      failure: runtimeLedgerDecodeFailure(
+        "non_runtime_event",
+        "ledger event kind is not owned by runtime protocol",
+      ),
+    };
+  }
+  return { ok: true, event: decoded.event };
 };
 
 export const decodeAgentClientRuntimeLedgerSseEvent = (
   frame: AgentClientSseEvent,
 ): AgentClientRuntimeLedgerDecodeResult => {
-  try {
-    return decodeAgentClientRuntimeLedgerEvent(JSON.parse(frame.data) as unknown);
-  } catch {
+  const parsed = parseBackendProtocolLedgerEventRpcJson(frame.data);
+  if (!parsed.ok && parsed.failure.reason === "ledger event JSON malformed") {
     return {
       ok: false,
       failure: runtimeLedgerDecodeFailure(
@@ -262,18 +270,40 @@ export const decodeAgentClientRuntimeLedgerSseEvent = (
       ),
     };
   }
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      failure: runtimeLedgerDecodeFailure("ledger_event_malformed", parsed.failure.reason),
+    };
+  }
+  return decodeAgentClientRuntimeLedgerEventRpc(parsed.value);
 };
 
-const decodeRuntimeLedgerStream = async function* <Wire>(
+const rejectIteratorResult = <A>(error: Error): Promise<IteratorResult<A>> =>
+  new Promise((_, reject) => {
+    reject(error);
+  });
+
+const decodeRuntimeLedgerStream = <Wire>(
   source: AsyncIterable<Wire>,
   decode: (value: Wire) => AgentClientRuntimeLedgerDecodeResult,
-): AsyncIterable<RuntimeLedgerEvent> {
-  for await (const value of source) {
-    const decoded = decode(value);
-    if (!decoded.ok) throw runtimeLedgerDecodeError(decoded.failure);
-    yield decoded.event;
-  }
-};
+): AsyncIterable<RuntimeLedgerEvent> => ({
+  [Symbol.asyncIterator](): AsyncIterator<RuntimeLedgerEvent> {
+    const iterator = source[Symbol.asyncIterator]();
+    return {
+      next(): Promise<IteratorResult<RuntimeLedgerEvent>> {
+        return iterator.next().then((item) => {
+          if (item.done === true) return { done: true, value: undefined as never };
+          const decoded = decode(item.value);
+          if (!decoded.ok) {
+            return rejectIteratorResult(runtimeLedgerDecodeError(decoded.failure));
+          }
+          return { done: false, value: decoded.event };
+        });
+      },
+    };
+  },
+});
 
 export const createAgentClientRuntimeLedgerStreamSource = (
   source: AgentClientLedgerEventRpcStreamSource,

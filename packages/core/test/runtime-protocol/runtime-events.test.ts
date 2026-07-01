@@ -17,6 +17,7 @@ import {
   agentSessionTurnSubmittedEvent,
   chatIngestedEvent,
   decodeRuntimeLedgerEvent,
+  decodeRuntimeLedgerEventSafe,
   EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   llmRequestedEvent,
   llmResponseEvent,
@@ -1597,6 +1598,7 @@ describe("runtime event vocabulary", () => {
 
   it("rejects missing required runtime payload fields", () => {
     expect(() => decodeRuntimeLedgerEvent(rawEvent(1, "agent.run.started", {}))).toThrow();
+    expect(decodeRuntimeLedgerEventSafe(rawEvent(1, "agent.run.started", {}))).toBeNull();
     expect(() => projectRuntimeSafeLedgerEvent(rawEvent(1, "agent.run.started", {}))).toThrow();
     expect(() =>
       decodeRuntimeLedgerEvent(rawEvent(2, "llm.response", { turn: { id: 1, index: 0 } })),
