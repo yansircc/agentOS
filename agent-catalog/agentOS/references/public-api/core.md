@@ -360,6 +360,7 @@
 - `.:inputRequestRefFromInterruptedEvent`
 - `.:InputRequestRefFromInterruptionResult`
 - `.:InputRequestResumePayload`
+- `.:InputRequestSettlement`
 - `.:inspectAgentSchemaProfile`
 - `.:INSTALLATION_INTENT_VERSION`
 - `.:INSTALLATION_OBSERVATION_VERSION`
@@ -850,6 +851,7 @@
 - `.:WorkspaceAgentDriverMount`
 - `.:WorkspaceAgentFileEntry`
 - `.:WorkspaceAgentInputRequestDecision`
+- `.:WorkspaceAgentInspectInputRequestCommandInput`
 - `.:WorkspaceAgentFilesProjection`
 - `.:WorkspaceAgentFilesProjectionShape`
 - `.:WorkspaceAgentGeneratedMount`
@@ -1391,6 +1393,7 @@
 - `./runtime-protocol:inputRequestRefFromInterruptedEvent`
 - `./runtime-protocol:InputRequestRefFromInterruptionResult`
 - `./runtime-protocol:InputRequestResumePayload`
+- `./runtime-protocol:InputRequestSettlement`
 - `./runtime-protocol:INSTALLATION_INTENT_VERSION`
 - `./runtime-protocol:INSTALLATION_OBSERVATION_VERSION`
 - `./runtime-protocol:INSTALLATION_RECEIPT_EVENT_KIND`
@@ -1730,6 +1733,7 @@
 - `./workspace-agent:WorkspaceAgentDriverMount`
 - `./workspace-agent:WorkspaceAgentFileEntry`
 - `./workspace-agent:WorkspaceAgentInputRequestDecision`
+- `./workspace-agent:WorkspaceAgentInspectInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentFilesProjection`
 - `./workspace-agent:WorkspaceAgentFilesProjectionShape`
 - `./workspace-agent:WorkspaceAgentGeneratedMount`

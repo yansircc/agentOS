@@ -364,6 +364,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:inputRequestRefFromInterruptedEvent`
 - `.:InputRequestRefFromInterruptionResult`
 - `.:InputRequestResumePayload`
+- `.:InputRequestSettlement`
 - `.:inspectAgentSchemaProfile`
 - `.:INSTALLATION_INTENT_VERSION`
 - `.:INSTALLATION_OBSERVATION_VERSION`
@@ -854,6 +855,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceAgentDriverMount`
 - `.:WorkspaceAgentFileEntry`
 - `.:WorkspaceAgentInputRequestDecision`
+- `.:WorkspaceAgentInspectInputRequestCommandInput`
 - `.:WorkspaceAgentFilesProjection`
 - `.:WorkspaceAgentFilesProjectionShape`
 - `.:WorkspaceAgentGeneratedMount`
@@ -1395,6 +1397,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:inputRequestRefFromInterruptedEvent`
 - `./runtime-protocol:InputRequestRefFromInterruptionResult`
 - `./runtime-protocol:InputRequestResumePayload`
+- `./runtime-protocol:InputRequestSettlement`
 - `./runtime-protocol:INSTALLATION_INTENT_VERSION`
 - `./runtime-protocol:INSTALLATION_OBSERVATION_VERSION`
 - `./runtime-protocol:INSTALLATION_RECEIPT_EVENT_KIND`
@@ -1734,6 +1737,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./workspace-agent:WorkspaceAgentDriverMount`
 - `./workspace-agent:WorkspaceAgentFileEntry`
 - `./workspace-agent:WorkspaceAgentInputRequestDecision`
+- `./workspace-agent:WorkspaceAgentInspectInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentFilesProjection`
 - `./workspace-agent:WorkspaceAgentFilesProjectionShape`
 - `./workspace-agent:WorkspaceAgentGeneratedMount`

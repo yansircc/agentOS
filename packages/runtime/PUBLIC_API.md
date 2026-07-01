@@ -150,6 +150,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:projectContinuationRefs`
 - `.:projectInputRequest`
 - `.:projectInputRequests`
+- `.:projectInputRequestSettlement`
 - `.:ProjectInspectionSnapshotInput`
 - `.:projectInspectionSnapshot`
 - `.:ProjectionApplicationError`
@@ -308,6 +309,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:WorkspaceAgentFilesProjection`
 - `.:WorkspaceAgentFilesProjectionShape`
 - `.:WorkspaceAgentGeneratedMount`
+- `.:WorkspaceAgentInspectInputRequestCommandInput`
 - `.:WorkspaceAgentMutationCommandOutput`
 - `.:WorkspaceAgentProjectionName`
 - `.:WorkspaceAgentProjectionRead`
@@ -743,6 +745,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./workspace-agent:WorkspaceAgentFilesProjection`
 - `./workspace-agent:WorkspaceAgentFilesProjectionShape`
 - `./workspace-agent:WorkspaceAgentGeneratedMount`
+- `./workspace-agent:WorkspaceAgentInspectInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentMutationCommandOutput`
 - `./workspace-agent:WorkspaceAgentProjectionName`
 - `./workspace-agent:WorkspaceAgentProjectionRead`

@@ -199,6 +199,7 @@ product-control-plane lifecycle.
 - `.:projectContinuationRefs`
 - `.:projectInputRequest`
 - `.:projectInputRequests`
+- `.:projectInputRequestSettlement`
 - `.:ProjectInspectionSnapshotInput`
 - `.:projectInspectionSnapshot`
 - `.:ProjectionApplicationError`
@@ -357,6 +358,7 @@ product-control-plane lifecycle.
 - `.:WorkspaceAgentFilesProjection`
 - `.:WorkspaceAgentFilesProjectionShape`
 - `.:WorkspaceAgentGeneratedMount`
+- `.:WorkspaceAgentInspectInputRequestCommandInput`
 - `.:WorkspaceAgentMutationCommandOutput`
 - `.:WorkspaceAgentProjectionName`
 - `.:WorkspaceAgentProjectionRead`
@@ -792,6 +794,7 @@ product-control-plane lifecycle.
 - `./workspace-agent:WorkspaceAgentFilesProjection`
 - `./workspace-agent:WorkspaceAgentFilesProjectionShape`
 - `./workspace-agent:WorkspaceAgentGeneratedMount`
+- `./workspace-agent:WorkspaceAgentInspectInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentMutationCommandOutput`
 - `./workspace-agent:WorkspaceAgentProjectionName`
 - `./workspace-agent:WorkspaceAgentProjectionRead`

@@ -59,6 +59,7 @@ slug: "api/client"
 - `./workspace-agent:WorkspaceAgentDecideInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`
 - `./workspace-agent:WorkspaceAgentFileEntry`
+- `./workspace-agent:WorkspaceAgentInspectInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentMutationCommandOutput`
 - `./workspace-agent:WorkspaceAgentProductClient`
 - `./workspace-agent:WorkspaceAgentProductCommandInputByName`
