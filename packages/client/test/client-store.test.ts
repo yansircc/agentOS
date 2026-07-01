@@ -41,14 +41,14 @@ const identity = {
 };
 
 const runtimeLedgerRpc = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
-    id,
-    ts: id * 10,
-    kind: spec.kind,
-    scopeRef: spec.scopeRef,
-    factOwnerRef: RUNTIME_FACT_OWNER,
-    effectAuthorityRef: spec.effectAuthorityRef,
-    payload: spec.payload,
-  });
+  id,
+  ts: id * 10,
+  kind: spec.kind,
+  scopeRef: spec.scopeRef,
+  factOwnerRef: RUNTIME_FACT_OWNER,
+  effectAuthorityRef: spec.effectAuthorityRef,
+  payload: spec.payload,
+});
 
 const runtimeEvent = (id: number, spec: RuntimeEventCommitSpec): RuntimeLedgerEvent => {
   const decoded = decodeRuntimeLedgerEvent(runtimeLedgerRpc(id, spec));
@@ -59,8 +59,7 @@ const runtimeEvent = (id: number, spec: RuntimeEventCommitSpec): RuntimeLedgerEv
 const startedEventSpec = (): RuntimeEventCommitSpec =>
   agentRunStartedEvent({ ...identity, intent: "test" });
 
-const startedEvent = (id = 1): RuntimeLedgerEvent =>
-  runtimeEvent(id, startedEventSpec());
+const startedEvent = (id = 1): RuntimeLedgerEvent => runtimeEvent(id, startedEventSpec());
 
 const interruptedEventSpec = (): RuntimeEventCommitSpec =>
   agentRunInterruptedEvent({
@@ -79,8 +78,7 @@ const interruptedEventSpec = (): RuntimeEventCommitSpec =>
     },
   });
 
-const interruptedEvent = (id = 2): RuntimeLedgerEvent =>
-  runtimeEvent(id, interruptedEventSpec());
+const interruptedEvent = (id = 2): RuntimeLedgerEvent => runtimeEvent(id, interruptedEventSpec());
 
 const resumedEventSpec = (): RuntimeEventCommitSpec =>
   agentRunResumedEvent({
@@ -92,8 +90,7 @@ const resumedEventSpec = (): RuntimeEventCommitSpec =>
     resumedAtEventId: 4,
   });
 
-const resumedEvent = (id = 3): RuntimeLedgerEvent =>
-  runtimeEvent(id, resumedEventSpec());
+const resumedEvent = (id = 3): RuntimeLedgerEvent => runtimeEvent(id, resumedEventSpec());
 
 const completedEventSpec = (): RuntimeEventCommitSpec =>
   agentRunCompletedEvent({
@@ -105,8 +102,7 @@ const completedEventSpec = (): RuntimeEventCommitSpec =>
     tokensUsed: 11,
   });
 
-const completedEvent = (id = 4): RuntimeLedgerEvent =>
-  runtimeEvent(id, completedEventSpec());
+const completedEvent = (id = 4): RuntimeLedgerEvent => runtimeEvent(id, completedEventSpec());
 
 const sessionLinkEvent = (id = 5): RuntimeLedgerEvent =>
   runtimeEvent(
@@ -320,9 +316,7 @@ describe("@agent-os/client", () => {
       failure: { reason: "non_runtime_event" },
     });
 
-    expect(
-      decodeAgentClientRuntimeLedgerSseEvent({ data: "{not json" }),
-    ).toMatchObject({
+    expect(decodeAgentClientRuntimeLedgerSseEvent({ data: "{not json" })).toMatchObject({
       ok: false,
       failure: { reason: "sse_data_invalid_json" },
     });

@@ -27,7 +27,11 @@ type ExampleProjection =
       readonly request: ExampleRequest;
       readonly evidenceRefs?: ReadonlyArray<string>;
     }
-  | { readonly status: "done"; readonly value: string; readonly evidenceRefs?: ReadonlyArray<string> }
+  | {
+      readonly status: "done";
+      readonly value: string;
+      readonly evidenceRefs?: ReadonlyArray<string>;
+    }
   | { readonly status: "indeterminate"; readonly evidenceRefs: ReadonlyArray<string> };
 type ExampleRequest = { readonly requestId: string };
 
