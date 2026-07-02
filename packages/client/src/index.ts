@@ -369,6 +369,7 @@ const runIdFromEvent = (event: RuntimeLedgerEvent): number | undefined => {
       return event.payload.runId;
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
       return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
     case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED:
@@ -413,6 +414,23 @@ const productLinkFromEvent = (
       submittedAt: event.ts,
       workflowId: event.payload.workflowId,
       workflowRunId: event.payload.workflowRunId,
+      ...(event.payload.idempotencyKey === undefined
+        ? {}
+        : { idempotencyKey: event.payload.idempotencyKey }),
+      ...(event.payload.inputDigest === undefined
+        ? {}
+        : { inputDigest: event.payload.inputDigest }),
+    };
+  }
+  if (
+    event.kind === RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED &&
+    event.payload.runtimeRunId === runId
+  ) {
+    return {
+      kind: "opaque",
+      eventId: event.id,
+      submittedAt: event.ts,
+      productRef: event.payload.productRef,
       ...(event.payload.idempotencyKey === undefined
         ? {}
         : { idempotencyKey: event.payload.idempotencyKey }),

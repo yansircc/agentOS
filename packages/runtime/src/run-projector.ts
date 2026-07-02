@@ -90,6 +90,7 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number | undefined => {
       return event.id;
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
       return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
@@ -383,9 +384,11 @@ const runProductLink = (
       event,
     ): event is
       | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
-      | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED> =>
+      | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>
+      | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED> =>
       (event.kind === RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED ||
-        event.kind === RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED) &&
+        event.kind === RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED ||
+        event.kind === RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED) &&
       event.payload.runtimeRunId === runId,
   );
   if (linked === undefined) return undefined;
@@ -401,18 +404,29 @@ const runProductLink = (
         : { idempotencyKey: linked.payload.idempotencyKey }),
     };
   }
+  if (linked.kind === RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED) {
+    return {
+      kind: "opaque",
+      eventId: linked.id,
+      submittedAt: linked.ts,
+      productRef: linked.payload.productRef,
+      ...(linked.payload.idempotencyKey === undefined
+        ? {}
+        : { idempotencyKey: linked.payload.idempotencyKey }),
+      ...(linked.payload.inputDigest === undefined
+        ? {}
+        : { inputDigest: linked.payload.inputDigest }),
+    };
+  }
+  const payload: WorkflowRunSubmittedPayload = linked.payload;
   return {
     kind: "workflow_run",
     eventId: linked.id,
     submittedAt: linked.ts,
-    workflowId: linked.payload.workflowId,
-    workflowRunId: linked.payload.workflowRunId,
-    ...(linked.payload.idempotencyKey === undefined
-      ? {}
-      : { idempotencyKey: linked.payload.idempotencyKey }),
-    ...(linked.payload.inputDigest === undefined
-      ? {}
-      : { inputDigest: linked.payload.inputDigest }),
+    workflowId: payload.workflowId,
+    workflowRunId: payload.workflowRunId,
+    ...(payload.idempotencyKey === undefined ? {} : { idempotencyKey: payload.idempotencyKey }),
+    ...(payload.inputDigest === undefined ? {} : { inputDigest: payload.inputDigest }),
   };
 };
 

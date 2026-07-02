@@ -70,6 +70,7 @@ const runIdForRuntimeEvent = (event: RuntimeLedgerEvent): number | undefined => 
       return event.payload.runId;
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
       return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:

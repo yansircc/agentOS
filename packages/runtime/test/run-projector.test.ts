@@ -24,6 +24,7 @@ import {
   agentSessionTurnSubmittedEvent,
   chatIngestedEvent,
   llmResponseEvent,
+  productRunLinkedEvent,
   scheduleFireRequestedEvent,
   toolExecutedEvent,
   workflowRunSubmittedEvent,
@@ -639,6 +640,39 @@ describe("runtime run projectors", () => {
           message: "handler failed",
         },
       ],
+    });
+  });
+
+  it("projects opaque product links as correlation evidence only", () => {
+    const rows = [
+      event(1, agentRunStartedEvent({ ...runtimeIdentity, intent: "product shell run" })),
+      event(
+        2,
+        productRunLinkedEvent({
+          ...runtimeIdentity,
+          productRef: "product:shell:run-1",
+          runtimeRunId: 1,
+          idempotencyKey: "idem:opaque",
+          inputDigest: "sha256:opaque-input",
+        }),
+      ),
+    ];
+
+    expect(projectRunInspection(rows, 1)).toMatchObject({
+      runId: 1,
+      productLink: {
+        kind: "opaque",
+        eventId: 2,
+        submittedAt: 20,
+        productRef: "product:shell:run-1",
+        idempotencyKey: "idem:opaque",
+        inputDigest: "sha256:opaque-input",
+      },
+    });
+    expect(projectAgentSessions(rows)).toEqual({ sessions: [] });
+    expect(projectWorkflowRuns(rows, "workflow:unused")).toEqual({
+      workflowId: "workflow:unused",
+      runs: [],
     });
   });
 

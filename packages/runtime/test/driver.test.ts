@@ -6,6 +6,7 @@ import {
   RUNTIME_EVENT_KIND,
   agentRunStartedEvent,
   agentSessionTurnSubmittedEvent,
+  productRunLinkedEvent,
   type RuntimeEventCommitSpec,
 } from "@agent-os/core/runtime-protocol";
 import { appendRuntimeDriverAction } from "../src/driver";
@@ -126,6 +127,84 @@ describe("runtime driver value-domain boundary", () => {
       expect(committed.map((event) => event.kind)).toEqual([
         RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
         RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED,
+      ]);
+    }),
+  );
+
+  it.effect("commits start and opaque product link in one prepared driver append", () =>
+    Effect.gen(function* () {
+      const start = agentRunStartedEvent({ ...identity, intent: "product shell run" });
+      const committed: LedgerEvent[] = [];
+      const result = yield* appendRuntimeDriverAction(
+        {
+          commit: () => Effect.die("unused commit"),
+          commitPrepared: (build) =>
+            Effect.sync(() => {
+              const ids = new Map<string, number>();
+              const recipes: Array<{
+                readonly ref: { readonly key: string };
+                readonly recipe: {
+                  readonly kind: string;
+                  readonly payload?: unknown;
+                  readonly buildPayload?: (context: {
+                    readonly id: (ref: { readonly key: string }) => number;
+                  }) => unknown;
+                  readonly scopeRef: LedgerEvent["scopeRef"];
+                  readonly effectAuthorityRef: LedgerEvent["effectAuthorityRef"];
+                };
+              }> = [];
+              const builder = {
+                ref: () => ({ key: "agent.run.started" }),
+                id: (ref: { readonly key: string }) => ids.get(ref.key) ?? 0,
+                append: (refOrRecipe: any, maybeRecipe?: any) => {
+                  const ref =
+                    maybeRecipe === undefined ? { key: `event:${recipes.length}` } : refOrRecipe;
+                  const recipe = maybeRecipe === undefined ? refOrRecipe : maybeRecipe;
+                  ids.set(ref.key, recipes.length + 1);
+                  recipes.push({ ref, recipe });
+                  return ref;
+                },
+              };
+              build(builder);
+              const id = (ref: { readonly key: string }) => ids.get(ref.key) ?? 0;
+              for (const { ref, recipe } of recipes) {
+                committed.push(
+                  eventFromSpec(id(ref), {
+                    kind: recipe.kind,
+                    scopeRef: recipe.scopeRef,
+                    effectAuthorityRef: recipe.effectAuthorityRef,
+                    payload:
+                      recipe.buildPayload === undefined
+                        ? recipe.payload
+                        : recipe.buildPayload({ id }),
+                  } as RuntimeEventCommitSpec),
+                );
+              }
+              return committed.map(decodeRecordedLedgerEvent);
+            }),
+        },
+        {
+          kind: "start_with_product_link",
+          start,
+          productLink: (runId) =>
+            productRunLinkedEvent({
+              ...identity,
+              productRef: "product:shell:run-1",
+              runtimeRunId: runId,
+              idempotencyKey: "idem:opaque",
+            }),
+        },
+      );
+
+      expect(result.kind).toBe("start_with_product_link");
+      expect(result.productLink.payload).toMatchObject({
+        productRef: "product:shell:run-1",
+        runtimeRunId: 1,
+        idempotencyKey: "idem:opaque",
+      });
+      expect(committed.map((event) => event.kind)).toEqual([
+        RUNTIME_EVENT_KIND.AGENT_RUN_STARTED,
+        RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED,
       ]);
     }),
   );

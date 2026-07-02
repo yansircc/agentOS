@@ -303,6 +303,14 @@ export type RunProductLink =
       readonly workflowRunId: string;
       readonly idempotencyKey?: string;
       readonly inputDigest?: string;
+    }
+  | {
+      readonly kind: "opaque";
+      readonly eventId: number;
+      readonly submittedAt: number;
+      readonly productRef: string;
+      readonly idempotencyKey?: string;
+      readonly inputDigest?: string;
     };
 
 export interface RunInspectionDiagnostic {

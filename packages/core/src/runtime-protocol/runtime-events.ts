@@ -59,6 +59,7 @@ export const RUNTIME_EVENT_KIND = {
   CHAT_INGESTED: "chat.ingested",
   AGENT_SESSION_TURN_SUBMITTED: "agent_session.turn_submitted",
   WORKFLOW_RUN_SUBMITTED: "workflow.run_submitted",
+  PRODUCT_RUN_LINKED: "product.run_linked",
   INGRESS_DELIVERY_REQUESTED: "ingress.delivery_requested",
   INGRESS_DELIVERY_ACCEPTED: "ingress.delivery_accepted",
   INGRESS_DELIVERY_FAILED: "ingress.delivery_failed",
@@ -156,6 +157,14 @@ export type AgentSessionTurnSubmittedPayload = {
 export type WorkflowRunSubmittedPayload = {
   readonly workflowId: string;
   readonly workflowRunId: string;
+  readonly runtimeRunId: number;
+  readonly idempotencyKey?: string;
+  readonly inputDigest?: string;
+  readonly traceContext?: TraceContext;
+};
+
+export type ProductRunLinkedPayload = {
+  readonly productRef: string;
   readonly runtimeRunId: number;
   readonly idempotencyKey?: string;
   readonly inputDigest?: string;
@@ -559,6 +568,15 @@ export const WorkflowRunSubmittedPayloadSchema: Schema.Decoder<WorkflowRunSubmit
     traceContext: Schema.optional(TraceContextSchema),
   });
 
+export const ProductRunLinkedPayloadSchema: Schema.Decoder<ProductRunLinkedPayload> =
+  Schema.Struct({
+    productRef: nonEmptyString,
+    runtimeRunId: positiveInt,
+    idempotencyKey: Schema.optional(nonEmptyString),
+    inputDigest: Schema.optional(nonEmptyString),
+    traceContext: Schema.optional(TraceContextSchema),
+  });
+
 export const IngressDeliveryPrincipalPayloadSchema: Schema.Decoder<IngressDeliveryPrincipalPayload> =
   Schema.Struct({
     authority: nonEmptyString,
@@ -835,6 +853,7 @@ export type RuntimeEventPayloadByKind = {
   readonly [RUNTIME_EVENT_KIND.CHAT_INGESTED]: ChatIngestedPayload;
   readonly [RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED]: AgentSessionTurnSubmittedPayload;
   readonly [RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED]: WorkflowRunSubmittedPayload;
+  readonly [RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED]: ProductRunLinkedPayload;
   readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED]: IngressDeliveryRequestedPayload;
   readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED]: IngressDeliveryAcceptedPayload;
   readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED]: IngressDeliveryFailedPayload;
@@ -938,6 +957,10 @@ const decodeRuntimePayload = <K extends RuntimeEventKind>(
       return Schema.decodeUnknownSync(WorkflowRunSubmittedPayloadSchema)(
         payload,
       ) as RuntimeEventPayloadByKind[K];
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
+      return Schema.decodeUnknownSync(ProductRunLinkedPayloadSchema)(
+        payload,
+      ) as RuntimeEventPayloadByKind[K];
     case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
       return Schema.decodeUnknownSync(IngressDeliveryRequestedPayloadSchema)(
         payload,
@@ -1036,6 +1059,10 @@ const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
       ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       return Schema.decodeUnknownOption(WorkflowRunSubmittedPayloadSchema)(
+        payload,
+      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
+      return Schema.decodeUnknownOption(ProductRunLinkedPayloadSchema)(
         payload,
       ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
@@ -1309,6 +1336,7 @@ type RuntimeProductLinkState = {
   readonly sessionTurns: Set<string>;
   readonly sessionRuns: Map<string, Set<number>>;
   readonly workflowRuns: Set<string>;
+  readonly productRefs: Set<string>;
   readonly runtimeRunLinks: Map<
     number,
     {
@@ -1369,6 +1397,7 @@ const makeRuntimeProductLinkState = (): RuntimeProductLinkState => ({
   sessionTurns: new Set(),
   sessionRuns: new Map(),
   workflowRuns: new Set(),
+  productRefs: new Set(),
   runtimeRunLinks: new Map(),
 });
 
@@ -1388,6 +1417,8 @@ const sessionTurnLinkKey = (payload: AgentSessionTurnSubmittedPayload): string =
 
 const workflowRunLinkKey = (payload: WorkflowRunSubmittedPayload): string =>
   `${payload.workflowId}\u0000${payload.workflowRunId}`;
+
+const productRunLinkKey = (payload: ProductRunLinkedPayload): string => payload.productRef;
 
 const isIngressDeliveryEvent = (
   event: RuntimeLedgerEvent,
@@ -1711,7 +1742,8 @@ const activeSessionRunId = (
 
 type RuntimeProductLinkEvent =
   | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
-  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>;
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>
+  | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED>;
 
 const addRuntimeProductLink = (
   productLinks: RuntimeProductLinkState,
@@ -1746,6 +1778,7 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
       return event.id;
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
       return event.payload.runtimeRunId;
     case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
     case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED:
@@ -1856,6 +1889,10 @@ const applyHistoricalRuntimeRunEvent = (
       break;
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
       productLinks.workflowRuns.add(workflowRunLinkKey(event.payload));
+      addRuntimeProductLink(productLinks, event);
+      break;
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
+      productLinks.productRefs.add(productRunLinkKey(event.payload));
       addRuntimeProductLink(productLinks, event);
       break;
     case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED: {
@@ -2190,6 +2227,25 @@ export const validateRuntimeLedgerTransitions = (input: {
         }
         break;
       }
+      case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED: {
+        const key = productRunLinkKey(event.payload);
+        const productLinkConflict = runtimeProductLinkConflict(productLinks, event);
+        if (productLinks.productRefs.has(key)) {
+          issues.push(
+            runTransitionIssue(
+              "runtime_product_link_duplicate",
+              event,
+              "product.run_linked must be the only runtime link for an opaque product ref",
+            ),
+          );
+        } else if (productLinkConflict !== null) {
+          issues.push(productLinkConflict);
+        } else if (hasStarted && !hasTerminal) {
+          productLinks.productRefs.add(key);
+          addRuntimeProductLink(productLinks, event);
+        }
+        break;
+      }
       case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
       case ABORT.BUDGET_TOKENS:
       case ABORT.BUDGET_TIME:
@@ -2303,6 +2359,23 @@ export const workflowRunSubmittedEvent = (
   runtimeEvent(spec, RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED, {
     workflowId: spec.workflowId,
     workflowRunId: spec.workflowRunId,
+    runtimeRunId: spec.runtimeRunId,
+    ...(spec.idempotencyKey === undefined ? {} : { idempotencyKey: spec.idempotencyKey }),
+    ...(spec.inputDigest === undefined ? {} : { inputDigest: spec.inputDigest }),
+    ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const productRunLinkedEvent = (
+  spec: RuntimeEventIdentitySpec & {
+    readonly productRef: string;
+    readonly runtimeRunId: number;
+    readonly idempotencyKey?: string;
+    readonly inputDigest?: string;
+    readonly traceContext?: TraceContext;
+  },
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED, {
+    productRef: spec.productRef,
     runtimeRunId: spec.runtimeRunId,
     ...(spec.idempotencyKey === undefined ? {} : { idempotencyKey: spec.idempotencyKey }),
     ...(spec.inputDigest === undefined ? {} : { inputDigest: spec.inputDigest }),

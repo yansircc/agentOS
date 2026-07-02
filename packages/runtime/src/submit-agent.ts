@@ -51,6 +51,7 @@ import {
   llmRequestedEvent,
   llmResponseEvent,
   parseInputRequestResumePayload,
+  productRunLinkedEvent,
   RUNTIME_EVENT_KIND,
   receiptBackedToolResultFromUnknown,
   runtimeCompletedAfterToolsEvent,
@@ -188,6 +189,12 @@ export type SubmitAgentProductLink =
       readonly workflowRunId: string;
       readonly idempotencyKey?: string;
       readonly inputDigest?: string;
+    }
+  | {
+      readonly kind: "opaque";
+      readonly productRef: string;
+      readonly idempotencyKey?: string;
+      readonly inputDigest?: string;
     };
 
 export interface SubmitAgentOptions {
@@ -215,6 +222,15 @@ const productLinkEventFor = (
         ...identity,
         workflowId: productLink.workflowId,
         workflowRunId: productLink.workflowRunId,
+        runtimeRunId,
+        idempotencyKey: productLink.idempotencyKey,
+        inputDigest: productLink.inputDigest,
+        traceContext,
+      });
+    case "opaque":
+      return productRunLinkedEvent({
+        ...identity,
+        productRef: productLink.productRef,
         runtimeRunId,
         idempotencyKey: productLink.idempotencyKey,
         inputDigest: productLink.inputDigest,

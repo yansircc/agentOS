@@ -8,6 +8,7 @@ import {
   agentRunResumedEvent,
   agentRunStartedEvent,
   decodeRuntimeLedgerEvent,
+  productRunLinkedEvent,
   RUNTIME_FACT_OWNER,
   type RuntimeEventCommitSpec,
   type RuntimeLedgerEvent,
@@ -116,6 +117,18 @@ const sessionLinkEvent = (id = 5): RuntimeLedgerEvent =>
     }),
   );
 
+const opaqueProductLinkEvent = (id = 5): RuntimeLedgerEvent =>
+  runtimeEvent(
+    id,
+    productRunLinkedEvent({
+      ...identity,
+      productRef: "product:shell:run-1",
+      runtimeRunId: 1,
+      idempotencyKey: "idem:opaque",
+      inputDigest: "sha256:opaque-input",
+    }),
+  );
+
 const cancelledEvent = (id = 6): RuntimeLedgerEvent =>
   runtimeEvent(
     id,
@@ -218,6 +231,26 @@ describe("@agent-os/client", () => {
         at: 60,
         event: "agent.aborted.cancelled",
         reason: "operator_cancelled",
+      },
+    });
+  });
+
+  it("projects opaque product links from runtime ledger replay", () => {
+    const client = createAgentClient({
+      initialEvents: [startedEvent(), opaqueProductLinkEvent()],
+    });
+
+    expect(projectAgentClientRunInspection(client.getSnapshot())).toMatchObject({
+      runId: 1,
+      status: "running",
+      lastKnownEvent: { id: 5, ts: 50, kind: "product.run_linked" },
+      productLink: {
+        kind: "opaque",
+        eventId: 5,
+        submittedAt: 50,
+        productRef: "product:shell:run-1",
+        idempotencyKey: "idem:opaque",
+        inputDigest: "sha256:opaque-input",
       },
     });
   });

@@ -21,6 +21,7 @@ import {
   EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   llmRequestedEvent,
   llmResponseEvent,
+  productRunLinkedEvent,
   RUNTIME_EVENT_KIND,
   RUNTIME_ABORT_EVENT_KINDS,
   runtimeCompletedAfterToolsEvent,
@@ -419,6 +420,16 @@ describe("runtime event vocabulary", () => {
         inputDigest: "sha256:input",
       }),
     );
+    const opaqueProduct = ledgerEvent(
+      4,
+      productRunLinkedEvent({
+        ...runtimeIdentity,
+        productRef: "product:shell:run-001",
+        runtimeRunId: 1,
+        idempotencyKey: "idem:opaque",
+        inputDigest: "sha256:opaque-input",
+      }),
+    );
 
     expect(projectRuntimeSafeLedgerEvent(sessionTurn)?.safePayload).toEqual({
       sessionRef: "session:s1",
@@ -432,7 +443,13 @@ describe("runtime event vocabulary", () => {
       idempotencyKey: "idem:1",
       inputDigest: "sha256:input",
     });
-    const serialized = JSON.stringify([sessionTurn, workflowRun]);
+    expect(projectRuntimeSafeLedgerEvent(opaqueProduct)?.safePayload).toEqual({
+      productRef: "product:shell:run-001",
+      runtimeRunId: 1,
+      idempotencyKey: "idem:opaque",
+      inputDigest: "sha256:opaque-input",
+    });
+    const serialized = JSON.stringify([sessionTurn, workflowRun, opaqueProduct]);
     expect(serialized).not.toContain("status");
     expect(serialized).not.toContain("terminal");
     expect(serialized).not.toContain("executionIdentity");
@@ -1059,11 +1076,25 @@ describe("runtime event vocabulary", () => {
         inputDigest: "sha256:input",
       }),
     );
+    const opaqueStarted = ledgerEvent(
+      5,
+      agentRunStartedEvent({ ...runtimeIdentity, intent: "product shell run" }),
+    );
+    const opaqueRun = ledgerEvent(
+      6,
+      productRunLinkedEvent({
+        ...runtimeIdentity,
+        productRef: "product:shell:run-1",
+        runtimeRunId: opaqueStarted.id,
+        idempotencyKey: "idem:opaque",
+        inputDigest: "sha256:opaque-input",
+      }),
+    );
 
     expect(
       validateRuntimeLedgerTransitions({
-        history: [started, workflowStarted],
-        events: [sessionTurn, workflowRun],
+        history: [started, workflowStarted, opaqueStarted],
+        events: [sessionTurn, workflowRun, opaqueRun],
       }),
     ).toEqual({ ok: true });
     const decodedSessionTurn = decodeRuntimeLedgerEvent(sessionTurn);
@@ -1078,6 +1109,16 @@ describe("runtime event vocabulary", () => {
     expect(projectRuntimeSafeLedgerEvent(sessionTurn)?.safePayload).toMatchObject({
       idempotencyKey: "fire:session:s1:1",
     });
+    expect(decodeRuntimeLedgerEvent(opaqueRun)).toMatchObject({
+      _tag: "runtime",
+      event: {
+        kind: RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED,
+        payload: {
+          productRef: "product:shell:run-1",
+          runtimeRunId: opaqueStarted.id,
+        },
+      },
+    });
     expect(() =>
       decodeRuntimeLedgerEvent({
         ...sessionTurn,
@@ -1091,7 +1132,7 @@ describe("runtime event vocabulary", () => {
     ).toThrow();
 
     const duplicateSessionTurn = ledgerEvent(
-      5,
+      7,
       agentSessionTurnSubmittedEvent({
         ...runtimeIdentity,
         sessionRef: "session:s1",
@@ -1100,7 +1141,7 @@ describe("runtime event vocabulary", () => {
       }),
     );
     const duplicateWorkflowRun = ledgerEvent(
-      6,
+      8,
       workflowRunSubmittedEvent({
         ...runtimeIdentity,
         workflowId: "summarize",
@@ -1108,14 +1149,23 @@ describe("runtime event vocabulary", () => {
         runtimeRunId: workflowStarted.id,
       }),
     );
+    const duplicateOpaqueRun = ledgerEvent(
+      9,
+      productRunLinkedEvent({
+        ...runtimeIdentity,
+        productRef: "product:shell:run-1",
+        runtimeRunId: opaqueStarted.id,
+      }),
+    );
 
     const duplicateValidation = validateRuntimeLedgerTransitions({
-      history: [started, sessionTurn, workflowStarted, workflowRun],
-      events: [duplicateSessionTurn, duplicateWorkflowRun],
+      history: [started, sessionTurn, workflowStarted, workflowRun, opaqueStarted, opaqueRun],
+      events: [duplicateSessionTurn, duplicateWorkflowRun, duplicateOpaqueRun],
     });
     expect(duplicateValidation.ok).toBe(false);
     if (!duplicateValidation.ok) {
       expect(duplicateValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_product_link_duplicate",
         "runtime_product_link_duplicate",
         "runtime_product_link_duplicate",
       ]);
@@ -1139,6 +1189,14 @@ describe("runtime event vocabulary", () => {
         ...runtimeIdentity,
         workflowId: "summarize",
         workflowRunId: "workflow-run:1",
+        runtimeRunId: started.id,
+      }),
+    );
+    const opaqueRun = ledgerEvent(
+      4,
+      productRunLinkedEvent({
+        ...runtimeIdentity,
+        productRef: "product:shell:run-1",
         runtimeRunId: started.id,
       }),
     );
@@ -1171,6 +1229,22 @@ describe("runtime event vocabulary", () => {
           eventId: sessionTurn.id,
           sourceEventId: workflowRun.id,
           sourceKind: RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED,
+        },
+      ]);
+    }
+
+    const opaqueAfterSession = validateRuntimeLedgerTransitions({
+      history: [started, sessionTurn],
+      events: [opaqueRun],
+    });
+    expect(opaqueAfterSession.ok).toBe(false);
+    if (!opaqueAfterSession.ok) {
+      expect(opaqueAfterSession.issues).toMatchObject([
+        {
+          code: "runtime_product_link_run_conflict",
+          eventId: opaqueRun.id,
+          sourceEventId: sessionTurn.id,
+          sourceKind: RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED,
         },
       ]);
     }
@@ -1267,14 +1341,23 @@ describe("runtime event vocabulary", () => {
         runtimeRunId: started.id,
       }),
     );
+    const missingOpaqueLink = ledgerEvent(
+      5,
+      productRunLinkedEvent({
+        ...runtimeIdentity,
+        productRef: "product:shell:missing",
+        runtimeRunId: 99,
+      }),
+    );
 
     const missingRunValidation = validateRuntimeLedgerTransitions({
       history: [],
-      events: [missingRunLink],
+      events: [missingRunLink, missingOpaqueLink],
     });
     expect(missingRunValidation.ok).toBe(false);
     if (!missingRunValidation.ok) {
       expect(missingRunValidation.issues.map((issue) => issue.code)).toEqual([
+        "runtime_run_missing_start",
         "runtime_run_missing_start",
       ]);
     }

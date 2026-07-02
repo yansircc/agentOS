@@ -86,7 +86,8 @@ export type RuntimeDriverAction = {
 
 type ProductLinkEventCommitSpec =
   | RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
-  | RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>;
+  | RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>
+  | RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED>;
 
 export type StartWithProductLinkDriverAction = {
   readonly kind: "start_with_product_link";
@@ -161,7 +162,8 @@ export type DriverActionResult =
       readonly event: RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_STARTED>;
       readonly productLink:
         | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED>
-        | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>;
+        | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED>
+        | RuntimeLedgerEventByKind<typeof RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED>;
     }
   | {
       readonly kind: "park";

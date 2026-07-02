@@ -92,6 +92,17 @@ const projectRuntimeSafeEvent = (event: RuntimeLedgerEvent): SafeLedgerEvent => 
           ? {}
           : { inputDigest: event.payload.inputDigest }),
       });
+    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
+      return safeLedgerEvent(event, {
+        productRef: event.payload.productRef,
+        runtimeRunId: event.payload.runtimeRunId,
+        ...(event.payload.idempotencyKey === undefined
+          ? {}
+          : { idempotencyKey: event.payload.idempotencyKey }),
+        ...(event.payload.inputDigest === undefined
+          ? {}
+          : { inputDigest: event.payload.inputDigest }),
+      });
     case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
       return safeLedgerEvent(event, {
         scheduleId: event.payload.scheduleId,
