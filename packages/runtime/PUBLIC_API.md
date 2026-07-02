@@ -672,6 +672,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./llm-effect-ai/openai-compatible:ProviderMaterialPreflightDiagnostic`
 - `./local:CreateLocalAgentRuntimeOptions`
 - `./local:createLocalAgentRuntime`
+- `./local:createLocalRuntimeLedgerSource`
 - `./local:CreateLocalWorkspaceEnvOptions`
 - `./local:createLocalWorkspaceEnv`
 - `./local:LocalAgentRuntime`
@@ -679,11 +680,15 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./local:LocalAgentRuntimeLlmPreflight`
 - `./local:LocalAgentRuntimeLlmPreflightInput`
 - `./local:LocalAgentRuntimeResolveError`
+- `./local:LocalRuntimeLedgerHydrationError`
+- `./local:LocalRuntimeLedgerSource`
+- `./local:LocalRuntimeLedgerSourceOptions`
 - `./local:LocalAgentRuntimeTarget`
 - `./local:LocalAgentSubmitInput`
 - `./local:LocalAgentRuntimeTestLlm`
 - `./local:LocalAgentRuntimeTransportLlm`
 - `./local:LocalWorkspaceEnvError`
+- `./local:validateLocalRuntimeLedgerHydrationEvents`
 - `./local:LoweredLocalAgentRuntime`
 - `./local:LowerLocalAgentRuntimeOptions`
 - `./local:lowerLocalAgentRuntime`

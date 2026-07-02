@@ -75,6 +75,21 @@ import {
   normalizeAbsolutePath,
   truncateUtf8,
 } from "../workspace-env-core/path-policy";
+import {
+  createLocalRuntimeLedgerSource,
+  type LocalRuntimeLedgerSource,
+  validateLocalRuntimeLedgerHydrationEvents,
+} from "./runtime-ledger-source";
+
+export {
+  createLocalRuntimeLedgerSource,
+  LocalRuntimeLedgerHydrationError,
+  validateLocalRuntimeLedgerHydrationEvents,
+} from "./runtime-ledger-source";
+export type {
+  LocalRuntimeLedgerSource,
+  LocalRuntimeLedgerSourceOptions,
+} from "./runtime-ledger-source";
 
 export interface CreateLocalWorkspaceEnvOptions {
   readonly cwd: string;
@@ -110,6 +125,7 @@ export type LocalAgentRuntimeLlmPreflight = (
 export interface CreateLocalAgentRuntimeOptions {
   readonly identity: string;
   readonly truthIdentity?: LedgerTruthIdentity;
+  readonly initialEvents?: ReadonlyArray<LedgerEvent>;
   readonly cwd: string;
   readonly env?: CreateLocalWorkspaceEnvOptions["env"];
   readonly inheritEnv?: CreateLocalWorkspaceEnvOptions["inheritEnv"];
@@ -153,6 +169,7 @@ export interface LoweredLocalAgentRuntime {
   readonly target: LocalAgentRuntimeTarget;
   readonly manifest: ResolvedRuntime["manifest"];
   readonly runtime: LocalAgentRuntime;
+  readonly runtimeLedgerSource: LocalRuntimeLedgerSource;
   readonly submitWithProductLink: (
     input: LocalAgentSubmitInput,
     productLink: SubmitAgentProductLink,
@@ -715,6 +732,29 @@ const commitLocalScheduleFireDispatchWithDelivery = (
         }).pipe(Effect.provide(resolved.layer)),
       );
 
+const hydrateLocalRuntimeLedger = (
+  input: Pick<LocalAgentRuntimeFacadeInput, "truthIdentity" | "resolved">,
+  events: ReadonlyArray<LedgerEvent> | undefined,
+): Promise<void> => {
+  if (events === undefined || events.length === 0) return Promise.resolve();
+  const hydrationError = validateLocalRuntimeLedgerHydrationEvents(events, input.truthIdentity);
+  if (hydrationError !== null) return Promise.reject(hydrationError);
+  return Effect.runPromise(
+    input.resolved.state
+      .commitProtocolEvents(
+        events.map((event) => ({
+          ts: event.ts,
+          kind: event.kind,
+          scopeRef: event.scopeRef,
+          effectAuthorityRef: event.effectAuthorityRef,
+          factOwnerRef: event.factOwnerRef,
+          payload: event.payload,
+        })),
+      )
+      .pipe(Effect.asVoid),
+  );
+};
+
 const assertLocalInputRequestScope = (
   input: LocalAgentRuntimeFacadeInput,
   ref: WorkspaceAgentInspectInputRequestCommandInput["ref"],
@@ -988,11 +1028,16 @@ export const lowerLocalAgentRuntime = async (
     llm,
     defaultRoute: llm.defaultRoute,
   } satisfies LocalAgentRuntimeFacadeInput;
+  await hydrateLocalRuntimeLedger(facadeInput, options.initialEvents);
   const runtime = localAgentRuntimeFacade(facadeInput);
   return {
     target,
     manifest: resolved.resolved.manifest,
     runtime,
+    runtimeLedgerSource: createLocalRuntimeLedgerSource({
+      events: () => runtime.events(),
+      diagnostics: () => runtime.diagnostics(),
+    }),
     submitWithProductLink: (submitInput, productLink) =>
       submitLocalAgent(facadeInput, submitInput, productLink),
     commitScheduleFireDispatch: (result) =>

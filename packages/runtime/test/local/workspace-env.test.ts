@@ -19,6 +19,8 @@ import {
 import type { LlmRequest } from "@agent-os/core/llm-protocol";
 import {
   createLocalAgentRuntime,
+  createLocalRuntimeLedgerSource,
+  LocalRuntimeLedgerHydrationError,
   createLocalWorkspaceEnv,
   LocalAgentRuntimeResolveError,
   lowerLocalAgentRuntime,
@@ -338,6 +340,138 @@ describe("createLocalWorkspaceEnv", () => {
           RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
         ]),
       );
+    });
+  });
+
+  it("hydrates local runtime continuation from persisted runtime ledger events", async () => {
+    await withTempWorkspace(async (root) => {
+      const firstRuntime = await createLocalAgentRuntime({
+        identity: "local-runtime-hydrate-input-request",
+        cwd: root,
+        llm: {
+          kind: "test",
+          responses: [
+            {
+              items: [
+                {
+                  type: "tool_call",
+                  call: {
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "write_file",
+                      arguments: JSON.stringify({
+                        path: "nested/local-hydrated-resume.txt",
+                        content: "hydrated write",
+                      }),
+                    },
+                  },
+                },
+              ],
+              usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
+            },
+          ],
+        },
+      });
+
+      const first = await firstRuntime.submit({
+        intent: "write a gated local file after hydrate",
+        decisionInterrupts: [{ toolName: "write_file", reason: "approval_required" }],
+        toolPolicy: {
+          completeAfterToolsExecuted: {
+            toolNames: ["write_file"],
+            finalMessage: "local hydrated request resumed",
+          },
+        },
+      });
+      if (first.status !== "interrupted" || first.inputRequest === undefined) {
+        expect.fail("expected interrupted result with input request");
+      }
+
+      const persistedEvents = firstRuntime.events();
+      const persistedSource = createLocalRuntimeLedgerSource({ events: persistedEvents });
+      expect(persistedSource.inspectRun(first.runId)).toMatchObject({
+        runId: first.runId,
+        request: { kind: "waiting_for_input" },
+      });
+      expect(persistedSource.inspectInputRequest({ ref: first.inputRequest.ref })).toMatchObject({
+        status: "pending",
+        ref: first.inputRequest.ref,
+      });
+
+      const hydratedRuntime = await createLocalAgentRuntime({
+        identity: "local-runtime-hydrate-input-request",
+        cwd: root,
+        initialEvents: persistedEvents,
+        llm: {
+          kind: "test",
+          responses: [
+            {
+              items: [{ type: "message", text: "local hydrated request resumed" }],
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            },
+          ],
+        },
+      });
+
+      const resumed = await hydratedRuntime.resumeInputRequest({
+        ref: first.inputRequest.ref,
+        decidedBy: "operator/hydrate",
+        answer: {
+          decisionRef: "decision/local-hydrate-resume",
+          resume: { kind: "approval", approved: true },
+        },
+      });
+      const resumedSource = createLocalRuntimeLedgerSource({
+        events: () => hydratedRuntime.events(),
+      });
+
+      expect(resumed).toMatchObject({
+        ok: true,
+        status: "delivered",
+        final: "local hydrated request resumed",
+      });
+      expect(resumedSource.inspectRun(first.runId)).toMatchObject({
+        runId: first.runId,
+        request: { kind: "none" },
+        terminal: { kind: "delivered" },
+      });
+      expect(resumedSource.inspectInputRequest({ ref: first.inputRequest.ref })).toMatchObject({
+        status: "consumed",
+        decisionRef: "decision/local-hydrate-resume",
+      });
+      await expect(
+        readFile(path.join(root, "nested/local-hydrated-resume.txt"), "utf8"),
+      ).resolves.toBe("hydrated write");
+    });
+  });
+
+  it("fails closed when local runtime hydration receives a partial ledger", async () => {
+    await withTempWorkspace(async (root) => {
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-runtime-hydrate-partial",
+        cwd: root,
+        llm: {
+          kind: "test",
+          responses: [
+            {
+              items: [{ type: "message", text: "done" }],
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            },
+          ],
+        },
+      });
+      await runtime.submit({ intent: "produce a ledger" });
+      const partial = runtime.events().slice(1);
+
+      await expect(
+        createLocalAgentRuntime({
+          identity: "local-runtime-hydrate-partial",
+          cwd: root,
+          initialEvents: partial,
+          llm: { kind: "test" },
+        }),
+      ).rejects.toBeInstanceOf(LocalRuntimeLedgerHydrationError);
     });
   });
 

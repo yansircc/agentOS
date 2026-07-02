@@ -18,6 +18,21 @@ target identity, or `submitWithProductLink` are part of the boundary. It is not
 a license to duplicate raw `resolveRuntime + submitAgentEffect +
 workspaceOperations` assembly in product code.
 
+`./local:CreateLocalAgentRuntimeOptions.initialEvents` is the local
+runtime-ledger hydration input for product-shell backends that persist the
+runtime ledger outside the live process. Hydration accepts only a complete,
+contiguous ledger prefix for the same runtime truth identity, and validates
+runtime protocol events plus generic decision-gate events before installing
+them into the local runtime. It is the continuation source for
+`inspectInputRequest`, `resumeInputRequest`, and `decideInputRequest`; partial
+event slices and product-owned facts fail closed.
+
+`./local:createLocalRuntimeLedgerSource` is the read-only product-shell
+projection source for persisted local ledger events. It projects run inspection
+and input-request settlement from ledger facts without constructing a second
+product store. Runtime events own run lifecycle and interruption state;
+decision-gate events own generic input-request settlement.
+
 Product links are runtime evidence links only. agentOS owns runtime run ids,
 terminal runtime status, tool events, diagnostics, and evidence correlation.
 Product applications own product control-plane facts such as Change, Candidate,
@@ -743,6 +758,7 @@ product-control-plane lifecycle.
 - `./llm-effect-ai/openai-compatible:ProviderMaterialPreflightDiagnostic`
 - `./local:CreateLocalAgentRuntimeOptions`
 - `./local:createLocalAgentRuntime`
+- `./local:createLocalRuntimeLedgerSource`
 - `./local:CreateLocalWorkspaceEnvOptions`
 - `./local:createLocalWorkspaceEnv`
 - `./local:LocalAgentRuntime`
@@ -750,11 +766,15 @@ product-control-plane lifecycle.
 - `./local:LocalAgentRuntimeLlmPreflight`
 - `./local:LocalAgentRuntimeLlmPreflightInput`
 - `./local:LocalAgentRuntimeResolveError`
+- `./local:LocalRuntimeLedgerHydrationError`
+- `./local:LocalRuntimeLedgerSource`
+- `./local:LocalRuntimeLedgerSourceOptions`
 - `./local:LocalAgentRuntimeTarget`
 - `./local:LocalAgentSubmitInput`
 - `./local:LocalAgentRuntimeTestLlm`
 - `./local:LocalAgentRuntimeTransportLlm`
 - `./local:LocalWorkspaceEnvError`
+- `./local:validateLocalRuntimeLedgerHydrationEvents`
 - `./local:LoweredLocalAgentRuntime`
 - `./local:LowerLocalAgentRuntimeOptions`
 - `./local:lowerLocalAgentRuntime`
