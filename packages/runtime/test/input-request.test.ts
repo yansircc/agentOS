@@ -15,6 +15,7 @@ import {
   decisionGateDecidedEvent,
   decisionGateExpiredEvent,
   decisionGateRequestedEvent,
+  prepareInputRequestDecisionResume,
   projectInputRequest,
   projectInputRequestSettlement,
   projectInputRequests,
@@ -131,22 +132,34 @@ describe("runtime InputRequest projection", () => {
         resume: { kind: "approval", approved: true },
       },
     });
+    const preparedResume = prepareInputRequestDecisionResume(
+      approved,
+      ref,
+      { kind: "approval", approved: true },
+      { ...identity, consumedBy: "agent.run:1" },
+    );
+    if (!preparedResume.ok) expect.fail(`expected prepared resume: ${preparedResume.reason}`);
+    expect(preparedResume.resume).toEqual({
+      runId: 1,
+      turn: { id: 1, index: 0 },
+      interruptId: "decision:publish",
+      gateRef: "decision_gate:publish",
+      decisionRef: "decision/1",
+      resume: { kind: "approval", approved: true },
+    });
+    expect(preparedResume.consumed).toMatchObject({
+      kind: "decision_gate.consumed",
+      payload: {
+        gateRef: "decision_gate:publish",
+        decisionRef: "decision/1",
+        consumedBy: "agent.run:1",
+        claim: { phase: "lived" },
+      },
+    });
 
     const consumed: ReadonlyArray<LedgerEvent> = [
       ...approved,
-      event(
-        5,
-        decisionGateConsumedEvent({
-          ...identity,
-          gateRef: "decision_gate:publish",
-          decisionRef: "decision/1",
-          consumedBy: "agent.run:1",
-          claim: settleDecisionGateConsumed(claim, {
-            gateRef: "decision_gate:publish",
-            eventId: 4,
-          }),
-        }),
-      ),
+      event(5, preparedResume.consumed),
     ];
     expect(projectInputRequest(consumed, ref)).toMatchObject({
       status: "consumed",
@@ -160,6 +173,23 @@ describe("runtime InputRequest projection", () => {
     ).toMatchObject({
       ok: false,
       reason: "input_request_consumed",
+    });
+  });
+
+  it("does not prepare resume consumption before product-owned approval exists", () => {
+    const pending = requestedEvents();
+    const ref = refFrom(pending);
+
+    expect(
+      prepareInputRequestDecisionResume(
+        pending,
+        ref,
+        { kind: "approval", approved: true },
+        { ...identity, consumedBy: "agent.run:1" },
+      ),
+    ).toMatchObject({
+      ok: false,
+      reason: "input_request_pending",
     });
   });
 

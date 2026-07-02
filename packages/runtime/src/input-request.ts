@@ -2,15 +2,20 @@ import { scopeRefKey } from "@agent-os/core/effect-claim";
 import type { LedgerEvent } from "@agent-os/core/types";
 import {
   DECISION_GATE_KIND,
+  decisionGateConsumedEvent,
   projectDecisionGate,
+  settleDecisionGateConsumed,
   type DecisionGateConsumedPayload,
   type DecisionGateDecidedPayload,
   type DecisionGateCancelledPayload,
+  type DecisionGateEventIdentitySpec,
   type DecisionGateExpiredPayload,
+  type DecisionGateProjection,
 } from "./decision-gate";
 import {
   decodeRuntimeLedgerEvent,
   inputRequestRefFromInterruptedEvent,
+  type LedgerCommitEventSpec,
   parseInputRequestResumePayload,
   RUNTIME_EVENT_KIND,
   submitResumeDecisionFromInputRequestRef,
@@ -102,6 +107,32 @@ export type InputRequestResumeDecisionResult =
         | "input_request_resume_malformed"
         | "input_request_authorization_ref_malformed";
       readonly projection: InputRequestProjection;
+    };
+
+type InputRequestResumeDecisionFailureReason = Extract<
+  InputRequestResumeDecisionResult,
+  { readonly ok: false }
+>["reason"];
+
+export type InputRequestDecisionResumeResult =
+  | {
+      readonly ok: true;
+      readonly resume: SubmitResumeDecision;
+      readonly consumed: LedgerCommitEventSpec;
+      readonly inputRequest: Extract<InputRequestProjection, { readonly status: "approved" }>;
+      readonly decisionGate: DecisionGateProjection & {
+        readonly status: "approved";
+        readonly request: NonNullable<DecisionGateProjection["request"]>;
+        readonly decision: NonNullable<DecisionGateProjection["decision"]>;
+      };
+    }
+  | {
+      readonly ok: false;
+      readonly reason:
+        | InputRequestResumeDecisionFailureReason
+        | "input_request_decision_gate_request_missing";
+      readonly inputRequest: InputRequestProjection;
+      readonly decisionGate: DecisionGateProjection;
     };
 
 const payloadRecord = (event: LedgerEvent): Readonly<Record<string, unknown>> | null =>
@@ -366,4 +397,55 @@ export const submitResumeDecisionFromInputRequestProjection = (
     case "consumed":
       return { ok: false, reason: "input_request_consumed", projection };
   }
+};
+
+export const prepareInputRequestDecisionResume = (
+  events: ReadonlyArray<LedgerEvent>,
+  ref: InputRequestRef,
+  resume: unknown,
+  spec: DecisionGateEventIdentitySpec & {
+    readonly consumedBy: string;
+  },
+): InputRequestDecisionResumeResult => {
+  const inputRequest = projectInputRequest(events, ref);
+  const decisionGate = projectDecisionGate(events, ref.gateRef);
+  const prepared = submitResumeDecisionFromInputRequestProjection(inputRequest, resume);
+  if (!prepared.ok) return { ...prepared, inputRequest, decisionGate };
+  const approvedInputRequest = inputRequest as Extract<
+    InputRequestProjection,
+    { readonly status: "approved" }
+  >;
+  if (
+    decisionGate.status !== "approved" ||
+    decisionGate.request === undefined ||
+    decisionGate.decision === undefined
+  ) {
+    return {
+      ok: false,
+      reason: "input_request_decision_gate_request_missing",
+      inputRequest,
+      decisionGate,
+    };
+  }
+  const approvedDecisionGate = decisionGate as DecisionGateProjection & {
+    readonly status: "approved";
+    readonly request: NonNullable<DecisionGateProjection["request"]>;
+    readonly decision: NonNullable<DecisionGateProjection["decision"]>;
+  };
+  return {
+    ok: true,
+    resume: prepared.resume,
+    inputRequest: approvedInputRequest,
+    decisionGate: approvedDecisionGate,
+    consumed: decisionGateConsumedEvent({
+      ...spec,
+      gateRef: ref.gateRef,
+      decisionRef: approvedInputRequest.decision.decisionRef,
+      consumedBy: spec.consumedBy,
+      claim: settleDecisionGateConsumed(approvedDecisionGate.request.claim, {
+        gateRef: ref.gateRef,
+        eventId: approvedInputRequest.decisionEventId,
+      }),
+    }),
+  };
 };

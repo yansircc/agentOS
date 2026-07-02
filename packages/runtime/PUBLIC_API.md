@@ -120,6 +120,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:GrepWorkspaceFilesOptions`
 - `.:HostProfile`
 - `.:HostProvidedFact`
+- `.:InputRequestDecisionResumeResult`
 - `.:InputRequestProjection`
 - `.:InputRequestResumeDecisionResult`
 - `.:InspectionBindingSummary`
@@ -170,6 +171,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:projectAgentSessionTurnLinks`
 - `.:projectContinuation`
 - `.:projectContinuationRefs`
+- `.:prepareInputRequestDecisionResume`
 - `.:projectInputRequest`
 - `.:projectInputRequests`
 - `.:projectInputRequestSettlement`

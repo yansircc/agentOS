@@ -50,6 +50,14 @@ refs such as `subjectRef` and `decisionRef`. They do not own product
 vocabulary such as Candidate, Grant, Receipt, preview, deployment, or
 capability-flow facts.
 
+`prepareInputRequestDecisionResume` is the generic product-shell handoff recipe
+for an already-approved input request. It reads runtime and `decision_gate.*`
+ledger facts, validates the request resume payload against the input-request
+kind, and returns both the runtime resume command payload and the
+`decision_gate.consumed` event spec. Product backends still own capability
+evaluation, policy enforcement, product decision writes, and durable product
+operation/receipt facts.
+
 ## External Effect Boundary
 
 `./external-effect` is the public vocabulary-neutral runner for one
@@ -206,6 +214,7 @@ product-control-plane lifecycle.
 - `.:GrepWorkspaceFilesOptions`
 - `.:HostProfile`
 - `.:HostProvidedFact`
+- `.:InputRequestDecisionResumeResult`
 - `.:InputRequestProjection`
 - `.:InputRequestResumeDecisionResult`
 - `.:InspectionBindingSummary`
@@ -256,6 +265,7 @@ product-control-plane lifecycle.
 - `.:projectAgentSessionTurnLinks`
 - `.:projectContinuation`
 - `.:projectContinuationRefs`
+- `.:prepareInputRequestDecisionResume`
 - `.:projectInputRequest`
 - `.:projectInputRequests`
 - `.:projectInputRequestSettlement`

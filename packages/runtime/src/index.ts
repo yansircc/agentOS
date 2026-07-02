@@ -64,12 +64,17 @@ export {
 } from "./ledger";
 export type { RuntimeStorageOperation } from "./ledger";
 export {
+  prepareInputRequestDecisionResume,
   projectInputRequest,
   projectInputRequestSettlement,
   projectInputRequests,
   submitResumeDecisionFromInputRequestProjection,
 } from "./input-request";
-export type { InputRequestProjection, InputRequestResumeDecisionResult } from "./input-request";
+export type {
+  InputRequestDecisionResumeResult,
+  InputRequestProjection,
+  InputRequestResumeDecisionResult,
+} from "./input-request";
 export {
   DECISION_GATE_EVENTS,
   DECISION_GATE_KIND,
