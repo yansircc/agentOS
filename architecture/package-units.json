@@ -344,6 +344,12 @@
           "optionalPeers": ["svelte"]
         },
         {
+          "subpath": "./product-shell-client",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["browser"],
+          "optionalPeers": []
+        },
+        {
           "subpath": "./workspace-agent",
           "moduleBuckets": ["adapter"],
           "targetProfiles": ["browser"],

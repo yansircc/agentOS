@@ -46,6 +46,7 @@
         "./packages/runtime/src/cloudflare/ops-api/index.ts"
       ],
       "@agent-os/client": ["./packages/client/src/index.ts"],
+      "@agent-os/client/product-shell-client": ["./packages/client/src/product-shell-client.ts"],
       "@agent-os/client/react": ["./packages/client/src/react/index.ts"],
       "@agent-os/client/svelte": ["./packages/client/src/svelte/index.ts"],
       "@agent-os/client/workspace-agent": ["./packages/client/src/workspace-agent.ts"],

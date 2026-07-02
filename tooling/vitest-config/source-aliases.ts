@@ -56,6 +56,7 @@ export const agentOsSourceAliasSpecs = [
   ["@agent-os/runtime/workspace-agent", "packages/runtime/src/workspace-agent.ts"],
   ["@agent-os/runtime/workspace-binding", "packages/runtime/src/workspace-binding.ts"],
   ["@agent-os/client", "packages/client/src/index.ts"],
+  ["@agent-os/client/product-shell-client", "packages/client/src/product-shell-client.ts"],
   ["@agent-os/client/react", "packages/client/src/react/index.ts"],
   ["@agent-os/client/svelte", "packages/client/src/svelte/index.ts"],
   ["@agent-os/client/workspace-agent", "packages/client/src/workspace-agent.ts"],

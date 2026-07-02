@@ -157,10 +157,7 @@ describe("runtime InputRequest projection", () => {
       },
     });
 
-    const consumed: ReadonlyArray<LedgerEvent> = [
-      ...approved,
-      event(5, preparedResume.consumed),
-    ];
+    const consumed: ReadonlyArray<LedgerEvent> = [...approved, event(5, preparedResume.consumed)];
     expect(projectInputRequest(consumed, ref)).toMatchObject({
       status: "consumed",
       consumedEventId: 5,

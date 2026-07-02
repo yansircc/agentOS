@@ -558,6 +558,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:projectResourceRows`
 - `.:projectResourceState`
 - `.:projectRuntimeSafeLedgerEvent`
+- `.:productRunLinkedEvent`
+- `.:ProductRunLinkedPayload`
+- `.:ProductRunLinkedPayloadSchema`
 - `.:ProviderFailureFlag`
 - `.:ProviderHttpFailure`
 - `.:ProviderOutputDecodeError`
@@ -1460,6 +1463,9 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./runtime-protocol:projectInstallationReceipt`
 - `./runtime-protocol:projectLease`
 - `./runtime-protocol:projectRuntimeSafeLedgerEvent`
+- `./runtime-protocol:productRunLinkedEvent`
+- `./runtime-protocol:ProductRunLinkedPayload`
+- `./runtime-protocol:ProductRunLinkedPayloadSchema`
 - `./runtime-protocol:providerResourceId`
 - `./runtime-protocol:ProviderResourceId`
 - `./runtime-protocol:QuestionInputRequestResumePayload`

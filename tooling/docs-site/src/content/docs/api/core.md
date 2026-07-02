@@ -559,6 +559,9 @@ slug: "api/core"
 - `.:projectResourceRows`
 - `.:projectResourceState`
 - `.:projectRuntimeSafeLedgerEvent`
+- `.:productRunLinkedEvent`
+- `.:ProductRunLinkedPayload`
+- `.:ProductRunLinkedPayloadSchema`
 - `.:ProviderFailureFlag`
 - `.:ProviderHttpFailure`
 - `.:ProviderOutputDecodeError`
@@ -1461,6 +1464,9 @@ slug: "api/core"
 - `./runtime-protocol:projectInstallationReceipt`
 - `./runtime-protocol:projectLease`
 - `./runtime-protocol:projectRuntimeSafeLedgerEvent`
+- `./runtime-protocol:productRunLinkedEvent`
+- `./runtime-protocol:ProductRunLinkedPayload`
+- `./runtime-protocol:ProductRunLinkedPayloadSchema`
 - `./runtime-protocol:providerResourceId`
 - `./runtime-protocol:ProviderResourceId`
 - `./runtime-protocol:QuestionInputRequestResumePayload`

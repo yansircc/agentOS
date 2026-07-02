@@ -568,14 +568,15 @@ export const WorkflowRunSubmittedPayloadSchema: Schema.Decoder<WorkflowRunSubmit
     traceContext: Schema.optional(TraceContextSchema),
   });
 
-export const ProductRunLinkedPayloadSchema: Schema.Decoder<ProductRunLinkedPayload> =
-  Schema.Struct({
+export const ProductRunLinkedPayloadSchema: Schema.Decoder<ProductRunLinkedPayload> = Schema.Struct(
+  {
     productRef: nonEmptyString,
     runtimeRunId: positiveInt,
     idempotencyKey: Schema.optional(nonEmptyString),
     inputDigest: Schema.optional(nonEmptyString),
     traceContext: Schema.optional(TraceContextSchema),
-  });
+  },
+);
 
 export const IngressDeliveryPrincipalPayloadSchema: Schema.Decoder<IngressDeliveryPrincipalPayload> =
   Schema.Struct({
@@ -1062,9 +1063,9 @@ const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
         payload,
       ) as Option.Option<RuntimeEventPayloadByKind[K]>;
     case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
-      return Schema.decodeUnknownOption(ProductRunLinkedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
+      return Schema.decodeUnknownOption(ProductRunLinkedPayloadSchema)(payload) as Option.Option<
+        RuntimeEventPayloadByKind[K]
+      >;
     case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
       return Schema.decodeUnknownOption(IngressDeliveryRequestedPayloadSchema)(
         payload,

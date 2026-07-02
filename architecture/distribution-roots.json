@@ -102,6 +102,7 @@
       "packageUnits": ["client"],
       "selectedSubpaths": [
         "@yansirplus/client",
+        "@yansirplus/client/product-shell-client",
         "@yansirplus/client/react",
         "@yansirplus/client/svelte",
         "@yansirplus/client/workspace-agent"
