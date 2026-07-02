@@ -2253,6 +2253,16 @@ void test("agentos build compiles an authored workspace tree into generated file
       /import \{ agentOSRpcClient, agentOSTruthIdentity \} from "\.\/cloudflare-scope";/,
     );
     assert.match(remote, /WORKSPACE_AGENT_PRODUCT_COMMAND/);
+    assert.match(
+      remote,
+      /type AgentOSSessionSubmitTurnInput = Parameters<AgentOSRemote\["submitSessionTurn"\]>\[0\];/,
+    );
+    assert.match(
+      remote,
+      /type AgentOSWorkflowRunInput = Parameters<AgentOSRemote\["runWorkflow"\]>\[0\];/,
+    );
+    assert.match(remote, /GeneratedResult<AgentOSSessionSubmitTurnInput>/);
+    assert.match(remote, /GeneratedResult<AgentOSWorkflowRunInput>/);
     assert.match(remote, /runtime\.submitSessionTurn/);
     assert.match(remote, /runtime\.inspectSession/);
     assert.match(remote, /runtime\.listSessions/);

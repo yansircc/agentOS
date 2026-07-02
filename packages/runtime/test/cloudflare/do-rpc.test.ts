@@ -7,6 +7,7 @@ import {
   durableObjectRpcInvoke,
   type DurableObjectRpcClient,
 } from "../../src/cloudflare/do-rpc";
+import type { SubmitDecisionInterrupt } from "@agent-os/core/runtime-protocol";
 
 interface ExampleClient {
   readonly ping: (input: { readonly value: string }) => Promise<string>;
@@ -14,6 +15,9 @@ interface ExampleClient {
   readonly rejectBoundary: () => Promise<void>;
   readonly rejectUntyped: () => Promise<void>;
   readonly bad: (input: { readonly fn: () => void }) => Promise<void>;
+  readonly submitWithInterrupts: (input: {
+    readonly decisionInterrupts?: ReadonlyArray<SubmitDecisionInterrupt>;
+  }) => Promise<void>;
 }
 
 class BoundaryRejectedFixture extends Error {
@@ -96,5 +100,21 @@ describe("durableObjectRpcClient", () => {
     };
     void invalid;
     expect(true).toBe(true);
+  });
+
+  it("preserves branded primitive unions in method input DTOs", () => {
+    const input = {
+      decisionInterrupts: [
+        {
+          toolName: "apply",
+          reason: "custom_gate" as SubmitDecisionInterrupt["reason"],
+        },
+      ],
+    } satisfies Parameters<ExampleClient["submitWithInterrupts"]>[0];
+
+    const rpcInput: Parameters<DurableObjectRpcClient<ExampleClient>["submitWithInterrupts"]>[0] =
+      input;
+
+    expect(rpcInput.decisionInterrupts?.[0]?.reason).toBe("custom_gate");
   });
 });

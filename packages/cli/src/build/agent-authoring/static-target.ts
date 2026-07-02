@@ -2724,6 +2724,8 @@ const agentOS = (platformEnv: AgentOSTargetEnv) =>
 
 type AgentOSRemote = ReturnType<typeof agentOS>;
 type AgentOSSubmitRunInput = Parameters<AgentOSRemote["submitRunInput"]>[0];
+type AgentOSSessionSubmitTurnInput = Parameters<AgentOSRemote["submitSessionTurn"]>[0];
+type AgentOSWorkflowRunInput = Parameters<AgentOSRemote["runWorkflow"]>[0];
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -2751,14 +2753,14 @@ const productSubmitInputFromUnknown = (
 
 const sessionTurnInputFromUnknown = (
   value: unknown,
-): GeneratedResult<WorkspaceAgentSessionSubmitTurnInput> => {
+): GeneratedResult<AgentOSSessionSubmitTurnInput> => {
   const submitInput = productSubmitInputFromUnknown(value, "submitSessionTurn");
   if (!submitInput.ok) return submitInput;
   if (!isRecord(value)) return fail(400, "invalid submitSessionTurn command input");
   if (typeof value.sessionRef !== "string" || typeof value.turnRef !== "string") {
     return fail(400, "invalid session turn identity");
   }
-  return { ok: true, value: value as unknown as WorkspaceAgentSessionSubmitTurnInput };
+  return { ok: true, value: value as unknown as AgentOSSessionSubmitTurnInput };
 };
 
 const sessionInspectInputFromUnknown = (
@@ -2772,7 +2774,7 @@ const sessionInspectInputFromUnknown = (
 
 const workflowRunInputFromUnknown = (
   value: unknown,
-): GeneratedResult<WorkspaceAgentWorkflowRunInput> => {
+): GeneratedResult<AgentOSWorkflowRunInput> => {
   const submitInput = productSubmitInputFromUnknown(value, "runWorkflow");
   if (!submitInput.ok) return submitInput;
   if (!isRecord(value)) return fail(400, "invalid runWorkflow command input");
@@ -2785,7 +2787,7 @@ const workflowRunInputFromUnknown = (
   if (value.inputDigest !== undefined && typeof value.inputDigest !== "string") {
     return fail(400, "invalid workflow run inputDigest");
   }
-  return { ok: true, value: value as unknown as WorkspaceAgentWorkflowRunInput };
+  return { ok: true, value: value as unknown as AgentOSWorkflowRunInput };
 };
 
 const workflowRunRefFromUnknown = (

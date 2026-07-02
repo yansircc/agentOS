@@ -2,19 +2,22 @@
 // This helper is intentionally type-level only; runtime validation remains app-owned.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFunction = (...args: any[]) => any;
+type Primitive = string | number | boolean | bigint | symbol | null | undefined;
 
 const RPC_ERROR_VERSION = "agentos-do-rpc-error-v1";
 export const DURABLE_OBJECT_RPC_INVOKE = "__agentOSRpcInvoke";
 
 export type FunctionFree<T> = T extends AnyFunction
   ? never
-  : T extends readonly [infer Head, ...infer Tail]
-    ? readonly [FunctionFree<Head>, ...FunctionFree<Tail>]
-    : T extends ReadonlyArray<infer Item>
-      ? ReadonlyArray<FunctionFree<Item>>
-      : T extends object
-        ? { readonly [K in keyof T]: FunctionFree<T[K]> }
-        : T;
+  : T extends Primitive
+    ? T
+    : T extends readonly [infer Head, ...infer Tail]
+      ? readonly [FunctionFree<Head>, ...FunctionFree<Tail>]
+      : T extends ReadonlyArray<infer Item>
+        ? ReadonlyArray<FunctionFree<Item>>
+        : T extends object
+          ? { readonly [K in keyof T]: FunctionFree<T[K]> }
+          : T;
 
 type FunctionFreeArgs<Args extends ReadonlyArray<unknown>> = {
   readonly [K in keyof Args]: FunctionFree<Args[K]>;
