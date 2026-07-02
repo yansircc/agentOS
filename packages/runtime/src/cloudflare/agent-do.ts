@@ -179,9 +179,12 @@ import {
   decisionGateSettlementRef,
   projectDecisionGate,
 } from "../decision-gate";
-import { projectInputRequest, projectInputRequestSettlement } from "../input-request";
 import {
-  chatInputForResume,
+  chatInputForInputRequestResume,
+  projectInputRequest,
+  projectInputRequestSettlement,
+} from "../input-request";
+import {
   declaredToolIntents,
   errorTagFromCause,
   invalidResourceAmount,
@@ -669,7 +672,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
           const ledger = yield* Ledger;
           const boundaryEvents = yield* BoundaryEvents;
           const events = yield* ledger.events(runtimeIdentity);
-          const chatInput = chatInputForResume(events, spec.ref);
+          const chatInput = chatInputForInputRequestResume(events, spec.ref);
           if (chatInput === null) {
             return yield* Effect.fail(
               new TypeError("input request resume missing original chat input"),

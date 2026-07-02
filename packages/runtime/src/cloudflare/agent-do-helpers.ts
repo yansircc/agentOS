@@ -1,17 +1,14 @@
 import { Layer, ManagedRuntime, Option } from "effect";
-import type { EventHandler, LedgerEvent } from "@agent-os/core/types";
+import type { EventHandler } from "@agent-os/core/types";
 import { InvalidResourceAmount, SqlError, TriggerFactoryError } from "@agent-os/core/errors";
 import type { AnyMaterializedProjectionDefinition, RuntimeStorageError } from "@agent-os/runtime";
 import { Admission } from "@agent-os/runtime";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../internal-submit";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
-  decodeRuntimeLedgerEvent,
   lowerSubmitRunInput,
   RUNTIME_FACT_OWNER,
-  RUNTIME_EVENT_KIND,
   type AgentSubmitBindings,
-  type InputRequestRef,
   type SubmitRunInput,
   type SubmitSpec,
   type SubmitToolIntent,
@@ -204,25 +201,3 @@ export const declaredToolIntents = (
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
-
-export const chatInputForResume = (
-  events: ReadonlyArray<LedgerEvent>,
-  ref: InputRequestRef,
-): { readonly intent: string; readonly context: Record<string, unknown> } | null => {
-  for (const event of events) {
-    const decoded = decodeRuntimeLedgerEvent(event);
-    if (
-      decoded._tag !== "runtime" ||
-      decoded.event.kind !== RUNTIME_EVENT_KIND.CHAT_INGESTED ||
-      decoded.event.payload.runId !== ref.runId
-    ) {
-      continue;
-    }
-    if (!isRecord(decoded.event.payload.context)) return null;
-    return {
-      intent: decoded.event.payload.intent,
-      context: decoded.event.payload.context,
-    };
-  }
-  return null;
-};

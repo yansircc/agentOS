@@ -156,7 +156,15 @@ describe("createLocalWorkspaceEnv", () => {
         },
       });
 
-      expect(Object.keys(runtime).sort()).toEqual(["diagnostics", "events", "inspect", "submit"]);
+      expect(Object.keys(runtime).sort()).toEqual([
+        "decideInputRequest",
+        "diagnostics",
+        "events",
+        "inspect",
+        "inspectInputRequest",
+        "resumeInputRequest",
+        "submit",
+      ]);
       const initialInspection = runtime.inspect();
       expect(initialInspection.compile).toEqual({
         status: "available",
@@ -222,6 +230,205 @@ describe("createLocalWorkspaceEnv", () => {
           RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
         ]),
       );
+    });
+  });
+
+  it("resumes a local pending input request through the public runtime surface", async () => {
+    await withTempWorkspace(async (root) => {
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-runtime-resume-input-request",
+        cwd: root,
+        llm: {
+          kind: "test",
+          responses: [
+            {
+              items: [
+                {
+                  type: "tool_call",
+                  call: {
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "write_file",
+                      arguments: JSON.stringify({
+                        path: "nested/local-resume.txt",
+                        content: "resumed write",
+                      }),
+                    },
+                  },
+                },
+              ],
+              usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
+            },
+            {
+              items: [{ type: "message", text: "local input request resumed" }],
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            },
+          ],
+        },
+      });
+
+      const first = await runtime.submit({
+        intent: "write a gated local file",
+        decisionInterrupts: [{ toolName: "write_file", reason: "approval_required" }],
+        toolPolicy: {
+          completeAfterToolsExecuted: {
+            toolNames: ["write_file"],
+            finalMessage: "local input request resumed",
+          },
+        },
+      });
+
+      expect(first).toMatchObject({
+        ok: false,
+        status: "interrupted",
+        inputRequest: { kind: "approval" },
+      });
+      if (first.status !== "interrupted" || first.inputRequest === undefined) {
+        expect.fail("expected interrupted result with input request");
+      }
+      const pending = await runtime.inspectInputRequest({ ref: first.inputRequest.ref });
+      expect(pending).toMatchObject({
+        status: "pending",
+        ref: first.inputRequest.ref,
+        request: { kind: "approval" },
+      });
+
+      const resumeInput = {
+        ref: first.inputRequest.ref,
+        decidedBy: "operator/alice",
+        answer: {
+          decisionRef: "decision/local-resume",
+          resume: { kind: "approval" as const, approved: true as const },
+        },
+      };
+      const resumed = await runtime.resumeInputRequest(resumeInput);
+      const duplicate = await runtime.resumeInputRequest(resumeInput);
+      const consumed = await runtime.inspectInputRequest({ ref: first.inputRequest.ref });
+
+      expect(resumed).toMatchObject({
+        ok: true,
+        status: "delivered",
+        final: "local input request resumed",
+      });
+      expect(duplicate).toEqual(resumed);
+      expect(consumed).toMatchObject({
+        status: "consumed",
+        decisionRef: "decision/local-resume",
+      });
+      await expect(readFile(path.join(root, "nested/local-resume.txt"), "utf8")).resolves.toBe(
+        "resumed write",
+      );
+      await expect(
+        runtime.resumeInputRequest({
+          ...resumeInput,
+          answer: {
+            decisionRef: "decision/local-divergent",
+            resume: { kind: "approval", approved: true },
+          },
+        }),
+      ).rejects.toThrow(/not resumable/);
+
+      expect(runtime.events().map((event) => event.kind)).toEqual(
+        expect.arrayContaining([
+          "decision_gate.decided",
+          "decision_gate.consumed",
+          RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED,
+          RUNTIME_EVENT_KIND.TOOL_EXECUTED,
+          RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED,
+        ]),
+      );
+    });
+  });
+
+  it("closes a local pending input request without resuming tool execution", async () => {
+    await withTempWorkspace(async (root) => {
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-runtime-reject-input-request",
+        cwd: root,
+        llm: {
+          kind: "test",
+          responses: [
+            {
+              items: [
+                {
+                  type: "tool_call",
+                  call: {
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "write_file",
+                      arguments: JSON.stringify({
+                        path: "nested/local-reject.txt",
+                        content: "should not write",
+                      }),
+                    },
+                  },
+                },
+              ],
+              usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
+            },
+          ],
+        },
+      });
+
+      const first = await runtime.submit({
+        intent: "write a gated local file",
+        decisionInterrupts: [{ toolName: "write_file", reason: "approval_required" }],
+        toolPolicy: {
+          completeAfterToolsExecuted: {
+            toolNames: ["write_file"],
+            finalMessage: "should not complete",
+          },
+        },
+      });
+      if (first.status !== "interrupted" || first.inputRequest === undefined) {
+        expect.fail("expected interrupted result with input request");
+      }
+
+      const decision = {
+        kind: "rejected" as const,
+        decisionRef: "decision/local-reject",
+        decidedBy: "operator/bob",
+        reason: "not_allowed",
+      };
+      const rejected = await runtime.decideInputRequest({
+        ref: first.inputRequest.ref,
+        decision,
+      });
+      const duplicate = await runtime.decideInputRequest({
+        ref: first.inputRequest.ref,
+        decision,
+      });
+      const settlement = await runtime.inspectInputRequest({ ref: first.inputRequest.ref });
+
+      expect(rejected).toMatchObject({
+        ok: false,
+        status: "aborted",
+        reason: "rejected",
+      });
+      expect(duplicate).toEqual(rejected);
+      expect(settlement).toMatchObject({
+        status: "rejected",
+        decisionRef: "decision/local-reject",
+      });
+      await expect(readFile(path.join(root, "nested/local-reject.txt"), "utf8")).rejects.toThrow();
+      await expect(
+        runtime.resumeInputRequest({
+          ref: first.inputRequest.ref,
+          decidedBy: "operator/alice",
+          answer: {
+            decisionRef: "decision/local-approve-after-reject",
+            resume: { kind: "approval", approved: true },
+          },
+        }),
+      ).rejects.toThrow(/not resumable/);
+
+      const kinds = runtime.events().map((event) => event.kind);
+      expect(kinds).toEqual(expect.arrayContaining(["decision_gate.decided"]));
+      expect(kinds).toEqual(expect.arrayContaining(["agent.aborted.rejected"]));
+      expect(kinds).not.toContain(RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED);
+      expect(kinds).not.toContain(RUNTIME_EVENT_KIND.TOOL_EXECUTED);
     });
   });
 
@@ -432,9 +639,12 @@ describe("createLocalWorkspaceEnv", () => {
       expect(lowered.target).toBe("node@1");
       expect(lowered.manifest.host).toBe("node@1");
       expect(Object.keys(lowered.runtime).sort()).toEqual([
+        "decideInputRequest",
         "diagnostics",
         "events",
         "inspect",
+        "inspectInputRequest",
+        "resumeInputRequest",
         "submit",
       ]);
       expect(localLowered.runtime.inspect().compile).toEqual({

@@ -18,6 +18,18 @@ terminal runtime status, tool events, diagnostics, and evidence correlation.
 Product applications own product control-plane facts such as Change, Candidate,
 Grant, Intent, Receipt, approval, deployment, and product receipt records.
 
+## Decision Gate Boundary
+
+Root `decisionGate*` exports are the public constructor/projection surface for
+generic runtime input-request settlement. They let product backends construct
+and inspect approval, rejection, cancellation, expiration, and consumption
+facts without copying `decision_gate.*` payload grammar.
+
+These exports own only runtime continuation refs and opaque product correlation
+refs such as `subjectRef` and `decisionRef`. They do not own product
+vocabulary such as Candidate, Grant, Receipt, preview, deployment, or
+capability-flow facts.
+
 ## External Effect Boundary
 
 `./external-effect` is the public vocabulary-neutral runner for one
@@ -121,6 +133,28 @@ product-control-plane lifecycle.
 - `.:CreateWorkspaceEnvOptions`
 - `.:createWorkspaceTools`
 - `.:CreateWorkspaceToolsOptions`
+- `.:DECISION_GATE_EVENTS`
+- `.:DECISION_GATE_KIND`
+- `.:decisionGateCancelledEvent`
+- `.:DecisionGateCancelledPayload`
+- `.:DecisionGateClosedEventSpec`
+- `.:decisionGateConsumedEvent`
+- `.:DecisionGateConsumedEventSpec`
+- `.:DecisionGateConsumedPayload`
+- `.:decisionGateDecidedEvent`
+- `.:DecisionGateDecidedEventSpec`
+- `.:DecisionGateDecidedPayload`
+- `.:DecisionGateDecision`
+- `.:DecisionGateEventIdentitySpec`
+- `.:DecisionGateEventKind`
+- `.:decisionGateExpiredEvent`
+- `.:DecisionGateExpiredPayload`
+- `.:DecisionGateLedgerEvent`
+- `.:DecisionGateProjection`
+- `.:decisionGateRequestedEvent`
+- `.:DecisionGateRequestedEventSpec`
+- `.:DecisionGateRequestedPayload`
+- `.:decisionGateSettlementRef`
 - `.:decodeSseHttpEvents`
 - `.:decodeStructuredOutputFromItems`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
@@ -284,6 +318,7 @@ product-control-plane lifecycle.
 - `.:RunWorkspaceJobSpec`
 - `.:scheduledEventTrigger`
 - `.:Scheduler`
+- `.:settleDecisionGateConsumed`
 - `.:settleToolAdmissionRejected`
 - `.:settleToolExecuted`
 - `.:settleToolExecutionRejected`

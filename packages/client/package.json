@@ -1,6 +1,6 @@
 {
   "name": "@agent-os/client",
-  "version": "0.5.22",
+  "version": "0.5.23",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",

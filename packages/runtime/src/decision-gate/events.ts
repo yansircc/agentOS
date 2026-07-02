@@ -2,10 +2,13 @@ import { Predicate } from "effect";
 import {
   isRejectionRef,
   validateEffectClaim,
+  type AuthorityRef,
   type LivedClaim,
   type PreClaim,
+  type ScopeRef,
 } from "@agent-os/core/effect-claim";
 import { validateTerminalClaim } from "@agent-os/core/settlement-contract";
+import type { LedgerCommitEventSpec } from "@agent-os/core/runtime-protocol";
 import {
   DECISION_GATE_EVENTS,
   DECISION_GATE_KIND,
@@ -33,6 +36,113 @@ export type DecisionGateExpiredPayload =
   DecisionGatePayloads[(typeof DECISION_GATE_KIND)["EXPIRED"]];
 
 export type DecisionGateEventKind = keyof typeof DECISION_GATE_EVENTS;
+
+export type DecisionGateEventIdentitySpec = {
+  readonly scopeRef: ScopeRef;
+  readonly effectAuthorityRef: AuthorityRef;
+  readonly scope?: never;
+  readonly factOwnerRef?: never;
+};
+
+export type DecisionGateRequestedEventSpec = DecisionGateEventIdentitySpec & {
+  readonly gateRef: string;
+  readonly subjectRef: string;
+  readonly claim: PreClaim;
+  readonly policyRef?: string;
+  readonly summary?: string;
+};
+
+export type DecisionGateDecidedEventSpec =
+  | (DecisionGateEventIdentitySpec & {
+      readonly gateRef: string;
+      readonly decisionRef: string;
+      readonly decision: "approved";
+      readonly decidedBy: string;
+      readonly reason?: string;
+    })
+  | (DecisionGateEventIdentitySpec & {
+      readonly gateRef: string;
+      readonly decisionRef: string;
+      readonly decision: "rejected";
+      readonly decidedBy: string;
+      readonly reason?: string;
+      readonly rejectionRef: NonNullable<DecisionGateDecidedPayload["rejectionRef"]>;
+    });
+
+export type DecisionGateConsumedEventSpec = DecisionGateEventIdentitySpec & {
+  readonly gateRef: string;
+  readonly decisionRef: string;
+  readonly consumedBy: string;
+  readonly claim: LivedClaim;
+};
+
+export type DecisionGateClosedEventSpec = DecisionGateEventIdentitySpec & {
+  readonly gateRef: string;
+  readonly closeRef: string;
+  readonly reason?: string;
+};
+
+const decisionGateEvent = (
+  identity: DecisionGateEventIdentitySpec,
+  kind: DecisionGateEventKind,
+  payload: unknown,
+): LedgerCommitEventSpec => ({
+  kind,
+  scopeRef: identity.scopeRef,
+  effectAuthorityRef: identity.effectAuthorityRef,
+  payload,
+});
+
+export const decisionGateRequestedEvent = (
+  spec: DecisionGateRequestedEventSpec,
+): LedgerCommitEventSpec =>
+  decisionGateEvent(spec, DECISION_GATE_KIND.REQUESTED, {
+    gateRef: spec.gateRef,
+    subjectRef: spec.subjectRef,
+    claim: spec.claim,
+    ...(spec.policyRef === undefined ? {} : { policyRef: spec.policyRef }),
+    ...(spec.summary === undefined ? {} : { summary: spec.summary }),
+  } satisfies DecisionGateRequestedPayload);
+
+export const decisionGateDecidedEvent = (
+  spec: DecisionGateDecidedEventSpec,
+): LedgerCommitEventSpec =>
+  decisionGateEvent(spec, DECISION_GATE_KIND.DECIDED, {
+    gateRef: spec.gateRef,
+    decisionRef: spec.decisionRef,
+    decision: spec.decision,
+    decidedBy: spec.decidedBy,
+    ...(spec.reason === undefined ? {} : { reason: spec.reason }),
+    ...(spec.decision === "rejected" ? { rejectionRef: spec.rejectionRef } : {}),
+  } satisfies DecisionGateDecidedPayload);
+
+export const decisionGateConsumedEvent = (
+  spec: DecisionGateConsumedEventSpec,
+): LedgerCommitEventSpec =>
+  decisionGateEvent(spec, DECISION_GATE_KIND.CONSUMED, {
+    gateRef: spec.gateRef,
+    decisionRef: spec.decisionRef,
+    consumedBy: spec.consumedBy,
+    claim: spec.claim,
+  } satisfies DecisionGateConsumedPayload);
+
+export const decisionGateCancelledEvent = (
+  spec: DecisionGateClosedEventSpec,
+): LedgerCommitEventSpec =>
+  decisionGateEvent(spec, DECISION_GATE_KIND.CANCELLED, {
+    gateRef: spec.gateRef,
+    closeRef: spec.closeRef,
+    ...(spec.reason === undefined ? {} : { reason: spec.reason }),
+  } satisfies DecisionGateCancelledPayload);
+
+export const decisionGateExpiredEvent = (
+  spec: DecisionGateClosedEventSpec,
+): LedgerCommitEventSpec =>
+  decisionGateEvent(spec, DECISION_GATE_KIND.EXPIRED, {
+    gateRef: spec.gateRef,
+    closeRef: spec.closeRef,
+    ...(spec.reason === undefined ? {} : { reason: spec.reason }),
+  } satisfies DecisionGateExpiredPayload);
 
 export interface DecisionGateLedgerEvent {
   readonly id: number;

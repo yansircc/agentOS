@@ -1,29 +1,30 @@
 import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import type { LedgerEvent } from "@agent-os/core/types";
-import { DECISION_GATE_KIND, settleDecisionGateConsumed } from "../src/decision-gate";
 import {
   agentRunInterruptedEvent,
   agentRunStartedEvent,
   decodeRuntimeLedgerEvent,
   inputRequestRefFromInterruptedEvent,
+  type LedgerCommitEventSpec,
   type RuntimeEventCommitSpec,
 } from "@agent-os/core/runtime-protocol";
 import {
+  decisionGateConsumedEvent,
+  decisionGateCancelledEvent,
+  decisionGateDecidedEvent,
+  decisionGateExpiredEvent,
+  decisionGateRequestedEvent,
   projectInputRequest,
   projectInputRequestSettlement,
   projectInputRequests,
+  settleDecisionGateConsumed,
   submitResumeDecisionFromInputRequestProjection,
-} from "../src/input-request";
+} from "../src";
 
 const scope = "input-request-runtime-test";
 const identity = {
   scopeRef: { kind: "conversation" as const, scopeId: scope },
-  effectAuthorityRef: { authorityClass: "test", authorityId: scope },
-};
-const eventIdentity = {
-  scopeRef: { kind: "conversation" as const, scopeId: scope },
-  factOwnerRef: "@agent-os/test",
   effectAuthorityRef: { authorityClass: "test", authorityId: scope },
 };
 const claim = makePreClaim({
@@ -33,7 +34,7 @@ const claim = makePreClaim({
   originRef: { originKind: "run", originId: "run:1" },
 });
 
-const event = (id: number, spec: RuntimeEventCommitSpec): LedgerEvent => ({
+const event = (id: number, spec: RuntimeEventCommitSpec | LedgerCommitEventSpec): LedgerEvent => ({
   id,
   ts: id * 10,
   kind: spec.kind,
@@ -63,17 +64,15 @@ const requestedEvents = (reason = "approval_required"): ReadonlyArray<LedgerEven
       },
     }),
   ),
-  {
-    id: 3,
-    ts: 30,
-    kind: DECISION_GATE_KIND.REQUESTED,
-    ...eventIdentity,
-    payload: {
+  event(
+    3,
+    decisionGateRequestedEvent({
+      ...identity,
       gateRef: "decision_gate:publish",
       subjectRef: "tool:publish",
       claim,
-    },
-  },
+    }),
+  ),
 ];
 
 const refFrom = (events: ReadonlyArray<LedgerEvent>) => {
@@ -100,18 +99,16 @@ describe("runtime InputRequest projection", () => {
 
     const approved: ReadonlyArray<LedgerEvent> = [
       ...pending,
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.DECIDED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateDecidedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/1",
           decision: "approved",
           decidedBy: "operator/alice",
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequest(approved, ref)).toMatchObject({
       status: "approved",
@@ -137,12 +134,10 @@ describe("runtime InputRequest projection", () => {
 
     const consumed: ReadonlyArray<LedgerEvent> = [
       ...approved,
-      {
-        id: 5,
-        ts: 50,
-        kind: DECISION_GATE_KIND.CONSUMED,
-        ...eventIdentity,
-        payload: {
+      event(
+        5,
+        decisionGateConsumedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/1",
           consumedBy: "agent.run:1",
@@ -150,8 +145,8 @@ describe("runtime InputRequest projection", () => {
             gateRef: "decision_gate:publish",
             eventId: 4,
           }),
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequest(consumed, ref)).toMatchObject({
       status: "consumed",
@@ -199,18 +194,16 @@ describe("runtime InputRequest projection", () => {
 
     const approved: ReadonlyArray<LedgerEvent> = [
       ...pending,
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.DECIDED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateDecidedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/ours",
           decision: "approved",
           decidedBy: "operator/alice",
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequestSettlement(approved, ref)).toMatchObject({
       status: "approved",
@@ -221,24 +214,20 @@ describe("runtime InputRequest projection", () => {
 
     const consumedByAnotherDecision: ReadonlyArray<LedgerEvent> = [
       ...pending,
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.DECIDED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateDecidedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/other",
           decision: "approved",
           decidedBy: "operator/bob",
-        },
-      },
-      {
-        id: 5,
-        ts: 50,
-        kind: DECISION_GATE_KIND.CONSUMED,
-        ...eventIdentity,
-        payload: {
+        }),
+      ),
+      event(
+        5,
+        decisionGateConsumedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/other",
           consumedBy: "agent.run:1",
@@ -246,8 +235,8 @@ describe("runtime InputRequest projection", () => {
             gateRef: "decision_gate:publish",
             eventId: 4,
           }),
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequestSettlement(consumedByAnotherDecision, ref)).toMatchObject({
       status: "consumed",
@@ -258,12 +247,10 @@ describe("runtime InputRequest projection", () => {
 
     const rejected: ReadonlyArray<LedgerEvent> = [
       ...pending,
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.DECIDED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateDecidedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/reject",
           decision: "rejected",
@@ -274,8 +261,8 @@ describe("runtime InputRequest projection", () => {
             rejectionKind: "policy_denied",
             reason: "not_allowed",
           },
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequestSettlement(rejected, ref)).toMatchObject({
       status: "rejected",
@@ -286,17 +273,15 @@ describe("runtime InputRequest projection", () => {
 
     const cancelled: ReadonlyArray<LedgerEvent> = [
       ...pending,
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.CANCELLED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateCancelledEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           closeRef: "cancel/1",
           reason: "operator_cancelled",
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequestSettlement(cancelled, ref)).toMatchObject({
       status: "cancelled",
@@ -306,17 +291,15 @@ describe("runtime InputRequest projection", () => {
 
     const expired: ReadonlyArray<LedgerEvent> = [
       ...pending,
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.EXPIRED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateExpiredEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           closeRef: "expire/1",
           reason: "deadline",
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequestSettlement(expired, ref)).toMatchObject({
       status: "expired",
@@ -338,18 +321,16 @@ describe("runtime InputRequest projection", () => {
   it("requires positive resume shapes for question and authorization requests", () => {
     const questionEvents: ReadonlyArray<LedgerEvent> = [
       ...requestedEvents("user_input_required"),
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.DECIDED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateDecidedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/answers",
           decision: "approved",
           decidedBy: "operator/alice",
-        },
-      },
+        }),
+      ),
     ];
     const questionRef = refFrom(questionEvents);
     expect(
@@ -381,18 +362,16 @@ describe("runtime InputRequest projection", () => {
     const authEvents = requestedEvents("authorization_required");
     const approvedAuth: ReadonlyArray<LedgerEvent> = [
       ...authEvents,
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.DECIDED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateDecidedEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           decisionRef: "decision/auth",
           decision: "approved",
           decidedBy: "operator/alice",
-        },
-      },
+        }),
+      ),
     ];
     const authRef = refFrom(approvedAuth);
     expect(
@@ -418,17 +397,15 @@ describe("runtime InputRequest projection", () => {
   it("projects non-resumable cancelled and expired gate closures", () => {
     const cancelledEvents: ReadonlyArray<LedgerEvent> = [
       ...requestedEvents(),
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.CANCELLED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateCancelledEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           closeRef: "cancel/1",
           reason: "operator_cancelled",
-        },
-      },
+        }),
+      ),
     ];
     const cancelledRef = refFrom(cancelledEvents);
     const cancelled = projectInputRequest(cancelledEvents, cancelledRef);
@@ -449,17 +426,15 @@ describe("runtime InputRequest projection", () => {
 
     const expiredEvents: ReadonlyArray<LedgerEvent> = [
       ...requestedEvents(),
-      {
-        id: 4,
-        ts: 40,
-        kind: DECISION_GATE_KIND.EXPIRED,
-        ...eventIdentity,
-        payload: {
+      event(
+        4,
+        decisionGateExpiredEvent({
+          ...identity,
           gateRef: "decision_gate:publish",
           closeRef: "expire/1",
           reason: "deadline",
-        },
-      },
+        }),
+      ),
     ];
     expect(projectInputRequest(expiredEvents, refFrom(expiredEvents))).toMatchObject({
       status: "expired",

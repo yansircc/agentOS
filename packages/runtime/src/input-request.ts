@@ -22,6 +22,9 @@ import {
   type SubmitResumeDecision,
 } from "@agent-os/core/runtime-protocol";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 export type InputRequestProjection =
   | {
       readonly status: "missing_interruption";
@@ -247,6 +250,28 @@ export const projectInputRequests = (
     refs.push(ref.ref);
   }
   return refs.sort((left, right) => left.interruptionEventId - right.interruptionEventId);
+};
+
+export const chatInputForInputRequestResume = (
+  events: ReadonlyArray<LedgerEvent>,
+  ref: InputRequestRef,
+): { readonly intent: string; readonly context: Record<string, unknown> } | null => {
+  for (const event of events) {
+    const decoded = decodeRuntimeLedgerEvent(event);
+    if (
+      decoded._tag !== "runtime" ||
+      decoded.event.kind !== RUNTIME_EVENT_KIND.CHAT_INGESTED ||
+      decoded.event.payload.runId !== ref.runId
+    ) {
+      continue;
+    }
+    if (!isRecord(decoded.event.payload.context)) return null;
+    return {
+      intent: decoded.event.payload.intent,
+      context: decoded.event.payload.context,
+    };
+  }
+  return null;
 };
 
 export const projectInputRequestSettlement = (

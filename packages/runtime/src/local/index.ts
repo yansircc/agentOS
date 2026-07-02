@@ -4,16 +4,27 @@ import { constants as fsConstants } from "node:fs";
 import process from "node:process";
 import { Effect } from "effect";
 import type { Layer } from "effect";
-import type { AuthorityRef } from "@agent-os/core/effect-claim";
+import { scopeRefKey, type AuthorityRef } from "@agent-os/core/effect-claim";
 import type { LlmResponse, LlmRoute, LlmTransport } from "@agent-os/core/llm-protocol";
 import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
 import type {
   AgentSubmitBindings,
+  InputRequestSettlement,
   LedgerTruthIdentity,
   SubmitSpec,
   SubmitResult,
   SubmitToolContext,
 } from "@agent-os/core/runtime-protocol";
+import {
+  agentRunAbortedEvent,
+  submitResumeDecisionFromInputRequestRef,
+} from "@agent-os/core/runtime-protocol";
+import { ABORT, type AbortKind } from "@agent-os/core/abort";
+import type {
+  WorkspaceAgentDecideInputRequestCommandInput,
+  WorkspaceAgentInspectInputRequestCommandInput,
+  WorkspaceAgentResumeInputRequestCommandInput,
+} from "@agent-os/core/workspace-agent";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 import {
@@ -34,6 +45,19 @@ import { internalSubmitSpec } from "../internal-submit";
 import type { ScheduleFireDeliveryDispatchResult, ScheduleFireDispatchResult } from "../schedule";
 import { submitAgentEffect } from "../submit-agent";
 import type { SubmitAgentProductLink } from "../submit-agent";
+import { BoundaryEvents } from "../boundary-events";
+import {
+  DECISION_GATE_KIND,
+  decisionGateBoundaryContract,
+  decisionGateSettlementRef,
+  projectDecisionGate,
+} from "../decision-gate";
+import {
+  chatInputForInputRequestResume,
+  projectInputRequest,
+  projectInputRequestSettlement,
+} from "../input-request";
+import { projectSubmitResult } from "../run-projector";
 import {
   createWorkspaceEnv,
   WORKSPACE_TOOL_NAMES,
@@ -111,6 +135,15 @@ export type LocalAgentSubmitInput = Omit<
 
 export interface LocalAgentRuntime {
   readonly submit: (input: LocalAgentSubmitInput) => Promise<SubmitResult>;
+  readonly resumeInputRequest: (
+    input: WorkspaceAgentResumeInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
+  readonly decideInputRequest: (
+    input: WorkspaceAgentDecideInputRequestCommandInput,
+  ) => Promise<SubmitResult>;
+  readonly inspectInputRequest: (
+    input: WorkspaceAgentInspectInputRequestCommandInput,
+  ) => Promise<InputRequestSettlement>;
   readonly events: (opts?: EventQueryOptions) => ReadonlyArray<LedgerEvent>;
   readonly diagnostics: () => ReadonlyArray<TelemetryFanoutDiagnostic>;
   readonly inspect: () => InspectionSnapshot;
@@ -682,8 +715,212 @@ const commitLocalScheduleFireDispatchWithDelivery = (
         }).pipe(Effect.provide(resolved.layer)),
       );
 
+const assertLocalInputRequestScope = (
+  input: LocalAgentRuntimeFacadeInput,
+  ref: WorkspaceAgentInspectInputRequestCommandInput["ref"],
+): void => {
+  if (scopeRefKey(ref.scopeRef) !== scopeRefKey(input.truthIdentity.scopeRef)) {
+    throw new TypeError(`input request scope mismatch: ${scopeRefKey(ref.scopeRef)}`);
+  }
+};
+
+const inspectLocalInputRequest = (
+  input: LocalAgentRuntimeFacadeInput,
+  spec: WorkspaceAgentInspectInputRequestCommandInput,
+): Promise<InputRequestSettlement> => {
+  try {
+    assertLocalInputRequestScope(input, spec.ref);
+    return Promise.resolve(
+      projectInputRequestSettlement(input.resolved.state.snapshot(input.truthIdentity), spec.ref),
+    );
+  } catch (cause) {
+    return Promise.reject(cause);
+  }
+};
+
+const resumeLocalInputRequest = (
+  input: LocalAgentRuntimeFacadeInput,
+  spec: WorkspaceAgentResumeInputRequestCommandInput,
+): Promise<SubmitResult> => {
+  try {
+    assertLocalInputRequestScope(input, spec.ref);
+  } catch (cause) {
+    return Promise.reject(cause);
+  }
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const ledger = yield* Ledger;
+      const boundaryEvents = yield* BoundaryEvents;
+      const events = yield* ledger.events(input.truthIdentity);
+      const chatInput = chatInputForInputRequestResume(events, spec.ref);
+      if (chatInput === null) {
+        return yield* Effect.fail(
+          new TypeError("input request resume missing original chat input"),
+        );
+      }
+      const gate = projectDecisionGate(events, spec.ref.gateRef);
+      const inputRequest = projectInputRequest(events, spec.ref);
+      if (gate.status === "requested" && inputRequest.status === "pending") {
+        yield* boundaryEvents.commit(decisionGateBoundaryContract, DECISION_GATE_KIND.DECIDED, {
+          gateRef: spec.ref.gateRef,
+          decisionRef: spec.answer.decisionRef,
+          decision: "approved",
+          decidedBy: spec.decidedBy,
+        });
+      } else if (
+        (gate.status === "approved" || gate.status === "consumed") &&
+        gate.decision?.decisionRef === spec.answer.decisionRef
+      ) {
+        // Idempotent retry after DECIDED was persisted but before/while submit resumed.
+      } else {
+        return yield* Effect.fail(new TypeError(`input request is not resumable: ${gate.status}`));
+      }
+      return chatInput;
+    }).pipe(Effect.provide(input.resolved.layer)),
+  ).then((chatInput) =>
+    submitLocalAgent(input, {
+      intent: chatInput.intent,
+      context: chatInput.context,
+      resume: submitResumeDecisionFromInputRequestRef(spec.ref, spec.answer),
+    }),
+  );
+};
+
+const closeLocalInputRequest = (
+  input: LocalAgentRuntimeFacadeInput,
+  spec: WorkspaceAgentDecideInputRequestCommandInput,
+): Promise<SubmitResult> => {
+  const closeDecision = spec.decision;
+  if (closeDecision.kind === "approved") {
+    return Promise.reject(new TypeError("approved input requests must resume"));
+  }
+  try {
+    assertLocalInputRequestScope(input, spec.ref);
+  } catch (cause) {
+    return Promise.reject(cause);
+  }
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const ledger = yield* Ledger;
+      const boundaryEvents = yield* BoundaryEvents;
+      const events = yield* ledger.events(input.truthIdentity);
+      const gate = projectDecisionGate(events, spec.ref.gateRef);
+      const inputRequest = projectInputRequest(events, spec.ref);
+      const resultFromLedger = () => {
+        const result = projectSubmitResult(events, spec.ref.runId);
+        return result === null
+          ? Effect.fail(new TypeError("input request close missing terminal run fact"))
+          : Effect.succeed(result);
+      };
+      const sameTerminal =
+        (closeDecision.kind === "rejected" &&
+          gate.status === "rejected" &&
+          gate.decision?.decisionRef === closeDecision.decisionRef) ||
+        (closeDecision.kind === "cancelled" &&
+          gate.status === "cancelled" &&
+          gate.cancelled?.closeRef === closeDecision.closeRef) ||
+        (closeDecision.kind === "expired" &&
+          gate.status === "expired" &&
+          gate.expired?.closeRef === closeDecision.closeRef);
+      if (sameTerminal) {
+        return yield* resultFromLedger();
+      }
+      if (gate.status !== "requested" || inputRequest.status !== "pending") {
+        return yield* Effect.fail(new TypeError(`input request terminal conflict: ${gate.status}`));
+      }
+      const terminal =
+        closeDecision.kind === "rejected"
+          ? {
+              event: DECISION_GATE_KIND.DECIDED,
+              payload: {
+                gateRef: spec.ref.gateRef,
+                decisionRef: closeDecision.decisionRef,
+                decision: "rejected",
+                decidedBy: closeDecision.decidedBy,
+                reason: closeDecision.reason ?? "rejected",
+                rejectionRef: {
+                  rejectionId: decisionGateSettlementRef(
+                    "rejected",
+                    spec.ref.gateRef,
+                    closeDecision.decisionRef,
+                  ),
+                  rejectionKind: "policy_denied",
+                  reason: closeDecision.reason ?? "rejected",
+                },
+              },
+              abortKind: ABORT.DECISION_REJECTED,
+              terminalRef: closeDecision.decisionRef,
+              reason: "rejected",
+            }
+          : closeDecision.kind === "cancelled"
+            ? {
+                event: DECISION_GATE_KIND.CANCELLED,
+                payload: {
+                  gateRef: spec.ref.gateRef,
+                  closeRef: closeDecision.closeRef,
+                  reason: closeDecision.reason ?? "cancelled",
+                },
+                abortKind: ABORT.DECISION_CANCELLED,
+                terminalRef: closeDecision.closeRef,
+                reason: "cancelled",
+              }
+            : {
+                event: DECISION_GATE_KIND.EXPIRED,
+                payload: {
+                  gateRef: spec.ref.gateRef,
+                  closeRef: closeDecision.closeRef,
+                  reason: closeDecision.reason ?? "expired",
+                },
+                abortKind: ABORT.DECISION_EXPIRED,
+                terminalRef: closeDecision.closeRef,
+                reason: "expired",
+              };
+      yield* boundaryEvents.commitWithRuntimeEvents(
+        decisionGateBoundaryContract,
+        terminal.event,
+        terminal.payload,
+        () => [
+          agentRunAbortedEvent({
+            scopeRef: input.truthIdentity.scopeRef,
+            effectAuthorityRef: input.truthIdentity.effectAuthorityRef,
+            kind: terminal.abortKind as AbortKind,
+            runId: spec.ref.runId,
+            tokensUsed: inputRequest.interruption.payload.tokensUsed,
+            payload: {
+              reason: terminal.reason,
+              gateRef: spec.ref.gateRef,
+              terminalRef: terminal.terminalRef,
+            },
+            traceContext: inputRequest.interruption.payload.traceContext,
+          }),
+        ],
+      );
+      const nextEvents = yield* ledger.events(input.truthIdentity);
+      const result = projectSubmitResult(nextEvents, spec.ref.runId);
+      return result === null
+        ? yield* Effect.fail(new TypeError("input request close missing terminal run fact"))
+        : result;
+    }).pipe(Effect.provide(input.resolved.layer)),
+  );
+};
+
+const decideLocalInputRequest = (
+  input: LocalAgentRuntimeFacadeInput,
+  spec: WorkspaceAgentDecideInputRequestCommandInput,
+): Promise<SubmitResult> =>
+  spec.decision.kind === "approved"
+    ? resumeLocalInputRequest(input, {
+        ref: spec.ref,
+        decidedBy: spec.decision.decidedBy,
+        answer: spec.decision.answer,
+      })
+    : closeLocalInputRequest(input, spec);
+
 const localAgentRuntimeFacade = (input: LocalAgentRuntimeFacadeInput): LocalAgentRuntime => ({
   submit: (submitInput) => submitLocalAgent(input, submitInput),
+  resumeInputRequest: (spec) => resumeLocalInputRequest(input, spec),
+  decideInputRequest: (spec) => decideLocalInputRequest(input, spec),
+  inspectInputRequest: (spec) => inspectLocalInputRequest(input, spec),
   events: (opts = {}) => input.resolved.state.snapshot(input.truthIdentity, opts),
   diagnostics: () => input.resolved.state.telemetryDiagnostics(),
   inspect: () =>
