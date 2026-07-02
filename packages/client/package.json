@@ -18,6 +18,10 @@
       "types": "./src/svelte/index.ts",
       "default": "./src/svelte/index.ts"
     },
+    "./product-shell-client": {
+      "types": "./src/product-shell-client.ts",
+      "default": "./src/product-shell-client.ts"
+    },
     "./workspace-agent": {
       "types": "./src/workspace-agent.ts",
       "default": "./src/workspace-agent.ts"

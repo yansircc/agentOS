@@ -54,6 +54,12 @@ Status: 0.5.x active development for the canonical agent client package. Root ex
 - `./svelte:AgentClientStore`
 - `./svelte:clientReadable`
 - `./svelte:selectClientReadable`
+- `./product-shell-client:createProductShellAgentClient`
+- `./product-shell-client:CreateProductShellAgentClientOptions`
+- `./product-shell-client:ProductShellCommandInvoker`
+- `./product-shell-client:ProductShellCommandMap`
+- `./product-shell-client:ProductShellCommandOptions`
+- `./product-shell-client:ProductShellRuntimeLedgerOptions`
 - `./workspace-agent:createWorkspaceAgentClient`
 - `./workspace-agent:createWorkspaceAgentClientBridge`
 - `./workspace-agent:CreateWorkspaceAgentClientOptions`

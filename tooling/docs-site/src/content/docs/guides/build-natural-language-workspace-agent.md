@@ -286,17 +286,19 @@ not be wrapped as `RuntimeLedgerEvent`.
 
 ```ts
 import {
-  createAgentClient,
   createAgentClientRuntimeLedgerStreamSource,
   projectAgentClientRunInspection,
 } from "@agent-os/client";
+import { createProductShellAgentClient } from "@agent-os/client/product-shell-client";
 
-const runtime = createAgentClient({
-  streamSource: createAgentClientRuntimeLedgerStreamSource({
-    open: ({ afterEventId }, options) =>
-      backend.streamLedgerEvents({ afterId: afterEventId, signal: options?.signal }),
-  }),
-  rpcInvoker: productCommandInvoker,
+const runtime = createProductShellAgentClient({
+  productCommands: { invoke: productCommandInvoker },
+  runtimeLedger: {
+    streamSource: createAgentClientRuntimeLedgerStreamSource({
+      open: ({ afterEventId }, options) =>
+        backend.streamLedgerEvents({ afterId: afterEventId, signal: options?.signal }),
+    }),
+  },
 });
 
 await runtime.connect();
@@ -305,8 +307,8 @@ const runtimeInspection = projectAgentClientRunInspection(runtime.getSnapshot())
 
 `streamLedgerEvents` returns raw ledger-event RPC frames from the runtime
 backend. The client decoder accepts only runtime-protocol ledger events. Product
-commands can share the `rpcInvoker`, but product lifecycle truth stays in the
-product command/report surface that owns those facts.
+commands use the product-shell command invoker, but product lifecycle truth
+stays in the product command/report surface that owns those facts.
 
 Generated workspace clients expose product lifecycle methods above the runtime
 run substrate:

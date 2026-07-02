@@ -1,5 +1,19 @@
 # @yansirplus/client Public API Intent
 
+## Product Shell Client Boundary
+
+`./product-shell-client` is the public composition surface for product shells
+that own their product command backend but want agentOS to own runtime-ledger
+stream consumption and runtime snapshot projection. It names the two injected
+facts separately: `productCommands.invoke` sends typed commands to the product
+backend, while `runtimeLedger.initialEvents` and `runtimeLedger.streamSource`
+feed only decoded `RuntimeLedgerEvent` facts into the existing agent client
+state machine.
+
+This subpath does not define product commands, product reports, approvals,
+candidates, receipts, previews, or workflow state. Product command outputs stay
+opaque to agentOS and are not appended to the runtime event snapshot.
+
 ## Public exports
 
 - `.:AgentClientCommandMap`
@@ -50,6 +64,12 @@
 - `./svelte:AgentClientStore`
 - `./svelte:clientReadable`
 - `./svelte:selectClientReadable`
+- `./product-shell-client:createProductShellAgentClient`
+- `./product-shell-client:CreateProductShellAgentClientOptions`
+- `./product-shell-client:ProductShellCommandInvoker`
+- `./product-shell-client:ProductShellCommandMap`
+- `./product-shell-client:ProductShellCommandOptions`
+- `./product-shell-client:ProductShellRuntimeLedgerOptions`
 - `./workspace-agent:createWorkspaceAgentClient`
 - `./workspace-agent:createWorkspaceAgentClientBridge`
 - `./workspace-agent:CreateWorkspaceAgentClientOptions`
