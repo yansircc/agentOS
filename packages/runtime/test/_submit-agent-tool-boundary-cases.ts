@@ -3,7 +3,7 @@ import {
   Schema,
   expect,
   it,
-  boundaryPackage,
+  compileBoundaryContract,
   defineBoundaryContract,
   defineTool,
   externalToolExecution,
@@ -157,7 +157,7 @@ export const registerSubmitAgentToolBoundaryCases = () => {
           toolIntents: [
             {
               kind: "workspace_op.requested",
-              boundaryPackage: boundaryPackage(
+              boundaryModule: compileBoundaryContract(
                 defineBoundaryContract({
                   ownerId: WORKSPACE_OP_OWNER_ID,
                   sourcePackageName: "../src/workspace-op-carrier",
@@ -323,7 +323,7 @@ export const registerSubmitAgentToolBoundaryCases = () => {
 
   it.effect("injects the tool pre-claim when emitting a declared intent with a claim slot", () =>
     Effect.gen(function* () {
-      const intentPackage = boundaryPackage(
+      const intentModule = compileBoundaryContract(
         defineBoundaryContract({
           ownerId: "@agent-os/runtime-test.claimed-intent",
           sourcePackageName: "@agent-os/runtime-test.claimed-intent",
@@ -380,7 +380,7 @@ export const registerSubmitAgentToolBoundaryCases = () => {
           toolIntents: [
             {
               kind: "runtime.claimed_intent.requested",
-              boundaryPackage: intentPackage,
+              boundaryModule: intentModule,
             },
           ],
         }),

@@ -335,7 +335,7 @@ product-control-plane lifecycle.
 - `.:RUNTIME_DIAGNOSTIC_KIND`
 - `.:RUNTIME_DIAGNOSTIC_RESERVED_KINDS`
 - `.:runtimeDiagnosticBoundaryContract`
-- `.:runtimeDiagnosticBoundaryPackage`
+- `.:runtimeDiagnosticBoundaryModule`
 - `.:runtimeDiagnosticCarrier`
 - `.:runtimeDiagnosticSettlementContract`
 - `.:runSynchronousAttachedStreamCommit`

@@ -122,8 +122,8 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:BoundaryContract`
 - `.:BoundaryContractIssue`
 - `.:BoundaryContractValidation`
-- `.:boundaryPackage`
-- `.:BoundaryPackage`
+- `.:BoundaryModule`
+- `.:BoundaryModuleManifest`
 - `.:BoundaryProjectionContract`
 - `.:buildContextPack`
 - `.:BUILTIN_HANDLER_KINDS`
@@ -154,6 +154,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:ChatIngestedPayload`
 - `.:ChatIngestedPayloadSchema`
 - `.:checkProjectionSink`
+- `.:compileBoundaryContract`
 - `.:ClaimRole`
 - `.:ClaimValidation`
 - `.:ClaimValidationIssue`
@@ -320,6 +321,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:ExtensionCommitSpec`
 - `.:ExtensionDeclaration`
 - `.:ExtensionHandlerKind`
+- `.:extensionManifest`
 - `.:extensionOwnsEvent`
 - `.:ExtensionTimeSpec`
 - `.:EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION`
@@ -399,7 +401,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:isBackendProtocolEventIdentity`
 - `.:isBackendProtocolProjectionKey`
 - `.:isBackendProtocolTruthIdentity`
-- `.:isBoundaryPackage`
+- `.:isBoundaryModule`
 - `.:isClaimedEventKind`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
@@ -1040,8 +1042,10 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./boundary-contract:BoundaryContractValidation`
 - `./boundary-contract:BoundaryEventClaimContract`
 - `./boundary-contract:BoundaryEventContract`
-- `./boundary-contract:boundaryPackage`
+- `./boundary-contract:BoundaryModule`
+- `./boundary-contract:BoundaryModuleManifest`
 - `./boundary-contract:BoundaryProjectionContract`
+- `./boundary-contract:compileBoundaryContract`
 - `./boundary-contract:defineBoundaryContract`
 - `./boundary-contract:validateBoundaryContract`
 - `./boundary-contract:validateBoundaryPayload`
@@ -1145,7 +1149,6 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./errors:UnregisteredDurableTriggerKind`
 - `./errors:UnsupportedScopeRef`
 - `./errors:UpstreamFailure`
-- `./extensions:BoundaryPackage`
 - `./extensions:CommitterMap`
 - `./extensions:defineEventKindView`
 - `./extensions:defineEventPayloads`
@@ -1157,10 +1160,11 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./extensions:ExtensionCapabilityConflict`
 - `./extensions:ExtensionCommitSpec`
 - `./extensions:ExtensionDeclaration`
+- `./extensions:extensionManifest`
 - `./extensions:extensionOwnsEvent`
 - `./extensions:ExtensionTimeSpec`
 - `./extensions:ExtensionValidation`
-- `./extensions:isBoundaryPackage`
+- `./extensions:isBoundaryModule`
 - `./extensions:makeCommitters`
 - `./extensions:payload`
 - `./extensions:rejectClaimedAppEvent`

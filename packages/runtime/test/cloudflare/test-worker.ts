@@ -47,7 +47,7 @@ import {
   DurableTriggerAcquireCancelled,
   ToolError,
 } from "@agent-os/core/errors";
-import { boundaryPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { compileBoundaryContract, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/core/extensions";
 import { makePreClaim, type FactOwnerRef } from "@agent-os/core/effect-claim";
 import {
@@ -605,7 +605,7 @@ const streamOwnerBoundaryContract = defineBoundaryContract({
 
 export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
   ...testAgentMountConfig,
-  extensions: () => [boundaryPackage(streamOwnerBoundaryContract, "0.1.0")],
+  extensions: () => [compileBoundaryContract(streamOwnerBoundaryContract, "0.1.0")],
   eventHandlers: ({ capabilities }) => [
     {
       kind: "stream.slow",
@@ -862,7 +862,7 @@ export const ExtensionTestDO = createAgentDurableObject<CloudflareAgentEnv>({
       kindPrefixes: ["image."],
       version: "0.3.0",
     }),
-    boundaryPackage(proofBoundaryContract, "0.1.0"),
+    compileBoundaryContract(proofBoundaryContract, "0.1.0"),
   ],
   eventHandlers: extensionCommandHandlers,
 });
@@ -921,7 +921,7 @@ export const facadeWriteSecond = defineTool({
   execute: ({ value }) => Effect.succeed({ value }),
 });
 
-const facadeIntentBoundaryPackage = boundaryPackage(
+const facadeIntentBoundaryModule = compileBoundaryContract(
   defineBoundaryContract({
     ownerId: "@agent-os/facade-intent-test",
     sourcePackageName: "@agent-os/facade-intent-test",
@@ -994,7 +994,7 @@ export const facadeIntent = defineTool({
       const projected = yield* ctx.awaitProjection({
         kind: "facade.intent.projection",
         identity: { label: args.label },
-        factOwnerRef: facadeIntentBoundaryPackage.ownerId,
+        factOwnerRef: facadeIntentBoundaryModule.manifest.ownerId,
         maxAttempts: 1,
       });
       return {
@@ -1268,16 +1268,16 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   },
   llmTransport: () => facadeSubmitLlmTransport,
   tools: [facadeLookup, facadeApply, facadeIntent, facadeWriteFirst, facadeWriteSecond],
-  extensions: [facadeIntentBoundaryPackage],
+  extensions: [facadeIntentBoundaryModule],
   on: {
     [FACADE_INTENT_COMMAND_EVENT]: async ({ data, capabilities }) => {
       const payload = Predicate.isObject(data) ? data : {};
       if (typeof payload.label !== "string") return;
-      const capability = capabilities.get(facadeIntentBoundaryPackage.ownerId);
+      const capability = capabilities.get(facadeIntentBoundaryModule.manifest.ownerId);
       if (capability === undefined) {
         throw new CapabilityRejected({
           event: "facade.intent.requested",
-          capability: `extension:${facadeIntentBoundaryPackage.ownerId}`,
+          capability: `extension:${facadeIntentBoundaryModule.manifest.ownerId}`,
         });
       }
       await capability.commit({
@@ -1289,7 +1289,7 @@ export const FacadeSubmitTestDO = defineAgentDO<CloudflareAgentEnv>({
   declaredIntents: [
     {
       kind: "facade.intent.requested",
-      boundaryOwnerId: facadeIntentBoundaryPackage.ownerId,
+      boundaryOwnerId: facadeIntentBoundaryModule.manifest.ownerId,
     },
   ],
   projections: [facadeIntentProjection],

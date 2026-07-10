@@ -9,7 +9,7 @@ export {
   providerMaterialPreflightDetailJson,
   runtimeDiagnosticBoundaryContract,
   runtimeDiagnosticSettlementContract,
-  runtimeDiagnosticBoundaryPackage,
+  runtimeDiagnosticBoundaryModule,
   type ProviderMaterialPreflightDetail,
   type ProviderMaterialPreflightStatus,
   type PreflightDiagnosticSink,

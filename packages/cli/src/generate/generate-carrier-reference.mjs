@@ -26,7 +26,7 @@ const isCarrier = (value) =>
   typeof value.prefix === "string" &&
   isRecord(value.boundaryContract) &&
   isRecord(value.settlementContract) &&
-  typeof value.boundaryPackage === "function" &&
+  typeof value.boundaryModule === "function" &&
   typeof value.decode === "function";
 
 const isEventNamespace = (value) =>

@@ -12,7 +12,7 @@ import {
 } from "@agent-os/core/llm-protocol";
 import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
 import {
-  boundaryPackage,
+  compileBoundaryContract,
   defineBoundaryContract,
   type BoundaryContract,
 } from "@agent-os/core/boundary-contract";
@@ -469,7 +469,7 @@ export {
   llmCallSnapshotFromResponse,
   LlmTransport,
   replayLlmResponseFromSnapshot,
-  boundaryPackage,
+  compileBoundaryContract,
   defineBoundaryContract,
   defineTool,
   externalToolExecution,

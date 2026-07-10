@@ -1,9 +1,10 @@
 import { Option } from "effect";
 import { defineAgentSchema, type AgentSchemaDecoder } from "./agent-schema";
 import {
-  boundaryPackage,
+  compileBoundaryContract,
   type BoundaryContract,
   type BoundaryEventContract,
+  type BoundaryModule,
   type BoundaryProjectionContract,
   validateBoundaryContract,
 } from "./boundary-contract";
@@ -17,7 +18,6 @@ import {
   type RejectedClaim,
   type RejectionRef,
 } from "./effect-claim";
-import { type BoundaryPackage } from "./extensions";
 import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import type { EffectAuthorityContract, MaterialRequirement } from "./material-ref";
 import type { Recordable } from "./value-brands";
@@ -208,7 +208,7 @@ export interface Carrier<
   readonly events: CarrierEventPayloads<Prefix, Events>;
   readonly boundaryContract: BoundaryContract<keyof CarrierEventPayloads<Prefix, Events> & string>;
   readonly settlementContract: SettlementContract;
-  readonly boundaryPackage: (version: string) => BoundaryPackage;
+  readonly boundaryModule: (version: string) => BoundaryModule;
   readonly settle: CarrierSettleMap<Events>;
   readonly reject: CarrierRejectMap<Events>;
   readonly indeterminate: CarrierIndeterminateMap<Events>;
@@ -535,7 +535,7 @@ export const defineCarrier = <
       keyof CarrierEventPayloads<Prefix, Events> & string
     >,
     settlementContract,
-    boundaryPackage: (version) => boundaryPackage(boundaryContract, version),
+    boundaryModule: (version) => compileBoundaryContract(boundaryContract, version),
     settle: settle as CarrierSettleMap<Events>,
     reject: reject as CarrierRejectMap<Events>,
     indeterminate: indeterminateClaims as CarrierIndeterminateMap<Events>,

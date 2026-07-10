@@ -579,7 +579,10 @@ const inspectionBoundaryEventIdentities = (
   bindings: AgentSubmitBindings,
 ) => {
   const intentOwners = new Map(
-    (bindings.toolIntents ?? []).map((intent) => [intent.kind, intent.boundaryPackage.ownerId]),
+    (bindings.toolIntents ?? []).map((intent) => [
+      intent.kind,
+      intent.boundaryModule.manifest.ownerId,
+    ]),
   );
   const identities = new Map<
     string,

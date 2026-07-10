@@ -22,7 +22,7 @@ import {
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
   RUNTIME_DIAGNOSTIC_KIND,
   runtimeDiagnosticBoundaryContract,
-  runtimeDiagnosticBoundaryPackage,
+  runtimeDiagnosticBoundaryModule,
   type RuntimePreflightPass,
   type PreflightDiagnosticSink,
 } from "../runtime-diagnostic-carrier";
@@ -39,6 +39,7 @@ import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolve
 import type { AgentBindings, AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
 import { validateToolRegistry } from "@agent-os/core/tools";
 import {
+  extensionManifest,
   validateExtensionDeclarations,
   type ExtensionDeclaration,
 } from "@agent-os/core/extensions";
@@ -57,6 +58,7 @@ import {
   type ResolvedRuntimeGraphStatus,
 } from "../runtime-graph-status";
 import { allMaterializedHostFactContracts, hasResolvedHostFact } from "./materialized-host-facts";
+import { bindDeclaredBoundaryIntents } from "./boundary-modules";
 
 /**
  * Preflight diagnostic returned when resolve fails
@@ -574,7 +576,7 @@ export const resolveRuntimeInstallGraph = (
   const allProjections: AnyMaterializedProjectionDefinition[] = [];
   const allProjectionRegistrations: ResolvedRuntimeGraphRegistration[] = [];
   const allTriggers: AnyDurableTrigger[] = [];
-  const runtimeDiagnosticExtension = runtimeDiagnosticBoundaryPackage(
+  const runtimeDiagnosticExtension = runtimeDiagnosticBoundaryModule(
     RUNTIME_DIAGNOSTIC_BOUNDARY_VERSION,
   );
   const allExtensions: ExtensionDeclaration[] = [runtimeDiagnosticExtension];
@@ -613,10 +615,10 @@ export const resolveRuntimeInstallGraph = (
   };
   addGlobalKey(
     "extension owner",
-    runtimeDiagnosticExtension.ownerId,
+    runtimeDiagnosticExtension.manifest.ownerId,
     RUNTIME_DIAGNOSTIC_FACT_OWNER,
   );
-  for (const prefix of runtimeDiagnosticExtension.kindPrefixes) {
+  for (const prefix of runtimeDiagnosticExtension.manifest.kindPrefixes) {
     addGlobalKey("extension prefix", prefix, RUNTIME_DIAGNOSTIC_FACT_OWNER);
   }
 
@@ -667,9 +669,10 @@ export const resolveRuntimeInstallGraph = (
       addGlobalKey("declared intent", intent.kind, cap.capabilityId);
     }
     for (const extension of installResult.extensions ?? []) {
+      const manifest = extensionManifest(extension);
       allExtensions.push(extension);
-      addGlobalKey("extension owner", extension.ownerId, cap.capabilityId);
-      for (const prefix of extension.kindPrefixes) {
+      addGlobalKey("extension owner", manifest.ownerId, cap.capabilityId);
+      for (const prefix of manifest.kindPrefixes) {
         addGlobalKey("extension prefix", prefix, cap.capabilityId);
       }
     }
@@ -732,6 +735,19 @@ export const resolveRuntimeInstallGraph = (
       reason: `Invalid extension namespace: ${extensionValidation.error.kindPrefix}`,
       capabilityId: extensionValidation.error.ownerId,
       detail: diagnosticDetail({ claimedBy: extensionValidation.error.claimedBy }),
+    });
+    return failed();
+  }
+
+  const boundaryIntentBindings = bindDeclaredBoundaryIntents(allExtensions, allDeclaredIntents);
+  if (!boundaryIntentBindings.ok) {
+    addDiagnostic({
+      pass: "global_unique",
+      capabilityId: boundaryIntentBindings.intent.boundaryOwnerId,
+      reason:
+        boundaryIntentBindings.reason === "unbound_boundary_owner"
+          ? `Declared intent ${boundaryIntentBindings.intent.kind} references an unbound BoundaryModule`
+          : `Declared intent ${boundaryIntentBindings.intent.kind} is outside its BoundaryModule vocabulary`,
     });
     return failed();
   }

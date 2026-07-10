@@ -1,10 +1,10 @@
-import type { BoundaryPackage } from "@agent-os/core/extensions";
+import type { BoundaryModule } from "@agent-os/core/boundary-contract";
 import type { AuthorityRef, FactOwnerRef, ScopeRef } from "@agent-os/core/effect-claim";
 import type { MaterialRef } from "@agent-os/core/material-ref";
 
 export interface AgentCapabilityIntent<Kind extends string = string, Payload = unknown> {
   readonly kind: Kind;
-  readonly boundaryPackage?: BoundaryPackage;
+  readonly boundaryModule?: BoundaryModule;
   readonly _payload?: Payload;
 }
 
@@ -42,7 +42,7 @@ export interface AgentCapabilityDefinition<
   Materials extends AgentCapabilityMaterialMap = {},
 > {
   readonly id: string;
-  readonly boundaryPackage?: BoundaryPackage;
+  readonly boundaryModule?: BoundaryModule;
   readonly intents: Intents;
   readonly projections: Projections;
   readonly materials: Materials;
@@ -94,7 +94,7 @@ export const capabilityIntent =
   <Payload = unknown>() =>
   <const Kind extends string>(
     kind: Kind,
-    options: { readonly boundaryPackage?: BoundaryPackage } = {},
+    options: { readonly boundaryModule?: BoundaryModule } = {},
   ): AgentCapabilityIntent<Kind, Payload> => ({
     kind,
     ...options,

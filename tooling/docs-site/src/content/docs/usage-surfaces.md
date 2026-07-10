@@ -22,7 +22,7 @@ views from projections.
 | Backend mount      | `@agent-os/runtime/cloudflare`             | Backend authors        | Durable Object factory, manifest mount             |
 | Runtime substrate  | `@agent-os/runtime`                        | Backend authors        | Effect Tags, submit protocol, projections          |
 | Backend protocol   | `@agent-os/core/backend-protocol`          | Backend authors        | shared dispatch/scheduler/resource/quota semantics |
-| Carriers/providers | `@agent-os/runtime` modules/subpaths       | Domain package authors | boundary packages, provider materializers          |
+| Carriers/providers | `@agent-os/runtime` modules/subpaths       | Domain package authors | compiled boundary modules, provider materializers  |
 | Composers/tooling  | `@agent-os/runtime`, `@agent-os/cli`       | Ops and UI authors     | projections, manifests, install-time registries    |
 
 ## Minimal App Concepts

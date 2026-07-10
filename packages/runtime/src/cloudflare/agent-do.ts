@@ -127,13 +127,13 @@ import { createEventStreamResponse } from "./ledger/stream";
 import { Scheduler } from "./scheduler";
 import { isMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import { RefResolverService, type RefResolver } from "@agent-os/core/ref-resolver";
+import type { BoundaryModule } from "@agent-os/core/boundary-contract";
 import {
-  type BoundaryPackage,
   type ExtensionCapability,
   type ExtensionValidation,
   ExtensionCapabilityConflict,
   extensionOwnsEvent,
-  isBoundaryPackage,
+  isBoundaryModule,
   rejectClaimedAppEvent,
   validateExtensionDeclarations,
 } from "@agent-os/core/extensions";
@@ -505,19 +505,16 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     const capabilities = new Map<string, ExtensionCapability>();
     if (!validation.ok) return capabilities;
     for (const declaration of validation.declarations) {
-      if (isBoundaryPackage(declaration)) {
-        capabilities.set(declaration.ownerId, this.makeExtensionCapability(declaration));
+      if (isBoundaryModule(declaration)) {
+        capabilities.set(declaration.manifest.ownerId, this.makeExtensionCapability(declaration));
       }
     }
     return capabilities;
   }
 
-  private makeExtensionCapability(pkg: BoundaryPackage): ExtensionCapability {
+  private makeExtensionCapability(pkg: BoundaryModule): ExtensionCapability {
     return {
-      ownerId: pkg.ownerId,
-      sourcePackageName: pkg.sourcePackageName,
-      kindPrefixes: pkg.kindPrefixes,
-      version: pkg.version,
+      ...pkg.manifest,
       commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data),
       time: (spec) => this.extensionTime(pkg, spec.at, spec.event, spec.data),
     };
@@ -528,7 +525,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   }
 
   private extensionCommit(
-    pkg: BoundaryPackage,
+    pkg: BoundaryModule,
     event: string,
     data: unknown,
   ): Promise<{ id: number }> {
@@ -536,11 +533,11 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       return Promise.reject(
         new CapabilityRejected({
           event,
-          capability: `extension:${pkg.ownerId}`,
+          capability: `extension:${pkg.manifest.ownerId}`,
         }),
       );
     }
-    const rejected = validateBoundaryEventPayload(pkg.boundaryContract, event, data);
+    const rejected = validateBoundaryEventPayload(pkg.contract, event, data);
     if (rejected !== null) {
       return Promise.reject(rejected);
     }
@@ -548,7 +545,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     return this.runScoped((_scope, runtimeIdentity) =>
       Effect.gen(function* () {
         const bus = yield* EventBus;
-        const ev = yield* commitBoundaryEvent(pkg.boundaryContract, event, data, (identity) =>
+        const ev = yield* commitBoundaryEvent(pkg.contract, event, data, (identity) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
             const scopeRef = identity.scopeRef ?? runtimeIdentity.scopeRef;
@@ -578,7 +575,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   }
 
   private extensionTime(
-    pkg: BoundaryPackage,
+    pkg: BoundaryModule,
     at: number,
     event: string,
     data: unknown,
@@ -590,11 +587,11 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       return Promise.reject(
         new CapabilityRejected({
           event,
-          capability: `extension:${pkg.ownerId}`,
+          capability: `extension:${pkg.manifest.ownerId}`,
         }),
       );
     }
-    const rejected = validateBoundaryEventPayload(pkg.boundaryContract, event, data);
+    const rejected = validateBoundaryEventPayload(pkg.contract, event, data);
     if (rejected !== null) {
       return Promise.reject(rejected);
     }

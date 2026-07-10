@@ -20,18 +20,14 @@ import type {
 import type { DispatchTargetRegistry } from "./dispatch/dispatch";
 import { AdmissionLive } from "./admission/admission";
 import { RefResolverLive, RefResolverService, type RefResolver } from "@agent-os/core/ref-resolver";
-import {
-  type BoundaryPackage,
-  type ExtensionDeclaration,
-  extensionOwnsEvent,
-  isBoundaryPackage,
-} from "@agent-os/core/extensions";
+import { type ExtensionDeclaration } from "@agent-os/core/extensions";
 import { makeCloudflareBackendCoreLayer, type CloudflareBackendCoreServices } from "./runtime-core";
 import type { CloudflareAttachedStreamSource } from "./stream-factory";
 import type { CloudflareTriggerSource } from "./trigger-factory";
 import type { AgentDeclaredIntent, CloudflareAgentEnv } from "./deployment";
 import { eventIdentity } from "./ledger/identity";
 import type { ResolvedRuntimeGraphStatus } from "../runtime-graph-status";
+import { bindDeclaredBoundaryIntents } from "../capability/boundary-modules";
 
 export interface AgentSubmitSpecLike {
   readonly intent: string;
@@ -175,28 +171,15 @@ export const declaredToolIntents = (
   extensions: ReadonlyArray<ExtensionDeclaration>,
   declaredIntents: ReadonlyArray<AgentDeclaredIntent>,
 ): ReadonlyArray<SubmitToolIntent> => {
-  const boundaryPackages = new Map<string, BoundaryPackage>();
-  for (const extension of extensions) {
-    if (isBoundaryPackage(extension)) {
-      boundaryPackages.set(extension.ownerId, extension);
-    }
+  const binding = bindDeclaredBoundaryIntents(extensions, declaredIntents);
+  if (!binding.ok) {
+    return rejectAgentConfig(
+      binding.reason === "unbound_boundary_owner"
+        ? `declared intent ${binding.intent.kind} references unbound boundary owner`
+        : `declared intent ${binding.intent.kind} is not owned by ${binding.intent.boundaryOwnerId}`,
+    );
   }
-
-  return declaredIntents.map((intent) => {
-    const boundaryPackage = boundaryPackages.get(intent.boundaryOwnerId);
-    if (boundaryPackage === undefined) {
-      return rejectAgentConfig(`declared intent ${intent.kind} references unbound boundary owner`);
-    }
-    if (!extensionOwnsEvent(boundaryPackage, intent.kind)) {
-      return rejectAgentConfig(
-        `declared intent ${intent.kind} is not owned by ${intent.boundaryOwnerId}`,
-      );
-    }
-    return {
-      kind: intent.kind,
-      boundaryPackage,
-    };
-  });
+  return binding.bindings.map(({ kind, boundaryModule }) => ({ kind, boundaryModule }));
 };
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>

@@ -3,7 +3,7 @@ import {
   Schema,
   expect,
   it,
-  boundaryPackage,
+  compileBoundaryContract,
   defineBoundaryContract,
   defineTool,
   externalToolExecution,
@@ -191,7 +191,7 @@ export const registerSubmitAgentMaterialCases = () => {
             toolIntents: [
               {
                 kind: "workspace_op.requested",
-                boundaryPackage: boundaryPackage(
+                boundaryModule: compileBoundaryContract(
                   defineBoundaryContract({
                     ownerId: WORKSPACE_OP_OWNER_ID,
                     sourcePackageName: "../src/workspace-op-carrier",

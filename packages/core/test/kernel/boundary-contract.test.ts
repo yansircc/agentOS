@@ -3,11 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   type BoundaryContract,
   type BoundaryEventContract,
-  boundaryPackage,
+  type BoundaryModule,
+  compileBoundaryContract,
   defineBoundaryContract,
   validateBoundaryContract,
 } from "../../src/boundary-contract";
-import type { BoundaryPackage } from "../../src/extensions";
 import type { Authored } from "../../src";
 import { materialRequirement } from "../../src/material-ref";
 import { defineSettlementContract } from "../../src/settlement-contract";
@@ -92,25 +92,48 @@ describe("BoundaryContract", () => {
     expect(authoredContract.value.ownerId).toBe("@agent-os/example-carrier");
     expect(authoredContract.value.sourcePackageName).toBe("@agent-os/example-carrier");
     expect(Object.prototype.propertyIsEnumerable.call(contract, "value")).toBe(false);
-    expect(boundaryPackage(contract, "0.1.0")).toEqual({
-      ownerId: "@agent-os/example-carrier",
-      sourcePackageName: "@agent-os/example-carrier",
-      kindPrefixes: ["example."],
-      version: "0.1.0",
-      boundaryContract: contract,
+    const module = compileBoundaryContract(contract, "0.1.0");
+    expect(module).toEqual({
+      contract,
+      manifest: {
+        ownerId: "@agent-os/example-carrier",
+        sourcePackageName: "@agent-os/example-carrier",
+        kindPrefixes: ["example."],
+        version: "0.1.0",
+      },
     });
+    expect(module.contract.events).toEqual(contract.events);
+    expect(module.contract.effectAuthorityContracts).toEqual(contract.effectAuthorityContracts);
+    expect(module.contract.materialRequirements).toEqual(contract.materialRequirements);
+    expect(module.contract.settlement).toEqual(contract.settlement);
+    expect(module.contract.projection).toEqual(contract.projection);
   });
 
-  it("keeps boundary package construction sealed to the constructor", () => {
-    // @ts-expect-error BoundaryPackage is intentionally opaque; callers must use boundaryPackage().
-    const literal: BoundaryPackage = {
-      ownerId: "@agent-os/example-carrier",
-      sourcePackageName: "@agent-os/example-carrier",
-      kindPrefixes: ["example."],
-      version: "0.1.0",
-      boundaryContract: contract as BoundaryContract,
+  it("keeps BoundaryModule construction sealed to the compiler", () => {
+    // @ts-expect-error BoundaryModule is intentionally opaque; callers must compile a contract.
+    const literal: BoundaryModule = {
+      contract,
+      manifest: {
+        ownerId: "@agent-os/example-carrier",
+        sourcePackageName: "@agent-os/example-carrier",
+        kindPrefixes: ["example."],
+        version: "0.1.0",
+      },
     };
-    expect(literal.sourcePackageName).toBe("@agent-os/example-carrier");
+    expect(literal.manifest.sourcePackageName).toBe("@agent-os/example-carrier");
+  });
+
+  it("fails closed when compilation receives an invalid axis or version", () => {
+    expect(() =>
+      compileBoundaryContract(
+        {
+          ...contract,
+          projection: { derivedFromLedger: true, shadowState: true },
+        } as unknown as BoundaryContract,
+        "0.1.0",
+      ),
+    ).toThrow(/projection_invalid/);
+    expect(() => compileBoundaryContract(contract, "")).toThrow(/version/);
   });
 
   it("accepts a complete event-level boundary declaration", () => {

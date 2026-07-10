@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import type { LedgerEvent, LedgerEventRpc } from "@agent-os/core/types";
-import type { ExtensionCapability } from "@agent-os/core/extensions";
+import { eventNamespace, type ExtensionCapability } from "@agent-os/core/extensions";
 import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
 import { agentRunStartedEvent, RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { createSseHttpTextResponse, decodeSseHttpEvents } from "../../src/sse-http";
@@ -19,6 +19,7 @@ import {
   createCloudflareLedgerAgUiSseResponse,
 } from "../../src/cloudflare/ag-ui-sse";
 import { createCloudflareWorkspaceJobResponse } from "../../src/cloudflare/workspace-job-facade";
+import { declaredToolIntents } from "../../src/cloudflare/agent-do-helpers";
 import { installCloudflareWorkspaceJobProfile } from "../../src/cloudflare/workspace-job-profile";
 import {
   createCloudflareSandboxWorkspaceEnvResolver,
@@ -34,6 +35,27 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const RUNTIME_SOURCE_PACKAGE_NAME = "@agent-os/runtime";
+
+it("requires a compiled BoundaryModule for claim-bearing declared intents", () => {
+  const namespace = eventNamespace({
+    ownerId: "@agent-os/test.namespace-only",
+    sourcePackageName: "@agent-os/test",
+    kindPrefixes: ["namespace_only."],
+    version: "1",
+  });
+
+  expect(() =>
+    declaredToolIntents(
+      [namespace],
+      [
+        {
+          kind: "namespace_only.requested",
+          boundaryOwnerId: "@agent-os/test.namespace-only",
+        },
+      ],
+    ),
+  ).toThrow(/unbound boundary owner/);
+});
 
 const collectAsync = async <A>(source: AsyncIterable<A>): Promise<ReadonlyArray<A>> => {
   const values: A[] = [];
@@ -704,8 +726,16 @@ describe("Cloudflare DO workspace host helpers", () => {
       }),
     });
     expect(install.extensions[0]).toMatchObject({
-      sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
-      kindPrefixes: ["workspace_op."],
+      contract: {
+        ownerId: WORKSPACE_OP_FACT_OWNER,
+        sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
+        projection: { derivedFromLedger: true, shadowState: false },
+      },
+      manifest: {
+        ownerId: WORKSPACE_OP_FACT_OWNER,
+        sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
+        kindPrefixes: ["workspace_op."],
+      },
     });
     expect(install.declaredIntents).toEqual([
       { kind: WORKSPACE_OP_KIND.REQUESTED, boundaryOwnerId: WORKSPACE_OP_FACT_OWNER },

@@ -208,4 +208,4 @@ export const WORKSPACE_JOB_KIND = workspaceJobCarrier.kind;
 export const WORKSPACE_JOB_EVENTS = workspaceJobCarrier.events;
 export const workspaceJobBoundaryContract = workspaceJobCarrier.boundaryContract;
 export const workspaceJobSettlementContract = workspaceJobCarrier.settlementContract;
-export const workspaceJobBoundaryPackage = workspaceJobCarrier.boundaryPackage;
+export const workspaceJobBoundaryModule = workspaceJobCarrier.boundaryModule;

@@ -22,7 +22,7 @@ import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
   WORKSPACE_OP_PROJECTION_KIND,
-  workspaceOpBoundaryPackage,
+  workspaceOpBoundaryModule,
   type WorkspaceOperationProjection,
 } from "./workspace-op-carrier";
 import {
@@ -381,7 +381,7 @@ export const bindWorkspaceToolsForRuntime = (
             ...(options.toolIntents ?? []),
             {
               kind: WORKSPACE_OP_KIND.REQUESTED,
-              boundaryPackage: workspaceOpBoundaryPackage(WORKSPACE_OP_BOUNDARY_VERSION),
+              boundaryModule: workspaceOpBoundaryModule(WORKSPACE_OP_BOUNDARY_VERSION),
             },
           ],
     ...(receiptBackedToolNames.length === 0

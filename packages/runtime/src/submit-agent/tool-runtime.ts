@@ -174,14 +174,9 @@ export const runtimeToolContext = (
             }
             return boundaryEvents
               .commit(
-                declared.boundaryPackage.boundaryContract,
+                declared.boundaryModule.contract,
                 kind,
-                payloadWithToolPreClaim(
-                  declared.boundaryPackage.boundaryContract,
-                  kind,
-                  payload,
-                  claim,
-                ),
+                payloadWithToolPreClaim(declared.boundaryModule.contract, kind, payload, claim),
               )
               .pipe(
                 Effect.map((event) => ({ id: event.id })),

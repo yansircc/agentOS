@@ -124,7 +124,7 @@ export const RUNTIME_DIAGNOSTIC_RESERVED_KIND_CONDITIONS = {
 } as const satisfies Readonly<Record<(typeof RUNTIME_DIAGNOSTIC_RESERVED_KINDS)[number], string>>;
 export const runtimeDiagnosticBoundaryContract = runtimeDiagnosticCarrier.boundaryContract;
 export const runtimeDiagnosticSettlementContract = runtimeDiagnosticCarrier.settlementContract;
-export const runtimeDiagnosticBoundaryPackage = runtimeDiagnosticCarrier.boundaryPackage;
+export const runtimeDiagnosticBoundaryModule = runtimeDiagnosticCarrier.boundaryModule;
 
 /**
  * Preflight diagnostic sink for host-level diagnostic persistence before runtime layer is built.

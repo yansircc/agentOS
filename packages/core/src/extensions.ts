@@ -4,18 +4,7 @@ import {
   CapabilityRejected,
   isCoreClaimedEventKind,
 } from "./errors";
-import type { BoundaryContract } from "./boundary-contract";
-
-declare const boundaryPackageBrand: unique symbol;
-
-export interface BoundaryPackage {
-  readonly ownerId: string;
-  readonly sourcePackageName: string;
-  readonly kindPrefixes: ReadonlyArray<string>;
-  readonly version: string;
-  readonly boundaryContract: BoundaryContract;
-  readonly [boundaryPackageBrand]: true;
-}
+import type { BoundaryModule, BoundaryModuleManifest } from "./boundary-contract";
 
 export interface EventNamespace {
   readonly ownerId: string;
@@ -24,7 +13,7 @@ export interface EventNamespace {
   readonly version: string;
 }
 
-export type ExtensionDeclaration = BoundaryPackage | EventNamespace;
+export type ExtensionDeclaration = BoundaryModule | EventNamespace;
 
 export interface ExtensionCommitSpec {
   readonly event: string;
@@ -93,8 +82,13 @@ export type ExtensionValidation =
     }
   | { readonly ok: false; readonly error: ExtensionCapabilityConflict };
 
-export const isBoundaryPackage = (value: ExtensionDeclaration): value is BoundaryPackage =>
-  "boundaryContract" in value;
+export const isBoundaryModule = (value: ExtensionDeclaration): value is BoundaryModule =>
+  "manifest" in value;
+
+export const extensionManifest = (
+  declaration: ExtensionDeclaration,
+): BoundaryModuleManifest | EventNamespace =>
+  isBoundaryModule(declaration) ? declaration.manifest : declaration;
 
 export const eventNamespace = (spec: EventNamespace): EventNamespace => ({
   ownerId: spec.ownerId,
@@ -117,24 +111,25 @@ export const validateExtensionDeclarations = (
   const out: string[] = [];
 
   for (const declaration of declarations) {
-    if (ownerIds.has(declaration.ownerId)) {
+    const manifest = extensionManifest(declaration);
+    if (ownerIds.has(manifest.ownerId)) {
       return {
         ok: false,
         error: new ExtensionCapabilityConflict({
-          ownerId: declaration.ownerId,
+          ownerId: manifest.ownerId,
           kindPrefix: "*",
-          claimedBy: declaration.ownerId,
+          claimedBy: manifest.ownerId,
         }),
       };
     }
-    ownerIds.add(declaration.ownerId);
+    ownerIds.add(manifest.ownerId);
 
-    for (const prefix of declaration.kindPrefixes) {
+    for (const prefix of manifest.kindPrefixes) {
       if (prefix.length === 0) {
         return {
           ok: false,
           error: new ExtensionCapabilityConflict({
-            ownerId: declaration.ownerId,
+            ownerId: manifest.ownerId,
             kindPrefix: prefix,
             claimedBy: "empty-prefix",
           }),
@@ -145,13 +140,13 @@ export const validateExtensionDeclarations = (
         return {
           ok: false,
           error: new ExtensionCapabilityConflict({
-            ownerId: declaration.ownerId,
+            ownerId: manifest.ownerId,
             kindPrefix: prefix,
             claimedBy: conflict.owner,
           }),
         };
       }
-      seen.push({ owner: declaration.ownerId, prefix });
+      seen.push({ owner: manifest.ownerId, prefix });
       out.push(prefix);
     }
   }
@@ -173,4 +168,4 @@ export const rejectClaimedAppEvent = (
 };
 
 export const extensionOwnsEvent = (declaration: ExtensionDeclaration, event: string): boolean =>
-  declaration.kindPrefixes.some((prefix) => event.startsWith(prefix));
+  extensionManifest(declaration).kindPrefixes.some((prefix) => event.startsWith(prefix));

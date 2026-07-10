@@ -2,7 +2,6 @@ export { ABORT, type AbortKind, reasonOf } from "./abort";
 export * from "./agent-schema";
 export * from "./backend-protocol";
 export type {
-  BoundaryPackage,
   EventNamespace,
   ExtensionCapability,
   ExtensionCommitSpec,
@@ -14,8 +13,9 @@ export {
   defineEventKindView,
   defineEventPayloads,
   eventNamespace,
+  extensionManifest,
   extensionOwnsEvent,
-  isBoundaryPackage,
+  isBoundaryModule,
   makeCommitters,
   payload,
   rejectClaimedAppEvent,
@@ -26,10 +26,12 @@ export type {
   BoundaryContract,
   BoundaryContractIssue,
   BoundaryContractValidation,
+  BoundaryModule,
+  BoundaryModuleManifest,
   BoundaryProjectionContract,
 } from "./boundary-contract";
 export {
-  boundaryPackage,
+  compileBoundaryContract,
   defineBoundaryContract,
   validateBoundaryPayload,
   validateBoundaryContract,

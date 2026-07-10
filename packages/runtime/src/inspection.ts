@@ -303,8 +303,8 @@ const toolIntentBindings = (
   [...(intents ?? [])]
     .map((intent) => ({
       kind: intent.kind,
-      boundaryOwnerId: intent.boundaryPackage.ownerId,
-      boundaryVersion: intent.boundaryPackage.version,
+      boundaryOwnerId: intent.boundaryModule.manifest.ownerId,
+      boundaryVersion: intent.boundaryModule.manifest.version,
     }))
     .sort(byString((intent) => intent.kind));
 

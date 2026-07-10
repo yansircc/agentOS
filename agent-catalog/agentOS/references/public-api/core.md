@@ -118,8 +118,8 @@
 - `.:BoundaryContract`
 - `.:BoundaryContractIssue`
 - `.:BoundaryContractValidation`
-- `.:boundaryPackage`
-- `.:BoundaryPackage`
+- `.:BoundaryModule`
+- `.:BoundaryModuleManifest`
 - `.:BoundaryProjectionContract`
 - `.:buildContextPack`
 - `.:BUILTIN_HANDLER_KINDS`
@@ -150,6 +150,7 @@
 - `.:ChatIngestedPayload`
 - `.:ChatIngestedPayloadSchema`
 - `.:checkProjectionSink`
+- `.:compileBoundaryContract`
 - `.:ClaimRole`
 - `.:ClaimValidation`
 - `.:ClaimValidationIssue`
@@ -316,6 +317,7 @@
 - `.:ExtensionCommitSpec`
 - `.:ExtensionDeclaration`
 - `.:ExtensionHandlerKind`
+- `.:extensionManifest`
 - `.:extensionOwnsEvent`
 - `.:ExtensionTimeSpec`
 - `.:EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION`
@@ -395,7 +397,7 @@
 - `.:isBackendProtocolEventIdentity`
 - `.:isBackendProtocolProjectionKey`
 - `.:isBackendProtocolTruthIdentity`
-- `.:isBoundaryPackage`
+- `.:isBoundaryModule`
 - `.:isClaimedEventKind`
 - `.:isContinuationCause`
 - `.:isContinuationRef`
@@ -1036,8 +1038,10 @@
 - `./boundary-contract:BoundaryContractValidation`
 - `./boundary-contract:BoundaryEventClaimContract`
 - `./boundary-contract:BoundaryEventContract`
-- `./boundary-contract:boundaryPackage`
+- `./boundary-contract:BoundaryModule`
+- `./boundary-contract:BoundaryModuleManifest`
 - `./boundary-contract:BoundaryProjectionContract`
+- `./boundary-contract:compileBoundaryContract`
 - `./boundary-contract:defineBoundaryContract`
 - `./boundary-contract:validateBoundaryContract`
 - `./boundary-contract:validateBoundaryPayload`
@@ -1141,7 +1145,6 @@
 - `./errors:UnregisteredDurableTriggerKind`
 - `./errors:UnsupportedScopeRef`
 - `./errors:UpstreamFailure`
-- `./extensions:BoundaryPackage`
 - `./extensions:CommitterMap`
 - `./extensions:defineEventKindView`
 - `./extensions:defineEventPayloads`
@@ -1153,10 +1156,11 @@
 - `./extensions:ExtensionCapabilityConflict`
 - `./extensions:ExtensionCommitSpec`
 - `./extensions:ExtensionDeclaration`
+- `./extensions:extensionManifest`
 - `./extensions:extensionOwnsEvent`
 - `./extensions:ExtensionTimeSpec`
 - `./extensions:ExtensionValidation`
-- `./extensions:isBoundaryPackage`
+- `./extensions:isBoundaryModule`
 - `./extensions:makeCommitters`
 - `./extensions:payload`
 - `./extensions:rejectClaimedAppEvent`

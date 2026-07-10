@@ -1,6 +1,5 @@
-import { Predicate } from "effect";
+import { Option, Predicate } from "effect";
 import { ANCHOR_KINDS, INDETERMINATE_KINDS, REJECTION_KINDS } from "./claim-kinds";
-import type { BoundaryPackage } from "./extensions";
 import { validateAgainstSchema, type JsonSchemaObject } from "./json-schema-dialect";
 import {
   isEffectAuthorityContract,
@@ -78,6 +77,29 @@ export interface BoundaryContract<EventKind extends string = string> {
   readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
   readonly settlement: SettlementContract;
   readonly projection: BoundaryProjectionContract;
+}
+
+export interface BoundaryModuleManifest {
+  readonly ownerId: string;
+  readonly sourcePackageName: string;
+  readonly kindPrefixes: ReadonlyArray<string>;
+  readonly version: string;
+}
+
+declare const boundaryModuleBrand: unique symbol;
+
+/**
+ * Pure compiled projection of one authored BoundaryContract.
+ *
+ * The contract remains the only owner of the five boundary axes. The manifest
+ * contains only installation identity derived from that same contract.
+ *
+ * @public
+ */
+export interface BoundaryModule<EventKind extends string = string> {
+  readonly contract: BoundaryContract<EventKind> & Authored<BoundaryContract<EventKind>>;
+  readonly manifest: BoundaryModuleManifest;
+  readonly [boundaryModuleBrand]: true;
 }
 
 export type BoundaryContractIssue =
@@ -258,15 +280,6 @@ export const defineBoundaryContract = <EventKind extends string>(
   contract: BoundaryContract<EventKind>,
 ): BoundaryContract<EventKind> & Authored<BoundaryContract<EventKind>> => authoredValue(contract);
 
-export const boundaryPackage = (contract: BoundaryContract, version: string): BoundaryPackage =>
-  ({
-    ownerId: contract.ownerId,
-    sourcePackageName: contract.sourcePackageName,
-    kindPrefixes: contract.kindPrefixes,
-    version,
-    boundaryContract: contract,
-  }) as BoundaryPackage;
-
 export const validateBoundaryContract = (value: unknown): BoundaryContractValidation => {
   if (!Predicate.isObject(value)) {
     return {
@@ -387,4 +400,37 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
     return { ok: false, issues };
   }
   return { ok: true, contract: authoredValue(value as unknown as BoundaryContract) };
+};
+
+const failBoundaryCompilation = (message: string): never =>
+  Option.getOrThrowWith(Option.none(), () => new TypeError(message));
+
+/**
+ * Compile one authored boundary declaration into deterministic install data.
+ *
+ * @public
+ */
+export const compileBoundaryContract = <EventKind extends string>(
+  contract: BoundaryContract<EventKind>,
+  version: string,
+): BoundaryModule<EventKind> => {
+  const validation = validateBoundaryContract(contract);
+  if (!validation.ok) {
+    return failBoundaryCompilation(
+      `compileBoundaryContract: invalid BoundaryContract (${validation.issues.join(",")})`,
+    );
+  }
+  if (!isNonEmptyString(version)) {
+    return failBoundaryCompilation("compileBoundaryContract: version must be a non-empty string");
+  }
+  return {
+    contract: validation.contract as BoundaryContract<EventKind> &
+      Authored<BoundaryContract<EventKind>>,
+    manifest: {
+      ownerId: validation.contract.ownerId,
+      sourcePackageName: validation.contract.sourcePackageName,
+      kindPrefixes: validation.contract.kindPrefixes,
+      version,
+    },
+  } as BoundaryModule<EventKind>;
 };

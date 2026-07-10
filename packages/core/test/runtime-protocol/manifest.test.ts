@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 import { defineAgentSchema, type AgentSchemaSpec } from "@agent-os/core/agent-schema";
-import { boundaryPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { compileBoundaryContract, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 import {
   type AnyAgentCapabilityDefinition,
   capabilityIntent,
@@ -45,7 +45,7 @@ const capability = {
   id: "runtime-protocol.test-capability",
   intents: {
     requested: capabilityIntent<{ readonly id: string }>()("runtime_protocol.requested", {
-      boundaryPackage: boundaryPackage(
+      boundaryModule: compileBoundaryContract(
         defineBoundaryContract({
           ownerId: "@agent-os/runtime-protocol.test-capability",
           sourcePackageName: "@agent-os/runtime-protocol.test-capability",

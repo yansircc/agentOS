@@ -78,4 +78,4 @@ export const DECISION_GATE_KIND = decisionGateCarrier.kind;
 export const DECISION_GATE_EVENTS = decisionGateCarrier.events;
 export const decisionGateBoundaryContract = decisionGateCarrier.boundaryContract;
 export const decisionGateSettlementContract = decisionGateCarrier.settlementContract;
-export const decisionGateBoundaryPackage = decisionGateCarrier.boundaryPackage;
+export const decisionGateBoundaryModule = decisionGateCarrier.boundaryModule;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { boundaryPackage, defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { compileBoundaryContract, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 import * as runtimeProtocol from "../../src/runtime-protocol";
 import {
   DYNAMIC_CAPABILITY_EVENT,
@@ -69,11 +69,11 @@ const surfaceEditBoundary = defineBoundaryContract({
   projection: { derivedFromLedger: true, shadowState: false },
 });
 
-const surfaceEditPackage = boundaryPackage(surfaceEditBoundary, "0.1.0");
+const surfaceEditModule = compileBoundaryContract(surfaceEditBoundary, "0.1.0");
 
 const surfaceEditCapability = {
   id: "zeroy.surface-edit",
-  boundaryPackage: surfaceEditPackage,
+  boundaryModule: surfaceEditModule,
   intents: {
     requestEdit: capabilityIntent<SurfaceEditIntent>()("surface_edit.intent.requested"),
   },

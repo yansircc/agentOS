@@ -241,7 +241,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `.:RUNTIME_DIAGNOSTIC_KIND`
 - `.:RUNTIME_DIAGNOSTIC_RESERVED_KINDS`
 - `.:runtimeDiagnosticBoundaryContract`
-- `.:runtimeDiagnosticBoundaryPackage`
+- `.:runtimeDiagnosticBoundaryModule`
 - `.:runtimeDiagnosticCarrier`
 - `.:runtimeDiagnosticSettlementContract`
 - `.:runSynchronousAttachedStreamCommit`

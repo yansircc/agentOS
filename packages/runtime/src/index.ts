@@ -311,7 +311,7 @@ export {
   RUNTIME_DIAGNOSTIC_RESERVED_KINDS,
   runtimeDiagnosticBoundaryContract,
   runtimeDiagnosticSettlementContract,
-  runtimeDiagnosticBoundaryPackage,
+  runtimeDiagnosticBoundaryModule,
 } from "./runtime-diagnostic-carrier";
 export {
   WORKSPACE_AGENT_COMMAND,

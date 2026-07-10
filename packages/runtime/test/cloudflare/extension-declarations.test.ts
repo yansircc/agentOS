@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import { compileBoundaryContract, defineBoundaryContract } from "@agent-os/core/boundary-contract";
 import { validateExtensionDeclarations, type EventNamespace } from "@agent-os/core/extensions";
 
 const namespace = ({
@@ -20,6 +21,38 @@ const BACKEND_PROTOCOL_OWNER_ID = "@agent-os/backend-protocol";
 const RUNTIME_PROTOCOL_OWNER_ID = "@agent-os/runtime-protocol";
 
 describe("extension declarations", () => {
+  it("validates claim-bearing ownership from a compiled module manifest", () => {
+    const module = compileBoundaryContract(
+      defineBoundaryContract({
+        ownerId: "@agent-os/proof",
+        sourcePackageName: "@agent-os/proof-source",
+        kindPrefixes: ["proof."],
+        roles: ["reader"],
+        events: {
+          "proof.recorded": {
+            payloadSchema: { type: "object", properties: {}, additionalProperties: false },
+          },
+        },
+        effectAuthorityContracts: [],
+        materialRequirements: [],
+        settlement: {
+          settlementId: "@agent-os/proof",
+          anchorKinds: [],
+          rejectionKinds: [],
+          indeterminateKinds: [],
+        },
+        projection: { derivedFromLedger: true, shadowState: false },
+      }),
+      "0.1.0",
+    );
+
+    expect(validateExtensionDeclarations([module])).toEqual({
+      ok: true,
+      prefixes: ["proof."],
+      declarations: [module],
+    });
+  });
+
   it("reports the source owner for core backend and runtime namespaces", () => {
     expect(
       validateExtensionDeclarations([

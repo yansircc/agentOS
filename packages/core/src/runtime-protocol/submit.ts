@@ -9,7 +9,7 @@ import type { AuthorityRef } from "@agent-os/core/effect-claim";
 import type { AnyAgentSchemaSource } from "@agent-os/core/agent-schema";
 import type { TraceContext } from "@agent-os/core/telemetry-protocol";
 import type { MaterialRef } from "@agent-os/core/material-ref";
-import type { BoundaryPackage } from "@agent-os/core/extensions";
+import type { BoundaryModule } from "@agent-os/core/boundary-contract";
 import { recordedContinuationRefFromUnknown, type ContinuationRef } from "./continuation";
 import {
   inputRequestDescriptorFromUnknown,
@@ -28,7 +28,7 @@ export class MissingSubmitRunBinding extends Data.TaggedError(
 
 export interface SubmitToolIntent {
   readonly kind: string;
-  readonly boundaryPackage: BoundaryPackage;
+  readonly boundaryModule: BoundaryModule;
 }
 
 export interface SubmitReceiptBackedToolBinding {

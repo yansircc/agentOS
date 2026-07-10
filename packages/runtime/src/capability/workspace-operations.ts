@@ -4,8 +4,8 @@
 
 import { Effect, Option, Predicate, Schema } from "effect";
 import { CapabilityRejected, type EventHandler, type LedgerEventRpc } from "@agent-os/core";
+import type { BoundaryModule } from "@agent-os/core/boundary-contract";
 import type { ToolAdmitter } from "@agent-os/core/tools";
-import type { ExtensionDeclaration } from "@agent-os/core/extensions";
 import {
   capabilityIntent,
   capabilityMaterial,
@@ -26,7 +26,7 @@ import {
   WORKSPACE_OP_KIND,
   WORKSPACE_OP_PROJECTION_KIND,
   projectWorkspaceOperation,
-  workspaceOpBoundaryPackage,
+  workspaceOpBoundaryModule,
   workspaceOpCarrier,
   type WorkspaceOperationProjection,
   type WorkspaceOperationRequestedPayload,
@@ -99,7 +99,7 @@ export interface WorkspaceOperationInstallContext {
 }
 
 export interface WorkspaceOperationInstall {
-  readonly extensions: ReadonlyArray<ExtensionDeclaration>;
+  readonly extensions: ReadonlyArray<BoundaryModule>;
   readonly capabilities: Readonly<Record<string, AnyAgentCapabilityDefinition>>;
   readonly declaredIntents: ReadonlyArray<{
     readonly kind: string;
@@ -173,15 +173,14 @@ const providerOptions = (
 });
 
 const workspaceOperationsAgentCapability = (
-  boundaryPackage: ExtensionDeclaration,
+  boundaryModule: BoundaryModule,
 ): AnyAgentCapabilityDefinition => ({
   id: WORKSPACE_OP_FACT_OWNER,
-  ...("boundaryContract" in boundaryPackage ? { boundaryPackage } : {}),
+  boundaryModule,
   intents: {
-    requested: capabilityIntent<WorkspaceOperationRequestedPayload>()(
-      WORKSPACE_OP_KIND.REQUESTED,
-      "boundaryContract" in boundaryPackage ? { boundaryPackage } : {},
-    ),
+    requested: capabilityIntent<WorkspaceOperationRequestedPayload>()(WORKSPACE_OP_KIND.REQUESTED, {
+      boundaryModule,
+    }),
   },
   projections: {
     operation: capabilityProjection<
@@ -282,7 +281,7 @@ export const createWorkspaceOperationInstall = (
   options: WorkspaceOperationsOptions,
   envResolver: WorkspaceOperationEnvResolver,
 ): WorkspaceOperationInstall => {
-  const boundaryPackage = workspaceOpBoundaryPackage(
+  const boundaryModule = workspaceOpBoundaryModule(
     options.boundaryVersion ?? DEFAULT_WORKSPACE_OP_BOUNDARY_VERSION,
   );
   const providers = new Map<string, WorkspaceOperationLocalProvider>();
@@ -347,15 +346,15 @@ export const createWorkspaceOperationInstall = (
   };
 
   return {
-    extensions: [boundaryPackage],
+    extensions: [boundaryModule],
     capabilities: {
       [WORKSPACE_OPERATIONS_CAPABILITY_BINDING_REF]:
-        workspaceOperationsAgentCapability(boundaryPackage),
+        workspaceOperationsAgentCapability(boundaryModule),
     },
     declaredIntents: [
       {
         kind: WORKSPACE_OP_KIND.REQUESTED,
-        boundaryOwnerId: boundaryPackage.ownerId,
+        boundaryOwnerId: boundaryModule.manifest.ownerId,
       },
     ],
     projections: [workspaceOperationMaterializedProjection()],

@@ -464,6 +464,32 @@ describe("resolveRuntime", () => {
     );
   });
 
+  it("rejects declared intents backed only by a hand-authored event namespace", async () => {
+    await expectGlobalUniqueFailure(
+      [
+        testCapability("@agent-os/test.namespace-intent", "resolve.namespace-intent.", {
+          install: () => ({
+            extensions: [
+              eventNamespace({
+                ownerId: "@agent-os/test.namespace-intent",
+                sourcePackageName: "@agent-os/test.namespace-intent",
+                kindPrefixes: ["namespace_intent."],
+                version: "1",
+              }),
+            ],
+            declaredIntents: [
+              {
+                kind: "namespace_intent.requested",
+                boundaryOwnerId: "@agent-os/test.namespace-intent",
+              },
+            ],
+          }),
+        }),
+      ],
+      "unbound BoundaryModule",
+    );
+  });
+
   it("resolves successfully with node host and workspace capabilities", async () => {
     const resolved = await resolveRuntime(nodeHost, [], {
       identity: "test-agent",

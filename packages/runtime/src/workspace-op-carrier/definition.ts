@@ -98,4 +98,4 @@ export const WORKSPACE_OP_KIND = workspaceOpCarrier.kind;
 export const WORKSPACE_OP_EVENTS = workspaceOpCarrier.events;
 export const workspaceOpBoundaryContract = workspaceOpCarrier.boundaryContract;
 export const workspaceOpSettlementContract = workspaceOpCarrier.settlementContract;
-export const workspaceOpBoundaryPackage = workspaceOpCarrier.boundaryPackage;
+export const workspaceOpBoundaryModule = workspaceOpCarrier.boundaryModule;

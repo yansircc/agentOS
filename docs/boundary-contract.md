@@ -85,3 +85,25 @@ export const boundary = defineBoundaryContract({
 ```
 
 Use `validateBoundaryContract` in tests when adding or changing a boundary.
+
+## Compile For Installation
+
+`BoundaryContract` is the only authored source. Compile it with an explicit
+version before runtime installation:
+
+```ts
+import { compileBoundaryContract } from "@agent-os/core/boundary-contract";
+
+export const boundaryModule = compileBoundaryContract(boundary, "1");
+```
+
+Compilation validates the five axes and returns an opaque `BoundaryModule`.
+`module.contract` preserves the authored vocabulary, authority, material,
+settlement, and projection facts. `module.manifest` contains only the derived
+owner, source package, kind prefixes, and version used by runtime installation.
+
+`BoundaryModule` is not independently authored. Core compilation has no host,
+backend, provider, filesystem, environment, time, or install-graph dependency;
+runtime consumes the compiled module and installs its manifest. Agent docs and
+the installed catalog continue to derive intent from `defineBoundaryContract`
+declarations, not from compiled modules.
