@@ -35,6 +35,11 @@ import type {
 import { validateOptionalTraceContext, type TraceContext } from "@agent-os/core/telemetry-protocol";
 
 export { copyTraceContext } from "@agent-os/core/telemetry-protocol";
+export {
+  BACKEND_PAGE_POLICY,
+  normalizeBackendPageLimit,
+  type BackendPagePolicy,
+} from "./page-policy";
 
 export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_ENQUEUED = "dispatch.outbound.enqueued";

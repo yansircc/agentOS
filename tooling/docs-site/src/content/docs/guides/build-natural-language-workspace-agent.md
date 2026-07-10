@@ -23,6 +23,8 @@ agent/
     review/SKILL.md      # packaged skill main file
     review/references/checklist.md
     review/scripts/review.sh
+    review/assets/icon.png
+    review/bin/helper
   channels/
     github.ts            # optional inbound provider request handler
   schedules/
@@ -64,18 +66,26 @@ name must match the path identity. The description is the generated advert
 routing text. The skill body is the markdown text after the closing `---`.
 
 Single-file skills at `agent/skills/<name>.md` cannot have sibling files.
-Packaged skills at `agent/skills/<name>/SKILL.md` may include supporting UTF-8
-text files under exactly these roots:
+Packaged skills at `agent/skills/<name>/SKILL.md` own every regular file below
+their package directory as an opaque resource tree. For example:
 
 ```text
 agent/skills/<name>/references/**
 agent/skills/<name>/scripts/**
+agent/skills/<name>/assets/**
+agent/skills/<name>/bin/**
 ```
 
-Supporting files are exposed by package-relative POSIX paths such as
-`references/checklist.md` and `scripts/review.sh`. They are readable skill
-content only. `scripts/**` files are not executed, imported, registered as tools,
-or treated as capabilities.
+Resources are exposed by package-relative POSIX paths such as
+`references/checklist.md`, `assets/icon.png`, and `bin/helper`. The compiler
+preserves bytes, byte length, and digest in a content-addressed resource bundle;
+it does not require UTF-8. Symlinks and paths escaping the skill package fail
+closed. Resource presence never executes, imports, registers, or grants a
+capability to any file.
+
+The package boundary does not classify filenames as secrets. A `.env` below a
+skill is bundled as an ordinary resource, so credentials must remain in the
+repo-root `.dev.vars` material source and must not be placed in a skill tree.
 
 Skills do not enter `AgentManifest`, materials, execution domains,
 interactions, runtime submit schema, ledger facts, or authored tool identity.
@@ -87,8 +97,10 @@ model must call `load_skill` with `{ "name": "<name>" }` before using the full
 skill text. `load_skill` returns the main body plus supporting-file metadata,
 not supporting-file contents. The model must call `read_skill_file` with
 `{ "name": "<name>", "path": "<package-relative-path>" }` to read one declared
-supporting file. Both tool names are reserved by this framework projection and
-cannot be used as authored `agent/tools/*.ts` tool names.
+UTF-8 resource, or add `"encoding": "base64"` for arbitrary bytes. The result
+declares its encoding, byte length, digest, and content. Both tool names are
+reserved by this framework projection and cannot be used as authored
+`agent/tools/*.ts` tool names.
 
 `agent/channels/<name>.ts` is an optional inbound request slot. The path stem is
 the channel identity; there is no second channel name in `agent.json` or

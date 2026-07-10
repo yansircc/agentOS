@@ -10,9 +10,6 @@ import {
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { sqlJson, sqlString } from "./host";
 
-export const DEFAULT_EVENT_LIMIT = 1000;
-export const MAX_EVENT_LIMIT = 1000;
-
 export const schemaName = (schema: string | undefined): string =>
   schema ?? `agentos_node_postgres_${randomUUID().replace(/-/g, "_")}`;
 

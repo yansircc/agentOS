@@ -331,6 +331,11 @@ export const runRuntimeBackendContractSuite = (
           expect(yield* promise(() => driver.events(identity, { limit: 2 }))).toEqual(
             committed.slice(0, 2),
           );
+          expect(yield* promise(() => driver.events(identity, { limit: 0 }))).toEqual([]);
+          expect(yield* promise(() => driver.events(identity, { limit: -1 }))).toEqual([]);
+          expect(yield* promise(() => driver.events(identity, { limit: 1.9 }))).toEqual(
+            committed.slice(0, 1),
+          );
           expect(
             yield* promise(() => driver.events(identity, { afterId: committed[0]!.id })),
           ).toEqual(committed.slice(1));

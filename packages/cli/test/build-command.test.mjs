@@ -1170,8 +1170,8 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
       '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
       '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace facts\\n---\\nUse echo." },',
       '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review output carefully\\n---\\nReview carefully." },',
-      '    { path: "agent/skills/review/references/checklist.md", kind: "text", bytes: utf8("Check every claim.") },',
-      '    { path: "agent/skills/review/scripts/audit.sh", kind: "text", bytes: utf8("echo audit") },',
+      '    { path: "agent/skills/review/references/checklist.md", kind: "resource", bytes: utf8("Check every claim.") },',
+      '    { path: "agent/skills/review/scripts/audit.sh", kind: "resource", bytes: utf8("echo audit") },',
       "  ],",
       "});",
       "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
@@ -1220,13 +1220,13 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
             path: "references/checklist.md",
             digest: digestText("Check every claim."),
             bytes: 18,
-            text: "Check every claim.",
+            contentBase64: "Q2hlY2sgZXZlcnkgY2xhaW0u",
           },
           {
             path: "scripts/audit.sh",
             digest: digestText("echo audit"),
             bytes: 10,
-            text: "echo audit",
+            contentBase64: "ZWNobyBhdWRpdA==",
           },
         ],
       },
@@ -1486,7 +1486,7 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
   ]);
 });
 
-void test("compileAgentTree rejects invalid skill identity and packaged skill file violations", () => {
+void test("compileAgentTree enforces skill identity and opaque resource package invariants", () => {
   const result = runTypeScript(
     [
       'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
@@ -1503,38 +1503,38 @@ void test("compileAgentTree rejects invalid skill identity and packaged skill fi
       'const emptyDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription:   \\n---\\nUse echo." });',
       'const oversizedDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: `---\\nname: echo\\ndescription: ${"x".repeat(241)}\\n---\\nUse echo.` });',
       'const unknownFrontmatter = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo facts\\nallowed-tools: bash\\n---\\nUse echo." });',
-      'const supportWithoutPackage = compile({ path: "agent/skills/echo/references/ref.md", kind: "text", bytes: utf8("Ref.") });',
+      'const supportWithoutPackage = compile({ path: "agent/skills/echo/references/ref.md", kind: "resource", bytes: utf8("Ref.") });',
       "const flatSupport = compileAgentTree({ files: [",
       "  instructions,",
       '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo facts\\n---\\nUse echo." },',
-      '  { path: "agent/skills/echo/references/ref.md", kind: "text", bytes: utf8("Ref.") },',
+      '  { path: "agent/skills/echo/references/ref.md", kind: "resource", bytes: utf8("Ref.") },',
       "] });",
-      'const unsupportedRoot = compile({ path: "agent/skills/echo/assets/icon.txt", kind: "text", bytes: utf8("icon") });',
-      'const dotdotPath = compile({ path: "agent/skills/echo/references/../secret.md", kind: "text", bytes: utf8("secret") });',
+      'const arbitraryRoot = compileAgentTree({ files: [instructions, packagedReview, { path: "agent/skills/review/assets/icon.bin", kind: "resource", bytes: new Uint8Array([0, 255, 1]) }] });',
+      'const dotdotPath = compile({ path: "agent/skills/echo/references/../secret.md", kind: "resource", bytes: utf8("secret") });',
       "const symlinkSupport = compileAgentTree({ files: [",
       "  instructions,",
       "  packagedReview,",
-      '  { path: "agent/skills/review/references/ref.md", kind: "text", bytes: new Uint8Array(), sourceKind: "symlink" },',
+      '  { path: "agent/skills/review/references/ref.md", kind: "resource", bytes: new Uint8Array(), sourceKind: "symlink" },',
       "] });",
       "const invalidUtf8 = compileAgentTree({ files: [",
       "  instructions,",
       "  packagedReview,",
-      '  { path: "agent/skills/review/references/ref.md", kind: "text", bytes: new Uint8Array([0xff]) },',
+      '  { path: "agent/skills/review/references/ref.md", kind: "resource", bytes: new Uint8Array([0xff]) },',
       "] });",
       "const oversizedFile = compileAgentTree({ files: [",
       "  instructions,",
       "  packagedReview,",
-      '  { path: "agent/skills/review/references/ref.md", kind: "text", bytes: utf8("x".repeat(65537)) },',
+      '  { path: "agent/skills/review/references/ref.md", kind: "resource", bytes: utf8("x".repeat(65537)) },',
       "] });",
       "const tooManyFiles = compileAgentTree({ files: [",
       "  instructions,",
       "  packagedReview,",
-      '  ...Array.from({ length: 65 }, (_, index) => ({ path: `agent/skills/review/references/${index}.txt`, kind: "text", bytes: utf8("x") })),',
+      '  ...Array.from({ length: 65 }, (_, index) => ({ path: `agent/skills/review/references/${index}.txt`, kind: "resource", bytes: utf8("x") })),',
       "] });",
       "const packageTooLarge = compileAgentTree({ files: [",
       "  instructions,",
       "  packagedReview,",
-      '  ...Array.from({ length: 5 }, (_, index) => ({ path: `agent/skills/review/references/large-${index}.txt`, kind: "text", bytes: utf8("x".repeat(65536)) })),',
+      '  ...Array.from({ length: 5 }, (_, index) => ({ path: `agent/skills/review/references/large-${index}.txt`, kind: "resource", bytes: utf8("x".repeat(65536)) })),',
       "] });",
       "const duplicate = compileAgentTree({ files: [",
       "  instructions,",
@@ -1549,7 +1549,7 @@ void test("compileAgentTree rejects invalid skill identity and packaged skill fi
       "  instructions,",
       '  { path: "agent/tools/read_skill_file.ts", kind: "tool", declaration: {} },',
       "] });",
-      "console.log(JSON.stringify({ mismatch, duplicateName, missingDescription, emptyDescription, oversizedDescription, unknownFrontmatter, supportWithoutPackage, flatSupport, unsupportedRoot, dotdotPath, symlinkSupport, invalidUtf8, oversizedFile, tooManyFiles, packageTooLarge, duplicate, reservedTool, reservedReadSkillFile }));",
+      "console.log(JSON.stringify({ mismatch, duplicateName, missingDescription, emptyDescription, oversizedDescription, unknownFrontmatter, supportWithoutPackage, flatSupport, arbitraryRoot, dotdotPath, symlinkSupport, invalidUtf8, oversizedFile, tooManyFiles, packageTooLarge, duplicate, reservedTool, reservedReadSkillFile }));",
     ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
@@ -1623,12 +1623,13 @@ void test("compileAgentTree rejects invalid skill identity and packaged skill fi
       reason: "skill_support_requires_packaged_skill",
     },
   ]);
-  assert.equal(output.unsupportedRoot.ok, false);
-  assert.deepEqual(output.unsupportedRoot.issues, [
+  assert.equal(output.arbitraryRoot.ok, true);
+  assert.deepEqual(output.arbitraryRoot.value.skills[0].files, [
     {
-      kind: "unsupported_path",
-      path: "skills/echo/assets/icon.txt",
-      reason: "text_path_not_in_grammar",
+      path: "assets/icon.bin",
+      digest: "fnv1a32:f38f4273:3",
+      bytes: 3,
+      contentBase64: "AP8B",
     },
   ]);
   assert.equal(output.dotdotPath.ok, false);
@@ -1647,13 +1648,13 @@ void test("compileAgentTree rejects invalid skill identity and packaged skill fi
       reason: "symlink_forbidden",
     },
   ]);
-  assert.equal(output.invalidUtf8.ok, false);
-  assert.deepEqual(output.invalidUtf8.issues, [
+  assert.equal(output.invalidUtf8.ok, true);
+  assert.deepEqual(output.invalidUtf8.value.skills[0].files, [
     {
-      kind: "invalid_authored_value",
-      path: "skills/review/references/ref.md",
-      field: "/bytes",
-      reason: "utf8_required",
+      path: "references/ref.md",
+      digest: "fnv1a32:7a0b824e:1",
+      bytes: 1,
+      contentBase64: "/w==",
     },
   ]);
   assert.equal(output.oversizedFile.ok, false);
@@ -3974,6 +3975,27 @@ void test("agentos build compiles chat profile without workspace surface", () =>
   }
 });
 
+void test("generated command projections derive profile coverage from one typed descriptor", () => {
+  const result = runTypeScript(
+    [
+      'import { WORKSPACE_AGENT_COMMAND, WORKSPACE_AGENT_COMMAND_DESCRIPTOR } from "./packages/core/src/workspace-agent.ts";',
+      'import { generatedCommandProjectionForProfile, renderGeneratedCommandDispatch } from "./packages/cli/src/build/agent-authoring/generated-command-projection.ts";',
+      'const workspace = generatedCommandProjectionForProfile("workspace");',
+      'const chat = generatedCommandProjectionForProfile("chat");',
+      'console.log(JSON.stringify({ commandNames: Object.values(WORKSPACE_AGENT_COMMAND), commandKeys: Object.keys(WORKSPACE_AGENT_COMMAND_DESCRIPTOR), workspaceKeys: workspace.map((entry) => entry.key), chatKeys: chat.map((entry) => entry.key), commonKeys: Object.entries(WORKSPACE_AGENT_COMMAND_DESCRIPTOR).filter(([, descriptor]) => descriptor.surface === "common").map(([key]) => key), dispatch: renderGeneratedCommandDispatch("chat", "chat") }));',
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.commandNames.length, output.commandKeys.length);
+  assert.deepEqual(output.workspaceKeys, output.commandKeys);
+  assert.deepEqual(output.chatKeys, output.commonKeys);
+  for (const key of output.chatKeys) {
+    assert.match(output.dispatch, new RegExp(`WORKSPACE_AGENT_COMMAND\\.${key}`));
+  }
+  assert.doesNotMatch(output.dispatch, /WORKSPACE_AGENT_COMMAND\.READ_STATE/u);
+});
+
 void test("static target injects skill advert and load_skill for workspace and chat profiles", () => {
   const result = runTypeScript(
     [
@@ -3984,7 +4006,7 @@ void test("static target injects skill advert and load_skill for workspace and c
       '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
       '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace routing\\n---\\nUse workspace echo skill." },',
       '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review chat routing\\n---\\nUse chat review skill." },',
-      '  { path: "agent/skills/review/references/checklist.md", kind: "text", bytes: utf8("Check output.") },',
+      '  { path: "agent/skills/review/references/checklist.md", kind: "resource", bytes: utf8("Check output.") },',
       "] });",
       "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
       "const baseConfig = {",
@@ -4037,8 +4059,8 @@ void test("static target injects skill advert and load_skill for workspace and c
   const output = JSON.parse(result.stdout);
   for (const profile of ["workspace", "chat"]) {
     for (const [marker, present] of Object.entries(output[profile])) {
-      if (marker === "legacyPathDigestAdvert") {
-        assert.equal(present, false, `${profile} target kept legacy path/digest advert`);
+      if (marker === "legacyPathDigestAdvert" || marker === "supportingText") {
+        assert.equal(present, false, `${profile} target leaked ${marker}`);
       } else {
         assert.equal(present, true, `${profile} target missing ${marker}`);
       }
@@ -4139,6 +4161,7 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     linkGeneratedTargetSmokeDependencies(root);
     mkdirSync(path.join(root, "agent/skills/echo/references"), { recursive: true });
     mkdirSync(path.join(root, "agent/skills/echo/scripts"), { recursive: true });
+    mkdirSync(path.join(root, "agent/skills/echo/assets"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
     writeFileSync(
       path.join(root, "agent/skills/echo/SKILL.md"),
@@ -4146,6 +4169,11 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     );
     writeFileSync(path.join(root, "agent/skills/echo/references/checklist.md"), "CHECK_MARKER_560");
     writeFileSync(path.join(root, "agent/skills/echo/scripts/audit.sh"), "SCRIPT_MARKER_560");
+    writeFileSync(
+      path.join(root, "agent/skills/echo/assets/icon.bin"),
+      new Uint8Array([0, 255, 1]),
+    );
+    writeFileSync(path.join(root, "agent/skills/echo/assets/empty.dat"), new Uint8Array());
     writeFileSync(
       path.join(root, "agent/agent.json"),
       JSON.stringify(
@@ -4198,10 +4226,19 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     assert.equal(Object.hasOwn(manifest, "skills"), false);
     const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
     assert.match(target, /ECHO_MARKER_560/);
-    assert.match(target, /CHECK_MARKER_560/);
-    assert.match(target, /SCRIPT_MARKER_560/);
+    assert.doesNotMatch(target, /CHECK_MARKER_560/);
+    assert.doesNotMatch(target, /SCRIPT_MARKER_560/);
     assert.match(target, /name: "load_skill"/);
     assert.match(target, /name: "read_skill_file"/);
+    const resourceBundle = JSON.parse(
+      readFileSync(path.join(root, ".agentos/generated/skill-resources.json"), "utf8"),
+    );
+    assert.deepEqual(Object.values(resourceBundle).sort(), [
+      "",
+      "AP8B",
+      "Q0hFQ0tfTUFSS0VSXzU2MA==",
+      "U0NSSVBUX01BUktFUl81NjA=",
+    ]);
 
     let smokeSource = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
     smokeSource = smokeSource
@@ -4244,6 +4281,26 @@ export const __agentosSkillSmoke = async () => {
         }),
       ),
     );
+    const readBinary = await Effect.runPromise(
+      unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("read_skill_file", {
+          name: "echo",
+          path: "assets/icon.bin",
+          encoding: "base64",
+        }),
+      ),
+    );
+    const readEmpty = await Effect.runPromise(
+      unsafeRunToolByName(
+        tools,
+        deterministicToolInvocation("read_skill_file", {
+          name: "echo",
+          path: "assets/empty.dat",
+          encoding: "base64",
+        }),
+      ),
+    );
     let unknownRejected = false;
     try {
       await Effect.runPromise(
@@ -4276,6 +4333,8 @@ export const __agentosSkillSmoke = async () => {
       loaded,
       readReference,
       readScript,
+      readBinary,
+      readEmpty,
       unknownRejected,
       unknownFileRejected,
     };
@@ -4305,6 +4364,16 @@ export const __agentosSkillSmoke = async () => {
     assert.equal(output.loaded.text, "ECHO_MARKER_560");
     assert.deepEqual(output.loaded.files, [
       {
+        path: "assets/empty.dat",
+        digest: "fnv1a32:811c9dc5:0",
+        bytes: 0,
+      },
+      {
+        path: "assets/icon.bin",
+        digest: "fnv1a32:f38f4273:3",
+        bytes: 3,
+      },
+      {
         path: "references/checklist.md",
         digest: digestText("CHECK_MARKER_560"),
         bytes: 16,
@@ -4321,13 +4390,33 @@ export const __agentosSkillSmoke = async () => {
       name: "echo",
       path: "references/checklist.md",
       digest: digestText("CHECK_MARKER_560"),
-      text: "CHECK_MARKER_560",
+      bytes: 16,
+      encoding: "utf-8",
+      content: "CHECK_MARKER_560",
     });
     assert.deepEqual(output.readScript, {
       name: "echo",
       path: "scripts/audit.sh",
       digest: digestText("SCRIPT_MARKER_560"),
-      text: "SCRIPT_MARKER_560",
+      bytes: 17,
+      encoding: "utf-8",
+      content: "SCRIPT_MARKER_560",
+    });
+    assert.deepEqual(output.readBinary, {
+      name: "echo",
+      path: "assets/icon.bin",
+      digest: "fnv1a32:f38f4273:3",
+      bytes: 3,
+      encoding: "base64",
+      content: "AP8B",
+    });
+    assert.deepEqual(output.readEmpty, {
+      name: "echo",
+      path: "assets/empty.dat",
+      digest: "fnv1a32:811c9dc5:0",
+      bytes: 0,
+      encoding: "base64",
+      content: "",
     });
     assert.equal(output.unknownRejected, true);
     assert.equal(output.unknownFileRejected, true);

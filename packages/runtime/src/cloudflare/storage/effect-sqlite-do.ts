@@ -13,7 +13,10 @@ import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { SqlError } from "@agent-os/core/errors";
 import type { EventQueryOptions } from "@agent-os/core/types";
 import { ledgerEventFromRow, ledgerIdentityKeys, type LedgerEventSqlRow } from "../ledger/identity";
-import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
+import {
+  normalizeBackendPageLimit,
+  type BackendProtocolTruthIdentity,
+} from "@agent-os/core/backend-protocol";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 
 interface EffectSqlLedgerEventRow {
@@ -30,14 +33,8 @@ interface EffectSqlLedgerEventRow {
   readonly payload: string;
 }
 
-const DEFAULT_LIMIT = 1000;
-const MAX_LIMIT = 1000;
-
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
-
-const normalizeLimit = (limit: number | undefined): number =>
-  Math.min(MAX_LIMIT, normalizeNonNegativeInteger(limit, DEFAULT_LIMIT));
 
 export const EffectSqliteDoReadLive = (sql: SqlStorage) => sqliteDoLayer({ db: sql });
 
@@ -49,7 +46,7 @@ export const selectLedgerEventsWithEffectSql = (
     Effect.gen(function* () {
       const sql = yield* SqlClient;
       const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-      const limit = normalizeLimit(opts.limit);
+      const limit = normalizeBackendPageLimit(opts.limit);
       const keys = ledgerIdentityKeys({ ...identity, factOwnerRef: RUNTIME_FACT_OWNER });
       const rows = yield* sql<EffectSqlLedgerEventRow>`
         SELECT

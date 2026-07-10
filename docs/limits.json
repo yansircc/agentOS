@@ -172,28 +172,12 @@
       "reason": "Dispatch retry shape is backend-neutral protocol semantics and must stay identical across production backends until a protocol policy axis exists."
     },
     {
-      "id": "backend.ledger-event-page-cap",
+      "id": "backend.read-page-policy",
       "class": "closed",
-      "owner": "@agent-os backend ledger readers",
-      "sourcePaths": [
-        "packages/runtime/src/cloudflare/ledger/ledger.ts",
-        "packages/runtime/src/cloudflare/storage/effect-sqlite-do.ts",
-        "packages/runtime/src/in-memory/state.ts",
-        "packages/runtime/src/node/index.ts"
-      ],
-      "value": "event reads are capped at 1000 rows per page",
-      "reason": "Page caps are backend equivalence and storage protection constraints; callers may request smaller pages but not redefine the cap per submit."
-    },
-    {
-      "id": "backend.materialized-projection-page-cap",
-      "class": "closed",
-      "owner": "@agent-os backend materialized projection readers",
-      "sourcePaths": [
-        "packages/runtime/src/cloudflare/materialized-projections.ts",
-        "packages/runtime/src/in-memory/state.ts"
-      ],
-      "value": "projection list reads are capped at 1000 rows per page",
-      "reason": "Projection page caps must remain backend-consistent until a protocol-level page policy exists."
+      "owner": "@agent-os/backend-protocol read page policy",
+      "sourcePaths": ["packages/core/src/backend-protocol/page-policy.ts"],
+      "value": "event and projection reads default to and are capped at 1000 rows per page; zero returns an empty page",
+      "reason": "One backend-neutral policy owns page normalization so every storage adapter has identical edge semantics."
     },
     {
       "id": "telemetry.trace-context-spec",

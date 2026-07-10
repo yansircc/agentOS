@@ -53,6 +53,32 @@ export const digestText = (text: string): string => {
   return `fnv1a32:${hash.toString(16).padStart(8, "0")}:${text.length}`;
 };
 
+export const digestBytes = (bytes: Uint8Array): string => {
+  let hash = 0x811c9dc5;
+  for (const byte of bytes) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `fnv1a32:${hash.toString(16).padStart(8, "0")}:${bytes.byteLength}`;
+};
+
+const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+export const encodeBase64 = (bytes: Uint8Array): string => {
+  let encoded = "";
+  for (let index = 0; index < bytes.length; index += 3) {
+    const first = bytes[index] ?? 0;
+    const second = bytes[index + 1] ?? 0;
+    const third = bytes[index + 2] ?? 0;
+    const word = (first << 16) | (second << 8) | third;
+    encoded += base64Alphabet[(word >>> 18) & 63];
+    encoded += base64Alphabet[(word >>> 12) & 63];
+    encoded += index + 1 < bytes.length ? base64Alphabet[(word >>> 6) & 63] : "=";
+    encoded += index + 2 < bytes.length ? base64Alphabet[word & 63] : "=";
+  }
+  return encoded;
+};
+
 export const digestHex64 = (text: string): string => {
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < text.length; index += 1) {

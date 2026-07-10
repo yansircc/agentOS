@@ -3,13 +3,12 @@ import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import {
   backendProtocolEventIdentityKey,
   backendProtocolTruthIdentityKey,
+  normalizeBackendPageLimit,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/core/backend-protocol";
 import { authorityRefKey, scopeRefKey } from "@agent-os/core/effect-claim";
 import { assertRuntimeLedgerTransitions } from "@agent-os/core/runtime-protocol";
 import {
-  DEFAULT_EVENT_LIMIT,
-  MAX_EVENT_LIMIT,
   eventIdentity,
   eventTruthIdentity,
   groupRuntimeTransitionEventsByTruthIdentity,
@@ -59,10 +58,7 @@ export const queryInMemoryLedgerRows = (
   opts: EventQueryOptions = {},
 ): ReadonlyArray<LedgerEvent> => {
   const afterId = normalizeNonNegativeInteger(opts.afterId, 0);
-  const limit =
-    opts.limit === undefined
-      ? DEFAULT_EVENT_LIMIT
-      : Math.max(0, Math.min(MAX_EVENT_LIMIT, normalizeNonNegativeInteger(opts.limit, 0)));
+  const limit = normalizeBackendPageLimit(opts.limit);
   const kinds =
     opts.kinds === undefined
       ? undefined

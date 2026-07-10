@@ -5,6 +5,7 @@ import {
   backendProtocolEventIdentityKey,
   backendProtocolProjectionKey,
   backendProtocolTruthIdentityKey,
+  normalizeBackendPageLimit,
   type BackendProtocolEventIdentity,
   type BackendProtocolProjectionKey,
   type BackendProtocolTruthIdentity,
@@ -12,9 +13,6 @@ import {
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { MaterializedProjectionRow } from "../projection";
 import type { InMemoryProjectionMeta } from "./state";
-
-export const DEFAULT_EVENT_LIMIT = 1000;
-export const MAX_EVENT_LIMIT = 1000;
 
 export const canonicalSerializablePayload = (
   payload: unknown,
@@ -175,10 +173,4 @@ export const cloneProjectionMeta = (
   meta: ReadonlyMap<string, InMemoryProjectionMeta>,
 ): Map<string, InMemoryProjectionMeta> => new Map(meta);
 
-export const normalizeProjectionLimit = (limit: number | undefined): number =>
-  limit === undefined
-    ? DEFAULT_EVENT_LIMIT
-    : Math.max(
-        0,
-        Math.min(MAX_EVENT_LIMIT, normalizeNonNegativeInteger(limit, DEFAULT_EVENT_LIMIT)),
-      );
+export const normalizeProjectionLimit = normalizeBackendPageLimit;

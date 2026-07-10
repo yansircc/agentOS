@@ -26,16 +26,9 @@ import type {
   BackendProtocolEventIdentity,
   BackendProtocolProjectionKey,
 } from "@agent-os/core/backend-protocol";
-
-const DEFAULT_LIMIT = 1000;
-const MAX_LIMIT = 1000;
+import { normalizeBackendPageLimit } from "@agent-os/core/backend-protocol";
 
 const registries = new WeakMap<SqlStorage, ProjectionRegistry>();
-
-const normalizeLimit = (value: number | undefined): number =>
-  value === undefined || !Number.isFinite(value)
-    ? DEFAULT_LIMIT
-    : Math.max(0, Math.min(MAX_LIMIT, Math.floor(value)));
 
 type ProjectionTransactionFailure = ProjectionApplicationError | ProjectionReducerReturnedThenable;
 
@@ -520,7 +513,7 @@ export const CloudflareMaterializedProjectionsLive = (
             return yield* Effect.try({
               try: () => {
                 const eventIdentity = eventIdentityFromQuerySpec(spec, "projection list spec");
-                const limit = normalizeLimit(spec.limit);
+                const limit = normalizeBackendPageLimit(spec.limit);
                 const identityColumns = projectionIdentityColumns({
                   ...eventIdentity,
                   projectionKind: spec.kind,

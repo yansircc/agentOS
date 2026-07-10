@@ -27,6 +27,7 @@ import {
   dispatchBackoffMs,
   dispatchTargetDelivered,
   emptyResourceProjection,
+  normalizeBackendPageLimit,
   parseDispatchLivedClaim,
   parseScheduledEventIntentPayload,
   parseRequestedPayloadValue,
@@ -63,8 +64,6 @@ import {
   type NodePostgresNow,
 } from "./host";
 import {
-  DEFAULT_EVENT_LIMIT,
-  MAX_EVENT_LIMIT,
   eventRowSelect,
   finiteNumberField,
   groupRuntimeEventsByIdentityKey,
@@ -1378,10 +1377,7 @@ export class NodePostgresBackend {
     opts: EventQueryOptions = {},
   ): Promise<ReadonlyArray<LedgerEvent>> {
     const afterId = Math.max(0, Math.floor(opts.afterId ?? 0));
-    const limit = Math.min(
-      MAX_EVENT_LIMIT,
-      Math.max(1, Math.floor(opts.limit ?? DEFAULT_EVENT_LIMIT)),
-    );
+    const limit = normalizeBackendPageLimit(opts.limit);
     const kinds =
       opts.kinds === undefined || opts.kinds.length === 0
         ? ""

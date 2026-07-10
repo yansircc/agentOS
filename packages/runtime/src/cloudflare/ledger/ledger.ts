@@ -28,10 +28,10 @@ import {
   truthIdentityFromCommitSpec,
   type LedgerEventSqlRow,
 } from "./identity";
-import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
-
-const DEFAULT_EVENT_LIMIT = 1000;
-const MAX_EVENT_LIMIT = 1000;
+import {
+  normalizeBackendPageLimit,
+  type BackendProtocolTruthIdentity,
+} from "@agent-os/core/backend-protocol";
 
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
@@ -178,16 +178,7 @@ export const LedgerLive = (
             const events = yield* Effect.try({
               try: () => {
                 const truthIdentity = truthIdentityFromCommitSpec(identity, "ledger events query");
-                const limit =
-                  opts.limit === undefined
-                    ? DEFAULT_EVENT_LIMIT
-                    : Math.max(
-                        0,
-                        Math.min(
-                          MAX_EVENT_LIMIT,
-                          normalizeNonNegativeInteger(opts.limit, DEFAULT_EVENT_LIMIT),
-                        ),
-                      );
+                const limit = normalizeBackendPageLimit(opts.limit);
                 return selectLedgerEvents(sql, truthIdentity, { ...opts, limit });
               },
               catch: (cause) => runtimeStorageError("ledger_events", cause),

@@ -10,8 +10,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const failures = [];
     const sourcePath = "packages/cli/src/build/agent-authoring/static-target.ts";
     const workspaceAgentSourcePath = "packages/core/src/workspace-agent.ts";
+    const commandProjectionSourcePath =
+      "packages/cli/src/build/agent-authoring/generated-command-projection.ts";
     const source = read(sourcePath);
     const workspaceAgentSource = read(workspaceAgentSourcePath);
+    const commandProjectionSource = read(commandProjectionSourcePath);
     const surface = readJson("docs/surface.json");
     const renderWorkspaceStaticTargetSource = sliceBetweenMarkers(
       source,
@@ -125,141 +128,43 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticClient`);
     }
 
-    const commandBlock =
-      workspaceAgentSource.match(
-        /export const WORKSPACE_AGENT_COMMAND = \{([\s\S]*?)\} as const;/u,
-      )?.[1] ?? "";
-    const workspaceCommandKeys = [...commandBlock.matchAll(/^\s*([A-Z_]+):\s*"([^"]+)"/gmu)].map(
-      (match) => match[1],
-    );
-    if (workspaceCommandKeys.length === 0) {
+    if (!workspaceAgentSource.includes("WORKSPACE_AGENT_COMMAND_DESCRIPTOR")) {
       failures.push(
-        `${workspaceAgentSourcePath}: generated-static-target-linking: missing WORKSPACE_AGENT_COMMAND`,
+        `${workspaceAgentSourcePath}: generated-static-target-linking: missing command descriptor source`,
       );
     }
-    const generatedCommandProjection = {
-      SUBMIT: {
-        method: "submitRunInput",
-        parser: "submitInputFromUnknown",
-      },
-      RESUME_INPUT_REQUEST: {
-        method: "resumeInputRequest",
-        parser: "resumeInputRequestFromUnknown",
-      },
-      DECIDE_INPUT_REQUEST: {
-        method: "decideInputRequest",
-        parser: "decideInputRequestFromUnknown",
-      },
-      INSPECT_INPUT_REQUEST: {
-        method: "inspectInputRequest",
-        parser: "inspectInputRequestFromUnknown",
-      },
-      CUSTOM: {
-        method: "customCommand",
-        parser: "customInputFromUnknown",
-      },
-      READ_STATE: {
-        method: "readWorkspaceState",
-        parser: "readStateInputFromUnknown",
-      },
-      READ_FILE: {
-        method: "readWorkspaceFile",
-        parser: "readFileInputFromUnknown",
-      },
-      RESET: {
-        method: "resetWorkspace",
-        parser: "resetInputFromUnknown",
-      },
-      DESTROY: {
-        method: "destroyWorkspace",
-        parser: "destroyInputFromUnknown",
-      },
-    };
-    const commonGeneratedCommandKeys = [
-      "SUBMIT",
-      "RESUME_INPUT_REQUEST",
-      "DECIDE_INPUT_REQUEST",
-      "INSPECT_INPUT_REQUEST",
-      "CUSTOM",
-    ];
-    const workspaceOnlyGeneratedCommandKeys = ["READ_STATE", "READ_FILE", "RESET", "DESTROY"];
-    const knownGeneratedCommandKeys = new Set([
-      ...commonGeneratedCommandKeys,
-      ...workspaceOnlyGeneratedCommandKeys,
-    ]);
-    for (const commandKey of workspaceCommandKeys) {
-      if (!knownGeneratedCommandKeys.has(commandKey)) {
+    for (const marker of [
+      "satisfies GeneratedCommandProjectionByKey",
+      "const commandKeys = Object.keys(",
+      'surface === "common"',
+      "renderGeneratedCommandRpcType",
+      "renderGeneratedCommandCases",
+      "renderGeneratedCommandDispatch",
+      "renderGeneratedClientTypeMethods",
+      "renderGeneratedClientMethods",
+    ]) {
+      if (!commandProjectionSource.includes(marker)) {
         failures.push(
-          `${sourcePath}: generated-static-target-linking: generated target missing profile classification for WORKSPACE_AGENT_COMMAND.${commandKey}`,
+          `${commandProjectionSourcePath}: generated-static-target-linking: missing algebra marker ${marker}`,
         );
       }
     }
-    const assertCommandProjection = ({ commandKey, targetSource, remoteSource, profile }) => {
-      const projection = generatedCommandProjection[commandKey];
-      if (projection === undefined) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: generated target missing projection for WORKSPACE_AGENT_COMMAND.${commandKey}`,
-        );
-        return;
+    for (const marker of [
+      'renderGeneratedCommandRpcType("workspace")',
+      'renderGeneratedCommandCases("workspace")',
+      'renderGeneratedCommandRpcType("chat")',
+      'renderGeneratedCommandDispatch("chat", "chat")',
+      'renderGeneratedClientTypeMethods("chat")',
+      'renderGeneratedClientMethods("chat")',
+    ]) {
+      if (!source.includes(marker)) {
+        failures.push(`${sourcePath}: generated-static-target-linking: missing ${marker}`);
       }
-      if (!targetSource.includes(`${projection.method}(`)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${profile} renderStaticTarget missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
-        );
-      }
-      if (!remoteSource.includes(`readonly ${projection.method}:`)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${profile} AgentOSRpc missing ${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
-        );
-      }
-      if (!remoteSource.includes(`if (name === WORKSPACE_AGENT_COMMAND.${commandKey})`)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${profile} invokeAgentCommand missing WORKSPACE_AGENT_COMMAND.${commandKey}`,
-        );
-      }
-      if (!remoteSource.includes(projection.parser)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${profile} invokeAgentCommand missing ${projection.parser} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
-        );
-      }
-      if (!remoteSource.includes(`runtime.${projection.method}(`)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${profile} invokeAgentCommand missing runtime.${projection.method} for WORKSPACE_AGENT_COMMAND.${commandKey}`,
-        );
-      }
-    };
-    for (const commandKey of commonGeneratedCommandKeys) {
-      assertCommandProjection({
-        commandKey,
-        targetSource: renderWorkspaceStaticTargetSource,
-        remoteSource: renderWorkspaceSvelteKitRemoteSource,
-        profile: "workspace@1",
-      });
-      assertCommandProjection({
-        commandKey,
-        targetSource: renderChatStaticTargetSource,
-        remoteSource: renderChatSvelteKitRemoteSource,
-        profile: "chat@1",
-      });
     }
-    for (const commandKey of workspaceOnlyGeneratedCommandKeys) {
-      const projection = generatedCommandProjection[commandKey];
-      assertCommandProjection({
-        commandKey,
-        targetSource: renderWorkspaceStaticTargetSource,
-        remoteSource: renderWorkspaceSvelteKitRemoteSource,
-        profile: "workspace@1",
-      });
-      if (
-        projection !== undefined &&
-        (renderChatStaticTargetSource.includes(`${projection.method}(`) ||
-          renderChatSvelteKitRemoteSource.includes(`WORKSPACE_AGENT_COMMAND.${commandKey}`) ||
-          renderChatSvelteKitRemoteSource.includes(projection.parser))
-      ) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: chat@1 must not project WORKSPACE_AGENT_COMMAND.${commandKey}`,
-        );
-      }
+    if (renderSvelteKitRemoteSource.includes("if (name === WORKSPACE_AGENT_COMMAND.")) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: remote command cases must come from the typed descriptor algebra`,
+      );
     }
 
     const requiredStaticWiringMarkers = [
@@ -292,7 +197,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const requiredSkillSupportMarkers = [
       "GENERATED_LOAD_SKILL_TOOL_NAME",
       "const renderSkillSupport =",
+      "const renderSkillResourceBundle =",
+      'import generatedSkillResourcePayloads from "./skill-resources.json";',
+      "const generatedSkillResources =",
       "const generatedLoadSkillTool = defineProductTool",
+      'encoding: Schema.optional(Schema.Literals(["utf-8", "base64"]))',
       "const generatedSkillsSystemAdvert =",
       "const generatedFrameworkToolsFor =",
       "const renderSubmitSpecFromRunInput =",
@@ -429,7 +338,6 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "responseToSseHttpChunks",
       "agentOSRpcClient<AgentOSRpc>(platformEnv)",
       "submitRunInput",
-      "readWorkspaceFile",
       "streamEvents",
       "export const invokeAgentCommand = command(",
       "export const runEventStream = query.live(",
@@ -464,6 +372,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     }
     for (const generatedFile of [
       '".agentos/generated/cloudflare-scope.ts"',
+      '".agentos/generated/skill-resources.json"',
       '".agentos/generated/worker.ts"',
       '".agentos/generated/wrangler.jsonc"',
     ]) {

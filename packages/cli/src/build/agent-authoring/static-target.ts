@@ -35,12 +35,21 @@ import {
   type NormalizedChatAgentOsConfig,
   type NormalizedWorkspaceAgentOsConfig,
 } from "./config";
+import {
+  generatedCommandInputTypesForProfile,
+  renderGeneratedClientMethods,
+  renderGeneratedClientTypeMethods,
+  renderGeneratedCommandCases,
+  renderGeneratedCommandDispatch,
+  renderGeneratedCommandRpcType,
+} from "./generated-command-projection";
 
 export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/manifest.json"
   | ".agentos/generated/deployment.json"
   | ".agentos/generated/provenance.json"
   | ".agentos/generated/fingerprints.json"
+  | ".agentos/generated/skill-resources.json"
   | ".agentos/generated/channels.ts"
   | ".agentos/generated/schedules.ts"
   | ".agentos/generated/target.ts"
@@ -659,7 +668,7 @@ const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string =
             bytes: file.bytes,
             digest: file.digest,
             path: file.path,
-            text: file.text,
+            resourceRef: `${skill.name}/${file.path}@${file.digest}`,
           })),
           name: skill.name,
           path: skill.path,
@@ -669,6 +678,17 @@ const renderSkillCatalog = (skills: ReadonlyArray<CompiledAgentSkill>): string =
   );
   return entries.length === 0 ? "[]" : `[\n${entries.join(",\n")}\n]`;
 };
+
+const renderSkillResourceBundle = (skills: ReadonlyArray<CompiledAgentSkill>): string =>
+  stableJson(
+    Object.fromEntries(
+      skills.flatMap((skill) =>
+        skill.files.map(
+          (file) => [`${skill.name}/${file.path}@${file.digest}`, file.contentBase64] as const,
+        ),
+      ),
+    ),
+  );
 
 const renderInstructionFragments = (
   fragments: ReadonlyArray<CompiledAgentInstructionFragment>,
@@ -797,6 +817,8 @@ const generatedDynamicSubmitBindingsFor = async (
 const renderSkillSupport = (skills: ReadonlyArray<CompiledAgentSkill>): string => {
   if (skills.length === 0) return "";
   return `
+import generatedSkillResourcePayloads from "./skill-resources.json";
+
 type GeneratedSkill = {
   readonly name: string;
   readonly description: string;
@@ -807,7 +829,7 @@ type GeneratedSkill = {
     readonly path: string;
     readonly digest: string;
     readonly bytes: number;
-    readonly text: string;
+    readonly resourceRef: string;
   }>;
 };
 
@@ -818,6 +840,7 @@ type LoadedGeneratedSkill = Omit<GeneratedSkill, "files"> & {
 };
 
 const generatedSkillCatalog = ${renderSkillCatalog(skills)} satisfies ReadonlyArray<GeneratedSkill>;
+const generatedSkillResources = generatedSkillResourcePayloads as Readonly<Record<string, string>>;
 const generatedSkillNames = generatedSkillCatalog.map((skill) => skill.name);
 const generatedSkillByName = Object.fromEntries(
   generatedSkillCatalog.map((skill) => [skill.name, skill]),
@@ -895,6 +918,7 @@ const generatedFrameworkToolsFor = (
   args: Schema.Struct({
     name: Schema.String,
     path: Schema.String,
+    encoding: Schema.optional(Schema.Literals(["utf-8", "base64"])),
   }),
   authority: "agentos.generated.skills",
   authorityId: "agentos.generated.skills.read_skill_file",
@@ -904,18 +928,42 @@ const generatedFrameworkToolsFor = (
         visibleSkillNames.has(name) &&
         generatedSkillFilePathCatalog.some((file) => file.name === name && file.path === path),
     } as const),
-  execute: ({ name, path }) => {
+  execute: ({ name, path, encoding = "utf-8" }) => {
     const skill = visibleSkill(name);
     const file = skill?.files.find((candidate) => candidate.path === path);
     if (skill === null || file === undefined) {
       return Effect.fail(Error(\`unknown skill file \${name}/\${path}\`));
     }
-    return Effect.succeed({
-      name,
-      path: file.path,
-      digest: file.digest,
-      text: file.text,
-    });
+    const contentBase64 = generatedSkillResources[file.resourceRef];
+    if (contentBase64 === undefined) {
+      return Effect.fail(Error(\`missing skill resource \${file.resourceRef}\`));
+    }
+    if (encoding === "base64") {
+      return Effect.succeed({
+        name,
+        path: file.path,
+        digest: file.digest,
+        bytes: file.bytes,
+        encoding,
+        content: contentBase64,
+      });
+    }
+    return Effect.try({
+      try: () =>
+        new TextDecoder("utf-8", { fatal: true }).decode(
+          Uint8Array.from(atob(contentBase64), (character) => character.charCodeAt(0)),
+        ),
+      catch: () => Error(\`skill resource is not valid utf-8: \${name}/\${path}\`),
+    }).pipe(
+      Effect.map((content) => ({
+        name,
+        path: file.path,
+        digest: file.digest,
+        bytes: file.bytes,
+        encoding,
+        content,
+      })),
+    );
   },
   });
 
@@ -2615,17 +2663,7 @@ ${renderTypeImport(
   modules.runtimeRunProjector,
 )}
 ${renderTypeImport(
-  [
-    "WorkspaceAgentCustomCommandInput",
-    "WorkspaceAgentDestroyCommandInput",
-    "WorkspaceAgentCommandOutputByName",
-    "WorkspaceAgentDecideInputRequestCommandInput",
-    "WorkspaceAgentInspectInputRequestCommandInput",
-    "WorkspaceAgentReadFileCommandInput",
-    "WorkspaceAgentResumeInputRequestCommandInput",
-    "WorkspaceAgentReadStateCommandInput",
-    "WorkspaceAgentResetCommandInput",
-  ],
+  ["WorkspaceAgentCommandOutputByName", ...generatedCommandInputTypesForProfile("workspace")],
   modules.workspaceAgentHost,
 )}
 ${renderTypeImport(
@@ -2640,7 +2678,6 @@ ${renderTypeImport(
 ${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
 type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
-  readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
   readonly submitSessionTurn: (input: WorkspaceAgentSessionSubmitTurnInput) => Promise<SubmitResult>;
   readonly inspectSession: (
     input: { readonly sessionRef: string },
@@ -2653,30 +2690,7 @@ type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
   readonly listWorkflowRuns: (
     input: WorkspaceAgentWorkflowRunsInput,
   ) => Promise<WorkflowRunListProjection>;
-  readonly resumeInputRequest: (
-    input: WorkspaceAgentResumeInputRequestCommandInput,
-  ) => Promise<SubmitResult>;
-  readonly decideInputRequest: (
-    input: WorkspaceAgentDecideInputRequestCommandInput,
-  ) => Promise<SubmitResult>;
-  readonly inspectInputRequest: (
-    input: WorkspaceAgentInspectInputRequestCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]>;
-  readonly customCommand: (
-    input: WorkspaceAgentCustomCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
-  readonly readWorkspaceFile: (
-    input: WorkspaceAgentReadFileCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.READ_FILE]>;
-  readonly readWorkspaceState: (
-    input?: WorkspaceAgentReadStateCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.READ_STATE]>;
-  readonly resetWorkspace: (
-    input?: WorkspaceAgentResetCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.RESET]>;
-  readonly destroyWorkspace: (
-    input?: WorkspaceAgentDestroyCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.DESTROY]>;
+${renderGeneratedCommandRpcType("workspace")}
 };
 
 const optionalAfterIdInput = Schema.toStandardSchemaV1(
@@ -3048,12 +3062,7 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
   const platformEnv = env();
   if (!platformEnv.ok) return rejectFailure(platformEnv);
   const runtime = agentOS(platformEnv.value);
-  if (name === WORKSPACE_AGENT_COMMAND.SUBMIT) {
-    const submitInput = submitInputFromUnknown(input);
-    return submitInput.ok
-      ? runtime.submitRunInput(submitInput.value.input)
-      : rejectFailure(submitInput);
-  }
+${renderGeneratedCommandCases("workspace")}
   if (name === WORKSPACE_AGENT_PRODUCT_COMMAND.SUBMIT_SESSION_TURN) {
     const sessionInput = sessionTurnInputFromUnknown(input);
     return sessionInput.ok ? runtime.submitSessionTurn(sessionInput.value) : rejectFailure(sessionInput);
@@ -3080,50 +3089,6 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
     return workflowInput.ok
       ? runtime.listWorkflowRuns(workflowInput.value)
       : rejectFailure(workflowInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST) {
-    const resumeInput = resumeInputRequestFromUnknown(input);
-    return resumeInput.ok
-      ? runtime.resumeInputRequest(resumeInput.value)
-      : rejectFailure(resumeInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST) {
-    const decideInput = decideInputRequestFromUnknown(input);
-    return decideInput.ok
-      ? runtime.decideInputRequest(decideInput.value)
-      : rejectFailure(decideInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST) {
-    const inspectInput = inspectInputRequestFromUnknown(input);
-    return inspectInput.ok
-      ? runtime.inspectInputRequest(inspectInput.value)
-      : rejectFailure(inspectInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.CUSTOM) {
-    const customInput = customInputFromUnknown(input);
-    return customInput.ok ? runtime.customCommand(customInput.value) : rejectFailure(customInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.READ_STATE) {
-    const readStateInput = readStateInputFromUnknown(input);
-    return readStateInput.ok
-      ? runtime.readWorkspaceState(readStateInput.value)
-      : rejectFailure(readStateInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.READ_FILE) {
-    const readFileInput = readFileInputFromUnknown(input);
-    return readFileInput.ok
-      ? runtime.readWorkspaceFile(readFileInput.value)
-      : rejectFailure(readFileInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.RESET) {
-    const resetInput = resetInputFromUnknown(input);
-    return resetInput.ok ? runtime.resetWorkspace(resetInput.value) : rejectFailure(resetInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.DESTROY) {
-    const destroyInput = destroyInputFromUnknown(input);
-    return destroyInput.ok
-      ? runtime.destroyWorkspace(destroyInput.value)
-      : rejectFailure(destroyInput);
   }
   return rejectFailure(fail(501, \`unsupported generated workspace command \${name}\`));
 });
@@ -3157,31 +3122,13 @@ ${renderTypeImport(
   modules.runtimeProtocol,
 )}
 ${renderTypeImport(
-  [
-    "WorkspaceAgentCommandOutputByName",
-    "WorkspaceAgentCustomCommandInput",
-    "WorkspaceAgentDecideInputRequestCommandInput",
-    "WorkspaceAgentInspectInputRequestCommandInput",
-    "WorkspaceAgentResumeInputRequestCommandInput",
-  ],
+  ["WorkspaceAgentCommandOutputByName", ...generatedCommandInputTypesForProfile("chat")],
   modules.workspaceAgentHost,
 )}
 ${renderTypeImport(["AgentOSTargetEnv"], "./cloudflare-scope")}
 
 type AgentOSRpc = Pick<AgentRuntimeClient, "events" | "streamEvents"> & {
-  readonly submitRunInput: (input: SubmitRunInput) => Promise<SubmitResult>;
-  readonly resumeInputRequest: (
-    input: WorkspaceAgentResumeInputRequestCommandInput,
-  ) => Promise<SubmitResult>;
-  readonly decideInputRequest: (
-    input: WorkspaceAgentDecideInputRequestCommandInput,
-  ) => Promise<SubmitResult>;
-  readonly inspectInputRequest: (
-    input: WorkspaceAgentInspectInputRequestCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]>;
-  readonly customCommand: (
-    input: WorkspaceAgentCustomCommandInput,
-  ) => Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
+${renderGeneratedCommandRpcType("chat")}
 };
 
 const optionalAfterIdInput = Schema.toStandardSchemaV1(
@@ -3430,35 +3377,7 @@ export const invokeAgentCommand = command(commandInput, ({ name, input }): Promi
   const platformEnv = env();
   if (!platformEnv.ok) return rejectFailure(platformEnv);
   const runtime = agentOS(platformEnv.value);
-  if (name === WORKSPACE_AGENT_COMMAND.SUBMIT) {
-    const submitInput = submitInputFromUnknown(input);
-    return submitInput.ok
-      ? runtime.submitRunInput(submitInput.value.input)
-      : rejectFailure(submitInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST) {
-    const resumeInput = resumeInputRequestFromUnknown(input);
-    return resumeInput.ok
-      ? runtime.resumeInputRequest(resumeInput.value)
-      : rejectFailure(resumeInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST) {
-    const decideInput = decideInputRequestFromUnknown(input);
-    return decideInput.ok
-      ? runtime.decideInputRequest(decideInput.value)
-      : rejectFailure(decideInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST) {
-    const inspectInput = inspectInputRequestFromUnknown(input);
-    return inspectInput.ok
-      ? runtime.inspectInputRequest(inspectInput.value)
-      : rejectFailure(inspectInput);
-  }
-  if (name === WORKSPACE_AGENT_COMMAND.CUSTOM) {
-    const customInput = customInputFromUnknown(input);
-    return customInput.ok ? runtime.customCommand(customInput.value) : rejectFailure(customInput);
-  }
-  return rejectFailure(fail(501, \`unsupported generated chat command \${name}\`));
+${renderGeneratedCommandDispatch("chat", "chat")}
 });
 
 export const runEventStream = query.live(optionalAfterIdInput, (input) => {
@@ -3612,10 +3531,7 @@ ${renderTypeImport(
     "CreateWorkspaceAgentClientOptions",
     "WorkspaceAgentClient",
     "WorkspaceAgentCommandOutputByName",
-    "WorkspaceAgentCustomCommandInput",
-    "WorkspaceAgentDecideInputRequestCommandInput",
-    "WorkspaceAgentInspectInputRequestCommandInput",
-    "WorkspaceAgentResumeInputRequestCommandInput",
+    ...generatedCommandInputTypesForProfile("chat"),
   ],
   modules.workspaceAgentClient,
 )}`;
@@ -3624,50 +3540,11 @@ export type GeneratedAgentClientOptions = CreateWorkspaceAgentClientOptions;
 
 export interface GeneratedAgentClient {
   readonly client: WorkspaceAgentClient;
-  submit(
-    input: SubmitRunInput,
-    options?: AgentClientCommandOptions,
-  ): Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.SUBMIT]>;
-  resumeInputRequest(
-    input: WorkspaceAgentResumeInputRequestCommandInput,
-    options?: AgentClientCommandOptions,
-  ): Promise<
-    WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST]
-  >;
-  decideInputRequest(
-    input: WorkspaceAgentDecideInputRequestCommandInput,
-    options?: AgentClientCommandOptions,
-  ): Promise<
-    WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST]
-  >;
-  inspectInputRequest(
-    input: WorkspaceAgentInspectInputRequestCommandInput,
-    options?: AgentClientCommandOptions,
-  ): Promise<
-    WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST]
-  >;
-  custom(
-    input: WorkspaceAgentCustomCommandInput,
-    options?: AgentClientCommandOptions,
-  ): Promise<WorkspaceAgentCommandOutputByName[typeof WORKSPACE_AGENT_COMMAND.CUSTOM]>;
+${renderGeneratedClientTypeMethods("chat")}
 `;
   const commonMethods = `
     client,
-    submit(input, commandOptions) {
-      return client.invoke(WORKSPACE_AGENT_COMMAND.SUBMIT, { input }, commandOptions);
-    },
-    resumeInputRequest(input, commandOptions) {
-      return client.invoke(WORKSPACE_AGENT_COMMAND.RESUME_INPUT_REQUEST, input, commandOptions);
-    },
-    decideInputRequest(input, commandOptions) {
-      return client.invoke(WORKSPACE_AGENT_COMMAND.DECIDE_INPUT_REQUEST, input, commandOptions);
-    },
-    inspectInputRequest(input, commandOptions) {
-      return client.invoke(WORKSPACE_AGENT_COMMAND.INSPECT_INPUT_REQUEST, input, commandOptions);
-    },
-    custom(input, commandOptions) {
-      return client.invoke(WORKSPACE_AGENT_COMMAND.CUSTOM, input, commandOptions);
-    },`;
+${renderGeneratedClientMethods("chat")}`;
   if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
     return `${commonImports}
 ${commonTypes}
@@ -3771,6 +3648,8 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
   const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
   const hasChannels = normalized.channels.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
+  const hasSkills = normalized.skills.length > 0;
+  const skillResourceBundle = renderSkillResourceBundle(normalized.skills);
   if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
     if (normalized.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1) {
       return {
@@ -3800,6 +3679,15 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
       { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
       { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+      ...(hasSkills
+        ? [
+            {
+              kind: "semantic-json" as const,
+              source: "./skill-resources.json",
+              imports: ["default as skillResourcePayloads"],
+            },
+          ]
+        : []),
       {
         kind: "local-runtime",
         source: modules.localRuntime,
@@ -3874,11 +3762,15 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           ),
           generatedPath(".agentos/generated/deployment.json", stableJson(deploymentJson)),
           generatedPath(".agentos/generated/provenance.json", stableJson(normalized.provenance)),
+          ...(hasSkills
+            ? [generatedPath(".agentos/generated/skill-resources.json", skillResourceBundle)]
+            : []),
           generatedPath(
             ".agentos/generated/fingerprints.json",
             stableJson({
               deployment: digestText(stableJson(deploymentJson)),
               manifest: digestText(stableJson(normalized.deployment.manifest)),
+              ...(hasSkills ? { skillResources: digestText(skillResourceBundle) } : {}),
               targetModuleGraph: digestText(stableJson(moduleGraph)),
             }),
           ),
@@ -3960,6 +3852,15 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
   const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
     { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
     { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+    ...(hasSkills
+      ? [
+          {
+            kind: "semantic-json" as const,
+            source: "./skill-resources.json",
+            imports: ["default as skillResourcePayloads"],
+          },
+        ]
+      : []),
     {
       kind: "target-runtime",
       source: modules.cloudflareDoRuntime,
@@ -4088,11 +3989,15 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         ),
         generatedPath(".agentos/generated/deployment.json", stableJson(deploymentJson)),
         generatedPath(".agentos/generated/provenance.json", stableJson(normalized.provenance)),
+        ...(hasSkills
+          ? [generatedPath(".agentos/generated/skill-resources.json", skillResourceBundle)]
+          : []),
         generatedPath(
           ".agentos/generated/fingerprints.json",
           stableJson({
             deployment: digestText(stableJson(deploymentJson)),
             manifest: digestText(stableJson(normalized.deployment.manifest)),
+            ...(hasSkills ? { skillResources: digestText(skillResourceBundle) } : {}),
             targetModuleGraph: digestText(stableJson(moduleGraph)),
           }),
         ),

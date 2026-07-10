@@ -29,17 +29,32 @@ export const WORKSPACE_AGENT_PROJECTION = {
 export type WorkspaceAgentProjectionName =
   (typeof WORKSPACE_AGENT_PROJECTION)[keyof typeof WORKSPACE_AGENT_PROJECTION];
 
-export const WORKSPACE_AGENT_COMMAND = {
-  SUBMIT: "submit",
-  RESUME_INPUT_REQUEST: "resumeInputRequest",
-  DECIDE_INPUT_REQUEST: "decideInputRequest",
-  INSPECT_INPUT_REQUEST: "inspectInputRequest",
-  READ_STATE: "readState",
-  READ_FILE: "readFile",
-  RESET: "reset",
-  DESTROY: "destroy",
-  CUSTOM: "custom",
+export const WORKSPACE_AGENT_COMMAND_DESCRIPTOR = {
+  SUBMIT: { name: "submit", surface: "common" },
+  RESUME_INPUT_REQUEST: { name: "resumeInputRequest", surface: "common" },
+  DECIDE_INPUT_REQUEST: { name: "decideInputRequest", surface: "common" },
+  INSPECT_INPUT_REQUEST: { name: "inspectInputRequest", surface: "common" },
+  READ_STATE: { name: "readState", surface: "workspace" },
+  READ_FILE: { name: "readFile", surface: "workspace" },
+  RESET: { name: "reset", surface: "workspace" },
+  DESTROY: { name: "destroy", surface: "workspace" },
+  CUSTOM: { name: "custom", surface: "common" },
 } as const;
+
+export type WorkspaceAgentCommandKey = keyof typeof WORKSPACE_AGENT_COMMAND_DESCRIPTOR;
+export type WorkspaceAgentCommandSurface =
+  (typeof WORKSPACE_AGENT_COMMAND_DESCRIPTOR)[WorkspaceAgentCommandKey]["surface"];
+
+const commandNamesFrom = <Descriptors extends Readonly<Record<string, { readonly name: string }>>>(
+  descriptors: Descriptors,
+): { readonly [Key in keyof Descriptors]: Descriptors[Key]["name"] } =>
+  Object.fromEntries(
+    Object.entries(descriptors).map(([key, descriptor]) => [key, descriptor.name]),
+  ) as {
+    readonly [Key in keyof Descriptors]: Descriptors[Key]["name"];
+  };
+
+export const WORKSPACE_AGENT_COMMAND = commandNamesFrom(WORKSPACE_AGENT_COMMAND_DESCRIPTOR);
 
 export type WorkspaceAgentCommandName =
   (typeof WORKSPACE_AGENT_COMMAND)[keyof typeof WORKSPACE_AGENT_COMMAND];

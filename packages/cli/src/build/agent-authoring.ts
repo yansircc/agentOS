@@ -14,6 +14,7 @@ export type {
   AuthoredDynamicResolverFile,
   AuthoredJsonFile,
   AuthoredMarkdownFile,
+  AuthoredResourceFile,
   AuthoredScheduleDeclaration,
   AuthoredScheduleFile,
   AuthoredToolDeclaration,

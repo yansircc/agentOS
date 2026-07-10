@@ -96,7 +96,9 @@
 - `.:authorityRefKey`
 - `.:AuthorizationGrantRef`
 - `.:AuthorizationInputRequestResumePayload`
+- `.:BACKEND_PAGE_POLICY`
 - `.:BACKEND_PROTOCOL_EVENT_PREFIXES`
+- `.:BackendPagePolicy`
 - `.:BackendProtocolDispatchTarget`
 - `.:BackendProtocolEventHandler`
 - `.:BackendProtocolEventIdentity`
@@ -496,6 +498,7 @@
 - `.:MountedAgent`
 - `.:none`
 - `.:normalizeAdmitVerdict`
+- `.:normalizeBackendPageLimit`
 - `.:OperationRef`
 - `.:OriginRef`
 - `.:Outcome`
@@ -844,12 +847,15 @@
 - `.:WorkflowRunSubmittedPayload`
 - `.:WorkflowRunSubmittedPayloadSchema`
 - `.:WORKSPACE_AGENT_COMMAND`
+- `.:WORKSPACE_AGENT_COMMAND_DESCRIPTOR`
 - `.:WORKSPACE_AGENT_PROJECTION`
 - `.:WORKSPACE_AGENT_PROJECTION_SCHEMA`
 - `.:WORKSPACE_TOPOLOGY`
 - `.:WorkspaceAgentCommandInputByName`
+- `.:WorkspaceAgentCommandKey`
 - `.:WorkspaceAgentCommandName`
 - `.:WorkspaceAgentCommandOutputByName`
+- `.:WorkspaceAgentCommandSurface`
 - `.:WorkspaceAgentCustomCommandInput`
 - `.:WorkspaceAgentDecideInputRequestCommandInput`
 - `.:WorkspaceAgentDestroyCommandInput`
@@ -908,7 +914,9 @@
 - `./authored-value:Authored`
 - `./authored-value:authoredValue`
 - `./authored-value:AuthoredValue`
+- `./backend-protocol:BACKEND_PAGE_POLICY`
 - `./backend-protocol:BACKEND_PROTOCOL_EVENT_PREFIXES`
+- `./backend-protocol:BackendPagePolicy`
 - `./backend-protocol:BackendProtocolDispatchTarget`
 - `./backend-protocol:BackendProtocolEventHandler`
 - `./backend-protocol:BackendProtocolEventIdentity`
@@ -984,6 +992,7 @@
 - `./backend-protocol:isBackendProtocolEventIdentity`
 - `./backend-protocol:isBackendProtocolProjectionKey`
 - `./backend-protocol:isBackendProtocolTruthIdentity`
+- `./backend-protocol:normalizeBackendPageLimit`
 - `./backend-protocol:parseBackendProtocolLedgerEventRpc`
 - `./backend-protocol:parseBackendProtocolLedgerEventRpcJson`
 - `./backend-protocol:parseDispatchBindingRef`
@@ -1732,11 +1741,14 @@
 - `./workspace-agent:isWorkspaceAgentCommandName`
 - `./workspace-agent:isWorkspaceAgentProjectionName`
 - `./workspace-agent:WORKSPACE_AGENT_COMMAND`
+- `./workspace-agent:WORKSPACE_AGENT_COMMAND_DESCRIPTOR`
 - `./workspace-agent:WORKSPACE_AGENT_PROJECTION`
 - `./workspace-agent:WORKSPACE_AGENT_PROJECTION_SCHEMA`
 - `./workspace-agent:WorkspaceAgentCommandInputByName`
+- `./workspace-agent:WorkspaceAgentCommandKey`
 - `./workspace-agent:WorkspaceAgentCommandName`
 - `./workspace-agent:WorkspaceAgentCommandOutputByName`
+- `./workspace-agent:WorkspaceAgentCommandSurface`
 - `./workspace-agent:WorkspaceAgentCustomCommandInput`
 - `./workspace-agent:WorkspaceAgentDecideInputRequestCommandInput`
 - `./workspace-agent:WorkspaceAgentDestroyCommandInput`

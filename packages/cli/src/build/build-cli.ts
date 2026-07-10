@@ -727,7 +727,7 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
       }
       files.push({
         path: authoredPath,
-        kind: "text",
+        kind: "resource",
         bytes: file.sourceKind === "regular" ? await readFile(file.path) : new Uint8Array(),
         sourceKind: file.sourceKind,
       });
@@ -764,7 +764,7 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
       }
       files.push({
         path: authoredPath,
-        kind: "text",
+        kind: "resource",
         bytes: file.sourceKind === "regular" ? await readFile(file.path) : new Uint8Array(),
         sourceKind: file.sourceKind,
       });

@@ -24,7 +24,9 @@ import {
 import { cronMinuteExpression } from "@agent-os/runtime/schedule";
 import {
   AUTHORING_DEFAULTS_VERSION,
+  digestBytes,
   digestText,
+  encodeBase64,
   findFunctionPath,
   GENERATED_LOAD_SKILL_TOOL_NAME,
   GENERATED_READ_SKILL_FILE_TOOL_NAME,
@@ -50,7 +52,7 @@ export interface AuthoredAgentTree {
 
 export type AuthoredAgentTreeFile =
   | AuthoredMarkdownFile
-  | AuthoredTextFile
+  | AuthoredResourceFile
   | AuthoredJsonFile
   | AuthoredToolFile
   | AuthoredDynamicResolverFile
@@ -67,9 +69,9 @@ export interface AuthoredMarkdownFile {
   readonly sourceKind?: AuthoredFileSourceKind;
 }
 
-export interface AuthoredTextFile {
+export interface AuthoredResourceFile {
   readonly path: string;
-  readonly kind: "text";
+  readonly kind: "resource";
   readonly bytes: Uint8Array;
   readonly sourceKind?: AuthoredFileSourceKind;
 }
@@ -177,7 +179,7 @@ export interface CompiledAgentSkillFile {
   readonly path: string;
   readonly digest: string;
   readonly bytes: number;
-  readonly text: string;
+  readonly contentBase64: string;
 }
 
 export interface CompiledAgentInstructionFragment {
@@ -1271,14 +1273,12 @@ const skillSupportPathForPath = (
   path: string,
 ): { readonly skillName: string; readonly packagePath: string } | null => {
   const parts = path.split("/");
-  if (parts[0] !== "skills" || parts.length < 4) return null;
+  if (parts[0] !== "skills" || parts.length < 3) return null;
   const skillName = parts[1] ?? "";
   if (!isSkillName(skillName)) return null;
-  const root = parts[2];
-  if (root !== "references" && root !== "scripts") return null;
   return {
     skillName,
-    packagePath: [root, ...parts.slice(3)].join("/"),
+    packagePath: parts.slice(2).join("/"),
   };
 };
 
@@ -1468,13 +1468,11 @@ const recordSkillSupportFile = (
     invalidAuthoredValue(state, path, "/bytes", "skill_package_too_large");
     return;
   }
-  const text = decodeUtf8Bytes(state, path, "/bytes", bytes);
-  if (text === null || !assertNoNulText(state, path, "/bytes", text)) return;
   files.push({
     path: supportPath.packagePath,
-    digest: digestText(text),
+    digest: digestBytes(bytes),
     bytes: bytes.byteLength,
-    text,
+    contentBase64: encodeBase64(bytes),
   });
   state.skillSupportFiles.set(supportPath.skillName, files);
   state.skillSupportByteTotals.set(supportPath.skillName, currentBytes + bytes.byteLength);
@@ -1520,7 +1518,7 @@ const recordMarkdownFile = (
   putAuthored(state, "/instructions", instructions, pathOrigin(path));
 };
 
-const recordTextFile = (
+const recordResourceFile = (
   state: CompilerState,
   path: string,
   bytes: Uint8Array,
@@ -1528,7 +1526,7 @@ const recordTextFile = (
 ): void => {
   const supportPath = skillSupportPathForPath(path);
   if (supportPath === null) {
-    state.issues.push({ kind: "unsupported_path", path, reason: "text_path_not_in_grammar" });
+    state.issues.push({ kind: "unsupported_path", path, reason: "resource_path_not_in_grammar" });
     return;
   }
   recordSkillSupportFile(state, path, supportPath, bytes, sourceKind);
@@ -2083,8 +2081,8 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       case "markdown":
         recordMarkdownFile(state, path, file.text, file.sourceKind);
         break;
-      case "text":
-        recordTextFile(state, path, file.bytes, file.sourceKind);
+      case "resource":
+        recordResourceFile(state, path, file.bytes, file.sourceKind);
         break;
       case "json":
         recordJsonFile(state, path, file.value);
