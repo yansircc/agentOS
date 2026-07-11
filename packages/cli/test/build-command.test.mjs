@@ -521,7 +521,11 @@ void test("agentos consumer integrity requires a current marker and exact tarbal
       mkdirSync(packageRoot, { recursive: true });
       writeFileSync(
         path.join(root, "package.json"),
-        JSON.stringify({ name: "agentos-consumer-integrity", private: true, type: "module" }, null, 2),
+        JSON.stringify(
+          { name: "agentos-consumer-integrity", private: true, type: "module" },
+          null,
+          2,
+        ),
       );
       writeFileSync(
         path.join(packageRoot, "package.json"),

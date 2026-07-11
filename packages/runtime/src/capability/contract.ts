@@ -70,9 +70,7 @@ export interface DefineCapabilitySpec {
   readonly version?: string;
   readonly carrier: Carrier<any, any>;
   readonly requires?: CapabilityRequirements;
-  readonly install: (
-    ctx: CapabilityInstallContext,
-  ) => CapabilityInstallation;
+  readonly install: (ctx: CapabilityInstallContext) => CapabilityInstallation;
   readonly diagnostics?: () => ReadonlyArray<{
     readonly capabilityId?: string;
     readonly reason: string;
@@ -89,9 +87,7 @@ export interface CapabilityContract {
   readonly sourcePackageName: string;
   readonly carrier: Carrier<any, any>;
   readonly requires: CapabilityRequirements;
-  readonly install: (
-    ctx: CapabilityInstallContext,
-  ) => CapabilityInstallation;
+  readonly install: (ctx: CapabilityInstallContext) => CapabilityInstallation;
   readonly diagnostics: () => ReadonlyArray<{
     readonly capabilityId?: string;
     readonly reason: string;
