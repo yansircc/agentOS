@@ -2,7 +2,7 @@
 
 # @agent-os/client Public API
 
-Status: 0.5.x active development for the canonical agent client package. Root exports cover framework-neutral stores, transport injection contracts, positive runtime ledger-event decoding, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation; `./product-shell-client` names the product command plus runtime ledger composition pattern; `./react` and `./svelte` are optional-peer subpath adapters.
+Status: 0.6.x active development for the canonical agent client package. Root exports cover framework-neutral stores, transport injection contracts, positive runtime ledger-event decoding, Recorded runtime-event snapshots, symbolic ref lifecycle, and generic command invocation; `./product-shell-client` names the product command plus runtime ledger composition pattern; `./react` and `./svelte` are optional-peer subpath adapters.
 
 ## Public exports
 

@@ -1,17 +1,17 @@
 # agentOS Package Map
 
-Release version: `0.5.24`
+Release version: `0.6.0`
 Published scope: `@yansirplus`
 
 ## Packages
 
 | Source Package      | Published Package     | Path               | Status       | Role                                                                                                                                                                                                                                              |
 | ------------------- | --------------------- | ------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-os/cli`     | `@yansirplus/cli`     | `packages/cli`     | 0.5.x public | developer command surface for generated projections, authored agent builds, structural checks, and distribution gates                                                                                                                             |
-| `@agent-os/client`  | `@yansirplus/client`  | `packages/client`  | 0.5.x public | transport-neutral agent client store, decoded runtime ledger stream adapter, typed command surface, product-shell composition helper, and optional framework subpath bridges                                                                      |
-| `@agent-os/core`    | `@yansirplus/core`    | `packages/core`    | 0.5.x public | neutral substrate axioms, owner identity helpers, value brands, protocol schemas, shared errors, material refs, AgentSchema, tool algebra, and backend/runtime/LLM/telemetry vocabulary                                                           |
-| `@agent-os/evals`   | `@yansirplus/evals`   | `packages/evals`   | 0.5.x public | eval authoring DSL, symbolic eval configuration, deterministic assertion declarations, and runner-facing case/context types for generated app behavior checks                                                                                     |
-| `@agent-os/runtime` | `@yansirplus/runtime` | `packages/runtime` | 0.5.x public | Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry. |
+| `@agent-os/cli`     | `@yansirplus/cli`     | `packages/cli`     | 0.6.x public | developer command surface for generated projections, authored agent builds, structural checks, and distribution gates                                                                                                                             |
+| `@agent-os/client`  | `@yansirplus/client`  | `packages/client`  | 0.6.x public | transport-neutral agent client store, decoded runtime ledger stream adapter, typed command surface, product-shell composition helper, and optional framework subpath bridges                                                                      |
+| `@agent-os/core`    | `@yansirplus/core`    | `packages/core`    | 0.6.x public | neutral substrate axioms, owner identity helpers, value brands, protocol schemas, shared errors, material refs, AgentSchema, tool algebra, and backend/runtime/LLM/telemetry vocabulary                                                           |
+| `@agent-os/evals`   | `@yansirplus/evals`   | `packages/evals`   | 0.6.x public | eval authoring DSL, symbolic eval configuration, deterministic assertion declarations, and runner-facing case/context types for generated app behavior checks                                                                                     |
+| `@agent-os/runtime` | `@yansirplus/runtime` | `packages/runtime` | 0.6.x public | Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry. |
 
 ## Entrypoints
 

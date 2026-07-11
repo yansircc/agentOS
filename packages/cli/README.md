@@ -9,7 +9,7 @@ authored agent builds, structural checks, and distribution gates.
 
 ## Public API Status
 
-0.5.x active development. CLI commands are the supported developer surface; generated projections remain owned by their source facts.
+0.6.x active development. CLI commands are the supported developer surface; generated projections remain owned by their source facts.
 
 ## Audience
 

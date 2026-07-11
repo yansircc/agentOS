@@ -13,7 +13,7 @@ adapter, target ambient implementation, or disputed event-projection fold.
 
 ## Public API Status
 
-0.5.x active development. Public exports are listed for package ownership; they are not frozen.
+0.6.x active development. Public exports are listed for package ownership; they are not frozen.
 
 ## Audience
 

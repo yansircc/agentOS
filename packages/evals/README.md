@@ -10,7 +10,7 @@ driver facades, and deterministic assertions over generated app behavior.
 
 ## Public API Status
 
-0.5.x active development. The package is an authoring surface for eval definitions; execution, app serving, provider resolution, and artifact persistence remain owned by the CLI/runtime/client seams.
+0.6.x active development. The package is an authoring surface for eval definitions; execution, app serving, provider resolution, and artifact persistence remain owned by the CLI/runtime/client seams.
 
 ## Audience
 

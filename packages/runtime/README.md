@@ -10,7 +10,7 @@ algebra, durable trigger authoring, and ledger-derived projections.
 
 ## Public API Status
 
-0.5.x active development. Runtime root is backend-neutral; optional integrations are selected by explicit subpath and optional peer dependencies.
+0.6.x active development. Runtime root is backend-neutral; optional integrations are selected by explicit subpath and optional peer dependencies.
 
 ## Audience
 

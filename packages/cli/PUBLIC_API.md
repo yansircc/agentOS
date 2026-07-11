@@ -2,7 +2,7 @@
 
 # @agent-os/cli Public API
 
-Status: 0.5.x active development. CLI root exports are the supported developer API; command internals remain implementation details.
+Status: 0.6.x active development. CLI root exports are the supported developer API; command internals remain implementation details.
 
 ## Public exports
 

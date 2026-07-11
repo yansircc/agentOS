@@ -9,7 +9,7 @@ optional React/Svelte subpath bridges.
 
 ## Public API Status
 
-0.5.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; the package owns the transport-neutral root client state machine and optional React/Svelte subpaths.
+0.6.x active development. Public exports are listed in `PUBLIC_API.md` to prevent accidental exports; the package owns the transport-neutral root client state machine and optional React/Svelte subpaths.
 
 ## Audience
 

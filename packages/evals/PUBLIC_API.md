@@ -2,7 +2,7 @@
 
 # @agent-os/evals Public API
 
-Status: 0.5.x active development. Public exports are limited to eval authoring DSL, symbolic config, case/context types, and deterministic assertion declarations.
+Status: 0.6.x active development. Public exports are limited to eval authoring DSL, symbolic config, case/context types, and deterministic assertion declarations.
 
 ## Public exports
 

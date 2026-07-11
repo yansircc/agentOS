@@ -2,7 +2,7 @@
 
 # @agent-os/runtime Public API
 
-Status: 0.5.x active development. Public exports are listed for accidental export control; subpath integrations are not independent package boundaries.
+Status: 0.6.x active development. Public exports are listed for accidental export control; subpath integrations are not independent package boundaries.
 
 ## Public exports
 
