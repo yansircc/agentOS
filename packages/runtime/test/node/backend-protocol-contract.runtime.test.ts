@@ -11,6 +11,7 @@ import {
   backendProtocolTruthIdentityKey,
 } from "@agent-os/core/backend-protocol";
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../../src/node";
+import { safeIntegerFromDecimalText } from "../../src/node/backend-helpers";
 import { PsqlCli, quoteIdentifier, sqlJson, sqlString } from "../../src/node/host";
 import {
   registerBackendConformanceSuite,
@@ -100,6 +101,33 @@ registerBackendConformanceSuite(
 );
 
 describe("node-postgres event+due atomicity", () => {
+  it("decodes only canonical decimal safe integers", () => {
+    expect(safeIntegerFromDecimalText("0", "test id")).toBe(0);
+    expect(safeIntegerFromDecimalText(String(-(2 ** 31)), "test id")).toBe(-(2 ** 31));
+    expect(safeIntegerFromDecimalText(String(2 ** 31), "test id")).toBe(2 ** 31);
+    expect(safeIntegerFromDecimalText(String(Number.MIN_SAFE_INTEGER), "test id")).toBe(
+      Number.MIN_SAFE_INTEGER,
+    );
+    expect(safeIntegerFromDecimalText(String(Number.MAX_SAFE_INTEGER), "test id")).toBe(
+      Number.MAX_SAFE_INTEGER,
+    );
+
+    for (const value of [
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MIN_SAFE_INTEGER - 1,
+      0,
+      "-0",
+      "+1",
+      "01",
+      "1.0",
+      " 1",
+    ]) {
+      expect(() => safeIntegerFromDecimalText(value, "test id")).toThrowError(
+        expect.objectContaining({ _tag: "agent_os.sql_error" }),
+      );
+    }
+  });
+
   const withDueInsertFailure = async (
     testName: string,
     run: (backend: NodePostgresBackend) => Promise<void>,
@@ -465,9 +493,13 @@ describe("node-postgres event+due atomicity", () => {
           ${sqlJson(otherOwner.effectAuthorityRef)}, ${sqlJson({ value: 5 })}
         )
       `);
-      const [{ id: otherOwnerEventId }] = await sql.json<{ readonly id: number }>(`
-        SELECT MAX(id)::int AS id FROM agentos_events
+      const [{ id: otherOwnerEventIdText }] = await sql.json<{ readonly id: string }>(`
+        SELECT MAX(id)::text AS id FROM agentos_events
       `);
+      const otherOwnerEventId = safeIntegerFromDecimalText(
+        otherOwnerEventIdText,
+        "test other-owner event id",
+      );
       const baseline = await backend.events(identity);
       const otherOwnerBaseline = await backend.events(otherOwner);
       const receipt = await backend.archiveLedger({
@@ -490,6 +522,76 @@ describe("node-postgres event+due atomicity", () => {
       expect(later[0]!.id).toBeGreaterThan(otherOwnerEventId!);
       expect(first!.id).toBeLessThan(interleaved!.id);
       expect(interleaved!.id).toBeLessThan(committed[0]!.id);
+    });
+  });
+
+  it("preserves identifiers above int32 across archive eviction and restart", async () => {
+    const identity = contractIdentity("node-id-width");
+    await withBackend("id_width", async (backend, sql, restart) => {
+      const firstId = 2 ** 31;
+      await sql.exec(`SELECT setval('agentos_events_id_seq', ${firstId}, false)`);
+      const commitIdentity = {
+        scopeRef: identity.scopeRef,
+        effectAuthorityRef: identity.effectAuthorityRef,
+      };
+      const committed = await backend.commit([
+        { ...commitIdentity, kind: "id-width.a", payload: { value: 1 } },
+        { ...commitIdentity, kind: "id-width.b", payload: { value: 2 } },
+      ]);
+      expect(committed.map((event) => event.id)).toEqual([firstId, firstId + 1]);
+      expect(await backend.events(identity)).toEqual(committed);
+
+      const receipt = await backend.archiveLedger({
+        identity,
+        throughEventId: committed[1]!.id,
+      });
+      expect(receipt.firstEventId).toBe(firstId);
+      expect(receipt.lastEventId).toBe(firstId + 1);
+      expect(await backend.evictArchivedLedger(receipt)).toEqual({ evicted: 2 });
+      expect(await backend.events(identity)).toEqual(committed);
+
+      const restarted = await restart();
+      expect(await restarted.events(identity)).toEqual(committed);
+      const [later] = await restarted.commit([
+        { ...commitIdentity, kind: "id-width.c", payload: { value: 3 } },
+      ]);
+      expect(later!.id).toBe(firstId + 2);
+
+      await sql.exec(`SELECT setval('agentos_due_work_id_seq', ${firstId}, false)`);
+      const scheduled = await restarted.schedule(identity, 100, "id-width.due", { value: 4 });
+      expect(scheduled.id).toBe(firstId + 3);
+      expect(await restarted.pendingDueCount(identity)).toBe(1);
+      expect(await restarted.fireDue(identity, 100)).toEqual({ fired: 1 });
+      expect(await restarted.pendingDueCount(identity)).toBe(0);
+      expect((await restarted.events(identity)).map((event) => event.id)).toEqual([
+        firstId,
+        firstId + 1,
+        firstId + 2,
+        firstId + 3,
+        firstId + 4,
+      ]);
+    });
+  });
+
+  it("rejects identifiers above the JavaScript safe integer range", async () => {
+    const identity = contractIdentity("node-id-unsafe");
+    await withBackend("id_unsafe", async (backend, sql) => {
+      await sql.exec(`SELECT setval('agentos_events_id_seq', ${Number.MAX_SAFE_INTEGER}, true)`);
+      await expect(
+        backend.commit([
+          {
+            scopeRef: identity.scopeRef,
+            effectAuthorityRef: identity.effectAuthorityRef,
+            kind: "id-width.unsafe",
+            payload: { value: 1 },
+          },
+        ]),
+      ).rejects.toMatchObject({ _tag: "agent_os.sql_error" });
+      const [{ id }] = await sql.json<{ readonly id: string }>(`
+        SELECT MAX(id)::text AS id FROM agentos_events
+      `);
+      expect(id).toBe("9007199254740992");
+      expect(() => safeIntegerFromDecimalText(id, "test unsafe event id")).toThrow();
     });
   });
 

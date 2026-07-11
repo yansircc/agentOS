@@ -85,9 +85,35 @@ export const finiteNumberField = (value: Record<string, unknown>, key: string): 
   return field;
 };
 
+const MIN_SAFE_INTEGER = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
+const DECIMAL_INTEGER = /^(?:0|-?[1-9]\d*)$/u;
+
+export const safeIntegerFromDecimalText = (value: unknown, label: string): number => {
+  if (typeof value !== "string" || !DECIMAL_INTEGER.test(value)) {
+    throw new SqlError({ cause: `${label} must be canonical decimal integer text` });
+  }
+  const exact = BigInt(value);
+  if (exact < MIN_SAFE_INTEGER || exact > MAX_SAFE_INTEGER) {
+    throw new SqlError({ cause: `${label} exceeds the JavaScript safe integer range` });
+  }
+  return Number(exact);
+};
+
+export type DecimalLedgerEventRow = Omit<LedgerEvent, "id"> & { readonly id: string };
+
+export const ledgerEventFromDecimalRow = (row: DecimalLedgerEventRow): LedgerEvent => ({
+  ...row,
+  id: safeIntegerFromDecimalText(row.id, "ledger event id"),
+});
+
+export const ledgerEventsFromDecimalRows = (
+  rows: ReadonlyArray<DecimalLedgerEventRow>,
+): ReadonlyArray<LedgerEvent> => rows.map(ledgerEventFromDecimalRow);
+
 export const eventRowSelect = `
   SELECT
-    id::int AS "id",
+    id::text AS "id",
     ts AS "ts",
     kind AS "kind",
     scope_ref AS "scopeRef",

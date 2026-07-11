@@ -72,14 +72,18 @@ import {
   eventRowSelect,
   finiteNumberField,
   groupRuntimeEventsByIdentityKey,
+  ledgerEventFromDecimalRow,
+  ledgerEventsFromDecimalRows,
   ledgerWriteLockKey,
   positiveAmount,
   recordOf,
   resourceLockKey,
   resourceProjectionCtes,
   runtimeIdentity,
+  safeIntegerFromDecimalText,
   schemaName,
   sqlPayload,
+  type DecimalLedgerEventRow,
 } from "./backend-helpers";
 import { type NodePostgresDueWorkRow, withNodePostgresDueDrainLock } from "./due-work";
 import { fireNodePostgresEvents, type NodePostgresEventSink } from "./telemetry";
@@ -192,6 +196,46 @@ interface PostgresConstraintDefinitionRow {
   readonly name: string;
   readonly definition: string;
 }
+
+type DecimalResourceReserveTransactionRow = Omit<ResourceReserveTransactionRow, "event"> & {
+  readonly event: DecimalLedgerEventRow | null;
+};
+
+type DecimalResourceTerminalTransactionRow = Omit<ResourceTerminalTransactionRow, "event"> & {
+  readonly event: DecimalLedgerEventRow | null;
+};
+
+type DecimalNodePostgresDueWorkRow = Omit<
+  NodePostgresDueWorkRow,
+  "id" | "payload" | "dispatchIntent" | "dispatchSuccessCount" | "dispatchAttemptCount"
+> & {
+  readonly id: string;
+  readonly payload: { readonly intentEventId: string };
+  readonly dispatchIntent: DecimalLedgerEventRow | null;
+  readonly dispatchSuccessCount: string;
+  readonly dispatchAttemptCount: string;
+};
+
+const dueWorkFromDecimalRow = (row: DecimalNodePostgresDueWorkRow): NodePostgresDueWorkRow => ({
+  ...row,
+  id: safeIntegerFromDecimalText(row.id, "due-work id"),
+  payload: {
+    intentEventId: safeIntegerFromDecimalText(
+      row.payload.intentEventId,
+      "due-work intent event id",
+    ),
+  },
+  dispatchIntent:
+    row.dispatchIntent === null ? null : ledgerEventFromDecimalRow(row.dispatchIntent),
+  dispatchSuccessCount: safeIntegerFromDecimalText(
+    row.dispatchSuccessCount,
+    "dispatch success count",
+  ),
+  dispatchAttemptCount: safeIntegerFromDecimalText(
+    row.dispatchAttemptCount,
+    "dispatch attempt count",
+  ),
+});
 
 export interface NodePostgresBackendOptions {
   readonly databaseUrl: string;
@@ -541,7 +585,7 @@ export class NodePostgresBackend {
       ) {
         throw new SqlError({ cause: "hot event set mismatch" });
       }
-      const deleted = await this.#sql.jsonValue<{ readonly count: number }>(`
+      const deleted = await this.#sql.jsonValue<{ readonly count: string }>(`
         WITH deleted AS (
           DELETE FROM agentos_events
           WHERE truth_key = ${sqlString(receipt.truthKey)}
@@ -549,12 +593,13 @@ export class NodePostgresBackend {
             AND ${archiveSnapshotSql(receipt.truthKey, stored)}
           RETURNING id
         )
-        SELECT json_build_object('count', COUNT(*)::int)::text FROM deleted
+        SELECT json_build_object('count', COUNT(*)::text)::text FROM deleted
       `);
-      if (deleted.count !== candidates.length) {
+      const deletedCount = safeIntegerFromDecimalText(deleted.count, "archive eviction count");
+      if (deletedCount !== candidates.length) {
         throw new SqlError({ cause: "archive chain changed before eviction" });
       }
-      return { evicted: deleted.count };
+      return { evicted: deletedCount };
     });
   }
 
@@ -622,12 +667,13 @@ export class NodePostgresBackend {
   }
 
   async pendingDueCount(identity: BackendProtocolEventIdentity): Promise<number> {
-    return this.#sql.jsonValue<number>(`
-      SELECT to_json(COUNT(*)::int)::text
+    const count = await this.#sql.jsonValue<string>(`
+      SELECT to_json(COUNT(*)::text)::text
       FROM agentos_due_work
       WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
         AND completed_at IS NULL
     `);
+    return safeIntegerFromDecimalText(count, "pending due-work count");
   }
 
   async dispatchToScope(
@@ -701,7 +747,7 @@ export class NodePostgresBackend {
     const ts = this.#now();
     const truthKey = backendProtocolTruthIdentityKey(spec.identity);
     const identityKey = backendProtocolEventIdentityKey(spec.identity);
-    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+    const rows = await this.#ledgerEventArrayStatement(`
       WITH accepted AS (
         INSERT INTO agentos_events (
           id, ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref, effect_authority_ref, payload
@@ -725,7 +771,7 @@ export class NodePostgresBackend {
         WHERE kind = ${sqlString(DISPATCH_INBOUND_ACCEPTED)}
         DO NOTHING
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -749,7 +795,7 @@ export class NodePostgresBackend {
           ${sqlPayload(spec.deliveredPayload)}
         FROM accepted
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -758,10 +804,13 @@ export class NodePostgresBackend {
           payload AS "payload"
       ),
       agentos_json_rows AS (
-        SELECT * FROM accepted
-        UNION ALL
-        SELECT * FROM delivered
-        ORDER BY "id" ASC
+        SELECT *
+        FROM (
+          SELECT * FROM accepted
+          UNION ALL
+          SELECT * FROM delivered
+        ) AS combined
+        ORDER BY "id"::bigint ASC
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
       FROM agentos_json_rows
@@ -795,7 +844,7 @@ export class NodePostgresBackend {
     const reservationId = randomUUID();
     const identityKey = backendProtocolEventIdentityKey(identity);
     const now = this.#now();
-    const [row] = await this.#sql.jsonArrayStatement<ResourceReserveTransactionRow>(`
+    const [wireRow] = await this.#sql.jsonArrayStatement<DecimalResourceReserveTransactionRow>(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
 
@@ -890,7 +939,7 @@ export class NodePostgresBackend {
           event_input.payload
         FROM event_input
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -917,7 +966,14 @@ export class NodePostgresBackend {
       FROM agentos_json_rows;
       COMMIT
     `);
-    if (row.event !== null) await this.#fireMany([row.event]);
+    const row: ResourceReserveTransactionRow | undefined =
+      wireRow === undefined
+        ? undefined
+        : {
+            ...wireRow,
+            event: wireRow.event === null ? null : ledgerEventFromDecimalRow(wireRow.event),
+          };
+    if (row?.event !== null && row?.event !== undefined) await this.#fireMany([row.event]);
     return nodePostgresResourceReserveResult(row, spec);
   }
 
@@ -1187,7 +1243,7 @@ export class NodePostgresBackend {
     readonly payload: unknown;
   }): Promise<LedgerEvent> {
     const identityKey = backendProtocolEventIdentityKey(spec.identity);
-    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+    const rows = await this.#ledgerEventArrayStatement(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
 
@@ -1213,7 +1269,7 @@ export class NodePostgresBackend {
           ${sqlPayload(spec.payload)}
         )
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -1222,7 +1278,7 @@ export class NodePostgresBackend {
           payload AS "payload"
       ),
       agentos_json_rows AS (
-        SELECT * FROM inserted ORDER BY id ASC
+        SELECT * FROM inserted ORDER BY id::bigint ASC
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
       FROM agentos_json_rows;
@@ -1241,7 +1297,7 @@ export class NodePostgresBackend {
   ): Promise<void> {
     const identityKey = backendProtocolEventIdentityKey(identity);
     const now = this.#now();
-    const [row] = await this.#sql.jsonArrayStatement<ResourceTerminalTransactionRow>(`
+    const [wireRow] = await this.#sql.jsonArrayStatement<DecimalResourceTerminalTransactionRow>(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(resourceLockKey(identityKey))}, 0));
 
@@ -1302,7 +1358,7 @@ export class NodePostgresBackend {
           event_input.payload
         FROM event_input
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -1324,7 +1380,14 @@ export class NodePostgresBackend {
       FROM agentos_json_rows;
       COMMIT
     `);
-    if (row.event !== null) await this.#fireMany([row.event]);
+    const row: ResourceTerminalTransactionRow | undefined =
+      wireRow === undefined
+        ? undefined
+        : {
+            ...wireRow,
+            event: wireRow.event === null ? null : ledgerEventFromDecimalRow(wireRow.event),
+          };
+    if (row?.event !== null && row?.event !== undefined) await this.#fireMany([row.event]);
     assertNodePostgresResourceTerminalResult(row, spec, terminalKind);
   }
 
@@ -1348,7 +1411,7 @@ export class NodePostgresBackend {
     fireAt: number,
   ): Promise<LedgerEvent> {
     const identityKey = backendProtocolEventIdentityKey(spec.identity);
-    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+    const rows = await this.#ledgerEventArrayStatement(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(identityKey))}, 0));
 
@@ -1367,7 +1430,7 @@ export class NodePostgresBackend {
           ${sqlPayload(spec.payload)}
         )
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -1384,7 +1447,7 @@ export class NodePostgresBackend {
           ${sqlJson(spec.identity)},
           ${sqlNumber(fireAt)},
           ${sqlString(dueKind)},
-          jsonb_build_object('intentEventId', inserted_event.id)
+          jsonb_build_object('intentEventId', inserted_event.id::text)
         FROM inserted_event
         RETURNING id
       ),
@@ -1419,7 +1482,7 @@ export class NodePostgresBackend {
       readonly fireAt: number;
     },
   ): Promise<ReadonlyArray<LedgerEvent>> {
-    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+    const rows = await this.#ledgerEventArrayStatement(`
       BEGIN;
       SELECT pg_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(row.identityKey))}, 0));
 
@@ -1472,7 +1535,7 @@ export class NodePostgresBackend {
         FROM input
         JOIN completed_due ON true
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -1482,11 +1545,15 @@ export class NodePostgresBackend {
       ),
       due_input AS (
         SELECT *
-        FROM jsonb_to_recordset(${sqlPayload(nextDue === undefined ? [] : [nextDue])})
+        FROM jsonb_to_recordset(${sqlPayload(
+          nextDue === undefined
+            ? []
+            : [{ ...nextDue, intentEventId: String(nextDue.intentEventId) }],
+        )})
         AS x(
           "fireAt" double precision,
           "kind" text,
-          "intentEventId" bigint
+          "intentEventId" text
         )
       ),
       inserted_due_work AS (
@@ -1504,7 +1571,7 @@ export class NodePostgresBackend {
         RETURNING id
       ),
       agentos_json_rows AS (
-        SELECT * FROM inserted_events ORDER BY id ASC
+        SELECT * FROM inserted_events ORDER BY id::bigint ASC
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
       FROM agentos_json_rows;
@@ -1524,7 +1591,7 @@ export class NodePostgresBackend {
     const identityKey = backendProtocolEventIdentityKey(identity);
     const token = randomUUID();
     const deadlineAt = now + 60_000;
-    const rows = await this.#sql.jsonArrayStatement<NodePostgresDueWorkRow>(`
+    const rows = await this.#sql.jsonArrayStatement<DecimalNodePostgresDueWorkRow>(`
       WITH lock AS (
         SELECT pg_try_advisory_xact_lock(hashtextextended(${sqlString(ledgerWriteLockKey(identityKey))}, 0)) AS acquired
       ),
@@ -1553,7 +1620,7 @@ export class NodePostgresBackend {
         FROM candidate
         WHERE work.id = candidate.id
         RETURNING
-          work.id::int AS "id",
+          work.id::text AS "id",
           work.identity AS "identity",
           work.identity_key AS "identityKey",
           work.fire_at AS "fireAt",
@@ -1594,17 +1661,18 @@ export class NodePostgresBackend {
             THEN (SELECT row_to_json(intent) FROM intent)
             ELSE NULL
           END AS "dispatchIntent",
-          (SELECT COUNT(*)::int FROM related WHERE kind = ANY(ARRAY[
+          (SELECT COUNT(*)::text FROM related WHERE kind = ANY(ARRAY[
             ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED)},
             ${sqlString(DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)}
           ]::text[])) AS "dispatchSuccessCount",
-          (SELECT COUNT(*)::int FROM related) AS "dispatchAttemptCount"
+          (SELECT COUNT(*)::text FROM related) AS "dispatchAttemptCount"
         FROM claimed
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
       FROM agentos_json_rows
     `);
-    return rows[0] ?? null;
+    const row = rows[0];
+    return row === undefined ? null : dueWorkFromDecimalRow(row);
   }
 
   async #drainDueLocked(
@@ -1634,7 +1702,7 @@ export class NodePostgresBackend {
     identity: BackendProtocolEventIdentity,
     id: number,
   ): Promise<ReadonlyArray<LedgerEvent>> {
-    return this.#sql.json<LedgerEvent>(`
+    return this.#ledgerEvents(`
       ${eventRowSelect}
       WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
         AND id = ${sqlNumber(id)}
@@ -1666,7 +1734,7 @@ export class NodePostgresBackend {
   }
 
   async #hotEvents(identity: BackendProtocolEventIdentity): Promise<ReadonlyArray<LedgerEvent>> {
-    return this.#sql.json<LedgerEvent>(`
+    return this.#ledgerEvents(`
       ${eventRowSelect}
       WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
       ORDER BY id ASC
@@ -1676,7 +1744,7 @@ export class NodePostgresBackend {
   async #hotTruthEvents(
     identity: BackendProtocolTruthIdentity,
   ): Promise<ReadonlyArray<LedgerEvent>> {
-    return this.#sql.json<LedgerEvent>(`
+    return this.#ledgerEvents(`
       ${eventRowSelect}
       WHERE truth_key = ${sqlString(backendProtocolTruthIdentityKey(identity))}
       ORDER BY id ASC
@@ -1698,26 +1766,28 @@ export class NodePostgresBackend {
       readonly segmentSha256: string;
       readonly truthKey: string;
       readonly previousSegmentSha256: string | null;
-      readonly firstEventId: number;
-      readonly lastEventId: number;
+      readonly firstEventId: string;
+      readonly lastEventId: string;
       readonly archiveRef: string;
     }>(`
       SELECT receipt AS "receipt", bytes AS "bytes",
              segment_sha256 AS "segmentSha256", truth_key AS "truthKey",
              previous_segment_sha256 AS "previousSegmentSha256",
-             first_event_id::int AS "firstEventId", last_event_id::int AS "lastEventId",
+             first_event_id::text AS "firstEventId", last_event_id::text AS "lastEventId",
              archive_ref AS "archiveRef"
       FROM agentos_event_archive_segments
       WHERE truth_key = ${sqlString(truthKey)}
       ORDER BY first_event_id ASC
     `);
     return rows.map((row) => {
+      const firstEventId = safeIntegerFromDecimalText(row.firstEventId, "archive first event id");
+      const lastEventId = safeIntegerFromDecimalText(row.lastEventId, "archive last event id");
       if (
         row.segmentSha256 !== row.receipt.segmentSha256 ||
         row.truthKey !== row.receipt.truthKey ||
         row.previousSegmentSha256 !== row.receipt.previousSegmentSha256 ||
-        row.firstEventId !== row.receipt.firstEventId ||
-        row.lastEventId !== row.receipt.lastEventId ||
+        firstEventId !== row.receipt.firstEventId ||
+        lastEventId !== row.receipt.lastEventId ||
         row.archiveRef !== row.receipt.archiveRef
       ) {
         throw new SqlError({ cause: "archive row mismatch" });
@@ -1748,7 +1818,7 @@ export class NodePostgresBackend {
   }
 
   async #eventsForIdentityKey(identityKey: string): Promise<ReadonlyArray<LedgerEvent>> {
-    return this.#sql.json<LedgerEvent>(`
+    return this.#ledgerEvents(`
       ${eventRowSelect}
       WHERE identity_key = ${sqlString(identityKey)}
       ORDER BY id ASC
@@ -1756,11 +1826,12 @@ export class NodePostgresBackend {
   }
 
   async #maxEventId(): Promise<number> {
-    const rows = await this.#sql.json<{ readonly id: number }>(`
-      SELECT COALESCE(MAX(id), 0)::int AS "id"
+    const rows = await this.#sql.json<{ readonly id: string }>(`
+      SELECT COALESCE(MAX(id), 0)::text AS "id"
       FROM agentos_events
     `);
-    return rows[0]?.id ?? 0;
+    const row = rows[0];
+    return row === undefined ? 0 : safeIntegerFromDecimalText(row.id, "maximum event id");
   }
 
   async #assertRuntimeAppendTransitions(
@@ -1805,7 +1876,7 @@ export class NodePostgresBackend {
     }>,
   ): Promise<ReadonlyArray<LedgerEvent>> {
     await this.#assertRuntimeAppendTransitions(specs);
-    const rows = await this.#sql.jsonArrayStatement<LedgerEvent>(`
+    const rows = await this.#ledgerEventArrayStatement(`
       WITH input AS (
         SELECT *
         FROM jsonb_to_recordset(${sqlPayload(
@@ -1838,7 +1909,7 @@ export class NodePostgresBackend {
         SELECT "ts", "kind", "truthKey", "identityKey", "scopeRef", "factOwnerRef", "effectAuthorityRef", "payload"
         FROM input
         RETURNING
-          id::int AS "id",
+          id::text AS "id",
           ts AS "ts",
           kind AS "kind",
           scope_ref AS "scopeRef",
@@ -1847,7 +1918,7 @@ export class NodePostgresBackend {
           payload AS "payload"
       )
       , agentos_json_rows AS (
-        SELECT * FROM inserted ORDER BY id ASC
+        SELECT * FROM inserted ORDER BY id::bigint ASC
       )
       SELECT COALESCE(json_agg(row_to_json(agentos_json_rows)), '[]'::json)::text
       FROM agentos_json_rows
@@ -1857,15 +1928,29 @@ export class NodePostgresBackend {
   }
 
   async #nextEventId(offset: number): Promise<number> {
-    const rows = await this.#sql.json<{ readonly id: number }>(`
-      SELECT nextval('agentos_events_id_seq')::int AS id
-      FROM generate_series(1, ${sqlNumber(offset + 1)})
+    const rows = await this.#sql.json<{ readonly id: string }>(`
+      WITH generated AS (
+        SELECT nextval('agentos_events_id_seq') AS id
+        FROM generate_series(1, ${sqlNumber(offset + 1)})
+      )
+      SELECT id::text AS id
+      FROM generated
       ORDER BY id DESC
       LIMIT 1
     `);
     const row = rows[0];
     if (row === undefined) throw new SqlError({ cause: "next event id unavailable" });
-    return row.id;
+    return safeIntegerFromDecimalText(row.id, "next event id");
+  }
+
+  async #ledgerEvents(selectSql: string): Promise<ReadonlyArray<LedgerEvent>> {
+    const rows = await this.#sql.json<DecimalLedgerEventRow>(selectSql);
+    return ledgerEventsFromDecimalRows(rows);
+  }
+
+  async #ledgerEventArrayStatement(statementSql: string): Promise<ReadonlyArray<LedgerEvent>> {
+    const rows = await this.#sql.jsonArrayStatement<DecimalLedgerEventRow>(statementSql);
+    return ledgerEventsFromDecimalRows(rows);
   }
 
   async #fireMany(events: ReadonlyArray<LedgerEvent>): Promise<void> {
