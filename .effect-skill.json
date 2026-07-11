@@ -57,12 +57,6 @@
       "rules": ["EFF025"]
     },
     {
-      "path": "packages/core/src/backend-protocol/archive.ts",
-      "owner": "@agent-os/core/ledger-archive-codec",
-      "reason": "backend-neutral archive protocol codec owns synchronous fail-closed canonical JSON validation and the Web Crypto Promise boundary used to derive content-addressed artifacts and exact readback receipts",
-      "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
-    },
-    {
       "path": "packages/runtime/src/attached-stream-protocol.ts",
       "owner": "@agent-os/runtime/attached-stream-protocol",
       "reason": "attached-stream JSON and SSE codecs own malformed frame decode classification without depending on Effect",
@@ -82,13 +76,13 @@
     },
     {
       "path": "packages/runtime/src/cloudflare/agent-do.ts",
-      "owner": "@agent-os/runtime/cloudflare",
-      "reason": "terminal Cloudflare Durable Object facade owns streamEvents missing-scope Response construction",
-      "rules": ["EFF402"]
+      "owner": "@agent-os/runtime/cloudflare/cf-do",
+      "reason": "Configured Cloudflare Durable Object facade is the terminal HTTP facade for streamEvents; missing named scope is a runtime invariant violation with no Effect return channel",
+      "rules": ["EFF025", "EFF402"]
     },
     {
       "path": "packages/runtime/src/cloudflare/agent-do-helpers.ts",
-      "owner": "@agent-os/runtime/cloudflare",
+      "owner": "@agent-os/runtime/cloudflare/cf-do",
       "reason": "Cloudflare Durable Object helper owns extracted streamEvents error Response construction while the DO class remains the terminal facade",
       "rules": ["EFF402"]
     },
@@ -99,9 +93,21 @@
       "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
     },
     {
+      "path": "packages/runtime/src/cloudflare/dispatch/payload.ts",
+      "owner": "@agent-os/runtime/cloudflare/dispatch",
+      "reason": "dispatch outbox payload parsing is sync ledger-wire validation caught at the Effect boundary and mapped to SqlError",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "packages/runtime/src/cloudflare/dispatch/receiver.ts",
+      "owner": "@agent-os/runtime/cloudflare/dispatch",
+      "reason": "dispatch inbound projection parsing runs inside synchronous transactionSync and must fail the transaction on malformed ledger wire data",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "packages/runtime/src/cloudflare/ledger/stream.ts",
-      "owner": "@agent-os/runtime/cloudflare",
-      "reason": "terminal ledger SSE adapter owns Response construction",
+      "owner": "@agent-os/runtime/cloudflare/http-stream",
+      "reason": "terminal SSE adapter constructs the Response boundary for ledger streamEvents",
       "rules": ["EFF402"]
     },
     {
@@ -268,14 +274,14 @@
     },
     {
       "path": "packages/runtime/test/cloudflare/_in-memory-do.ts",
-      "owner": "@agent-os/runtime/cloudflare-tests",
-      "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
+      "owner": "@agent-os/runtime/cloudflare/test-runtime",
+      "reason": "test-only DO SQLite subset intentionally models transactionSync rollback and fail-fast unsupported SQL using synchronous exceptions",
       "rules": ["EFF001", "EFF025"]
     },
     {
       "path": "packages/runtime/test/cloudflare/admission/attempt-structured.runtime.test.ts",
-      "owner": "@agent-os/runtime/cloudflare-tests",
-      "reason": "test HTTP fixture owns provider Response construction",
+      "owner": "@agent-os/runtime/cloudflare/test-provider",
+      "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
       "rules": ["EFF402"]
     },
     {
@@ -292,8 +298,8 @@
     },
     {
       "path": "packages/runtime/test/cloudflare/test-worker.ts",
-      "owner": "@agent-os/runtime/cloudflare-tests",
-      "reason": "Cloudflare worker test adapter owns Response construction and terminal execution of Effect archive services through Durable Object RPC fixtures",
+      "owner": "@agent-os/runtime/cloudflare/test-worker",
+      "reason": "Cloudflare test Worker entry is the terminal HTTP and Effect execution adapter for worker-pool contract tests",
       "rules": ["EFF400", "EFF402"]
     },
     {
@@ -310,7 +316,7 @@
     },
     {
       "path": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-      "owner": "@agent-os/runtime/cloudflare-tests",
+      "owner": "@agent-os/runtime/cloudflare/test-host-helpers",
       "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
       "rules": ["EFF402"]
     },
@@ -343,6 +349,12 @@
       "owner": "@agent-os/runtime/workspace-job-tests",
       "reason": "workspace-job idempotency tests own async fixture callbacks for replayed artifact provider surfaces",
       "rules": ["EFF003"]
+    },
+    {
+      "path": "packages/core/src/backend-protocol/archive.ts",
+      "owner": "@agent-os/core/ledger-archive-codec",
+      "reason": "backend-neutral archive protocol codec owns synchronous fail-closed canonical JSON validation and the Web Crypto Promise boundary used to derive content-addressed artifacts and exact readback receipts",
+      "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
     }
   ]
 }

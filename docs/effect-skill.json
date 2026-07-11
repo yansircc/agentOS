@@ -43,294 +43,6 @@
         "owner": "@agent-os/evals/authoring-dsl",
         "reason": "pure synchronous eval authoring DSL owns fail-fast validation for malformed authored eval definitions before the CLI public driver executes; no Effect runtime boundary exists here",
         "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/core/src/backend-protocol/archive.ts",
-        "owner": "@agent-os/core/ledger-archive-codec",
-        "reason": "backend-neutral archive protocol codec owns synchronous fail-closed canonical JSON validation and the Web Crypto Promise boundary used to derive content-addressed artifacts and exact readback receipts",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/attached-stream-protocol.ts",
-        "owner": "@agent-os/runtime/attached-stream-protocol",
-        "reason": "attached-stream JSON and SSE codecs own malformed frame decode classification without depending on Effect",
-        "rules": ["EFF001"]
-      },
-      {
-        "path": "packages/runtime/src/ledger-archive.ts",
-        "owner": "@agent-os/runtime/ledger-archive-codec",
-        "reason": "backend-neutral archive storage codec owns Promise-based checksum verification and fail-closed mapping of malformed persisted segment chains before any logical ledger read",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/channel/index.ts",
-        "owner": "@agent-os/runtime/channel",
-        "reason": "pure authored channel contract owns synchronous fail-fast validation for malformed authored channel definitions before generated targets mount provider ingress; no Effect runtime boundary exists here",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/agent-do.ts",
-        "owner": "@agent-os/runtime/cloudflare",
-        "reason": "terminal Cloudflare Durable Object facade owns streamEvents missing-scope Response construction",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/agent-do-helpers.ts",
-        "owner": "@agent-os/runtime/cloudflare",
-        "reason": "Cloudflare Durable Object helper owns extracted streamEvents error Response construction while the DO class remains the terminal facade",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/attached-stream-wire.ts",
-        "owner": "@agent-os/runtime/cloudflare/attached-stream-wire",
-        "reason": "terminal attached-stream transport adapter owns WebSocket/SSE Response construction and platform callback loops",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ledger/stream.ts",
-        "owner": "@agent-os/runtime/cloudflare",
-        "reason": "terminal ledger SSE adapter owns Response construction",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ledger/archive.ts",
-        "owner": "@agent-os/runtime/cloudflare-ledger-archive",
-        "reason": "terminal Durable Object SQLite archive adapter owns Promise checksum operations, synchronous transaction rollback, persisted receipt decoding, and fail-closed storage errors",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/materialized-projections.ts",
-        "owner": "@agent-os/runtime/cloudflare/materialized-projections",
-        "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ops-api/encoding.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api",
-        "reason": "terminal Cloudflare runtime ops query parser owns malformed URL/base64/JSON decode classification",
-        "rules": ["EFF001"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ops-api/errors.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api",
-        "reason": "terminal Cloudflare runtime ops API error adapter owns Response construction",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/ops-api/mount.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api",
-        "reason": "terminal Cloudflare runtime ops API HTTP mount owns startup option assertions and request handler async boundary",
-        "rules": ["EFF003", "EFF024", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/storage/sql-row.ts",
-        "owner": "@agent-os/runtime/cloudflare-storage",
-        "reason": "SQLite row adapter owns fail-fast host column shape assertion",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/trigger-pump.ts",
-        "owner": "@agent-os/runtime/cloudflare/durable-trigger",
-        "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/workspace-env-adapter.ts",
-        "owner": "@agent-os/runtime/cloudflare/workspace-env-adapter",
-        "reason": "terminal Cloudflare Sandbox WorkspaceEnv adapter owns Promise provider calls, pre/post AbortSignal checks, provider duration normalization, and symbolic material rejection at the adapter boundary",
-        "rules": ["EFF003", "EFF004", "EFF024", "EFF025", "EFF026"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/workspace-job-facade.ts",
-        "owner": "@agent-os/runtime/cloudflare/workspace-job-facade",
-        "reason": "terminal Cloudflare workspace-job HTTP facade owns projection response construction while result truth stays in workspace_job.result",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/cloudflare/workspace-job-profile.ts",
-        "owner": "@agent-os/runtime/cloudflare/workspace-job-profile",
-        "reason": "Cloudflare workspace-job profile owns fail-fast rejection of submit-binding materialization because workspace leases require a concrete workspace-op operation event",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/in-memory/state.ts",
-        "owner": "@agent-os/runtime/in-memory-state",
-        "reason": "in-memory backend state owns synchronous post-commit sink isolation plus Promise serialization and fail-closed archive codec calls; sink failures are diagnostics while archive failures prevent eviction",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/in-memory/due-work-state.ts",
-        "owner": "@agent-os/runtime/in-memory-state",
-        "reason": "in-memory due-work state helper owns fail-fast synchronous lifecycle projection errors on malformed in-memory rows",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/in-memory/telemetry-state.ts",
-        "owner": "@agent-os/runtime/in-memory-state",
-        "reason": "in-memory telemetry helper owns synchronous post-commit sink isolation; sink failures are diagnostics and must not roll back committed facts",
-        "rules": ["EFF001"]
-      },
-      {
-        "path": "packages/runtime/src/local/index.ts",
-        "owner": "@agent-os/runtime/local",
-        "reason": "terminal local Node workspace runtime adapter owns Node filesystem and child_process workspace IO, symbolic material/env rejection, command timeout/error mapping, and the executable submit facade over lowerLocalAgentRuntime",
-        "rules": ["EFF020", "EFF025", "EFF400"]
-      },
-      {
-        "path": "packages/runtime/src/testing/conformance-assert.ts",
-        "owner": "@agent-os/runtime/backend-conformance-harness",
-        "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF024", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/testing/backend-conformance.ts",
-        "owner": "@agent-os/runtime/backend-conformance-runner",
-        "reason": "public executable conformance runner is the terminal Promise boundary that runs the same Effect law bodies used by framework registrars and returns a protocol report",
-        "rules": ["EFF400"]
-      },
-      {
-        "path": "packages/runtime/src/node/index.ts",
-        "owner": "@agent-os/runtime/node/postgres-backend",
-        "reason": "terminal Node/Postgres backend adapter owns Promise SQL execution, dispatch delivery callbacks, and post-commit fanout diagnostics",
-        "rules": ["EFF001", "EFF004", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/node/dispatch.ts",
-        "owner": "@agent-os/runtime/node/postgres-backend",
-        "reason": "Node/Postgres dispatch helper owns fail-fast validation for the terminal dispatch adapter before ledger writes",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/node/due-work.ts",
-        "owner": "@agent-os/runtime/node/postgres-backend",
-        "reason": "Node/Postgres due-work helper owns Promise lock sequencing for the terminal backend adapter",
-        "rules": ["EFF001", "EFF003", "EFF004"]
-      },
-      {
-        "path": "packages/runtime/src/node/quota.ts",
-        "owner": "@agent-os/runtime/node/postgres-backend",
-        "reason": "Node/Postgres quota helper owns fail-fast projection error mapping at the terminal backend adapter boundary",
-        "rules": ["EFF001", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/node/resource.ts",
-        "owner": "@agent-os/runtime/node/postgres-backend",
-        "reason": "Node/Postgres resource helper owns fail-fast SQL transaction result mapping at the terminal backend adapter boundary",
-        "rules": ["EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/node/telemetry.ts",
-        "owner": "@agent-os/runtime/node/postgres-backend",
-        "reason": "Node/Postgres telemetry helper owns Promise event-handler fanout and post-commit sink diagnostics",
-        "rules": ["EFF001", "EFF003", "EFF004"]
-      },
-      {
-        "path": "packages/runtime/src/node/host.ts",
-        "owner": "@agent-os/runtime/node/psql-host-adapter",
-        "reason": "terminal Node/Postgres psql CLI host adapter owns Promise callback bridging, child_process execution, psql timeout, system clock, and fail-fast process/JSON parse failure mapping",
-        "rules": ["EFF001", "EFF002", "EFF004", "EFF022", "EFF024", "EFF025", "EFF026"]
-      },
-      {
-        "path": "packages/runtime/src/sse-http.ts",
-        "owner": "@agent-os/runtime/sse-http",
-        "reason": "terminal SSE-over-HTTP transport adapter owns Web Fetch Response construction and async iterator pumping from attached-stream codecs",
-        "rules": ["EFF001", "EFF002", "EFF003", "EFF004", "EFF402"]
-      },
-      {
-        "path": "packages/runtime/src/workspace-env-core.ts",
-        "owner": "@agent-os/runtime/workspace-env-core",
-        "reason": "WorkspaceEnv core owns fail-fast AbortSignal and workspace path validation before provider side effects",
-        "rules": ["EFF024", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/workspace-env-core/path-policy.ts",
-        "owner": "@agent-os/runtime/workspace-env-core",
-        "reason": "WorkspaceEnv core path policy owns fail-fast AbortSignal, regex parsing, path validation, and provider traversal Promise calls before workspace side effects",
-        "rules": ["EFF001", "EFF003", "EFF004", "EFF024", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/src/workspace-env-core/file-ops.ts",
-        "owner": "@agent-os/runtime/workspace-env-core",
-        "reason": "WorkspaceEnv core file operations own Promise provider calls for read, write, glob, grep, and diff tool boundaries",
-        "rules": ["EFF003", "EFF004"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/_in-memory-do.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "test-only Durable Object SQL adapter models transactionSync rollback by synchronous throws",
-        "rules": ["EFF001", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/admission/attempt-structured.runtime.test.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "test HTTP fixture owns provider Response construction",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/do-rpc.test.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "Durable Object RPC typed-client contract test owns Response construction to prove sync Response-returning stub methods are exposed as Promise<Response>",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/ops-api-contract.test.ts",
-        "owner": "@agent-os/runtime/cloudflare/ops-api-tests",
-        "reason": "Cloudflare runtime ops API HTTP contract tests own Request/Response construction",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/test-worker.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "Cloudflare worker test adapter owns Response construction and terminal execution of Effect archive services through Durable Object RPC fixtures",
-        "rules": ["EFF400", "EFF402"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "in-memory Durable Object conformance suite uses the repository registrar because Cloudflare worker pool execution cannot be owned by @effect/vitest",
-        "rules": ["EFF200"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/backend-protocol-contract.runtime.test.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "production Durable Object conformance suite uses the Cloudflare worker-pool registrar and owns terminal Effect law execution because @effect/vitest cannot host this worker runtime",
-        "rules": ["EFF200", "EFF400"]
-      },
-      {
-        "path": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-        "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "Cloudflare workspace host helper tests own Response construction to prove consumer wire-shape callbacks stay outside workspace_job projection truth",
-        "rules": ["EFF402"]
-      },
-      {
-        "path": "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts",
-        "owner": "@agent-os/runtime/submit-agent-tests",
-        "reason": "submit-agent interrupt/resume tests own throwing tool fixtures to prove consumer failure handling without changing production error channels",
-        "rules": ["EFF024", "EFF025"]
-      },
-      {
-        "path": "packages/runtime/test/_workspace-job-harness.ts",
-        "owner": "@agent-os/runtime/workspace-job-tests",
-        "reason": "workspace-job harness owns async data-plane fixture callbacks that model host provider promises",
-        "rules": ["EFF003"]
-      },
-      {
-        "path": "packages/runtime/test/_workspace-job-data-plane-cases.ts",
-        "owner": "@agent-os/runtime/workspace-job-tests",
-        "reason": "workspace-job data-plane tests own async fixture callbacks for terminal artifact build, write, readback, and verifier providers",
-        "rules": ["EFF003"]
-      },
-      {
-        "path": "packages/runtime/test/_workspace-job-failure-reconcile-cases.ts",
-        "owner": "@agent-os/runtime/workspace-job-tests",
-        "reason": "workspace-job failure/reconcile tests own async fixture callbacks for failing provider and verifier surfaces",
-        "rules": ["EFF003"]
-      },
-      {
-        "path": "packages/runtime/test/_workspace-job-idempotency-cases.ts",
-        "owner": "@agent-os/runtime/workspace-job-tests",
-        "reason": "workspace-job idempotency tests own async fixture callbacks for replayed artifact provider surfaces",
-        "rules": ["EFF003"]
       }
     ]
   },
@@ -402,6 +114,30 @@
           "path": "src/cloudflare/materialized-projections.ts",
           "owner": "@agent-os/runtime/cloudflare/materialized-projections",
           "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
+          "rules": ["EFF025"]
+        },
+        {
+          "path": "src/cloudflare/ops-api/encoding.ts",
+          "owner": "@agent-os/runtime/cloudflare/ops-api",
+          "reason": "terminal Cloudflare runtime ops query parser owns malformed URL/base64/JSON decode classification",
+          "rules": ["EFF001"]
+        },
+        {
+          "path": "src/cloudflare/ops-api/errors.ts",
+          "owner": "@agent-os/runtime/cloudflare/ops-api",
+          "reason": "terminal Cloudflare runtime ops API error adapter owns Response construction",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "src/cloudflare/ops-api/mount.ts",
+          "owner": "@agent-os/runtime/cloudflare/ops-api",
+          "reason": "terminal Cloudflare runtime ops API HTTP mount owns startup option assertions and request handler async boundary",
+          "rules": ["EFF003", "EFF024", "EFF025"]
+        },
+        {
+          "path": "src/cloudflare/storage/sql-row.ts",
+          "owner": "@agent-os/runtime/cloudflare-storage",
+          "reason": "SQLite row adapter owns fail-fast host column shape assertion",
           "rules": ["EFF025"]
         },
         {
@@ -540,6 +276,18 @@
           "path": "test/cloudflare/admission/attempt-structured.runtime.test.ts",
           "owner": "@agent-os/runtime/cloudflare/test-provider",
           "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "test/cloudflare/do-rpc.test.ts",
+          "owner": "@agent-os/runtime/cloudflare-tests",
+          "reason": "Durable Object RPC typed-client contract test owns Response construction to prove sync Response-returning stub methods are exposed as Promise<Response>",
+          "rules": ["EFF402"]
+        },
+        {
+          "path": "test/cloudflare/ops-api-contract.test.ts",
+          "owner": "@agent-os/runtime/cloudflare/ops-api-tests",
+          "reason": "Cloudflare runtime ops API HTTP contract tests own Request/Response construction",
           "rules": ["EFF402"]
         },
         {

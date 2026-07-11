@@ -68,6 +68,30 @@
       "rules": ["EFF025"]
     },
     {
+      "path": "src/cloudflare/ops-api/encoding.ts",
+      "owner": "@agent-os/runtime/cloudflare/ops-api",
+      "reason": "terminal Cloudflare runtime ops query parser owns malformed URL/base64/JSON decode classification",
+      "rules": ["EFF001"]
+    },
+    {
+      "path": "src/cloudflare/ops-api/errors.ts",
+      "owner": "@agent-os/runtime/cloudflare/ops-api",
+      "reason": "terminal Cloudflare runtime ops API error adapter owns Response construction",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "src/cloudflare/ops-api/mount.ts",
+      "owner": "@agent-os/runtime/cloudflare/ops-api",
+      "reason": "terminal Cloudflare runtime ops API HTTP mount owns startup option assertions and request handler async boundary",
+      "rules": ["EFF003", "EFF024", "EFF025"]
+    },
+    {
+      "path": "src/cloudflare/storage/sql-row.ts",
+      "owner": "@agent-os/runtime/cloudflare-storage",
+      "reason": "SQLite row adapter owns fail-fast host column shape assertion",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "src/cloudflare/trigger-pump.ts",
       "owner": "@agent-os/runtime/cloudflare/durable-trigger",
       "reason": "trigger pump owns transactionSync rollback when a commit attempts to enqueue an unregistered trigger kind",
@@ -203,6 +227,18 @@
       "path": "test/cloudflare/admission/attempt-structured.runtime.test.ts",
       "owner": "@agent-os/runtime/cloudflare/test-provider",
       "reason": "test provider stub constructs terminal HTTP Response objects to model upstream transport",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "test/cloudflare/do-rpc.test.ts",
+      "owner": "@agent-os/runtime/cloudflare-tests",
+      "reason": "Durable Object RPC typed-client contract test owns Response construction to prove sync Response-returning stub methods are exposed as Promise<Response>",
+      "rules": ["EFF402"]
+    },
+    {
+      "path": "test/cloudflare/ops-api-contract.test.ts",
+      "owner": "@agent-os/runtime/cloudflare/ops-api-tests",
+      "reason": "Cloudflare runtime ops API HTTP contract tests own Request/Response construction",
       "rules": ["EFF402"]
     },
     {
