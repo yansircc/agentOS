@@ -81,6 +81,7 @@ import {
   resourceProjectionCtes,
   runtimeIdentity,
   safeIntegerFromDecimalText,
+  safeIntegerSum,
   schemaName,
   sqlPayload,
   type DecimalLedgerEventRow,
@@ -144,7 +145,21 @@ const archiveSnapshotSql = (
   `;
 };
 
+const POSTGRES_SAFE_IDENTIFIER_MAX = String(Number.MAX_SAFE_INTEGER);
+const POSTGRES_SAFE_IDENTIFIER_DEFINITION = `CHECK ((id <= '${POSTGRES_SAFE_IDENTIFIER_MAX}'::bigint))`;
+
+const POSTGRES_EVENT_CONSTRAINTS = [
+  {
+    name: "agentos_events_id_safe",
+    definition: POSTGRES_SAFE_IDENTIFIER_DEFINITION,
+  },
+] as const;
+
 const POSTGRES_DUE_WORK_CONSTRAINTS = [
+  {
+    name: "agentos_due_work_id_safe",
+    definition: POSTGRES_SAFE_IDENTIFIER_DEFINITION,
+  },
   {
     name: "agentos_due_work_kind_nonempty",
     definition: "CHECK ((kind <> ''::text))",
@@ -178,21 +193,34 @@ const POSTGRES_DUE_WORK_CONSTRAINTS = [
   },
 ] as const;
 
-const POSTGRES_DUE_WORK_CONSTRAINT_DDL = POSTGRES_DUE_WORK_CONSTRAINTS.map(
-  ({ name, definition }) => `CONSTRAINT ${name} ${definition}`,
-).join(",\n        ");
+const postgresConstraintDdl = (
+  constraints: ReadonlyArray<{ readonly name: string; readonly definition: string }>,
+): string =>
+  constraints.map(({ name, definition }) => `CONSTRAINT ${name} ${definition}`).join(",\n        ");
+
+const POSTGRES_EVENT_CONSTRAINT_DDL = postgresConstraintDdl(POSTGRES_EVENT_CONSTRAINTS);
+const POSTGRES_DUE_WORK_CONSTRAINT_DDL = postgresConstraintDdl(POSTGRES_DUE_WORK_CONSTRAINTS);
 
 const normalizePostgresConstraintDefinition = (definition: string): string =>
   definition.replace(/\s+/gu, " ").trim();
 
-const POSTGRES_DUE_WORK_CONSTRAINT_PROJECTION = new Map(
-  POSTGRES_DUE_WORK_CONSTRAINTS.map(({ name, definition }) => [
-    name,
-    normalizePostgresConstraintDefinition(definition),
-  ]),
-);
+const postgresConstraintProjection = (
+  constraints: ReadonlyArray<{ readonly name: string; readonly definition: string }>,
+): ReadonlyMap<string, string> =>
+  new Map(
+    constraints.map(({ name, definition }) => [
+      name,
+      normalizePostgresConstraintDefinition(definition),
+    ]),
+  );
+
+const POSTGRES_CONSTRAINT_PROJECTIONS = new Map<string, ReadonlyMap<string, string>>([
+  ["agentos_events", postgresConstraintProjection(POSTGRES_EVENT_CONSTRAINTS)],
+  ["agentos_due_work", postgresConstraintProjection(POSTGRES_DUE_WORK_CONSTRAINTS)],
+]);
 
 interface PostgresConstraintDefinitionRow {
+  readonly tableName: string;
   readonly name: string;
   readonly definition: string;
 }
@@ -287,7 +315,8 @@ export class NodePostgresBackend {
         scope_ref JSONB NOT NULL,
         fact_owner_ref JSONB NOT NULL,
         effect_authority_ref JSONB NOT NULL,
-        payload JSONB NOT NULL
+        payload JSONB NOT NULL,
+        ${POSTGRES_EVENT_CONSTRAINT_DDL}
       );
       CREATE INDEX IF NOT EXISTS agentos_events_identity_id_idx
         ON agentos_events (identity_key, id);
@@ -335,27 +364,40 @@ export class NodePostgresBackend {
       );
     `);
     const installedConstraints = await this.#sql.json<PostgresConstraintDefinitionRow>(`
-      SELECT conname AS name, pg_get_constraintdef(oid, false) AS definition
-      FROM pg_constraint
-      WHERE conrelid = 'agentos_due_work'::regclass
-        AND contype = 'c'
-      ORDER BY conname
+      SELECT relation.relname AS "tableName",
+             installed_constraint.conname AS name,
+             pg_get_constraintdef(installed_constraint.oid, false) AS definition
+      FROM pg_constraint installed_constraint
+      JOIN pg_class relation ON relation.oid = installed_constraint.conrelid
+      WHERE installed_constraint.conrelid IN (
+        'agentos_events'::regclass,
+        'agentos_due_work'::regclass
+      )
+        AND installed_constraint.contype = 'c'
+      ORDER BY relation.relname, installed_constraint.conname
     `);
-    const installedProjection = new Map(
-      installedConstraints.map(({ name, definition }) => [
-        name,
-        normalizePostgresConstraintDefinition(definition),
-      ]),
+    const installedProjections = new Map<string, Map<string, string>>();
+    for (const { tableName, name, definition } of installedConstraints) {
+      const tableProjection = installedProjections.get(tableName) ?? new Map<string, string>();
+      tableProjection.set(name, normalizePostgresConstraintDefinition(definition));
+      installedProjections.set(tableName, tableProjection);
+    }
+    const schemaValid = Array.from(POSTGRES_CONSTRAINT_PROJECTIONS).every(
+      ([tableName, expectedProjection]) => {
+        const installedProjection = installedProjections.get(tableName);
+        return (
+          installedProjection !== undefined &&
+          installedProjection.size === expectedProjection.size &&
+          Array.from(expectedProjection).every(
+            ([name, definition]) => installedProjection.get(name) === definition,
+          )
+        );
+      },
     );
-    const schemaValid =
-      installedProjection.size === POSTGRES_DUE_WORK_CONSTRAINT_PROJECTION.size &&
-      Array.from(POSTGRES_DUE_WORK_CONSTRAINT_PROJECTION).every(
-        ([name, definition]) => installedProjection.get(name) === definition,
-      );
     if (!schemaValid) {
       throw new SqlError({
         cause: new TypeError(
-          "agentos_due_work schema does not enforce the durable lifecycle contract",
+          "agentos Postgres schema does not enforce the identifier and durable lifecycle contract",
         ),
       });
     }
@@ -1844,6 +1886,7 @@ export class NodePostgresBackend {
   ): Promise<void> {
     try {
       const maxEventId = await this.#maxEventId();
+      safeIntegerSum(maxEventId, specs.length, "event batch upper identifier");
       const candidates = specs.map(
         (spec, index): LedgerEvent => ({
           id: maxEventId + index + 1,

@@ -11,7 +11,7 @@ import {
   backendProtocolTruthIdentityKey,
 } from "@agent-os/core/backend-protocol";
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../../src/node";
-import { safeIntegerFromDecimalText } from "../../src/node/backend-helpers";
+import { safeIntegerFromDecimalText, safeIntegerSum } from "../../src/node/backend-helpers";
 import { PsqlCli, quoteIdentifier, sqlJson, sqlString } from "../../src/node/host";
 import {
   registerBackendConformanceSuite,
@@ -126,6 +126,13 @@ describe("node-postgres event+due atomicity", () => {
         expect.objectContaining({ _tag: "agent_os.sql_error" }),
       );
     }
+
+    expect(safeIntegerSum(Number.MAX_SAFE_INTEGER - 1, 1, "test sum")).toBe(
+      Number.MAX_SAFE_INTEGER,
+    );
+    expect(() => safeIntegerSum(Number.MAX_SAFE_INTEGER, 1, "test sum")).toThrowError(
+      expect.objectContaining({ _tag: "agent_os.sql_error" }),
+    );
   });
 
   const withDueInsertFailure = async (
@@ -301,6 +308,7 @@ describe("node-postgres event+due atomicity", () => {
         cancel_requested_at DOUBLE PRECISION,
         cancel_reason TEXT,
         cancelled_at DOUBLE PRECISION,
+        CONSTRAINT agentos_due_work_id_safe CHECK (TRUE),
         CONSTRAINT agentos_due_work_kind_nonempty CHECK (TRUE),
         CONSTRAINT agentos_due_work_finite_timestamps CHECK (TRUE),
         CONSTRAINT agentos_due_work_claim_tuple CHECK (TRUE),
@@ -573,7 +581,7 @@ describe("node-postgres event+due atomicity", () => {
     });
   });
 
-  it("rejects identifiers above the JavaScript safe integer range", async () => {
+  it("rejects unsafe event and due-work identifiers without persisting rows", async () => {
     const identity = contractIdentity("node-id-unsafe");
     await withBackend("id_unsafe", async (backend, sql) => {
       await sql.exec(`SELECT setval('agentos_events_id_seq', ${Number.MAX_SAFE_INTEGER}, true)`);
@@ -587,11 +595,28 @@ describe("node-postgres event+due atomicity", () => {
           },
         ]),
       ).rejects.toMatchObject({ _tag: "agent_os.sql_error" });
-      const [{ id }] = await sql.json<{ readonly id: string }>(`
-        SELECT MAX(id)::text AS id FROM agentos_events
+      const [{ count: eventCount }] = await sql.json<{ readonly count: string }>(`
+        SELECT COUNT(*)::text AS count FROM agentos_events
       `);
-      expect(id).toBe("9007199254740992");
-      expect(() => safeIntegerFromDecimalText(id, "test unsafe event id")).toThrow();
+      expect(eventCount).toBe("0");
+
+      await sql.exec(`
+        SELECT setval('agentos_events_id_seq', 1, false);
+        SELECT setval('agentos_due_work_id_seq', ${Number.MAX_SAFE_INTEGER}, true);
+      `);
+      await expect(
+        backend.schedule(identity, 100, "id-width.unsafe-due", { value: 2 }),
+      ).rejects.toMatchObject({ _tag: "agent_os.sql_error" });
+      const [{ eventCountAfterDue, dueCount }] = await sql.json<{
+        readonly eventCountAfterDue: string;
+        readonly dueCount: string;
+      }>(`
+        SELECT
+          (SELECT COUNT(*) FROM agentos_events)::text AS "eventCountAfterDue",
+          (SELECT COUNT(*) FROM agentos_due_work)::text AS "dueCount"
+      `);
+      expect(eventCountAfterDue).toBe("0");
+      expect(dueCount).toBe("0");
     });
   });
 

@@ -100,6 +100,17 @@ export const safeIntegerFromDecimalText = (value: unknown, label: string): numbe
   return Number(exact);
 };
 
+export const safeIntegerSum = (left: number, right: number, label: string): number => {
+  if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right)) {
+    throw new SqlError({ cause: `${label} operands must be JavaScript safe integers` });
+  }
+  const exact = BigInt(left) + BigInt(right);
+  if (exact < MIN_SAFE_INTEGER || exact > MAX_SAFE_INTEGER) {
+    throw new SqlError({ cause: `${label} exceeds the JavaScript safe integer range` });
+  }
+  return Number(exact);
+};
+
 export type DecimalLedgerEventRow = Omit<LedgerEvent, "id"> & { readonly id: string };
 
 export const ledgerEventFromDecimalRow = (row: DecimalLedgerEventRow): LedgerEvent => ({
