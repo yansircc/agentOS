@@ -15,6 +15,11 @@ export {
 } from "./ag-ui-sse";
 export { createCloudflareWorkspaceJobResponse } from "./workspace-job-facade";
 export { makeCloudflareWorkspaceEnv } from "./workspace-env-adapter";
+export {
+  CloudflareWorkspaceEnvResolverError,
+  createCloudflareSandboxWorkspaceEnvResolver,
+  createCloudflareWorkspaceEnvResolver,
+} from "./workspace-env";
 export type {
   AgentAttachedStreamCancelSpec,
   AgentAttachedStreamSpec,
@@ -48,6 +53,19 @@ export type {
   CloudflareWorkspaceJobResponseOptions,
   CloudflareWorkspaceJobResponseProjection,
 } from "./workspace-job-facade";
+export type {
+  CloudflareSandboxTransport,
+  CloudflareSandboxWorkspaceClient,
+  CloudflareSandboxWorkspaceEnvResolverOptions,
+  CloudflareSandboxWorkspaceNamespace,
+  CloudflareWorkspaceEnvBinding,
+  CloudflareWorkspaceEnvLease,
+  CloudflareWorkspaceEnvResolver,
+  CloudflareWorkspaceEnvResolverInput,
+  CloudflareWorkspaceEnvResolverOptions,
+  CloudflareWorkspaceIdentityInput,
+  CloudflareWorkspaceLeaseIdentity,
+} from "./workspace-env";
 export type {
   CloudflareAttachedStreamFactory,
   CloudflareAttachedStreamFactoryContext,
