@@ -712,7 +712,7 @@ const packageOverlayRows = (consumerRoot, marker) => {
       const tarballExists = tarball.length > 0 && fs.existsSync(tarball);
       const expectedSha = typeof record.sha256 === "string" ? record.sha256 : undefined;
       const actualSha = tarballExists ? sha256File(tarball) : undefined;
-      const requiresSha = marker.artifact?.kind === "install-manifest-overlay";
+      const isCurrentOverlay = marker.artifact?.kind === "install-manifest-overlay";
       return {
         packageName,
         target: record.target,
@@ -720,13 +720,13 @@ const packageOverlayRows = (consumerRoot, marker) => {
         targetStatus,
         tarball,
         tarballStatus: tarballExists
-          ? expectedSha === undefined
-            ? requiresSha
+          ? !isCurrentOverlay
+            ? "legacy_marker_unverified"
+            : expectedSha === undefined
               ? "sha_missing"
-              : "verified"
-            : expectedSha === actualSha
-              ? "verified"
-              : "sha_mismatch"
+              : expectedSha === actualSha
+                ? "verified"
+                : "sha_mismatch"
           : "missing",
         sha256: expectedSha,
       };

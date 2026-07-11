@@ -167,7 +167,10 @@ The projection separates three release-truth modes:
 - `local_overlay`: the consumer has a current `agentos-install-manifest@1`
   overlay marker written by `agentos consumer install`.
 - `legacy_local_overlay`: the consumer has an older marker shape that can still
-  be inspected but is not the current artifact contract.
+  be inspected but is not the current artifact contract. Legacy marker bytes
+  are never reported as verified: package integrity and the derived gate fail
+  until `agentos consumer install` writes a current install-manifest marker with
+  exact tarball SHA-256 facts.
 
 It also separates package integrity from source freshness. `packageIntegrity`
 reports installed package content, symlink rejection, tarball existence, and

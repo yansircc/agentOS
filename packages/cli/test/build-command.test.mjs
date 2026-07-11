@@ -479,6 +479,110 @@ void test("agentos consumer check fails from packageIntegrity failures", async (
   }
 });
 
+void test("agentos consumer integrity requires a current marker and exact tarball sha", async () => {
+  const scenarios = [
+    {
+      name: "legacy marker without sha",
+      artifact: undefined,
+      sha256: undefined,
+      expectedStatus: 1,
+      expectedTruthMode: "legacy_local_overlay",
+      expectedTarballStatus: "legacy_marker_unverified",
+      expectedIntegrity: "failed",
+      expectedGate: "fail",
+    },
+    {
+      name: "current marker with exact sha",
+      artifact: { kind: "install-manifest-overlay" },
+      sha256: "exact",
+      expectedStatus: 0,
+      expectedTruthMode: "local_overlay",
+      expectedTarballStatus: "verified",
+      expectedIntegrity: "verified",
+      expectedGate: "pass",
+    },
+    {
+      name: "current marker with mismatched sha",
+      artifact: { kind: "install-manifest-overlay" },
+      sha256: "mismatch",
+      expectedStatus: 1,
+      expectedTruthMode: "local_overlay",
+      expectedTarballStatus: "sha_mismatch",
+      expectedIntegrity: "failed",
+      expectedGate: "fail",
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-integrity-"));
+    try {
+      const packageName = "@example/runtime";
+      const packageRoot = path.join(root, "node_modules", "@example", "runtime");
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        path.join(root, "package.json"),
+        JSON.stringify({ name: "agentos-consumer-integrity", private: true, type: "module" }, null, 2),
+      );
+      writeFileSync(
+        path.join(packageRoot, "package.json"),
+        JSON.stringify(
+          { name: packageName, version: agentOsReleaseVersion(), type: "module" },
+          null,
+          2,
+        ),
+      );
+      const packed = writePackedPackageTarball(root, packageName);
+      const packageRecord = {
+        target: "node_modules/@example/runtime",
+        tarball: packed.tarball,
+        ...(scenario.sha256 === undefined
+          ? {}
+          : { sha256: scenario.sha256 === "exact" ? packed.sha256 : "0".repeat(64) }),
+      };
+      writeFileSync(
+        path.join(root, "node_modules", ".agentos-local.json"),
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            generatedBy: "agentos consumer integrity test",
+            installedAt: new Date().toISOString(),
+            source: repoSourceIdentity(),
+            packageVersion: agentOsReleaseVersion(),
+            ...(scenario.artifact === undefined ? {} : { artifact: scenario.artifact }),
+            consumerRoot: root,
+            packages: { [packageName]: packageRecord },
+          },
+          null,
+          2,
+        ),
+      );
+
+      const checked = await runCli(["consumer", "check", root, "--json"]);
+      assert.equal(checked.status, scenario.expectedStatus, `${scenario.name}: ${checked.stderr}`);
+      const projection = JSON.parse(checked.stdout);
+      assert.equal(projection.truthMode, scenario.expectedTruthMode, scenario.name);
+      assert.equal(
+        projection.localOverlay.packages[0]?.tarballStatus,
+        scenario.expectedTarballStatus,
+        scenario.name,
+      );
+      assert.equal(projection.packageIntegrity.status, scenario.expectedIntegrity, scenario.name);
+      assert.equal(projection.gate.status, scenario.expectedGate, scenario.name);
+      assert.deepEqual(
+        projection.gate.hardFailures
+          .filter((failure) => failure.dimension === "package_integrity")
+          .map((failure) => [failure.code, failure.tarballStatus]),
+        scenario.expectedGate === "pass"
+          ? []
+          : [["local_overlay_tarball_not_verified", scenario.expectedTarballStatus]],
+        scenario.name,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 void test("agentos consumer check fails when a workspace package overlay is missing", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-consumer-workspace-"));
   try {
