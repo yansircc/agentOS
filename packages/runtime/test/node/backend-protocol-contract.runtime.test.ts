@@ -252,6 +252,48 @@ describe("node-postgres event+due atomicity", () => {
     }
   });
 
+  it("rejects same-name tautological lifecycle constraints", async () => {
+    if (harness === undefined) throw new Error("postgres harness not started");
+    const schema = `agentos_tautology_${randomUUID().replace(/-/g, "_")}`;
+    const sql = new PsqlCli({ databaseUrl: harness.databaseUrl, schema });
+    await sql.exec(`
+      CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(schema)};
+      CREATE TABLE agentos_due_work (
+        id BIGSERIAL PRIMARY KEY,
+        identity_key TEXT NOT NULL,
+        identity JSONB NOT NULL,
+        fire_at DOUBLE PRECISION NOT NULL,
+        kind TEXT NOT NULL,
+        payload JSONB NOT NULL,
+        completed_at DOUBLE PRECISION,
+        claimed_at DOUBLE PRECISION,
+        claim_token TEXT,
+        claim_deadline_at DOUBLE PRECISION,
+        redrive_count INTEGER NOT NULL DEFAULT 0,
+        cancel_requested_at DOUBLE PRECISION,
+        cancel_reason TEXT,
+        cancelled_at DOUBLE PRECISION,
+        CONSTRAINT agentos_due_work_kind_nonempty CHECK (TRUE),
+        CONSTRAINT agentos_due_work_finite_timestamps CHECK (TRUE),
+        CONSTRAINT agentos_due_work_claim_tuple CHECK (TRUE),
+        CONSTRAINT agentos_due_work_redrive_count CHECK (TRUE),
+        CONSTRAINT agentos_due_work_redrive_claim CHECK (TRUE),
+        CONSTRAINT agentos_due_work_cancel_reason CHECK (TRUE),
+        CONSTRAINT agentos_due_work_cancelled_terminal CHECK (TRUE)
+      );
+    `);
+    const backend = new NodePostgresBackend({
+      databaseUrl: harness.databaseUrl,
+      schema,
+      bindingRef,
+    });
+    try {
+      await expect(backend.initialize()).rejects.toBeTruthy();
+    } finally {
+      await backend.dispose();
+    }
+  });
+
   it("rolls back scheduled intent event when due-work insert fails", async () => {
     const identity = contractIdentity("schedule-atomic-rollback");
     await withDueInsertFailure("schedule", async (backend) => {

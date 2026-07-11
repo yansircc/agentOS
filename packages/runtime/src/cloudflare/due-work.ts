@@ -60,6 +60,78 @@ type DueWorkParseResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly cause: unknown };
 
+const SQLITE_DUE_WORK_CONSTRAINTS = [
+  { name: "due_work_kind_nonempty", definition: "CHECK (kind <> '')" },
+  {
+    name: "due_work_finite_timestamps",
+    definition: `CHECK (
+      (completed_at IS NULL OR completed_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+      AND (claimed_at IS NULL OR claimed_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+      AND (claim_deadline_at IS NULL OR claim_deadline_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+      AND (cancel_requested_at IS NULL OR cancel_requested_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+      AND (cancelled_at IS NULL OR cancelled_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+    )`,
+  },
+  {
+    name: "due_work_claim_tuple",
+    definition: `CHECK (
+      (claim_token IS NULL AND claimed_at IS NULL AND claim_deadline_at IS NULL)
+      OR
+      (claim_token IS NOT NULL AND claim_token <> ''
+        AND claimed_at IS NOT NULL AND claim_deadline_at IS NOT NULL)
+    )`,
+  },
+  {
+    name: "due_work_redrive_count",
+    definition: "CHECK (typeof(redrive_count) = 'integer' AND redrive_count >= 0)",
+  },
+  {
+    name: "due_work_redrive_claim",
+    definition: "CHECK (redrive_count = 0 OR claim_token IS NOT NULL)",
+  },
+  {
+    name: "due_work_cancel_reason",
+    definition: "CHECK (cancel_reason IS NULL OR cancel_requested_at IS NOT NULL)",
+  },
+  {
+    name: "due_work_cancelled_terminal",
+    definition: `CHECK (
+      cancelled_at IS NULL
+      OR (
+        completed_at IS NOT NULL
+        AND cancel_requested_at IS NOT NULL
+        AND cancelled_at = completed_at
+      )
+    )`,
+  },
+] as const;
+
+const SQLITE_DUE_WORK_CREATE = `
+  CREATE TABLE IF NOT EXISTS due_work (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fire_at INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    completed_at INTEGER,
+    claimed_at INTEGER,
+    claim_token TEXT,
+    claim_deadline_at INTEGER,
+    redrive_count INTEGER NOT NULL DEFAULT 0,
+    cancel_requested_at INTEGER,
+    cancel_reason TEXT,
+    cancelled_at INTEGER,
+    ${SQLITE_DUE_WORK_CONSTRAINTS.map(({ name, definition }) => `CONSTRAINT ${name} ${definition}`).join(",\n    ")}
+  )
+`;
+
+const normalizeSqliteCreateProjection = (sql: string): string =>
+  sql
+    .replace(/^\s*CREATE TABLE IF NOT EXISTS\s+/iu, "CREATE TABLE ")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+const SQLITE_DUE_WORK_CREATE_PROJECTION = normalizeSqliteCreateProjection(SQLITE_DUE_WORK_CREATE);
+
 const dueRowPayload = (row: {
   readonly payload: unknown;
 }): DueWorkParseResult<IntentPointerDuePayload> => {
@@ -115,68 +187,16 @@ const dueWorkRowFromSql = (row: Record<string, unknown>): DueWorkParseResult<Due
 export const ensureDueWorkSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({
     try: () => {
-      sql.exec(`
-        CREATE TABLE IF NOT EXISTS due_work (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          fire_at INTEGER NOT NULL,
-          kind TEXT NOT NULL,
-          payload TEXT NOT NULL,
-          completed_at INTEGER,
-          claimed_at INTEGER,
-          claim_token TEXT,
-          claim_deadline_at INTEGER,
-          redrive_count INTEGER NOT NULL DEFAULT 0,
-          cancel_requested_at INTEGER,
-          cancel_reason TEXT,
-          cancelled_at INTEGER,
-          CONSTRAINT due_work_kind_nonempty CHECK (kind <> ''),
-          CONSTRAINT due_work_finite_timestamps CHECK (
-            (completed_at IS NULL OR completed_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
-            AND (claimed_at IS NULL OR claimed_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
-            AND (claim_deadline_at IS NULL OR claim_deadline_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
-            AND (cancel_requested_at IS NULL OR cancel_requested_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
-            AND (cancelled_at IS NULL OR cancelled_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
-          ),
-          CONSTRAINT due_work_claim_tuple CHECK (
-            (claim_token IS NULL AND claimed_at IS NULL AND claim_deadline_at IS NULL)
-            OR
-            (claim_token IS NOT NULL AND claim_token <> ''
-              AND claimed_at IS NOT NULL AND claim_deadline_at IS NOT NULL)
-          ),
-          CONSTRAINT due_work_redrive_count CHECK (
-            typeof(redrive_count) = 'integer' AND redrive_count >= 0
-          ),
-          CONSTRAINT due_work_redrive_claim CHECK (
-            redrive_count = 0 OR claim_token IS NOT NULL
-          ),
-          CONSTRAINT due_work_cancel_reason CHECK (
-            cancel_reason IS NULL OR cancel_requested_at IS NOT NULL
-          ),
-          CONSTRAINT due_work_cancelled_terminal CHECK (
-            cancelled_at IS NULL
-            OR (
-              completed_at IS NOT NULL
-              AND cancel_requested_at IS NOT NULL
-              AND cancelled_at = completed_at
-            )
-          )
-        )
-      `);
+      sql.exec(SQLITE_DUE_WORK_CREATE);
       const schemaSql = sql
         .exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'due_work'")
         .toArray()[0]?.sql;
-      const requiredConstraints = [
-        "due_work_kind_nonempty",
-        "due_work_finite_timestamps",
-        "due_work_claim_tuple",
-        "due_work_redrive_count",
-        "due_work_redrive_claim",
-        "due_work_cancel_reason",
-        "due_work_cancelled_terminal",
-      ];
-      const schemaInvalid =
+      if (
         typeof schemaSql !== "string" ||
-        requiredConstraints.some((constraint) => !schemaSql.includes(constraint));
+        normalizeSqliteCreateProjection(schemaSql) !== SQLITE_DUE_WORK_CREATE_PROJECTION
+      ) {
+        throw new TypeError("due_work schema does not enforce the durable lifecycle contract");
+      }
       sql.exec(`
         CREATE INDEX IF NOT EXISTS idx_due_work_pending
           ON due_work (fire_at)
@@ -187,22 +207,9 @@ export const ensureDueWorkSchema = (sql: SqlStorage): Effect.Effect<void, SqlErr
           ON due_work (claim_deadline_at)
           WHERE completed_at IS NULL AND claim_token IS NOT NULL
       `);
-      return !schemaInvalid;
     },
     catch: (cause) => new SqlError({ cause }),
-  }).pipe(
-    Effect.flatMap((schemaValid) =>
-      schemaValid
-        ? Effect.void
-        : Effect.fail(
-            new SqlError({
-              cause: new TypeError(
-                "due_work schema does not enforce the durable lifecycle contract",
-              ),
-            }),
-          ),
-    ),
-  );
+  });
 
 export const findNextDue = (sql: SqlStorage): Effect.Effect<number | null, SqlError> =>
   Effect.try({

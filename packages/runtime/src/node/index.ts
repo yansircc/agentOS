@@ -140,6 +140,59 @@ const archiveSnapshotSql = (
   `;
 };
 
+const POSTGRES_DUE_WORK_CONSTRAINTS = [
+  {
+    name: "agentos_due_work_kind_nonempty",
+    definition: "CHECK ((kind <> ''::text))",
+  },
+  {
+    name: "agentos_due_work_finite_timestamps",
+    definition:
+      "CHECK ((((completed_at IS NULL) OR (completed_at <> ALL (ARRAY['NaN'::double precision, 'Infinity'::double precision, '-Infinity'::double precision]))) AND ((claimed_at IS NULL) OR (claimed_at <> ALL (ARRAY['NaN'::double precision, 'Infinity'::double precision, '-Infinity'::double precision]))) AND ((claim_deadline_at IS NULL) OR (claim_deadline_at <> ALL (ARRAY['NaN'::double precision, 'Infinity'::double precision, '-Infinity'::double precision]))) AND ((cancel_requested_at IS NULL) OR (cancel_requested_at <> ALL (ARRAY['NaN'::double precision, 'Infinity'::double precision, '-Infinity'::double precision]))) AND ((cancelled_at IS NULL) OR (cancelled_at <> ALL (ARRAY['NaN'::double precision, 'Infinity'::double precision, '-Infinity'::double precision])))))",
+  },
+  {
+    name: "agentos_due_work_claim_tuple",
+    definition:
+      "CHECK ((((claim_token IS NULL) AND (claimed_at IS NULL) AND (claim_deadline_at IS NULL)) OR ((claim_token IS NOT NULL) AND (claim_token <> ''::text) AND (claimed_at IS NOT NULL) AND (claim_deadline_at IS NOT NULL))))",
+  },
+  {
+    name: "agentos_due_work_redrive_count",
+    definition: "CHECK ((redrive_count >= 0))",
+  },
+  {
+    name: "agentos_due_work_redrive_claim",
+    definition: "CHECK (((redrive_count = 0) OR (claim_token IS NOT NULL)))",
+  },
+  {
+    name: "agentos_due_work_cancel_reason",
+    definition: "CHECK (((cancel_reason IS NULL) OR (cancel_requested_at IS NOT NULL)))",
+  },
+  {
+    name: "agentos_due_work_cancelled_terminal",
+    definition:
+      "CHECK (((cancelled_at IS NULL) OR ((completed_at IS NOT NULL) AND (cancel_requested_at IS NOT NULL) AND (cancelled_at = completed_at))))",
+  },
+] as const;
+
+const POSTGRES_DUE_WORK_CONSTRAINT_DDL = POSTGRES_DUE_WORK_CONSTRAINTS.map(
+  ({ name, definition }) => `CONSTRAINT ${name} ${definition}`,
+).join(",\n        ");
+
+const normalizePostgresConstraintDefinition = (definition: string): string =>
+  definition.replace(/\s+/gu, " ").trim();
+
+const POSTGRES_DUE_WORK_CONSTRAINT_PROJECTION = new Map(
+  POSTGRES_DUE_WORK_CONSTRAINTS.map(({ name, definition }) => [
+    name,
+    normalizePostgresConstraintDefinition(definition),
+  ]),
+);
+
+interface PostgresConstraintDefinitionRow {
+  readonly name: string;
+  readonly definition: string;
+}
+
 export interface NodePostgresBackendOptions {
   readonly databaseUrl: string;
   readonly schema?: string;
@@ -234,56 +287,35 @@ export class NodePostgresBackend {
         cancel_requested_at DOUBLE PRECISION,
         cancel_reason TEXT,
         cancelled_at DOUBLE PRECISION,
-        CONSTRAINT agentos_due_work_kind_nonempty CHECK (kind <> ''),
-        CONSTRAINT agentos_due_work_finite_timestamps CHECK (
-          (completed_at IS NULL OR completed_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
-          AND (claimed_at IS NULL OR claimed_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
-          AND (claim_deadline_at IS NULL OR claim_deadline_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
-          AND (cancel_requested_at IS NULL OR cancel_requested_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
-          AND (cancelled_at IS NULL OR cancelled_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
-        ),
-        CONSTRAINT agentos_due_work_claim_tuple CHECK (
-          (claim_token IS NULL AND claimed_at IS NULL AND claim_deadline_at IS NULL)
-          OR
-          (claim_token IS NOT NULL AND claim_token <> ''
-            AND claimed_at IS NOT NULL AND claim_deadline_at IS NOT NULL)
-        ),
-        CONSTRAINT agentos_due_work_redrive_count CHECK (redrive_count >= 0),
-        CONSTRAINT agentos_due_work_redrive_claim CHECK (
-          redrive_count = 0 OR claim_token IS NOT NULL
-        ),
-        CONSTRAINT agentos_due_work_cancel_reason CHECK (
-          cancel_reason IS NULL OR cancel_requested_at IS NOT NULL
-        ),
-        CONSTRAINT agentos_due_work_cancelled_terminal CHECK (
-          cancelled_at IS NULL
-          OR (
-            completed_at IS NOT NULL
-            AND cancel_requested_at IS NOT NULL
-            AND cancelled_at = completed_at
-          )
-        )
+        ${POSTGRES_DUE_WORK_CONSTRAINT_DDL}
       );
-      DO $agentos$
-      BEGIN
-        IF (
-          SELECT COUNT(*) <> 7
-          FROM pg_constraint
-          WHERE conrelid = 'agentos_due_work'::regclass
-            AND conname IN (
-              'agentos_due_work_kind_nonempty',
-              'agentos_due_work_finite_timestamps',
-              'agentos_due_work_claim_tuple',
-              'agentos_due_work_redrive_count',
-              'agentos_due_work_redrive_claim',
-              'agentos_due_work_cancel_reason',
-              'agentos_due_work_cancelled_terminal'
-            )
-        ) THEN
-          RAISE EXCEPTION 'agentos_due_work schema does not enforce the durable lifecycle contract';
-        END IF;
-      END
-      $agentos$;
+    `);
+    const installedConstraints = await this.#sql.json<PostgresConstraintDefinitionRow>(`
+      SELECT conname AS name, pg_get_constraintdef(oid, false) AS definition
+      FROM pg_constraint
+      WHERE conrelid = 'agentos_due_work'::regclass
+        AND contype = 'c'
+      ORDER BY conname
+    `);
+    const installedProjection = new Map(
+      installedConstraints.map(({ name, definition }) => [
+        name,
+        normalizePostgresConstraintDefinition(definition),
+      ]),
+    );
+    const schemaValid =
+      installedProjection.size === POSTGRES_DUE_WORK_CONSTRAINT_PROJECTION.size &&
+      Array.from(POSTGRES_DUE_WORK_CONSTRAINT_PROJECTION).every(
+        ([name, definition]) => installedProjection.get(name) === definition,
+      );
+    if (!schemaValid) {
+      throw new SqlError({
+        cause: new TypeError(
+          "agentos_due_work schema does not enforce the durable lifecycle contract",
+        ),
+      });
+    }
+    await this.#sql.exec(`
       CREATE INDEX IF NOT EXISTS agentos_due_work_pending_idx
         ON agentos_due_work (identity_key, completed_at, fire_at, id);
     `);

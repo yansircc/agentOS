@@ -155,4 +155,37 @@ describe("cloudflare-do durable process lifecycle", () => {
       expect(rejected).toBe(true);
     }),
   );
+
+  it.effect("rejects same-name tautological lifecycle constraints", () =>
+    Effect.gen(function* () {
+      const sql = makeInMemoryDurableObjectState().storage.sql;
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS due_work (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fire_at INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          completed_at INTEGER,
+          claimed_at INTEGER,
+          claim_token TEXT,
+          claim_deadline_at INTEGER,
+          redrive_count INTEGER NOT NULL DEFAULT 0,
+          cancel_requested_at INTEGER,
+          cancel_reason TEXT,
+          cancelled_at INTEGER,
+          CONSTRAINT due_work_kind_nonempty CHECK (1 = 1),
+          CONSTRAINT due_work_finite_timestamps CHECK (1 = 1),
+          CONSTRAINT due_work_claim_tuple CHECK (1 = 1),
+          CONSTRAINT due_work_redrive_count CHECK (1 = 1),
+          CONSTRAINT due_work_redrive_claim CHECK (1 = 1),
+          CONSTRAINT due_work_cancel_reason CHECK (1 = 1),
+          CONSTRAINT due_work_cancelled_terminal CHECK (1 = 1)
+        )
+      `);
+      const rejected = yield* ensureDueWorkSchema(sql).pipe(
+        Effect.match({ onFailure: () => true, onSuccess: () => false }),
+      );
+      expect(rejected).toBe(true);
+    }),
+  );
 });
