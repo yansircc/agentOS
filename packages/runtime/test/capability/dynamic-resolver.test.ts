@@ -47,6 +47,14 @@ const resolver = (
   ...(timeoutMs === undefined ? {} : { timeoutMs }),
 });
 
+const deferred = <Value>() => {
+  let resolve!: (value: Value) => void;
+  const promise = new Promise<Value>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+};
+
 describe("runDynamicCapabilityResolvers", () => {
   it("provides a restricted read-only resolver context", async () => {
     let observed: DynamicCapabilityContext | undefined;
@@ -76,6 +84,188 @@ describe("runDynamicCapabilityResolvers", () => {
     expect("commit" in (observed as object)).toBe(false);
     expect("openProvider" in (observed as object)).toBe(false);
     expect("workspace" in (observed as object)).toBe(false);
+  });
+
+  it("detaches one deeply frozen snapshot before concurrent resolvers observe context", async () => {
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const sourceEvent = structuredClone(turnEvent);
+    const sourceCatalog = structuredClone(catalog);
+    const sourceInput = { phase: "observe", values: { ticket: { id: "change-1" } } };
+    const sourceAuth = { principal: { id: "principal-a", roles: ["admin"] } };
+    const sourceProjections = { session: { id: "session:1", flags: ["ready"] } };
+    let observed: DynamicCapabilityContext | undefined;
+
+    const running = runDynamicCapabilityResolvers({
+      event: sourceEvent,
+      catalog: sourceCatalog,
+      input: sourceInput,
+      auth: sourceAuth,
+      projections: sourceProjections,
+      resolvers: [
+        resolver("barrier", DYNAMIC_CAPABILITY_SLOT.TOOLS, async (context) => {
+          observed = context;
+          entered.resolve(undefined);
+          await release.promise;
+          const principal = context.auth.principal as {
+            readonly id: string;
+            readonly roles: ReadonlyArray<string>;
+          };
+          const ticket = context.input.values?.ticket as { readonly id: string };
+          const session = context.projections.session as {
+            readonly id: string;
+            readonly flags: ReadonlyArray<string>;
+          };
+          return principal.id === "principal-a" &&
+            principal.roles[0] === "admin" &&
+            ticket.id === "change-1" &&
+            session.flags[0] === "ready"
+            ? { tools: { allow: ["read_file"] } }
+            : { tools: { deny: ["read_file"] } };
+        }),
+      ],
+    });
+
+    await entered.promise;
+    (sourceEvent as { turnRef?: string }).turnRef = "turn:mutated";
+    (sourceCatalog.tools[0] as { id: string }).id = "mutated_tool";
+    sourceInput.values.ticket.id = "mutated";
+    sourceAuth.principal.id = "principal-b";
+    sourceAuth.principal.roles[0] = "guest";
+    sourceProjections.session.flags[0] = "stale";
+    release.resolve(undefined);
+
+    const result = await running;
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.projection.event.turnRef).toBe("turn:1");
+    expect(result.projection.tools.map((tool) => tool.id)).toEqual(["read_file", "write_file"]);
+    expect(result.projection.tools[0]?.decision).toBe(DYNAMIC_CAPABILITY_VISIBILITY.ALLOWED);
+    expect((observed?.input.values?.ticket as { readonly id: string }).id).toBe("change-1");
+    expect(Object.isFrozen(observed?.input.values?.ticket)).toBe(true);
+    expect(Object.isFrozen(observed?.auth.principal)).toBe(true);
+    expect(
+      Object.isFrozen(
+        (observed?.auth.principal as { readonly roles: ReadonlyArray<string> }).roles,
+      ),
+    ).toBe(true);
+    expect(Object.isFrozen(observed?.projections.session)).toBe(true);
+  });
+
+  it("prevents resolver mutation from reaching the raw input graph", async () => {
+    const sourceAuth = { principal: { id: "principal-a" } };
+    let mutationRejected = false;
+    const result = await runDynamicCapabilityResolvers({
+      event: turnEvent,
+      catalog,
+      auth: sourceAuth,
+      resolvers: [
+        resolver("cannot-mutate-source", DYNAMIC_CAPABILITY_SLOT.TOOLS, (context) => {
+          try {
+            (context.auth.principal as { id: string }).id = "mutated";
+          } catch {
+            mutationRejected = true;
+          }
+          return { tools: { allow: ["read_file"] } };
+        }),
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mutationRejected).toBe(true);
+    expect(sourceAuth).toEqual({ principal: { id: "principal-a" } });
+  });
+
+  it("fails closed with structured issues for values outside the JSON snapshot grammar", async () => {
+    class UnsupportedClass {
+      readonly value = "not-a-record";
+    }
+    const sparse: unknown[] = [];
+    sparse.length = 1;
+    const accessor = Object.defineProperty({}, "value", {
+      enumerable: true,
+      get: () => {
+        throw new Error("snapshot must not invoke accessors");
+      },
+    });
+    const hiddenProperty = Object.defineProperty({}, "hidden", {
+      enumerable: false,
+      value: "not-json",
+    });
+    const symbolProperty = { [Symbol("hidden")]: "not-json" };
+    const extraArrayProperty: unknown[] & { extra?: string } = [];
+    extraArrayProperty.extra = "not-json";
+    const unsupportedValues: ReadonlyArray<unknown> = [
+      new Map([["key", "value"]]),
+      new Set(["value"]),
+      new Date(0),
+      new UnsupportedClass(),
+      () => "value",
+      undefined,
+      Symbol("value"),
+      1n,
+      Number.POSITIVE_INFINITY,
+      sparse,
+      accessor,
+      hiddenProperty,
+      symbolProperty,
+      extraArrayProperty,
+    ];
+
+    for (const unsupported of unsupportedValues) {
+      let ran = false;
+      const result = await runDynamicCapabilityResolvers({
+        event: turnEvent,
+        catalog,
+        projections: { unsupported },
+        resolvers: [
+          resolver("must-not-run", DYNAMIC_CAPABILITY_SLOT.TOOLS, () => {
+            ran = true;
+            return {};
+          }),
+        ],
+      });
+
+      expect(result).toMatchObject({
+        ok: false,
+        issues: [
+          {
+            kind: "context_invalid",
+            reason: "json_value_required",
+          },
+        ],
+      });
+      expect(ran).toBe(false);
+    }
+  });
+
+  it("rejects cyclic context graphs without raw promise rejection", async () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    let ran = false;
+    const result = await runDynamicCapabilityResolvers({
+      event: turnEvent,
+      catalog,
+      projections: { cyclic },
+      resolvers: [
+        resolver("must-not-run", DYNAMIC_CAPABILITY_SLOT.TOOLS, () => {
+          ran = true;
+          return {};
+        }),
+      ],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "context_invalid",
+          path: '$["projections"]["cyclic"]["self"]',
+          reason: "acyclic_value_required",
+        },
+      ],
+    });
+    expect(ran).toBe(false);
   });
 
   it("lowers product-authored phase policy into dynamic capability projection diagnostics", async () => {
@@ -453,6 +643,100 @@ describe("runDynamicCapabilityResolvers", () => {
     ]);
   });
 
+  it("rejects invalid service and resolver timeouts before any resolver executes", async () => {
+    const invalidTimeouts = [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
+    for (const timeoutMs of invalidTimeouts) {
+      let ran = false;
+      const serviceResult = await runDynamicCapabilityResolvers({
+        event: turnEvent,
+        catalog,
+        timeoutMs,
+        resolvers: [
+          resolver("must-not-run", DYNAMIC_CAPABILITY_SLOT.TOOLS, () => {
+            ran = true;
+            return {};
+          }),
+        ],
+      });
+      expect(serviceResult).toEqual({
+        ok: false,
+        issues: [{ kind: "timeout_invalid", owner: { kind: "service" }, timeoutMs }],
+      });
+      expect(ran).toBe(false);
+    }
+
+    let resolverRan = false;
+    const resolverResult = await runDynamicCapabilityResolvers({
+      event: turnEvent,
+      catalog,
+      resolvers: [
+        resolver(
+          "invalid-timeout",
+          DYNAMIC_CAPABILITY_SLOT.TOOLS,
+          () => {
+            resolverRan = true;
+            return {};
+          },
+          Number.POSITIVE_INFINITY,
+        ),
+      ],
+    });
+    expect(resolverResult).toEqual({
+      ok: false,
+      issues: [
+        {
+          kind: "timeout_invalid",
+          owner: {
+            kind: "resolver",
+            resolverId: "invalid-timeout",
+            slot: DYNAMIC_CAPABILITY_SLOT.TOOLS,
+          },
+          timeoutMs: Number.POSITIVE_INFINITY,
+        },
+      ],
+    });
+    expect(resolverRan).toBe(false);
+  });
+
+  it("aborts cooperative resolver work before returning a timeout projection", async () => {
+    let abortObserved = false;
+    const result = await runDynamicCapabilityResolvers({
+      event: turnEvent,
+      catalog,
+      resolvers: [
+        resolver(
+          "cooperative-timeout",
+          DYNAMIC_CAPABILITY_SLOT.TOOLS,
+          (_context, signal) =>
+            new Promise((resolve) => {
+              signal.addEventListener(
+                "abort",
+                () => {
+                  abortObserved = true;
+                  resolve({ tools: { allow: ["read_file"] } });
+                },
+                { once: true },
+              );
+            }),
+          1,
+        ),
+      ],
+    });
+
+    expect(abortObserved).toBe(true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.projection.provenance).toEqual([
+      {
+        resolverId: "cooperative-timeout",
+        slot: "tools",
+        eventName: "turn.started",
+        status: DYNAMIC_CAPABILITY_RESOLVER_STATUS.TIMED_OUT,
+        reason: DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_TIMEOUT,
+      },
+    ]);
+  });
+
   it("runs only tool resolvers for step.started", async () => {
     let skillRan = false;
     const result = await runDynamicCapabilityResolvers({
@@ -520,7 +804,7 @@ describe("runDynamicCapabilityResolvers", () => {
   });
 
   it("builds the same restricted context without executing resolvers", () => {
-    const context = makeDynamicCapabilityContext({
+    const snapshot = makeDynamicCapabilityContext({
       event: turnEvent,
       catalog,
       auth: { user: "agent" },
@@ -528,6 +812,9 @@ describe("runDynamicCapabilityResolvers", () => {
       materials: {},
     });
 
+    expect(snapshot.ok).toBe(true);
+    if (!snapshot.ok) throw new Error(JSON.stringify(snapshot.issue));
+    const context = snapshot.value;
     expect(context.event).toEqual(turnEvent);
     expect(context.catalog.instructions).toEqual([{ id: "tone", digest: "fnv1a32:tone" }]);
     expect(Object.isFrozen(context.materials)).toBe(true);

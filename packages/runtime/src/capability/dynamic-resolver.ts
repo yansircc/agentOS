@@ -22,7 +22,10 @@ export interface DynamicCapabilityResolverDefinition {
   readonly resolverId: string;
   readonly slot: DynamicCapabilitySlot;
   readonly timeoutMs?: number;
-  readonly resolve: (context: DynamicCapabilityContext) => unknown | Promise<unknown>;
+  readonly resolve: (
+    context: DynamicCapabilityContext,
+    signal: AbortSignal,
+  ) => unknown | Promise<unknown>;
 }
 
 export interface DynamicCapabilityResolverServiceInput {
@@ -45,48 +48,159 @@ export type DynamicCapabilityResolverServiceIssue =
       readonly kind: "resolver_id_duplicate";
       readonly resolverId: string;
       readonly slot: DynamicCapabilitySlot;
+    }
+  | {
+      readonly kind: "timeout_invalid";
+      readonly owner:
+        | { readonly kind: "service" }
+        | {
+            readonly kind: "resolver";
+            readonly resolverId: string;
+            readonly slot: DynamicCapabilitySlot;
+          };
+      readonly timeoutMs: number;
+    }
+  | {
+      readonly kind: "context_invalid";
+      readonly path: string;
+      readonly reason: "json_value_required" | "acyclic_value_required";
     };
 
 export type DynamicCapabilityResolverServiceResult =
   | { readonly ok: true; readonly projection: DynamicCapabilityProjection }
   | { readonly ok: false; readonly issues: ReadonlyArray<DynamicCapabilityResolverServiceIssue> };
 
+type DynamicCapabilityContextIssue = Extract<
+  DynamicCapabilityResolverServiceIssue,
+  { readonly kind: "context_invalid" }
+>;
+
 const DEFAULT_DYNAMIC_RESOLVER_TIMEOUT_MS = 1_000;
 
-const freezeRecord = <Value>(
-  value: Readonly<Record<string, Value>> | undefined,
-): Readonly<Record<string, Value>> => Object.freeze({ ...(value ?? {}) });
+type JsonSnapshotResult =
+  | { readonly ok: true; readonly value: unknown }
+  | {
+      readonly ok: false;
+      readonly path: string;
+      readonly reason: "json_value_required" | "acyclic_value_required";
+    };
 
-const freezeCatalog = (
-  catalog: DynamicCapabilityCompiledCatalog,
-): DynamicCapabilityCompiledCatalog =>
-  Object.freeze({
-    tools: Object.freeze(catalog.tools.map((tool) => Object.freeze({ ...tool }))),
-    skills: Object.freeze(catalog.skills.map((skill) => Object.freeze({ ...skill }))),
-    instructions: Object.freeze(
-      catalog.instructions.map((instruction) => Object.freeze({ ...instruction })),
-    ),
-  });
+const jsonSnapshot = (
+  value: unknown,
+  path: string,
+  ancestors: ReadonlyArray<object>,
+): JsonSnapshotResult => {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return { ok: true, value };
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? { ok: true, value }
+      : { ok: false, path, reason: "json_value_required" };
+  }
+  if (typeof value !== "object") {
+    return { ok: false, path, reason: "json_value_required" };
+  }
+  if (ancestors.includes(value)) {
+    return { ok: false, path, reason: "acyclic_value_required" };
+  }
 
-const freezeDynamicCapabilityRunInput = (
-  input: DynamicCapabilityRunInput | undefined,
-): DynamicCapabilityRunInput =>
-  Object.freeze({
-    ...(input?.phase === undefined ? {} : { phase: input.phase }),
-    values: freezeRecord(input?.values),
-  });
+  const isArray = Array.isArray(value);
+  const prototype = Object.getPrototypeOf(value);
+  if (!isArray && prototype !== Object.prototype && prototype !== null) {
+    return { ok: false, path, reason: "json_value_required" };
+  }
+
+  const descendants = [...ancestors, value];
+  if (isArray) {
+    const output: unknown[] = [];
+    const unexpectedKey = Reflect.ownKeys(value).find((key) => {
+      if (key === "length") return false;
+      if (typeof key !== "string") return true;
+      const index = Number(key);
+      return (
+        !Number.isInteger(index) || index < 0 || index >= value.length || String(index) !== key
+      );
+    });
+    if (unexpectedKey !== undefined) {
+      return {
+        ok: false,
+        path: `${path}[${
+          typeof unexpectedKey === "symbol"
+            ? unexpectedKey.toString()
+            : JSON.stringify(unexpectedKey)
+        }]`,
+        reason: "json_value_required",
+      };
+    }
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, index);
+      if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+        return { ok: false, path: `${path}[${index}]`, reason: "json_value_required" };
+      }
+      const entry = jsonSnapshot(descriptor.value, `${path}[${index}]`, descendants);
+      if (!entry.ok) return entry;
+      output.push(entry.value);
+    }
+    return { ok: true, value: Object.freeze(output) };
+  }
+
+  const output = Object.create(null) as Record<string, unknown>;
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      return {
+        ok: false,
+        path: `${path}[${key.toString()}]`,
+        reason: "json_value_required",
+      };
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    const keyPath = `${path}[${JSON.stringify(key)}]`;
+    if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+      return { ok: false, path: keyPath, reason: "json_value_required" };
+    }
+    const entry = jsonSnapshot(descriptor.value, keyPath, descendants);
+    if (!entry.ok) return entry;
+    output[key] = entry.value;
+  }
+  return { ok: true, value: Object.freeze(output) };
+};
+
+const dynamicCapabilityContextSnapshot = (
+  input: Omit<DynamicCapabilityResolverServiceInput, "resolvers" | "timeoutMs">,
+):
+  | { readonly ok: true; readonly value: DynamicCapabilityContext }
+  | { readonly ok: false; readonly issue: DynamicCapabilityContextIssue } => {
+  const snapshot = jsonSnapshot(
+    {
+      event: input.event,
+      catalog: input.catalog,
+      input: {
+        ...(input.input?.phase === undefined ? {} : { phase: input.input.phase }),
+        values: input.input?.values ?? {},
+      },
+      auth: input.auth ?? {},
+      projections: input.projections ?? {},
+      materials: input.materials ?? {},
+    },
+    "$",
+    [],
+  );
+  return snapshot.ok
+    ? { ok: true, value: snapshot.value as DynamicCapabilityContext }
+    : {
+        ok: false,
+        issue: {
+          kind: "context_invalid",
+          path: snapshot.path,
+          reason: snapshot.reason,
+        },
+      };
+};
 
 export const makeDynamicCapabilityContext = (
   input: Omit<DynamicCapabilityResolverServiceInput, "resolvers" | "timeoutMs">,
-): DynamicCapabilityContext =>
-  Object.freeze({
-    event: Object.freeze({ ...input.event }),
-    catalog: freezeCatalog(input.catalog),
-    input: freezeDynamicCapabilityRunInput(input.input),
-    auth: freezeRecord(input.auth),
-    projections: freezeRecord(input.projections),
-    materials: freezeRecord(input.materials),
-  });
+) => dynamicCapabilityContextSnapshot(input);
 
 const resolverKey = (resolver: Pick<DynamicCapabilityResolverDefinition, "resolverId" | "slot">) =>
   `${resolver.slot}/${resolver.resolverId}`;
@@ -111,8 +225,37 @@ const duplicateResolverIssues = (
   return issues;
 };
 
+const isValidTimeout = (timeoutMs: number): boolean =>
+  Number.isFinite(timeoutMs) && Number.isInteger(timeoutMs) && timeoutMs > 0;
+
+const invalidTimeoutIssues = (
+  input: DynamicCapabilityResolverServiceInput,
+): ReadonlyArray<DynamicCapabilityResolverServiceIssue> => {
+  const issues: DynamicCapabilityResolverServiceIssue[] = [];
+  if (input.timeoutMs !== undefined && !isValidTimeout(input.timeoutMs)) {
+    issues.push({
+      kind: "timeout_invalid",
+      owner: { kind: "service" },
+      timeoutMs: input.timeoutMs,
+    });
+  }
+  for (const resolver of input.resolvers) {
+    if (resolver.timeoutMs === undefined || isValidTimeout(resolver.timeoutMs)) continue;
+    issues.push({
+      kind: "timeout_invalid",
+      owner: {
+        kind: "resolver",
+        resolverId: resolver.resolverId,
+        slot: resolver.slot,
+      },
+      timeoutMs: resolver.timeoutMs,
+    });
+  }
+  return issues;
+};
+
 const withTimeout = async (
-  run: () => unknown | Promise<unknown>,
+  run: (signal: AbortSignal) => unknown | Promise<unknown>,
   timeoutMs: number,
 ): Promise<
   | { readonly ok: true; readonly value: unknown }
@@ -120,13 +263,15 @@ const withTimeout = async (
 > =>
   new Promise((resolve) => {
     let settled = false;
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
+      controller.abort();
       resolve({ ok: false, reason: DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_TIMEOUT });
     }, timeoutMs);
     Promise.resolve()
-      .then(run)
+      .then(() => run(controller.signal))
       .then(
         (value) => {
           if (settled) return;
@@ -193,7 +338,7 @@ const runResolver = async (
   timeoutMs: number,
 ): Promise<DynamicCapabilityResolverMergeInput> => {
   const resolved = await withTimeout(
-    () => resolver.resolve(context),
+    (signal) => resolver.resolve(context, signal),
     resolver.timeoutMs ?? timeoutMs,
   );
   if (!resolved.ok) {
@@ -211,25 +356,27 @@ const runResolver = async (
 export const runDynamicCapabilityResolvers = async (
   input: DynamicCapabilityResolverServiceInput,
 ): Promise<DynamicCapabilityResolverServiceResult> => {
-  const duplicateIssues = duplicateResolverIssues(input.resolvers);
-  if (duplicateIssues.length > 0) return { ok: false, issues: duplicateIssues };
+  const inputIssues = [...duplicateResolverIssues(input.resolvers), ...invalidTimeoutIssues(input)];
+  if (inputIssues.length > 0) return { ok: false, issues: inputIssues };
 
   const runnableSlots = new Set(dynamicCapabilitySlotsForEvent(input.event.name));
   const runnableResolvers = input.resolvers.filter((resolver) => runnableSlots.has(resolver.slot));
-  const context = makeDynamicCapabilityContext(input);
+  const contextSnapshot = makeDynamicCapabilityContext(input);
+  if (!contextSnapshot.ok) return { ok: false, issues: [contextSnapshot.issue] };
+  const context = contextSnapshot.value;
   const results = await Promise.all(
     runnableResolvers.map((resolver) =>
       runResolver(
         resolver,
         context,
-        input.event,
+        context.event,
         input.timeoutMs ?? DEFAULT_DYNAMIC_RESOLVER_TIMEOUT_MS,
       ),
     ),
   );
   const merged = mergeDynamicCapabilityProjection({
-    event: input.event,
-    catalog: input.catalog,
+    event: context.event,
+    catalog: context.catalog,
     results,
   });
   if (!merged.ok) return { ok: false, issues: [{ kind: "merge_failed", issues: merged.issues }] };
