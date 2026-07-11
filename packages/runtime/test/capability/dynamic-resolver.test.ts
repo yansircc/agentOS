@@ -239,6 +239,200 @@ describe("runDynamicCapabilityResolvers", () => {
     }
   });
 
+  it("rejects service and run-input wrapper accessors without invoking getters", async () => {
+    let getterCalls = 0;
+    let ran = false;
+    const mustNotRun = resolver("must-not-run", DYNAMIC_CAPABILITY_SLOT.TOOLS, () => {
+      ran = true;
+      return {};
+    });
+    const serviceInput = Object.defineProperty({ catalog, resolvers: [mustNotRun] }, "event", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        throw new TypeError("service getter must not run");
+      },
+    });
+    await expect(
+      runDynamicCapabilityResolvers(
+        serviceInput as unknown as Parameters<typeof runDynamicCapabilityResolvers>[0],
+      ),
+    ).resolves.toEqual({
+      ok: false,
+      issues: [{ kind: "context_invalid", path: '$["event"]', reason: "json_value_required" }],
+    });
+
+    for (const field of ["phase", "values"] as const) {
+      const input = Object.defineProperty({}, field, {
+        enumerable: true,
+        get: () => {
+          getterCalls += 1;
+          throw new TypeError("run-input getter must not run");
+        },
+      });
+      await expect(
+        runDynamicCapabilityResolvers({
+          event: turnEvent,
+          catalog,
+          input,
+          resolvers: [mustNotRun],
+        }),
+      ).resolves.toEqual({
+        ok: false,
+        issues: [
+          {
+            kind: "context_invalid",
+            path: `$["input"][${JSON.stringify(field)}]`,
+            reason: "json_value_required",
+          },
+        ],
+      });
+    }
+
+    expect(getterCalls).toBe(0);
+    expect(ran).toBe(false);
+  });
+
+  it("rejects every resolver-definition accessor without invoking getters", async () => {
+    let getterCalls = 0;
+    const fields = ["resolverId", "slot", "timeoutMs", "resolve"] as const;
+    for (const field of fields) {
+      const definition: Record<string, unknown> = {
+        resolverId: "descriptor-probe",
+        slot: DYNAMIC_CAPABILITY_SLOT.TOOLS,
+        timeoutMs: 10,
+        resolve: () => ({}),
+      };
+      delete definition[field];
+      Object.defineProperty(definition, field, {
+        enumerable: true,
+        get: () => {
+          getterCalls += 1;
+          throw new TypeError("resolver getter must not run");
+        },
+      });
+      await expect(
+        runDynamicCapabilityResolvers({
+          event: turnEvent,
+          catalog,
+          resolvers: [definition as unknown as DynamicCapabilityResolverDefinition],
+        }),
+      ).resolves.toEqual({
+        ok: false,
+        issues: [
+          {
+            kind: "context_invalid",
+            path: `$["resolvers"][0][${JSON.stringify(field)}]`,
+            reason: "json_value_required",
+          },
+        ],
+      });
+    }
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects symbol, non-enumerable, and unknown wrapper fields", async () => {
+    const invalidWrappers = [
+      {
+        input: { event: turnEvent, catalog, resolvers: [], unknown: true },
+        path: '$["unknown"]',
+      },
+      {
+        input: {
+          event: turnEvent,
+          catalog,
+          resolvers: [],
+          [Symbol("hidden")]: true,
+        },
+        path: "$[Symbol(hidden)]",
+      },
+      {
+        input: Object.defineProperty({ event: turnEvent, catalog, resolvers: [] }, "auth", {
+          enumerable: false,
+          value: {},
+        }),
+        path: '$["auth"]',
+      },
+      {
+        input: {
+          event: turnEvent,
+          catalog,
+          resolvers: [],
+          input: { unknown: true },
+        },
+        path: '$["input"]["unknown"]',
+      },
+      {
+        input: {
+          event: turnEvent,
+          catalog,
+          resolvers: [],
+          input: { [Symbol("hidden")]: true },
+        },
+        path: '$["input"][Symbol(hidden)]',
+      },
+      {
+        input: {
+          event: turnEvent,
+          catalog,
+          resolvers: [],
+          input: Object.defineProperty({}, "phase", {
+            enumerable: false,
+            value: "hidden",
+          }),
+        },
+        path: '$["input"]["phase"]',
+      },
+      {
+        input: {
+          event: turnEvent,
+          catalog,
+          resolvers: [
+            {
+              resolverId: "extra",
+              slot: DYNAMIC_CAPABILITY_SLOT.TOOLS,
+              resolve: () => ({}),
+              unknown: true,
+            },
+          ],
+        },
+        path: '$["resolvers"][0]["unknown"]',
+      },
+    ];
+
+    for (const invalid of invalidWrappers) {
+      await expect(
+        runDynamicCapabilityResolvers(
+          invalid.input as unknown as Parameters<typeof runDynamicCapabilityResolvers>[0],
+        ),
+      ).resolves.toEqual({
+        ok: false,
+        issues: [{ kind: "context_invalid", path: invalid.path, reason: "json_value_required" }],
+      });
+    }
+  });
+
+  it("rejects service-only fields at the context-helper boundary", () => {
+    for (const [field, value] of [
+      ["resolvers", []],
+      ["timeoutMs", 10],
+    ] as const) {
+      const result = makeDynamicCapabilityContext({
+        event: turnEvent,
+        catalog,
+        [field]: value,
+      } as unknown as Parameters<typeof makeDynamicCapabilityContext>[0]);
+      expect(result).toEqual({
+        ok: false,
+        issue: {
+          kind: "context_invalid",
+          path: `$[${JSON.stringify(field)}]`,
+          reason: "json_value_required",
+        },
+      });
+    }
+  });
+
   it("rejects cyclic context graphs without raw promise rejection", async () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
