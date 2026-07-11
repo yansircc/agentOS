@@ -427,17 +427,18 @@ const isValidTimeout = (timeoutMs: number): boolean =>
   Number.isFinite(timeoutMs) && Number.isInteger(timeoutMs) && timeoutMs > 0;
 
 const invalidTimeoutIssues = (
-  input: DynamicCapabilityResolverServiceInput,
+  resolvers: ReadonlyArray<DynamicCapabilityResolverDefinition>,
+  timeoutMs: number | undefined,
 ): ReadonlyArray<DynamicCapabilityResolverServiceIssue> => {
   const issues: DynamicCapabilityResolverServiceIssue[] = [];
-  if (input.timeoutMs !== undefined && !isValidTimeout(input.timeoutMs)) {
+  if (timeoutMs !== undefined && !isValidTimeout(timeoutMs)) {
     issues.push({
       kind: "timeout_invalid",
       owner: { kind: "service" },
-      timeoutMs: input.timeoutMs,
+      timeoutMs,
     });
   }
-  for (const resolver of input.resolvers) {
+  for (const resolver of resolvers) {
     if (resolver.timeoutMs === undefined || isValidTimeout(resolver.timeoutMs)) continue;
     issues.push({
       kind: "timeout_invalid",
@@ -561,9 +562,11 @@ export const runDynamicCapabilityResolvers = async (
   );
   if (!selected.ok) return { ok: false, issues: [selected.issue] };
   const serviceInput = selected.value as unknown as DynamicCapabilityResolverServiceInput;
+  const acceptedResolvers = serviceInput.resolvers;
+  const acceptedTimeoutMs = serviceInput.timeoutMs;
   const contextSnapshot = dynamicCapabilityContextSnapshot(selected.value);
   if (!contextSnapshot.ok) return { ok: false, issues: [contextSnapshot.issue] };
-  if (!Array.isArray(serviceInput.resolvers)) {
+  if (!Array.isArray(acceptedResolvers)) {
     return {
       ok: false,
       issues: [
@@ -576,23 +579,23 @@ export const runDynamicCapabilityResolvers = async (
     };
   }
   const inputIssues = [
-    ...duplicateResolverIssues(serviceInput.resolvers),
-    ...invalidTimeoutIssues(serviceInput),
+    ...duplicateResolverIssues(acceptedResolvers),
+    ...invalidTimeoutIssues(acceptedResolvers, acceptedTimeoutMs),
   ];
   if (inputIssues.length > 0) return { ok: false, issues: inputIssues };
 
-  const runnableSlots = new Set(dynamicCapabilitySlotsForEvent(serviceInput.event.name));
-  const runnableResolvers = serviceInput.resolvers.filter((resolver) =>
+  const context = contextSnapshot.value;
+  const runnableSlots = new Set(dynamicCapabilitySlotsForEvent(context.event.name));
+  const runnableResolvers = acceptedResolvers.filter((resolver) =>
     runnableSlots.has(resolver.slot),
   );
-  const context = contextSnapshot.value;
   const results = await Promise.all(
     runnableResolvers.map((resolver) =>
       runResolver(
         resolver,
         context,
         context.event,
-        serviceInput.timeoutMs ?? DEFAULT_DYNAMIC_RESOLVER_TIMEOUT_MS,
+        acceptedTimeoutMs ?? DEFAULT_DYNAMIC_RESOLVER_TIMEOUT_MS,
       ),
     ),
   );

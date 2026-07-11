@@ -973,6 +973,49 @@ describe("runDynamicCapabilityResolvers", () => {
     });
   });
 
+  it("selects slots from the accepted event snapshot without rereading the source event", async () => {
+    let rawNameReads = 0;
+    let skillRan = false;
+    const sourceEvent = new Proxy(
+      { name: DYNAMIC_CAPABILITY_EVENT.STEP_STARTED, stepRef: "step:1" },
+      {
+        get: (target, key, receiver) => {
+          if (key === "name") {
+            rawNameReads += 1;
+            return DYNAMIC_CAPABILITY_EVENT.TURN_STARTED;
+          }
+          return Reflect.get(target, key, receiver);
+        },
+      },
+    );
+
+    const result = await runDynamicCapabilityResolvers({
+      event: sourceEvent,
+      catalog,
+      resolvers: [
+        resolver("tool-step", DYNAMIC_CAPABILITY_SLOT.TOOLS, () => ({
+          tools: { deny: ["write_file"] },
+        })),
+        resolver("skill-must-not-run", DYNAMIC_CAPABILITY_SLOT.SKILLS, () => {
+          skillRan = true;
+          return { skills: { deny: ["review"] } };
+        }),
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(rawNameReads).toBe(0);
+    expect(skillRan).toBe(false);
+    expect(result.projection.event).toEqual({
+      name: DYNAMIC_CAPABILITY_EVENT.STEP_STARTED,
+      stepRef: "step:1",
+    });
+    expect(result.projection.skills[0]?.decision).toBe(
+      DYNAMIC_CAPABILITY_VISIBILITY.BASELINE,
+    );
+  });
+
   it("rejects duplicate resolver ids within a slot before execution", async () => {
     let ran = false;
     const result = await runDynamicCapabilityResolvers({
