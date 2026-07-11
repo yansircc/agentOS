@@ -16,6 +16,21 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const workspaceAgentSource = read(workspaceAgentSourcePath);
     const commandProjectionSource = read(commandProjectionSourcePath);
     const surface = readJson("docs/surface.json");
+    const staticRuntimeBootstrapModelSource = sliceBetweenMarkers(
+      source,
+      "interface StaticRuntimeBootstrapModel",
+      "const renderCustomToolImports =",
+    );
+    const renderStaticRuntimeBootstrapImportsSource = sliceBetweenMarkers(
+      source,
+      "const renderStaticRuntimeBootstrapImports =",
+      "const renderStaticRuntimeBootstrap =",
+    );
+    const renderStaticRuntimeBootstrapSource = sliceBetweenMarkers(
+      source,
+      "const renderStaticRuntimeBootstrap =",
+      "const renderSubmitSpecFromRunInput =",
+    );
     const renderWorkspaceStaticTargetSource = sliceBetweenMarkers(
       source,
       "const renderWorkspaceStaticTarget =",
@@ -24,6 +39,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const renderChatStaticTargetSource = sliceBetweenMarkers(
       source,
       "const renderChatStaticTarget =",
+      "const renderLocalAgentApp =",
+    );
+    const renderLocalAgentAppSource = sliceBetweenMarkers(
+      source,
+      "const renderLocalAgentApp =",
       "const renderStaticTarget =",
     );
     const renderStaticTargetDispatchSource = sliceBetweenMarkers(
@@ -32,8 +52,12 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "const renderCloudflareScopeHelper =",
     );
     const renderStaticTargetSource = [
+      staticRuntimeBootstrapModelSource,
+      renderStaticRuntimeBootstrapImportsSource,
+      renderStaticRuntimeBootstrapSource,
       renderWorkspaceStaticTargetSource,
       renderChatStaticTargetSource,
+      renderLocalAgentAppSource,
       renderStaticTargetDispatchSource,
     ].join("\n");
     const linkWorkspaceStaticTargetSource = sliceBetweenMarkers(
@@ -98,6 +122,20 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     ].join("\n");
     if (renderStaticTargetSource.length === 0) {
       failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticTarget`);
+    }
+    for (const [name, targetSource] of [
+      ["StaticRuntimeBootstrapModel", staticRuntimeBootstrapModelSource],
+      ["renderStaticRuntimeBootstrapImports", renderStaticRuntimeBootstrapImportsSource],
+      ["renderStaticRuntimeBootstrap", renderStaticRuntimeBootstrapSource],
+      ["renderWorkspaceStaticTarget", renderWorkspaceStaticTargetSource],
+      ["renderChatStaticTarget", renderChatStaticTargetSource],
+      ["renderLocalAgentApp", renderLocalAgentAppSource],
+    ]) {
+      if (targetSource.length === 0) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: missing shared bootstrap surface ${name}`,
+        );
+      }
     }
     if (linkWorkspaceStaticTargetSource.length === 0) {
       failures.push(
@@ -214,30 +252,97 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
         );
       }
     }
-    const assertProfileSkillProjection = ({ targetSource, profile }) => {
-      for (const marker of [
-        "const hasSkills = normalized.skills.length > 0;",
-        '...(hasSkills ? ["defineProductTool"] : [])',
-        'renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect)',
-        "${renderSkillSupport(normalized.skills)}",
-        "${renderSubmitSpecFromRunInput(hasSkills)}",
-        "...generatedFrameworkTools",
-      ]) {
+    const sharedBootstrapMarkersBySurface = [
+      {
+        name: "StaticRuntimeBootstrapModel",
+        targetSource: staticRuntimeBootstrapModelSource,
+        markers: [
+          "interface StaticRuntimeBootstrapModel",
+          "const staticRuntimeBootstrapModelFor =",
+          "customToolNames: toolNames.filter",
+          "manifestTools: normalized.deployment.manifest.tools",
+          "llmRoutes: normalized.llmRoutes",
+          "skills: normalized.skills",
+          "instructionFragments: normalized.instructionFragments",
+          "dynamicResolvers: normalized.dynamicResolvers",
+        ],
+      },
+      {
+        name: "renderStaticRuntimeBootstrapImports",
+        targetSource: renderStaticRuntimeBootstrapImportsSource,
+        markers: [
+          "const renderStaticRuntimeBootstrapImports =",
+          'import semanticDeclarations from "./manifest.json";',
+          "runDynamicCapabilityResolvers",
+          "OpenAiCompatibleLlmTransportLive",
+          "preflightOpenAiCompatibleProviderMaterial",
+          "manifestTruthIdentity",
+          "deterministicToolInvocation",
+          "unsafeRunToolByName",
+          "renderCustomToolImports(model)",
+        ],
+      },
+      {
+        name: "renderStaticRuntimeBootstrap",
+        targetSource: renderStaticRuntimeBootstrapSource,
+        markers: [
+          "const renderStaticRuntimeBootstrap =",
+          "const semanticManifest =",
+          "const semanticTruthIdentity =",
+          "const generatedCustomTools =",
+          "renderDynamicCapabilitySupport(model)",
+          "renderSkillSupport(model.skills)",
+          "renderMaterialValueFunction(model.llmRoutes)",
+          "renderGeneratedProviderPreflight(model.llmRoutes)",
+          "renderGeneratedLlmRoutesFor(model.llmRoutes)",
+        ],
+      },
+    ];
+    for (const { name, targetSource, markers } of sharedBootstrapMarkersBySurface) {
+      for (const marker of markers) {
         if (!targetSource.includes(marker)) {
           failures.push(
-            `${sourcePath}: generated-static-target-linking: ${profile} missing generated skills projection marker ${marker}`,
+            `${sourcePath}: generated-static-target-linking: ${name} missing shared semantic marker ${marker}`,
           );
         }
       }
-    };
-    assertProfileSkillProjection({
-      targetSource: renderWorkspaceStaticTargetSource,
-      profile: "workspace@1",
-    });
-    assertProfileSkillProjection({
-      targetSource: renderChatStaticTargetSource,
-      profile: "chat@1",
-    });
+    }
+
+    const staticTargetConsumers = [
+      { name: "cloudflare workspace", targetSource: renderWorkspaceStaticTargetSource },
+      { name: "cloudflare chat", targetSource: renderChatStaticTargetSource },
+      { name: "node local", targetSource: renderLocalAgentAppSource },
+    ];
+    const requiredBootstrapConsumerMarkers = [
+      "const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);",
+      "const hasSkills = bootstrap.skills.length > 0;",
+      "renderStaticRuntimeBootstrapImports(bootstrap, modules)",
+      "${renderStaticRuntimeBootstrap(bootstrap)}",
+    ];
+    const forbiddenTargetLocalBootstrapMarkers = [
+      "const semanticManifest =",
+      "const semanticTruthIdentity =",
+      "const generatedCustomTools =",
+      "const generatedDynamicCapabilityCatalog =",
+      "const materialEnvValue =",
+      "const requiredStringMaterial =",
+    ];
+    for (const { name, targetSource } of staticTargetConsumers) {
+      for (const marker of requiredBootstrapConsumerMarkers) {
+        if (!targetSource.includes(marker)) {
+          failures.push(
+            `${sourcePath}: generated-static-target-linking: ${name} missing shared bootstrap consumer marker ${marker}`,
+          );
+        }
+      }
+      for (const marker of forbiddenTargetLocalBootstrapMarkers) {
+        if (targetSource.includes(marker)) {
+          failures.push(
+            `${sourcePath}: generated-static-target-linking: ${name} duplicates shared bootstrap writer ${marker}`,
+          );
+        }
+      }
+    }
 
     const requiredModuleKinds = [
       '"semantic-json"',
