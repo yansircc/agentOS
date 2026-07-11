@@ -100,3 +100,45 @@ void test("effect manifest generator rejects normalized package adapter duplicat
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
 });
+
+void test("effect manifest generator rejects canonical and aliased package owners before writes", () => {
+  const fixture = makeFixture([]);
+  try {
+    const sourcePath = path.join(fixture.root, "docs/effect-skill.json");
+    const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+    source.packageManifests["packages/./core"] = {
+      shape: ["library"],
+      allowedAdapters: [adapter("src/adapter.ts", "@agent-os/core/divergent-owner")],
+    };
+    fs.writeFileSync(sourcePath, JSON.stringify(source));
+
+    const result = runGenerator(fixture.root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must exactly equal a canonical workspace package path/u);
+    assert.match(result.stderr, /duplicates canonical package owner packages\/core/u);
+    assert.equal(fs.existsSync(path.join(fixture.root, ".effect-skill.json")), false);
+    assert.equal(fs.existsSync(path.join(fixture.root, "packages/core/.effect-skill.json")), false);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+void test("effect manifest generator rejects a lone aliased package owner before writes", () => {
+  const fixture = makeFixture([]);
+  try {
+    const sourcePath = path.join(fixture.root, "docs/effect-skill.json");
+    const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+    source.packageManifests["packages/./core"] = source.packageManifests["packages/core"];
+    delete source.packageManifests["packages/core"];
+    fs.writeFileSync(sourcePath, JSON.stringify(source));
+
+    const result = runGenerator(fixture.root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must exactly equal a canonical workspace package path/u);
+    assert.doesNotMatch(result.stderr, /duplicates canonical package owner/u);
+    assert.equal(fs.existsSync(path.join(fixture.root, ".effect-skill.json")), false);
+    assert.equal(fs.existsSync(path.join(fixture.root, "packages/core/.effect-skill.json")), false);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});

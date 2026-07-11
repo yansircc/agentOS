@@ -15,6 +15,35 @@ const packageManifests =
 
 const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const normalizeAdapterPath = (adapterPath) => path.posix.normalize(adapterPath);
+const workspacePaths = workspacePackagePaths(root).map(String);
+const workspacePathSet = new Set(workspacePaths);
+
+if (packageManifests === null) {
+  failures.push("docs/effect-skill.json missing packageManifests object");
+} else {
+  const normalizedOwners = new Map();
+  for (const packagePath of Object.keys(packageManifests)) {
+    const normalizedPath = path.posix.normalize(packagePath);
+    if (packagePath !== normalizedPath || !workspacePathSet.has(packagePath)) {
+      failures.push(
+        `docs/effect-skill.json.packageManifests.${packagePath} must exactly equal a canonical workspace package path`,
+      );
+    }
+    const previousOwner = normalizedOwners.get(normalizedPath);
+    if (previousOwner !== undefined) {
+      failures.push(
+        `docs/effect-skill.json.packageManifests.${packagePath} duplicates canonical package owner ${previousOwner}`,
+      );
+    } else {
+      normalizedOwners.set(normalizedPath, packagePath);
+    }
+  }
+}
+
+if (failures.length > 0) {
+  console.error(failures.join("\n"));
+  process.exit(1);
+}
 
 const stableJson = (value) =>
   `${JSON.stringify(value, null, 2).replace(
@@ -118,16 +147,13 @@ const scannerPackagesFromWorkspaces = (rootSource) => {
 
   const packageDefaults = isRecord(rootSource.packageDefaults) ? rootSource.packageDefaults : {};
   const packageOverrides = isRecord(rootSource.packageOverrides) ? rootSource.packageOverrides : {};
-  const paths = workspacePackagePaths(root);
-  const pathSet = new Set(paths);
-
   for (const packagePath of Object.keys(packageOverrides)) {
-    if (!pathSet.has(packagePath)) {
+    if (!workspacePathSet.has(packagePath)) {
       failures.push(`${packagePath} has an effect scanner override but is not a workspace package`);
     }
   }
 
-  return paths
+  return workspacePaths
     .map((packagePath) => {
       const packagePathText = String(packagePath);
       const override = isRecord(packageOverrides[packagePath]) ? packageOverrides[packagePath] : {};
@@ -163,9 +189,7 @@ if (!isRecord(source.root)) {
     allowedAdapters: rootAllowedAdapters,
     resolvePath: (adapterPath) => adapterPath,
   });
-  if (packageManifests !== null) {
-    validateRootAdapterOwnership(rootAllowedAdapters, Object.keys(packageManifests));
-  }
+  validateRootAdapterOwnership(rootAllowedAdapters, Object.keys(packageManifests));
   const {
     packageDefaults: _packageDefaults,
     packageOverrides: _packageOverrides,
@@ -177,38 +201,33 @@ if (!isRecord(source.root)) {
     ...rootSource,
     allowedAdapters: [
       ...(Array.isArray(rootAllowedAdapters) ? rootAllowedAdapters : []),
-      ...(packageManifests === null ? [] : packageAllowedAdapters(packageManifests)),
+      ...packageAllowedAdapters(packageManifests),
     ],
   });
 }
 
-if (packageManifests === null) {
-  failures.push("docs/effect-skill.json missing packageManifests object");
-} else {
-  const expectedPackageFiles = new Set(
-    Object.keys(packageManifests).map((packagePath) => `${packagePath}/.effect-skill.json`),
-  );
+const expectedPackageFiles = new Set(
+  Object.keys(packageManifests).map((packagePath) => `${packagePath}/.effect-skill.json`),
+);
 
-  for (const [packagePath, manifest] of Object.entries(packageManifests)) {
-    const packageJson = path.join(root, packagePath, "package.json");
-    if (!fs.existsSync(packageJson)) {
-      failures.push(`${packagePath} has an effect manifest but no package.json`);
-      continue;
-    }
-    validateAllowedAdapters({
-      label: `docs/effect-skill.json.packageManifests.${packagePath}`,
-      allowedAdapters: isRecord(manifest) ? manifest.allowedAdapters : undefined,
-      resolvePath: (adapterPath) => `${packagePath}/${adapterPath}`,
-    });
-    writeJson(`${packagePath}/.effect-skill.json`, manifest);
+for (const [packagePath, manifest] of Object.entries(packageManifests)) {
+  const packageJson = path.join(root, packagePath, "package.json");
+  if (!fs.existsSync(packageJson)) {
+    failures.push(`${packagePath} has an effect manifest but no package.json`);
+    continue;
   }
+  validateAllowedAdapters({
+    label: `docs/effect-skill.json.packageManifests.${packagePath}`,
+    allowedAdapters: isRecord(manifest) ? manifest.allowedAdapters : undefined,
+    resolvePath: (adapterPath) => `${packagePath}/${adapterPath}`,
+  });
+  writeJson(`${packagePath}/.effect-skill.json`, manifest);
+}
 
-  for (const workspacePath of workspacePackagePaths(root)) {
-    const packagePath = String(workspacePath);
-    const manifestFile = `${packagePath}/.effect-skill.json`;
-    if (fs.existsSync(path.join(root, manifestFile)) && !expectedPackageFiles.has(manifestFile)) {
-      failures.push(`${manifestFile} exists but is not declared in docs/effect-skill.json`);
-    }
+for (const packagePath of workspacePaths) {
+  const manifestFile = `${packagePath}/.effect-skill.json`;
+  if (fs.existsSync(path.join(root, manifestFile)) && !expectedPackageFiles.has(manifestFile)) {
+    failures.push(`${manifestFile} exists but is not declared in docs/effect-skill.json`);
   }
 }
 
