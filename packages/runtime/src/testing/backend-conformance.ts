@@ -402,10 +402,10 @@ const createBaseBackendConformanceLaws = (
       ),
     );
 
-    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_DURABLE_ACK, () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_ACK_READABLE, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
-          const identity = contractIdentity("ledger-durable-ack");
+          const identity = contractIdentity("ledger-ack-readable");
           const committed = yield* promise(() =>
             driver.commit([
               ledgerSpec(identity, "ledger_law.ack", {

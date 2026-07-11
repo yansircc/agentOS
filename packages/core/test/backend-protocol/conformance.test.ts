@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import {
+  BACKEND_CONFORMANCE_LAW_ID,
   BACKEND_CONFORMANCE_LAWS,
   BACKEND_CONFORMANCE_PROTOCOL_VERSION,
   BACKEND_CONFORMANCE_REQUIRED_CAPABILITIES,
@@ -22,6 +23,25 @@ const validReport = (): BackendConformanceReport => ({
 describe("backend conformance report validation", () => {
   it("accepts the exact core-owned manifest", () => {
     expect(validateBackendConformanceReport(validReport())).toMatchObject({ ok: true });
+    expect(BACKEND_CONFORMANCE_LAWS).toContainEqual({
+      id: BACKEND_CONFORMANCE_LAW_ID.LEDGER_ACK_READABLE,
+      title: "ledger acknowledgement is readable",
+      requiredCapabilities: ["ledger.commit", "ledger.read"],
+    });
+  });
+
+  it("rejects the stale durable-ack law id", () => {
+    const report = validReport();
+    const staleResults = report.results.map((result) =>
+      result.lawId === BACKEND_CONFORMANCE_LAW_ID.LEDGER_ACK_READABLE
+        ? { ...result, lawId: "ledger.durable-ack" }
+        : result,
+    );
+
+    expect(validateBackendConformanceReport({ ...report, results: staleResults })).toMatchObject({
+      ok: false,
+    });
+    expect(BACKEND_CONFORMANCE_LAWS.map((law) => law.id)).not.toContain("ledger.durable-ack");
   });
 
   it("rejects stale versions and incomplete law coverage", () => {

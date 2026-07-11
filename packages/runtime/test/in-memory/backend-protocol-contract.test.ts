@@ -275,17 +275,17 @@ describe("backend conformance red cases", () => {
     );
   });
 
-  it("rejects acknowledgement before a durable read", async () => {
+  it("rejects an acknowledgement that is not readable", async () => {
     await expectBrokenLaw(
-      "broken-durable-ack",
+      "broken-ack-readable",
       (driver) => ({
         ...driver,
         events: (identity, options) =>
-          identity.scopeRef.scopeId === "ledger-durable-ack"
+          identity.scopeRef.scopeId === "ledger-ack-readable"
             ? Promise.resolve([])
             : driver.events(identity, options),
       }),
-      BACKEND_CONFORMANCE_LAW_ID.LEDGER_DURABLE_ACK,
+      BACKEND_CONFORMANCE_LAW_ID.LEDGER_ACK_READABLE,
     );
   });
 

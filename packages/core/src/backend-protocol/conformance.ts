@@ -21,7 +21,7 @@ export type BackendConformanceCapability =
 export const BACKEND_CONFORMANCE_LAW_ID = {
   LEDGER_READ_PREFIX: "ledger.read-prefix",
   LEDGER_BATCH_ATOMICITY: "ledger.batch-atomicity",
-  LEDGER_DURABLE_ACK: "ledger.durable-ack",
+  LEDGER_ACK_READABLE: "ledger.ack-readable",
   LEDGER_PER_TRUTH_ORDERING: "ledger.per-truth-ordering",
   LEDGER_OWNER_INTEGRITY: "ledger.owner-integrity",
   LEDGER_IDEMPOTENT_APPEND: "ledger.idempotent-append",
@@ -69,7 +69,7 @@ export const BACKEND_CONFORMANCE_LAWS = [
     capability.LEDGER_COMMIT,
     capability.LEDGER_READ,
   ]),
-  law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_DURABLE_ACK, "ledger durable acknowledgement", [
+  law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_ACK_READABLE, "ledger acknowledgement is readable", [
     capability.LEDGER_COMMIT,
     capability.LEDGER_READ,
   ]),
