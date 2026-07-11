@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { backendProtocolEventIdentityKey } from "@agent-os/core/backend-protocol";
 import {
   Ledger,
+  LedgerArchive,
   MaterializedProjections,
   defineProjection,
   projectionFail,
@@ -265,6 +266,7 @@ describe("in-memory materialized projections", () => {
     const { backend, runtime } = makeRuntime(scope);
     try {
       const ledger = await runtime.runPromise(Ledger);
+      const archive = await runtime.runPromise(LedgerArchive);
       const projections = await runtime.runPromise(MaterializedProjections);
 
       await runtime.runPromise(
@@ -281,6 +283,13 @@ describe("in-memory materialized projections", () => {
           },
         ]),
       );
+
+      const events = await runtime.runPromise(ledger.events(truthIdentity(scope)));
+      const receipt = await archive.archive({
+        identity: truthIdentity(scope),
+        throughEventId: events[0]!.id,
+      });
+      await archive.evict(receipt);
 
       installTestProjectionRegistry(backend.state, [runWorkflowProjection(2)]);
 

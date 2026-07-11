@@ -7,12 +7,19 @@ import {
 } from "@agent-os/core/errors";
 import type { EventHandler, EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import {
+  createLedgerArchiveArtifact,
+  createLedgerArchiveReceipt,
+  canonicalLedgerArchiveJson,
+  decodeLedgerArchiveArtifact,
+  validateLedgerArchiveChain,
   backendProtocolEventIdentityKey,
   backendProtocolTruthIdentityKey,
   scheduledEventIntentPayload,
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
   type DurableProcessLifecycleState,
+  type LedgerArchiveArtifact,
+  type LedgerArchiveReceipt,
 } from "@agent-os/core/backend-protocol";
 import {
   applyProjectionEvent,
@@ -67,6 +74,7 @@ import {
   type InMemoryDueWorkRow,
 } from "./due-work-state";
 import { fireInMemoryEvents, type InMemoryEventSink } from "./telemetry-state";
+import { LedgerArchiveError, mergeLedgerArchiveEvents } from "../ledger-archive";
 export {
   inMemoryConversationRuntimeIdentity,
   inMemoryConversationTruthIdentity,
@@ -140,6 +148,16 @@ export class InMemoryBackendState {
   private projectionRegistryError: ProjectionRegistryError | null = null;
   private readonly projectionRows = new Map<string, MaterializedProjectionRow>();
   private readonly projectionMeta = new Map<string, InMemoryProjectionMeta>();
+  private readonly archiveSegments = new Map<
+    string,
+    Array<{
+      artifact: LedgerArchiveArtifact;
+      receipt: LedgerArchiveReceipt;
+      bytes: Uint8Array;
+      tampered: boolean;
+    }>
+  >();
+  private readonly archiveLocks = new Map<string, Promise<void>>();
 
   constructor(options: InMemoryBackendStateOptions = {}) {
     this.projectionRegistry = new Map();
@@ -171,11 +189,23 @@ export class InMemoryBackendState {
   }
 
   private rowsForTruthIdentity(identity: BackendProtocolTruthIdentity): ReadonlyArray<LedgerEvent> {
-    return this.rowsByTruthIdentityKey.get(backendProtocolTruthIdentityKey(identity)) ?? [];
+    const key = backendProtocolTruthIdentityKey(identity);
+    const segments = this.archiveSegments.get(key) ?? [];
+    if (segments.some((segment) => segment.tampered)) {
+      throw new LedgerArchiveError({ operation: "read", cause: "archive bytes were tampered" });
+    }
+    validateLedgerArchiveChain(segments.map((segment) => segment.artifact));
+    return mergeLedgerArchiveEvents(
+      identity,
+      segments.map((segment) => segment.artifact),
+      this.rowsByTruthIdentityKey.get(key) ?? [],
+    );
   }
 
   private rowsForEventIdentity(identity: BackendProtocolEventIdentity): ReadonlyArray<LedgerEvent> {
-    return this.rowsByEventIdentityKey.get(backendProtocolEventIdentityKey(identity)) ?? [];
+    return this.rowsForTruthIdentity(identity).filter(
+      (event) => event.factOwnerRef === identity.factOwnerRef,
+    );
   }
 
   private queryRows(
@@ -188,6 +218,102 @@ export class InMemoryBackendState {
   private setProjectionRegistry(registry: ProjectionRegistry): void {
     this.projectionRegistry = registry;
     this.projectionRegistryError = null;
+  }
+
+  private async withArchiveLock<A>(key: string, run: () => Promise<A>): Promise<A> {
+    const prior = this.archiveLocks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = prior.then(() => current);
+    this.archiveLocks.set(key, tail);
+    await prior;
+    try {
+      return await run();
+    } finally {
+      release();
+      if (this.archiveLocks.get(key) === tail) this.archiveLocks.delete(key);
+    }
+  }
+
+  async archiveLedger(spec: {
+    readonly identity: BackendProtocolTruthIdentity;
+    readonly throughEventId: number;
+  }): Promise<LedgerArchiveReceipt> {
+    const key = backendProtocolTruthIdentityKey(spec.identity);
+    return this.withArchiveLock(key, async () => {
+      const segments = this.archiveSegments.get(key) ?? [];
+      const previous = segments.at(-1);
+      const previousLastId = previous?.receipt.lastEventId ?? 0;
+      const events = (this.rowsByTruthIdentityKey.get(key) ?? []).filter(
+        (event) => event.id > previousLastId && event.id <= spec.throughEventId,
+      );
+      if (events.length === 0) {
+        if (previous !== undefined && spec.throughEventId <= previous.receipt.lastEventId) {
+          return previous.receipt;
+        }
+        throw new LedgerArchiveError({ operation: "archive", cause: "no hot events to archive" });
+      }
+      const artifact = await createLedgerArchiveArtifact({
+        identity: spec.identity,
+        previousSegmentSha256: previous?.artifact.sha256 ?? null,
+        events,
+      });
+      const bytes = new Uint8Array(artifact.bytes);
+      const archiveRef = `memory:${encodeURIComponent(key)}:${artifact.sha256}`;
+      const receipt = await createLedgerArchiveReceipt({ artifact, archiveRef, readback: bytes });
+      segments.push({ artifact, receipt, bytes, tampered: false });
+      this.archiveSegments.set(key, segments);
+      return receipt;
+    });
+  }
+
+  async evictArchivedLedger(receipt: LedgerArchiveReceipt): Promise<{ readonly evicted: number }> {
+    return this.withArchiveLock(receipt.truthKey, async () => {
+      const segments = this.archiveSegments.get(receipt.truthKey) ?? [];
+      const stored = segments.find(
+        (segment) => segment.receipt.segmentSha256 === receipt.segmentSha256,
+      );
+      if (
+        stored === undefined ||
+        canonicalLedgerArchiveJson(stored.receipt) !== canonicalLedgerArchiveJson(receipt) ||
+        stored.tampered
+      ) {
+        throw new LedgerArchiveError({ operation: "evict", cause: "receipt is not authoritative" });
+      }
+      await decodeLedgerArchiveArtifact(stored.bytes, stored.receipt.segmentSha256);
+      const ids = new Set(stored.artifact.segment.events.map((event) => event.id));
+      const hot = this.rows.filter((event) => ids.has(event.id));
+      if (hot.length === 0) return { evicted: 0 };
+      if (
+        hot.length !== ids.size ||
+        hot.some((event) => {
+          const archived = stored.artifact.segment.events.find(
+            (candidate) => candidate.id === event.id,
+          );
+          return (
+            archived === undefined ||
+            canonicalLedgerArchiveJson(event) !== canonicalLedgerArchiveJson(archived)
+          );
+        })
+      ) {
+        throw new LedgerArchiveError({ operation: "evict", cause: "hot event set mismatch" });
+      }
+      const remaining = this.rows.filter((event) => !ids.has(event.id));
+      this.rows.length = 0;
+      this.rowsByTruthIdentityKey.clear();
+      this.rowsByEventIdentityKey.clear();
+      this.appendRows(remaining);
+      return { evicted: hot.length };
+    });
+  }
+
+  corruptArchiveForTest(receipt: LedgerArchiveReceipt): void {
+    const segment = (this.archiveSegments.get(receipt.truthKey) ?? []).find(
+      (candidate) => candidate.receipt.segmentSha256 === receipt.segmentSha256,
+    );
+    if (segment !== undefined) segment.tampered = true;
   }
 
   private setProjectionRegistryResult(result: ProjectionRegistryBuildResult): void {

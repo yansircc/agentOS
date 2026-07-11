@@ -4,9 +4,14 @@ import { afterAll, beforeAll } from "vite-plus/test";
 import { Effect } from "effect";
 import { bindingMaterialRef } from "@agent-os/core/material-ref";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
-import { DISPATCH_EVENT_KINDS, DELIVERY_RETRY_TRIGGER_KIND } from "@agent-os/core/backend-protocol";
+import {
+  DISPATCH_EVENT_KINDS,
+  DELIVERY_RETRY_TRIGGER_KIND,
+  backendProtocolEventIdentityKey,
+  backendProtocolTruthIdentityKey,
+} from "@agent-os/core/backend-protocol";
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../../src/node";
-import { PsqlCli } from "../../src/node/host";
+import { PsqlCli, sqlJson, sqlString } from "../../src/node/host";
 import {
   registerBackendConformanceSuite,
   type ContractDispatchReceiver,
@@ -295,6 +300,103 @@ describe("node-postgres event+due atomicity", () => {
       );
       expect(failedAfterRestart).toHaveLength(2);
       expect(await restarted.pendingDueCount(source)).toBe(1);
+    });
+  });
+
+  it("preserves archived ledger facts across exact eviction and restart", async () => {
+    const identity = contractIdentity("node-archive");
+    const otherTruth = contractIdentity("node-archive-other-truth");
+    const otherOwner = { ...identity, factOwnerRef: "@test/node-archive-other-owner" };
+    await withBackend("ledger_archive", async (backend, sql, restart) => {
+      const commitIdentity = {
+        scopeRef: identity.scopeRef,
+        effectAuthorityRef: identity.effectAuthorityRef,
+      };
+      const [first] = await backend.commit([
+        { ...commitIdentity, kind: "archive.a", payload: { value: 1 } },
+      ]);
+      const [interleaved] = await backend.commit([
+        {
+          scopeRef: otherTruth.scopeRef,
+          effectAuthorityRef: otherTruth.effectAuthorityRef,
+          kind: "archive.other-truth",
+          payload: { value: 2 },
+        },
+      ]);
+      const committed = await backend.commit([
+        { ...commitIdentity, kind: "archive.b", payload: { value: 3 } },
+        { ...commitIdentity, kind: "archive.c", payload: { value: 4 } },
+      ]);
+      await sql.exec(`
+        INSERT INTO agentos_events
+          (ts, kind, truth_key, identity_key, scope_ref, fact_owner_ref,
+           effect_authority_ref, payload)
+        VALUES (
+          1, 'archive.other-owner',
+          ${sqlString(backendProtocolTruthIdentityKey(otherOwner))},
+          ${sqlString(backendProtocolEventIdentityKey(otherOwner))},
+          ${sqlJson(otherOwner.scopeRef)}, ${sqlJson(otherOwner.factOwnerRef)},
+          ${sqlJson(otherOwner.effectAuthorityRef)}, ${sqlJson({ value: 5 })}
+        )
+      `);
+      const [{ id: otherOwnerEventId }] = await sql.json<{ readonly id: number }>(`
+        SELECT MAX(id)::int AS id FROM agentos_events
+      `);
+      const baseline = await backend.events(identity);
+      const otherOwnerBaseline = await backend.events(otherOwner);
+      const receipt = await backend.archiveLedger({
+        identity,
+        throughEventId: otherOwnerEventId!,
+      });
+      expect(await backend.events(identity)).toEqual(baseline);
+      expect(await backend.events(otherOwner)).toEqual(otherOwnerBaseline);
+      expect(await backend.evictArchivedLedger(receipt)).toEqual({ evicted: 4 });
+      expect(await backend.events(identity)).toEqual(baseline);
+      expect(await backend.events(otherOwner)).toEqual(otherOwnerBaseline);
+      expect(await backend.events(otherTruth)).toEqual([interleaved]);
+      const restarted = await restart();
+      expect(await restarted.events(identity)).toEqual(baseline);
+      expect(await restarted.events(otherOwner)).toEqual(otherOwnerBaseline);
+      expect(await restarted.events(otherTruth)).toEqual([interleaved]);
+      const later = await restarted.commit([
+        { ...commitIdentity, kind: "archive.d", payload: { value: 6 } },
+      ]);
+      expect(later[0]!.id).toBeGreaterThan(otherOwnerEventId!);
+      expect(first!.id).toBeLessThan(interleaved!.id);
+      expect(interleaved!.id).toBeLessThan(committed[0]!.id);
+    });
+  });
+
+  it("linearizes archive successors across backend processes", async () => {
+    const identity = contractIdentity("node-archive-concurrent");
+    await withBackend("ledger_archive_concurrent", async (backend, _sql, restart) => {
+      const commitIdentity = {
+        scopeRef: identity.scopeRef,
+        effectAuthorityRef: identity.effectAuthorityRef,
+      };
+      const committed = await backend.commit([
+        { ...commitIdentity, kind: "archive.a", payload: { value: 1 } },
+        { ...commitIdentity, kind: "archive.b", payload: { value: 2 } },
+        { ...commitIdentity, kind: "archive.c", payload: { value: 3 } },
+      ]);
+      const baseline = await backend.events(identity);
+      const competitor = await restart();
+      const attempts = await Promise.allSettled([
+        backend.archiveLedger({ identity, throughEventId: committed[0]!.id }),
+        competitor.archiveLedger({ identity, throughEventId: committed[1]!.id }),
+      ]);
+      expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(attempts.filter((result) => result.status === "rejected")).toHaveLength(1);
+      const winner = attempts.find((result) => result.status === "fulfilled");
+      if (winner?.status !== "fulfilled") expect.fail("expected one archive successor");
+      const tail = await backend.archiveLedger({
+        identity,
+        throughEventId: committed[2]!.id,
+      });
+      expect(tail.previousSegmentSha256).toBe(winner.value.segmentSha256);
+      await competitor.evictArchivedLedger(winner.value);
+      await backend.evictArchivedLedger(tail);
+      expect(await backend.events(identity)).toEqual(baseline);
     });
   });
 });

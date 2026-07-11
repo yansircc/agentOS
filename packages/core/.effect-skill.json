@@ -1,3 +1,11 @@
 {
-  "shape": ["library"]
+  "shape": ["library"],
+  "allowedAdapters": [
+    {
+      "path": "src/backend-protocol/archive.ts",
+      "owner": "@agent-os/core/ledger-archive-codec",
+      "reason": "backend-neutral archive protocol codec owns synchronous fail-closed canonical JSON validation and the Web Crypto Promise boundary used to derive content-addressed artifacts and exact readback receipts",
+      "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
+    }
+  ]
 }

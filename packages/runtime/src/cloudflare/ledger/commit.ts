@@ -199,6 +199,26 @@ export const ensureLedgerSchema = (sql: SqlStorage): void => {
       next_id INTEGER NOT NULL
     )
   `);
+  sql.exec(`
+    CREATE TABLE IF NOT EXISTS ledger_archive_segments (
+      segment_sha256 TEXT PRIMARY KEY,
+      truth_key TEXT NOT NULL,
+      previous_segment_sha256 TEXT,
+      first_event_id INTEGER NOT NULL,
+      last_event_id INTEGER NOT NULL,
+      archive_ref TEXT NOT NULL,
+      bytes TEXT NOT NULL,
+      receipt TEXT NOT NULL
+    )
+  `);
+  sql.exec(`
+    CREATE INDEX IF NOT EXISTS ledger_archive_truth_first
+      ON ledger_archive_segments (truth_key, first_event_id)
+  `);
+  sql.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ledger_archive_truth_predecessor
+      ON ledger_archive_segments (truth_key, COALESCE(previous_segment_sha256, ''))
+  `);
 };
 
 const nextEventId = (sql: SqlStorage): number => {

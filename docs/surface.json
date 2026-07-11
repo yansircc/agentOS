@@ -65,7 +65,7 @@
         {
           "subpath": "./backend-protocol",
           "audiences": ["advanced"],
-          "capability": "backend protocol DTOs, conformance manifest, and report validation"
+          "capability": "backend protocol DTOs, conformance manifests, ledger archive proof algebra, and report validation"
         },
         {
           "subpath": "./backend-protocol/reference",

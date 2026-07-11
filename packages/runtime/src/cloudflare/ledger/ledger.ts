@@ -19,6 +19,11 @@ import {
   type LedgerPreparedEventSpec,
   type RuntimeStorageError,
 } from "../../ledger";
+import {
+  decodeLedgerArchiveSegments,
+  mergeLedgerArchiveEvents,
+  queryLedgerArchiveEvents,
+} from "../../ledger-archive";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { EventBus } from "./event-bus";
 import { commitLedgerTransaction, ensureLedgerSchema } from "./commit";
@@ -32,6 +37,7 @@ import {
   normalizeBackendPageLimit,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/core/backend-protocol";
+import { selectCloudflareArchiveSegments } from "./archive";
 
 const normalizeNonNegativeInteger = (value: number | undefined, fallback: number): number =>
   value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
@@ -98,6 +104,24 @@ export const selectLedgerEvents = (
     )
     .toArray()
     .map((r): LedgerEvent => ledgerEventFromRow(r as unknown as LedgerEventSqlRow));
+};
+
+export const selectLogicalLedgerEvents = async (
+  sql: SqlStorage,
+  identity: BackendProtocolTruthIdentity,
+  opts: EventQueryOptions = {},
+): Promise<ReadonlyArray<LedgerEvent>> => {
+  if (!queryMatchesTruthIdentity(identity, opts)) return [];
+  const stored = selectCloudflareArchiveSegments(sql, identity);
+  if (stored.length === 0) {
+    return selectLedgerEvents(sql, identity, {
+      ...opts,
+      limit: normalizeBackendPageLimit(opts.limit),
+    });
+  }
+  const artifacts = await decodeLedgerArchiveSegments(identity, stored);
+  const hot = selectLedgerEvents(sql, identity, {});
+  return queryLedgerArchiveEvents(mergeLedgerArchiveEvents(identity, artifacts, hot), opts);
 };
 
 export const LedgerLive = (
@@ -175,11 +199,10 @@ export const LedgerLive = (
           }),
         events: (identity, opts = {}) =>
           Effect.gen(function* () {
-            const events = yield* Effect.try({
+            const events = yield* Effect.tryPromise({
               try: () => {
                 const truthIdentity = truthIdentityFromCommitSpec(identity, "ledger events query");
-                const limit = normalizeBackendPageLimit(opts.limit);
-                return selectLedgerEvents(sql, truthIdentity, { ...opts, limit });
+                return selectLogicalLedgerEvents(sql, truthIdentity, opts);
               },
               catch: (cause) => runtimeStorageError("ledger_events", cause),
             });
@@ -187,9 +210,9 @@ export const LedgerLive = (
           }),
         streamSnapshot: (identity, opts = {}) =>
           Effect.gen(function* () {
-            const events = yield* Effect.try({
+            const events = yield* Effect.tryPromise({
               try: () =>
-                selectLedgerEvents(
+                selectLogicalLedgerEvents(
                   sql,
                   truthIdentityFromCommitSpec(identity, "ledger stream query"),
                   opts,

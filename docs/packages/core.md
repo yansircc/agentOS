@@ -18,6 +18,11 @@ Backend conformance facts are core algebra. The backend-protocol subpath owns th
 protocol version, ordered law manifest, capability matrix, report schema, and positive
 validator. It does not import a test runner or execute backend drivers.
 
+Ledger archive segments and receipts are also core protocol facts. Canonical
+encoding, SHA-256 verification, exact truth identity, strict event ordering, and
+segment-chain validation are provider-neutral; archive storage and eviction remain
+runtime/backend responsibilities.
+
 ## Minimal Usage
 
 ```ts

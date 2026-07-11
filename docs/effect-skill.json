@@ -45,10 +45,22 @@
         "rules": ["EFF025"]
       },
       {
+        "path": "packages/core/src/backend-protocol/archive.ts",
+        "owner": "@agent-os/core/ledger-archive-codec",
+        "reason": "backend-neutral archive protocol codec owns synchronous fail-closed canonical JSON validation and the Web Crypto Promise boundary used to derive content-addressed artifacts and exact readback receipts",
+        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
+      },
+      {
         "path": "packages/runtime/src/attached-stream-protocol.ts",
         "owner": "@agent-os/runtime/attached-stream-protocol",
         "reason": "attached-stream JSON and SSE codecs own malformed frame decode classification without depending on Effect",
         "rules": ["EFF001"]
+      },
+      {
+        "path": "packages/runtime/src/ledger-archive.ts",
+        "owner": "@agent-os/runtime/ledger-archive-codec",
+        "reason": "backend-neutral archive storage codec owns Promise-based checksum verification and fail-closed mapping of malformed persisted segment chains before any logical ledger read",
+        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
       },
       {
         "path": "packages/runtime/src/channel/index.ts",
@@ -79,6 +91,12 @@
         "owner": "@agent-os/runtime/cloudflare",
         "reason": "terminal ledger SSE adapter owns Response construction",
         "rules": ["EFF402"]
+      },
+      {
+        "path": "packages/runtime/src/cloudflare/ledger/archive.ts",
+        "owner": "@agent-os/runtime/cloudflare-ledger-archive",
+        "reason": "terminal Durable Object SQLite archive adapter owns Promise checksum operations, synchronous transaction rollback, persisted receipt decoding, and fail-closed storage errors",
+        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
       },
       {
         "path": "packages/runtime/src/cloudflare/materialized-projections.ts",
@@ -137,8 +155,8 @@
       {
         "path": "packages/runtime/src/in-memory/state.ts",
         "owner": "@agent-os/runtime/in-memory-state",
-        "reason": "in-memory backend state owns synchronous post-commit sink isolation; sink failures are diagnostics and must not roll back committed facts",
-        "rules": ["EFF001"]
+        "reason": "in-memory backend state owns synchronous post-commit sink isolation plus Promise serialization and fail-closed archive codec calls; sink failures are diagnostics while archive failures prevent eviction",
+        "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
       },
       {
         "path": "packages/runtime/src/in-memory/due-work-state.ts",
@@ -157,6 +175,18 @@
         "owner": "@agent-os/runtime/local",
         "reason": "terminal local Node workspace runtime adapter owns Node filesystem and child_process workspace IO, symbolic material/env rejection, command timeout/error mapping, and the executable submit facade over lowerLocalAgentRuntime",
         "rules": ["EFF020", "EFF025", "EFF400"]
+      },
+      {
+        "path": "packages/runtime/src/testing/conformance-assert.ts",
+        "owner": "@agent-os/runtime/backend-conformance-harness",
+        "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",
+        "rules": ["EFF001", "EFF003", "EFF004", "EFF024", "EFF025"]
+      },
+      {
+        "path": "packages/runtime/src/testing/backend-conformance.ts",
+        "owner": "@agent-os/runtime/backend-conformance-runner",
+        "reason": "public executable conformance runner is the terminal Promise boundary that runs the same Effect law bodies used by framework registrars and returns a protocol report",
+        "rules": ["EFF400"]
       },
       {
         "path": "packages/runtime/src/node/index.ts",
@@ -251,8 +281,20 @@
       {
         "path": "packages/runtime/test/cloudflare/test-worker.ts",
         "owner": "@agent-os/runtime/cloudflare-tests",
-        "reason": "Cloudflare worker test adapter owns Response construction",
-        "rules": ["EFF402"]
+        "reason": "Cloudflare worker test adapter owns Response construction and terminal execution of Effect archive services through Durable Object RPC fixtures",
+        "rules": ["EFF400", "EFF402"]
+      },
+      {
+        "path": "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
+        "reason": "in-memory Durable Object conformance suite uses the repository registrar because Cloudflare worker pool execution cannot be owned by @effect/vitest",
+        "rules": ["EFF200"]
+      },
+      {
+        "path": "packages/runtime/test/cloudflare/backend-protocol-contract.runtime.test.ts",
+        "owner": "@agent-os/runtime/cloudflare-tests",
+        "reason": "production Durable Object conformance suite uses the Cloudflare worker-pool registrar and owns terminal Effect law execution because @effect/vitest cannot host this worker runtime",
+        "rules": ["EFF200", "EFF400"]
       },
       {
         "path": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
@@ -303,6 +345,12 @@
           "rules": ["EFF001"]
         },
         {
+          "path": "src/ledger-archive.ts",
+          "owner": "@agent-os/runtime/ledger-archive-codec",
+          "reason": "backend-neutral archive storage codec owns Promise-based checksum verification and fail-closed mapping of malformed persisted segment chains before any logical ledger read",
+          "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
+        },
+        {
           "path": "src/channel/index.ts",
           "owner": "@agent-os/runtime/channel",
           "reason": "pure authored channel contract owns synchronous fail-fast validation for malformed authored channel definitions before generated targets mount provider ingress; no Effect runtime boundary exists here",
@@ -345,6 +393,12 @@
           "rules": ["EFF402"]
         },
         {
+          "path": "src/cloudflare/ledger/archive.ts",
+          "owner": "@agent-os/runtime/cloudflare-ledger-archive",
+          "reason": "terminal Durable Object SQLite archive adapter owns Promise checksum operations, synchronous transaction rollback, persisted receipt decoding, and fail-closed storage errors",
+          "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
+        },
+        {
           "path": "src/cloudflare/materialized-projections.ts",
           "owner": "@agent-os/runtime/cloudflare/materialized-projections",
           "reason": "Cloudflare transactionSync exposes rollback only through synchronous exceptions; this adapter owns projection reducer rollback at the storage boundary",
@@ -377,8 +431,8 @@
         {
           "path": "src/in-memory/state.ts",
           "owner": "@agent-os/runtime/in-memory-state",
-          "reason": "in-memory backend state owns synchronous post-commit sink isolation; sink failures are diagnostics and must not roll back committed facts",
-          "rules": ["EFF001"]
+          "reason": "in-memory backend state owns synchronous post-commit sink isolation plus Promise serialization and fail-closed archive codec calls; sink failures are diagnostics while archive failures prevent eviction",
+          "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
         },
         {
           "path": "src/in-memory/due-work-state.ts",
@@ -397,6 +451,18 @@
           "owner": "@agent-os/runtime/local",
           "reason": "terminal local Node workspace runtime adapter owns Node filesystem and child_process workspace IO, symbolic material/env rejection, command timeout/error mapping, and the executable submit facade over lowerLocalAgentRuntime",
           "rules": ["EFF020", "EFF025", "EFF400"]
+        },
+        {
+          "path": "src/testing/conformance-assert.ts",
+          "owner": "@agent-os/runtime/backend-conformance-harness",
+          "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",
+          "rules": ["EFF001", "EFF003", "EFF004", "EFF024", "EFF025"]
+        },
+        {
+          "path": "src/testing/backend-conformance.ts",
+          "owner": "@agent-os/runtime/backend-conformance-runner",
+          "reason": "public executable conformance runner is the terminal Promise boundary that runs the same Effect law bodies used by framework registrars and returns a protocol report",
+          "rules": ["EFF400"]
         },
         {
           "path": "src/node/index.ts",
@@ -479,8 +545,20 @@
         {
           "path": "test/cloudflare/test-worker.ts",
           "owner": "@agent-os/runtime/cloudflare/test-worker",
-          "reason": "Cloudflare test Worker entry is the terminal HTTP adapter for worker-pool contract tests",
-          "rules": ["EFF402"]
+          "reason": "Cloudflare test Worker entry is the terminal HTTP and Effect execution adapter for worker-pool contract tests",
+          "rules": ["EFF400", "EFF402"]
+        },
+        {
+          "path": "test/cloudflare/backend-protocol-contract.test.ts",
+          "owner": "@agent-os/runtime/cloudflare-tests",
+          "reason": "in-memory Durable Object conformance suite uses the repository registrar because Cloudflare worker pool execution cannot be owned by @effect/vitest",
+          "rules": ["EFF200"]
+        },
+        {
+          "path": "test/cloudflare/backend-protocol-contract.runtime.test.ts",
+          "owner": "@agent-os/runtime/cloudflare-tests",
+          "reason": "production Durable Object conformance suite uses the Cloudflare worker-pool registrar and owns terminal Effect law execution because @effect/vitest cannot host this worker runtime",
+          "rules": ["EFF200", "EFF400"]
         },
         {
           "path": "test/cloudflare/workspace-host-helpers.test.ts",
@@ -521,7 +599,15 @@
       ]
     },
     "packages/core": {
-      "shape": ["library"]
+      "shape": ["library"],
+      "allowedAdapters": [
+        {
+          "path": "src/backend-protocol/archive.ts",
+          "owner": "@agent-os/core/ledger-archive-codec",
+          "reason": "backend-neutral archive protocol codec owns synchronous fail-closed canonical JSON validation and the Web Crypto Promise boundary used to derive content-addressed artifacts and exact readback receipts",
+          "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
+        }
+      ]
     }
   }
 }

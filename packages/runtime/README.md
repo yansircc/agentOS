@@ -50,6 +50,12 @@ an adapter-provided driver. The public programmatic runner has no Vitest depende
 creates and disposes one driver per law, and returns a core-validated report. Repo
 test runners register those same law bodies through an injected registrar.
 
+`LedgerArchive` performs verified physical relocation only. A receipt is emitted
+after archive write and exact readback; eviction revalidates the stored receipt and
+archive bytes before deleting the exact hot event ids. Ordinary ledger reads and
+projection rebuilds merge verified archive segments with hot rows before filtering
+or pagination. Archive metadata is not a replay checkpoint or product reset fact.
+
 Effect AI provider peers are subpath-local by contract. The
 `llm-effect-ai/openai-compatible` subpath imports no Anthropic provider package
 and is covered by packed consumer proof without `@effect/ai-anthropic`

@@ -42,6 +42,9 @@ describe("materialized projections — Cloudflare DO", () => {
       await expect(
         instance.projectionList({ kind: "run.workflow", ...identity }),
       ).resolves.toHaveLength(1);
+      const events: LedgerEventRpc[] = await instance.events(testTruthIdentity(scope));
+      const receipt = await instance.archiveLedgerForTest(identity, events[0]!.id);
+      await instance.evictArchivedLedgerForTest(receipt);
       await expect(
         instance.projectionRebuild({ kind: "run.workflow", ...identity }),
       ).resolves.toMatchObject({

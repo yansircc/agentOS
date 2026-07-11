@@ -14,6 +14,18 @@
       "fix": "Map backend storage failures into the runtime-owned storage error at the runtime service boundary; keep backend-specific storage errors inside backend adapters."
     },
     {
+      "tag": "agent_os.ledger_archive_protocol_error",
+      "invariants": ["invariant.ledger.single-commit-source", "invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Accept archive segments only through canonical encoding, exact truth identity, strict event ordering, SHA-256 readback, and linked segment validation."
+    },
+    {
+      "tag": "agent_os.ledger_archive_error",
+      "invariants": ["invariant.ledger.single-commit-source", "invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Keep hot rows when archive receipt, checksum, chain, or exact event-set verification fails; retry only after the archive artifact reads back identically."
+    },
+    {
       "tag": "agent_os.driver_ledger_commit_shape_mismatch",
       "invariants": ["invariant.ledger.single-commit-source"],
       "docs": "docs/concepts/durable-truth.md",

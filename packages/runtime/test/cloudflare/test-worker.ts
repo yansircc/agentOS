@@ -21,6 +21,7 @@ import {
   Dispatch,
   defineProjection,
   Ledger,
+  LedgerArchive,
   makeProjectionRegistryResult,
   MaterializedProjectionRegistry,
   MaterializedProjections,
@@ -77,6 +78,7 @@ import type {
   DispatchTargetAdapter,
   DispatchTargetResult,
   GrantResult,
+  LedgerArchiveReceipt,
   ResourceProjection,
 } from "@agent-os/core/backend-protocol";
 import {
@@ -97,6 +99,8 @@ import type { EventBusService } from "../../src/cloudflare/ledger/event-bus";
 import { cloudflareRouteKeyFromScopeRef } from "../../src/cloudflare/ledger/identity";
 import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
 import { findNextDue } from "../../src/cloudflare/due-work";
+import { corruptCloudflareArchiveForTest } from "../../src/cloudflare/ledger/archive";
+import { CloudflareLedgerArchiveLive } from "../../src/cloudflare/ledger/archive";
 
 const allowToolAdmitter = () =>
   Effect.withSpan("agentos.test.cloudflare_do.allow_tool")(Effect.succeed({ ok: true as const }));
@@ -301,6 +305,27 @@ export class BackendProtocolContractTestDO extends DurableObject<BackendProtocol
       const ledger = await runtime.runPromise(Ledger);
       return runtime.runPromise(ledger.streamSnapshot(identity, opts));
     });
+  }
+
+  async archiveLedger(
+    identity: BackendProtocolEventIdentity,
+    throughEventId: number,
+  ): Promise<LedgerArchiveReceipt> {
+    return this.withRuntime(identity, async (runtime) => {
+      const archive = await runtime.runPromise(LedgerArchive);
+      return archive.archive({ identity, throughEventId });
+    });
+  }
+
+  async evictArchivedLedger(receipt: LedgerArchiveReceipt): Promise<{ readonly evicted: number }> {
+    return this.withRuntime(contractIdentityForScope("archive-evict"), async (runtime) => {
+      const archive = await runtime.runPromise(LedgerArchive);
+      return archive.evict(receipt);
+    });
+  }
+
+  corruptArchiveForTest(receipt: LedgerArchiveReceipt): void {
+    corruptCloudflareArchiveForTest(this.ctx, receipt);
   }
 
   async schedule(
@@ -1815,6 +1840,27 @@ const silentEventBus = {
 } satisfies EventBusService;
 
 export class MaterializedProjectionTestDO extends MaterializedProjectionBaseDO {
+  archiveLedgerForTest(
+    identity: BackendProtocolEventIdentity,
+    throughEventId: number,
+  ): Promise<LedgerArchiveReceipt> {
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const archive = yield* LedgerArchive;
+        return yield* Effect.promise(() => archive.archive({ identity, throughEventId }));
+      }).pipe(Effect.provide(CloudflareLedgerArchiveLive(this.ctx))),
+    );
+  }
+
+  evictArchivedLedgerForTest(receipt: LedgerArchiveReceipt): Promise<{ readonly evicted: number }> {
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const archive = yield* LedgerArchive;
+        return yield* Effect.promise(() => archive.evict(receipt));
+      }).pipe(Effect.provide(CloudflareLedgerArchiveLive(this.ctx))),
+    );
+  }
+
   async emitForFactOwner(
     scopeId: string,
     factOwnerRef: FactOwnerRef,

@@ -14,6 +14,10 @@ import type {
   ResourceReserveSpec,
 } from "@agent-os/core/types";
 import {
+  canonicalLedgerArchiveJson,
+  createLedgerArchiveArtifact,
+  createLedgerArchiveReceipt,
+  decodeLedgerArchiveArtifact,
   DELIVERY_RETRY_TRIGGER_KIND,
   DISPATCH_EVENT_KINDS,
   DISPATCH_INBOUND_ACCEPTED,
@@ -45,6 +49,7 @@ import {
   type DispatchTargetAdapter,
   type DispatchTargetResult,
   type GrantResult,
+  type LedgerArchiveReceipt,
   type ProjectedResourceState,
   type ResourceProjection,
 } from "@agent-os/core/backend-protocol";
@@ -86,6 +91,12 @@ import {
 } from "./dispatch";
 import { nodePostgresQuotaGrantDecision } from "./quota";
 import {
+  decodeLedgerArchiveSegments,
+  mergeLedgerArchiveEvents,
+  queryLedgerArchiveEvents,
+  type StoredLedgerArchiveSegment,
+} from "../ledger-archive";
+import {
   assertNodePostgresResourceTerminalResult,
   nodePostgresResourceReserveResult,
   type ResourceReserveTransactionRow,
@@ -112,6 +123,7 @@ export class NodePostgresBackend {
   readonly #diagnostics: TelemetryFanoutDiagnostic[] = [];
   readonly #targets = new Map<string, DispatchTargetAdapter>();
   readonly #dueDrainLocks = new Map<string, Promise<void>>();
+  readonly #archiveLocks = new Map<string, Promise<void>>();
   readonly #now: NodePostgresNow;
 
   constructor(options: NodePostgresBackendOptions) {
@@ -154,6 +166,21 @@ export class NodePostgresBackend {
           ((payload ->> 'idempotencyKey'))
         )
         WHERE kind = ${sqlString(DISPATCH_INBOUND_ACCEPTED)};
+
+      CREATE TABLE IF NOT EXISTS agentos_event_archive_segments (
+        segment_sha256 TEXT PRIMARY KEY,
+        truth_key TEXT NOT NULL,
+        previous_segment_sha256 TEXT,
+        first_event_id BIGINT NOT NULL,
+        last_event_id BIGINT NOT NULL,
+        archive_ref TEXT NOT NULL,
+        bytes TEXT NOT NULL,
+        receipt JSONB NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS agentos_archive_truth_first_idx
+        ON agentos_event_archive_segments (truth_key, first_event_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS agentos_archive_truth_predecessor_idx
+        ON agentos_event_archive_segments (truth_key, COALESCE(previous_segment_sha256, ''));
 
       CREATE TABLE IF NOT EXISTS agentos_due_work (
         id BIGSERIAL PRIMARY KEY,
@@ -294,6 +321,130 @@ export class NodePostgresBackend {
     opts: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs"> = {},
   ): Promise<ReadonlyArray<LedgerEvent>> {
     return this.#events(identity, opts);
+  }
+
+  async archiveLedger(spec: {
+    readonly identity: BackendProtocolTruthIdentity;
+    readonly throughEventId: number;
+  }): Promise<LedgerArchiveReceipt> {
+    const truthKey = backendProtocolTruthIdentityKey(spec.identity);
+    return this.#withArchiveLock(truthKey, async () => {
+      const stored = await this.#archiveSegments(spec.identity);
+      const previous = stored.at(-1);
+      const previousLastId = previous?.receipt.lastEventId ?? 0;
+      const hot = await this.#hotTruthEvents(spec.identity);
+      const events = hot.filter(
+        (event) => event.id > previousLastId && event.id <= spec.throughEventId,
+      );
+      if (events.length === 0) {
+        if (previous !== undefined && spec.throughEventId <= previous.receipt.lastEventId) {
+          return previous.receipt;
+        }
+        throw new SqlError({ cause: "no hot events to archive" });
+      }
+      const artifact = await createLedgerArchiveArtifact({
+        identity: spec.identity,
+        previousSegmentSha256: previous?.receipt.segmentSha256 ?? null,
+        events,
+      });
+      const archiveRef = `postgres:${truthKey}:${artifact.sha256}`;
+      const receipt = await createLedgerArchiveReceipt({
+        artifact,
+        archiveRef,
+        readback: artifact.bytes,
+      });
+      await this.#sql.exec(`
+        INSERT INTO agentos_event_archive_segments
+          (segment_sha256, truth_key, previous_segment_sha256, first_event_id,
+           last_event_id, archive_ref, bytes, receipt)
+        VALUES (
+          ${sqlString(receipt.segmentSha256)}, ${sqlString(truthKey)},
+          ${receipt.previousSegmentSha256 === null ? "NULL" : sqlString(receipt.previousSegmentSha256)},
+          ${sqlNumber(receipt.firstEventId)}, ${sqlNumber(receipt.lastEventId)},
+          ${sqlString(receipt.archiveRef)}, ${sqlString(Buffer.from(artifact.bytes).toString("base64"))},
+          ${sqlJson(receipt)}
+        )
+        ON CONFLICT DO NOTHING
+      `);
+      const readback = (await this.#archiveSegments(spec.identity)).find(
+        (segment) => segment.receipt.previousSegmentSha256 === receipt.previousSegmentSha256,
+      );
+      if (readback === undefined) throw new SqlError({ cause: "archive readback missing" });
+      if (readback.receipt.segmentSha256 !== receipt.segmentSha256) {
+        throw new SqlError({
+          cause: "archive chain predecessor already has a different successor",
+        });
+      }
+      const readbackReceipt = await createLedgerArchiveReceipt({
+        artifact,
+        archiveRef,
+        readback: readback.bytes,
+      });
+      if (
+        canonicalLedgerArchiveJson(readback.receipt) !== canonicalLedgerArchiveJson(readbackReceipt)
+      ) {
+        throw new SqlError({ cause: "archive readback receipt mismatch" });
+      }
+      return readbackReceipt;
+    });
+  }
+
+  async evictArchivedLedger(receipt: LedgerArchiveReceipt): Promise<{ readonly evicted: number }> {
+    return this.#withArchiveLock(receipt.truthKey, async () => {
+      const rows = await this.#sql.json<{
+        readonly receipt: LedgerArchiveReceipt;
+        readonly bytes: string;
+      }>(`
+        SELECT receipt AS "receipt", bytes AS "bytes"
+        FROM agentos_event_archive_segments
+        WHERE segment_sha256 = ${sqlString(receipt.segmentSha256)}
+      `);
+      const stored = rows[0];
+      if (
+        stored === undefined ||
+        canonicalLedgerArchiveJson(stored.receipt) !== canonicalLedgerArchiveJson(receipt)
+      ) {
+        throw new SqlError({ cause: "archive receipt is not authoritative" });
+      }
+      const artifact = await decodeLedgerArchiveArtifact(
+        Uint8Array.from(Buffer.from(stored.bytes, "base64")),
+        receipt.segmentSha256,
+      );
+      const hot = await this.#hotTruthEvents(artifact.segment.identity);
+      const ids = new Set(artifact.segment.events.map((event) => event.id));
+      const candidates = hot.filter((event) => ids.has(event.id));
+      if (candidates.length === 0) return { evicted: 0 };
+      if (
+        candidates.length !== ids.size ||
+        candidates.some((event) => {
+          const archived = artifact.segment.events.find((candidate) => candidate.id === event.id);
+          return (
+            archived === undefined ||
+            canonicalLedgerArchiveJson(event) !== canonicalLedgerArchiveJson(archived)
+          );
+        })
+      ) {
+        throw new SqlError({ cause: "hot event set mismatch" });
+      }
+      const deleted = await this.#sql.jsonValue<{ readonly count: number }>(`
+        WITH deleted AS (
+          DELETE FROM agentos_events
+          WHERE truth_key = ${sqlString(receipt.truthKey)}
+            AND id IN (${Array.from(ids, sqlNumber).join(", ")})
+          RETURNING id
+        )
+        SELECT json_build_object('count', COUNT(*)::int)::text FROM deleted
+      `);
+      return { evicted: deleted.count };
+    });
+  }
+
+  async corruptArchiveForTest(receipt: LedgerArchiveReceipt): Promise<void> {
+    await this.#sql.exec(`
+      UPDATE agentos_event_archive_segments
+      SET bytes = ${sqlString(Buffer.from("corrupt").toString("base64"))}
+      WHERE segment_sha256 = ${sqlString(receipt.segmentSha256)}
+    `);
   }
 
   async schedule(
@@ -1376,25 +1527,76 @@ export class NodePostgresBackend {
     identity: BackendProtocolEventIdentity,
     opts: EventQueryOptions = {},
   ): Promise<ReadonlyArray<LedgerEvent>> {
-    const afterId = Math.max(0, Math.floor(opts.afterId ?? 0));
-    const limit = normalizeBackendPageLimit(opts.limit);
-    const kinds =
-      opts.kinds === undefined || opts.kinds.length === 0
-        ? ""
-        : `AND kind = ANY(ARRAY[${opts.kinds.map(sqlString).join(", ")}]::text[])`;
-    const factOwners =
-      opts.factOwnerRefs === undefined || opts.factOwnerRefs.length === 0
-        ? ""
-        : `AND fact_owner_ref #>> '{}' = ANY(ARRAY[${opts.factOwnerRefs.map(sqlString).join(", ")}]::text[])`;
+    if (
+      opts.factOwnerRefs !== undefined &&
+      opts.factOwnerRefs.length > 0 &&
+      !opts.factOwnerRefs.includes(identity.factOwnerRef)
+    ) {
+      return [];
+    }
+    const hot = await this.#hotEvents(identity);
+    const stored = await this.#archiveSegments(identity);
+    if (stored.length === 0) {
+      return queryLedgerArchiveEvents(hot as never, opts);
+    }
+    const artifacts = await decodeLedgerArchiveSegments(identity, stored);
+    return queryLedgerArchiveEvents(mergeLedgerArchiveEvents(identity, artifacts, hot), {
+      ...opts,
+      factOwnerRefs: [identity.factOwnerRef],
+    });
+  }
+
+  async #hotEvents(identity: BackendProtocolEventIdentity): Promise<ReadonlyArray<LedgerEvent>> {
     return this.#sql.json<LedgerEvent>(`
       ${eventRowSelect}
       WHERE identity_key = ${sqlString(backendProtocolEventIdentityKey(identity))}
-        AND id > ${sqlNumber(afterId)}
-        ${kinds}
-        ${factOwners}
       ORDER BY id ASC
-      LIMIT ${sqlNumber(limit)}
     `);
+  }
+
+  async #hotTruthEvents(
+    identity: BackendProtocolTruthIdentity,
+  ): Promise<ReadonlyArray<LedgerEvent>> {
+    return this.#sql.json<LedgerEvent>(`
+      ${eventRowSelect}
+      WHERE truth_key = ${sqlString(backendProtocolTruthIdentityKey(identity))}
+      ORDER BY id ASC
+    `);
+  }
+
+  async #archiveSegments(
+    identity: BackendProtocolTruthIdentity,
+  ): Promise<ReadonlyArray<StoredLedgerArchiveSegment>> {
+    const rows = await this.#sql.json<{
+      readonly receipt: LedgerArchiveReceipt;
+      readonly bytes: string;
+    }>(`
+      SELECT receipt AS "receipt", bytes AS "bytes"
+      FROM agentos_event_archive_segments
+      WHERE truth_key = ${sqlString(backendProtocolTruthIdentityKey(identity))}
+      ORDER BY first_event_id ASC
+    `);
+    return rows.map((row) => ({
+      receipt: row.receipt,
+      bytes: Uint8Array.from(Buffer.from(row.bytes, "base64")),
+    }));
+  }
+
+  async #withArchiveLock<A>(key: string, run: () => Promise<A>): Promise<A> {
+    const prior = this.#archiveLocks.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = prior.then(() => current);
+    this.#archiveLocks.set(key, tail);
+    await prior;
+    try {
+      return await run();
+    } finally {
+      release();
+      if (this.#archiveLocks.get(key) === tail) this.#archiveLocks.delete(key);
+    }
   }
 
   async #eventsForIdentityKey(identityKey: string): Promise<ReadonlyArray<LedgerEvent>> {

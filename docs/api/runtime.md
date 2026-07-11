@@ -101,6 +101,17 @@ product-control-plane lifecycle.
 
 ## Public exports
 
+`LedgerArchive` is the backend-neutral archive/eviction service. Implementations
+must preserve one logical ledger across archive and hot storage and fail closed on
+receipt, checksum, chain, or hot-row mismatch.
+
+- `.:LedgerArchive`
+- `.:LedgerArchiveError`
+- `.:StoredLedgerArchiveSegment`
+- `.:decodeLedgerArchiveSegments`
+- `.:mergeLedgerArchiveEvents`
+- `.:queryLedgerArchiveEvents`
+
 - `.:AcquireCtx`
 - `.:Admission`
 - `.:AgentSessionProjection`

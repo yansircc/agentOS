@@ -166,7 +166,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       this.addColumn(alterAddColumn[1]!, alterAddColumn[2]!);
       return new InMemorySqlCursor([]);
     }
-    if (/^CREATE (TABLE|INDEX) IF NOT EXISTS /i.test(normalized)) {
+    if (/^CREATE (?:TABLE|(?:UNIQUE )?INDEX) IF NOT EXISTS /i.test(normalized)) {
       const tableMatch = /^CREATE TABLE IF NOT EXISTS ([a-z_]+) \((.*)\)$/i.exec(normalized);
       if (tableMatch !== null) this.defineTable(tableMatch[1]!, tableMatch[2]!);
       return new InMemorySqlCursor([]);

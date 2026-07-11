@@ -6,6 +6,32 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 
 ## Public exports
 
+- `.:BACKEND_CONFORMANCE_CAPABILITY`
+- `.:BACKEND_CONFORMANCE_LAWS`
+- `.:BACKEND_CONFORMANCE_LAW_ID`
+- `.:BACKEND_CONFORMANCE_PROTOCOL_VERSION`
+- `.:BACKEND_CONFORMANCE_REQUIRED_CAPABILITIES`
+- `.:BACKEND_CONFORMANCE_RESULT_SCHEMA`
+- `.:BackendConformanceCapability`
+- `.:BackendConformanceIssue`
+- `.:BackendConformanceLaw`
+- `.:BackendConformanceLawId`
+- `.:BackendConformanceLawResult`
+- `.:BackendConformanceLawStatus`
+- `.:BackendConformanceReport`
+- `.:BackendConformanceReportValidation`
+- `.:validateBackendConformanceReport`
+- `.:LEDGER_ARCHIVE_PROTOCOL_VERSION`
+- `.:LedgerArchiveArtifact`
+- `.:LedgerArchiveProtocolError`
+- `.:LedgerArchiveReceipt`
+- `.:LedgerArchiveSegment`
+- `.:canonicalLedgerArchiveJson`
+- `.:createLedgerArchiveArtifact`
+- `.:createLedgerArchiveReceipt`
+- `.:decodeLedgerArchiveArtifact`
+- `.:sha256LedgerArchiveBytes`
+- `.:validateLedgerArchiveChain`
 - `.:ABORT`
 - `.:AbortKind`
 - `.:AdmissionImpact`
@@ -926,6 +952,7 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./backend-protocol:BACKEND_CONFORMANCE_PROTOCOL_VERSION`
 - `./backend-protocol:BACKEND_CONFORMANCE_REQUIRED_CAPABILITIES`
 - `./backend-protocol:BACKEND_CONFORMANCE_RESULT_SCHEMA`
+- `./backend-protocol:LEDGER_ARCHIVE_PROTOCOL_VERSION`
 - `./backend-protocol:BACKEND_PAGE_POLICY`
 - `./backend-protocol:BACKEND_PROTOCOL_EVENT_PREFIXES`
 - `./backend-protocol:BackendConformanceCapability`
@@ -936,6 +963,16 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./backend-protocol:BackendConformanceLawStatus`
 - `./backend-protocol:BackendConformanceReport`
 - `./backend-protocol:BackendConformanceReportValidation`
+- `./backend-protocol:LedgerArchiveArtifact`
+- `./backend-protocol:LedgerArchiveProtocolError`
+- `./backend-protocol:LedgerArchiveReceipt`
+- `./backend-protocol:LedgerArchiveSegment`
+- `./backend-protocol:canonicalLedgerArchiveJson`
+- `./backend-protocol:createLedgerArchiveArtifact`
+- `./backend-protocol:createLedgerArchiveReceipt`
+- `./backend-protocol:decodeLedgerArchiveArtifact`
+- `./backend-protocol:sha256LedgerArchiveBytes`
+- `./backend-protocol:validateLedgerArchiveChain`
 - `./backend-protocol:BackendPagePolicy`
 - `./backend-protocol:BackendProtocolDispatchTarget`
 - `./backend-protocol:BackendProtocolEventHandler`

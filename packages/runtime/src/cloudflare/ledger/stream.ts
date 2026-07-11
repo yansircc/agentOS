@@ -126,7 +126,7 @@ export const createEventStreamResponse = <R, E>(
   let heartbeatHandle: ReturnType<typeof setInterval> | undefined;
 
   const stream = new ReadableStream<Uint8Array>({
-    start: (controller) => {
+    start: async (controller) => {
       const close = (): void => {
         if (closed) return;
         closed = true;
@@ -160,7 +160,7 @@ export const createEventStreamResponse = <R, E>(
           Ledger | EventBus,
           unknown
         >;
-        narrow.runSync(
+        await narrow.runPromise(
           Effect.gen(function* () {
             const bus = yield* EventBus;
             const ledger = yield* Ledger;

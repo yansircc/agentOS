@@ -22,6 +22,7 @@ import {
   projectionIdentityColumns,
   type LedgerEventSqlRow,
 } from "./ledger/identity";
+import { selectLogicalLedgerEvents } from "./ledger/ledger";
 import type {
   BackendProtocolEventIdentity,
   BackendProtocolProjectionKey,
@@ -421,33 +422,6 @@ const projectionStatusSync = (
   return statusFromMeta(projection, identity, row);
 };
 
-const selectProjectionEvents = (
-  sql: SqlStorage,
-  identity: BackendProtocolEventIdentity,
-  eventKinds: ReadonlyArray<string>,
-): ReadonlyArray<LedgerEvent> => {
-  if (eventKinds.length === 0) return [];
-  const placeholders = eventKinds.map(() => "?").join(", ");
-  const identityColumns = projectionIdentityColumns({
-    ...identity,
-    projectionKind: "event-select",
-    projectionId: "event-select",
-  });
-  return sql
-    .exec(
-      `
-        SELECT *
-        FROM events
-        WHERE event_identity_key = ? AND kind IN (${placeholders})
-        ORDER BY id ASC
-      `,
-      identityColumns.event_identity_key,
-      ...eventKinds,
-    )
-    .toArray()
-    .map((row): LedgerEvent => ledgerEventFromRow(row as unknown as LedgerEventSqlRow));
-};
-
 const countRows = (sql: SqlStorage, identity: BackendProtocolEventIdentity, kind: string): number =>
   Number(
     sql
@@ -571,11 +545,19 @@ export const CloudflareMaterializedProjectionsLive = (
         rebuild: (spec) =>
           Effect.gen(function* () {
             const projection = yield* getProjection(registry, spec.kind);
+            const identity = eventIdentityFromQuerySpec(spec, "projection rebuild spec");
+            const events = yield* Effect.tryPromise({
+              try: () =>
+                selectLogicalLedgerEvents(sql, identity, {
+                  kinds: projection.eventKinds,
+                  factOwnerRefs: [identity.factOwnerRef],
+                }),
+              catch: (cause) => runtimeStorageError("projection", cause),
+            });
             return yield* Effect.try({
               try: (): MaterializedProjectionRebuildResult =>
                 ctx.storage.transactionSync(() => {
                   ensureMaterializedProjectionSchema(sql);
-                  const identity = eventIdentityFromQuerySpec(spec, "projection rebuild spec");
                   const identityColumns = projectionIdentityColumns({
                     ...identity,
                     projectionKind: spec.kind,
@@ -597,7 +579,6 @@ export const CloudflareMaterializedProjectionsLive = (
                     identityColumns.event_identity_key,
                     spec.kind,
                   );
-                  const events = selectProjectionEvents(sql, identity, projection.eventKinds);
                   applyEvents(sql, events, (eventKind) =>
                     projection.eventKinds.includes(eventKind) ? [projection] : [],
                   );

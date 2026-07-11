@@ -225,6 +225,20 @@
       "sourceFiles": ["packages/core/src/errors.ts"]
     },
     {
+      "tag": "agent_os.ledger_archive_error",
+      "invariants": ["invariant.ledger.single-commit-source", "invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Keep hot rows when archive receipt, checksum, chain, or exact event-set verification fails; retry only after the archive artifact reads back identically.",
+      "sourceFiles": ["packages/runtime/src/ledger-archive.ts"]
+    },
+    {
+      "tag": "agent_os.ledger_archive_protocol_error",
+      "invariants": ["invariant.ledger.single-commit-source", "invariant.d10.truth-identity"],
+      "docs": "docs/concepts/durable-truth.md",
+      "fix": "Accept archive segments only through canonical encoding, exact truth identity, strict event ordering, SHA-256 readback, and linked segment validation.",
+      "sourceFiles": ["packages/core/src/backend-protocol/archive.ts"]
+    },
+    {
       "tag": "agent_os.llm_call_timed_out",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/packages/runtime.md",

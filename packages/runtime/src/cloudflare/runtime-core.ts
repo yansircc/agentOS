@@ -7,6 +7,7 @@ import {
   Dispatch,
   DurableTriggerRegistry,
   Ledger,
+  LedgerArchive,
   MaterializedProjectionRegistry,
   MaterializedProjections,
   Quota,
@@ -27,6 +28,7 @@ import {
 } from "./dispatch/dispatch";
 import { EventBus, EventBusLive } from "./ledger/event-bus";
 import { LedgerLive } from "./ledger/ledger";
+import { CloudflareLedgerArchiveLive } from "./ledger/archive";
 import { Scheduler, SchedulerLive } from "./scheduler";
 import { ResourcesLive } from "./resources/resources";
 import { QuotaLive } from "./quota";
@@ -54,7 +56,8 @@ export type CloudflareBackendCoreServices =
   | BoundaryEvents
   | MaterializedProjectionRegistry
   | MaterializedProjections
-  | Ledger;
+  | Ledger
+  | LedgerArchive;
 
 export const makeCloudflareBackendCoreLayer = <Env>(
   ctx: DurableObjectState,
@@ -119,6 +122,7 @@ export const makeCloudflareBackendCoreLayer = <Env>(
   const triggerDeps = Layer.mergeAll(eventBusLayer, triggerRegistryLayer, triggerLayer);
   const serviceLayer = Layer.mergeAll(
     LedgerLive(ctx),
+    CloudflareLedgerArchiveLive(ctx),
     BoundaryEventsLive(ctx, identity),
     SchedulerLive(ctx, scope, identity),
     DispatchLive(ctx, scope, identity, dispatchTargets).pipe(Layer.provide(triggerDeps)),

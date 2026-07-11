@@ -15,6 +15,7 @@ export type RuntimeStorageOperation =
   | "dispatch"
   | "driver"
   | "ledger_commit"
+  | "ledger_archive"
   | "ledger_events"
   | "ledger_stream_snapshot"
   | "projection"

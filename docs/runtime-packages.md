@@ -40,7 +40,7 @@ Audience is declared per package entrypoint, not per package.
 | `@agent-os/core/abort`                              | `advanced`                         | abort vocabulary                                                                                           |
 | `@agent-os/core/agent-schema`                       | `advanced`                         | agent schema authoring algebra                                                                             |
 | `@agent-os/core/authored-value`                     | `advanced`                         | authored value ownership                                                                                   |
-| `@agent-os/core/backend-protocol`                   | `advanced`                         | backend protocol DTOs, conformance manifest, and report validation                                         |
+| `@agent-os/core/backend-protocol`                   | `advanced`                         | backend protocol DTOs, conformance manifests, ledger archive proof algebra, and report validation          |
 | `@agent-os/core/backend-protocol/reference`         | `advanced`                         | backend protocol reference helpers                                                                         |
 | `@agent-os/core/boundary-contract`                  | `advanced`                         | boundary contract declarations                                                                             |
 | `@agent-os/core/carrier`                            | `advanced`                         | carrier algebra                                                                                            |

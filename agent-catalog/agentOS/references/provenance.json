@@ -35,13 +35,13 @@
     },
     {
       "path": "docs/agent/error-metadata.source.json",
-      "sha256": "dbcd9ae1270b0141b16736dbe3c10ad34f9fa208db15469b176420cbc11299b7",
-      "byteSize": 22125
+      "sha256": "42dcdbdf8a06ed8fc161b2d0aea8beaa93ac5c345c9c5014975edbfc8705cc0b",
+      "byteSize": 22873
     },
     {
       "path": "docs/agent/errors.json",
-      "sha256": "b152bcadea953a52e4005760a3d10b9902f024fe7aa7082635da1f24edf44c21",
-      "byteSize": 25673
+      "sha256": "c2a0a363c56409e807fc8d45f28c124cea540c39fbbf08a6ddb128d89e40b105",
+      "byteSize": 26558
     },
     {
       "path": "docs/agent/external-vocabulary.source.json",
@@ -55,8 +55,8 @@
     },
     {
       "path": "docs/agent/invariant-matrix.json",
-      "sha256": "d2f53615fea4b823e5a8f0a4c792b699ea56067ed4b88ed168a181d7e00188ff",
-      "byteSize": 15187
+      "sha256": "11a9f08888c93110d41fe38e25eead44a93416f1b1f9f0465272db5babc59a4a",
+      "byteSize": 15369
     },
     {
       "path": "docs/agent/invariants.source.json",
@@ -120,17 +120,17 @@
     },
     {
       "path": "docs/api/core.md",
-      "sha256": "8945f20487b71f61fad9a7f21c8479dd49bc37a08d0c7819af9a424805a9e4ff",
-      "byteSize": 71843
+      "sha256": "c2e4706a03671d9413972a8aa80da695c479bb237d7963a776d61f3339a70567",
+      "byteSize": 73266
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "2a140401f4eb7eec4fc4154ee505dc994f5111d36fed273a7f58815a8ff2c60b",
-      "byteSize": 36986
+      "sha256": "55a268e87f81f7c3f374a9afd9f1ebb48a93ff55c8e88f0050b6d8fe6bc81397",
+      "byteSize": 37373
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "f18c1b9cb3d2830af477bbbfaaae1fb57e09e957c93564c02a3fb6305455eaab",
+      "sha256": "b3fd767afa6da9dfac43ce4dde29d56bf39f702b3e7575f1d5ed152b533a4b93",
       "byteSize": 30869
     },
     {
@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/surface.json",
-      "sha256": "9d45db07f86088bae95a32c5db549b7355b626aa4b0815bd42a607ede2b45066",
-      "byteSize": 19434
+      "sha256": "ac9340a6e29e2324d6c3ccecf19e8637ed37e1ff6be89e6d3c5f3eb517e31e2f",
+      "byteSize": 19465
     },
     {
       "path": "package.json",
@@ -187,18 +187,18 @@
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "07ba5e6417b5dc6de481163222e27f3f38914276c118f8dc9d53fd9809457fbf",
+      "sha256": "86e6b8fa22d727996783135ab09934a97a8fbaa26d6733c4475ba60ee433e455",
       "byteSize": 15175
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/core.md",
-      "sha256": "0e14ed702f1a523e5288d55253971698ea6d92dc585afab14e5001f6ca76213f",
-      "byteSize": 71845
+      "sha256": "1c8b08f5e9a506ac352dd5973a309e47a7daa6fe1f41ecb5dcc1b1ed8f8c7459",
+      "byteSize": 73268
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "80089a598f03cb77229c232012ac43aa26c640102dcac6966ccccafc10bb5626",
-      "byteSize": 36988
+      "sha256": "778a547f0ee7b0ea62a8213e00f232c15aa47ae10c747f364020bd45b0bbccc3",
+      "byteSize": 37375
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",
@@ -232,13 +232,13 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/errors.json",
-      "sha256": "b152bcadea953a52e4005760a3d10b9902f024fe7aa7082635da1f24edf44c21",
-      "byteSize": 25673
+      "sha256": "c2a0a363c56409e807fc8d45f28c124cea540c39fbbf08a6ddb128d89e40b105",
+      "byteSize": 26558
     },
     {
       "path": "agent-catalog/agentOS/references/agent/invariant-matrix.json",
-      "sha256": "d2f53615fea4b823e5a8f0a4c792b699ea56067ed4b88ed168a181d7e00188ff",
-      "byteSize": 15187
+      "sha256": "11a9f08888c93110d41fe38e25eead44a93416f1b1f9f0465272db5babc59a4a",
+      "byteSize": 15369
     }
   ],
   "outputHashScope": "all generated files except references/provenance.json to avoid a self-referential hash",

@@ -1,5 +1,19 @@
 # Durable Truth
 
+## Verified archive relocation
+
+Ledger archival changes physical location, not truth. A segment contains one exact
+`scopeRef + effectAuthorityRef` truth in strictly increasing event-id order. Core
+canonicalizes the segment and computes SHA-256; runtime issues a receipt only after
+the written bytes read back identically. Eviction then re-reads the archive, matches
+stored receipt metadata, and deletes only the byte-identical hot event ids.
+
+Archive and hot rows are one logical ledger. Reads deduplicate identical seam rows,
+order once, then apply cursor, kind, owner, and limit filters. Projection rebuilds
+replay that same merged source from the beginning. Receipts are not replay
+checkpoints, product reset facts, retention policy, or authority to delete without a
+fresh readback.
+
 ## Problem
 
 Agent applications need a source of truth that survives retries, process

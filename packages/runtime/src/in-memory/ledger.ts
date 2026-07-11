@@ -2,6 +2,7 @@ import { Clock, Effect, Layer } from "effect";
 import {
   Ledger,
   recordLedgerPortEvents,
+  runtimeStorageError,
   runtimeStorageOrJsonError,
   type LedgerPreparedCommitBuilder,
   type LedgerPreparedEventRef,
@@ -102,11 +103,19 @@ export const InMemoryLedgerLive = (state: InMemoryBackendState): Layer.Layer<Led
         return yield* recordLedgerPortEvents("ledger_commit", committed);
       }).pipe(Effect.withSpan("agentos.in_memory.ledger.commit_prepared")),
     events: (identity, opts = {}) =>
-      recordLedgerPortEvents("ledger_events", state.snapshot(identity, opts)).pipe(
+      Effect.try({
+        try: () => state.snapshot(identity, opts),
+        catch: (cause) => runtimeStorageError("ledger_events", cause),
+      }).pipe(
+        Effect.andThen((events) => recordLedgerPortEvents("ledger_events", events)),
         Effect.withSpan("agentos.in_memory.ledger.events"),
       ),
     streamSnapshot: (identity, opts = {}) =>
-      recordLedgerPortEvents("ledger_stream_snapshot", state.streamSnapshot(identity, opts)).pipe(
+      Effect.try({
+        try: () => state.streamSnapshot(identity, opts),
+        catch: (cause) => runtimeStorageError("ledger_stream_snapshot", cause),
+      }).pipe(
+        Effect.andThen((events) => recordLedgerPortEvents("ledger_stream_snapshot", events)),
         Effect.withSpan("agentos.in_memory.ledger.stream_snapshot"),
       ),
   });

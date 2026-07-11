@@ -14,6 +14,7 @@ import {
   Dispatch,
   DurableTriggerRegistry,
   Ledger,
+  LedgerArchive,
   MaterializedProjectionRegistry,
   MaterializedProjections,
   Quota,
@@ -43,6 +44,7 @@ import { InMemoryBoundaryEventsLive } from "./boundary-events";
 import { InMemoryDispatchLive, deliveryRetryTrigger } from "./dispatch";
 import type { InMemoryDispatchTargetRegistry } from "./dispatch-types";
 import { InMemoryLedgerLive } from "./ledger";
+import { InMemoryLedgerArchiveLive } from "./ledger-archive";
 import { InMemoryLlmTransportLive } from "./llm";
 import { InMemoryMaterializedProjectionsLive } from "./materialized-projections";
 import { InMemoryQuotaLive } from "./quota";
@@ -61,6 +63,7 @@ const resolvedRuntimeInstallGraphBrand: unique symbol = Symbol(
 
 export type InMemoryRuntimeServices =
   | Ledger
+  | LedgerArchive
   | DurableTriggerRegistry
   | Scheduler
   | Dispatch
@@ -206,6 +209,7 @@ export const createInMemoryRuntimeBackend = (
     state,
     layer: Layer.mergeAll(
       InMemoryLedgerLive(state),
+      InMemoryLedgerArchiveLive(state),
       InMemoryBoundaryEventsLive(state, graph.identity),
       InMemorySchedulerLive(state, graph.identity).pipe(Layer.provide(triggerRegistryLayer)),
       triggerLayer,
