@@ -744,9 +744,7 @@ const renderCustomToolRecord = (model: StaticRuntimeBootstrapModel): string =>
         .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
         .join("\n")}\n}`;
 
-const renderDynamicCapabilityCatalog = (
-  model: StaticRuntimeBootstrapModel,
-): string => {
+const renderDynamicCapabilityCatalog = (model: StaticRuntimeBootstrapModel): string => {
   const manifestTools = model.manifestTools ?? {};
   const dynamicToolNames = [
     ...model.toolNames,
@@ -786,9 +784,7 @@ const renderDynamicResolverImportStatements = (
     )
     .join("\n");
 
-const renderDynamicCapabilitySupport = (
-  model: StaticRuntimeBootstrapModel,
-): string => {
+const renderDynamicCapabilitySupport = (model: StaticRuntimeBootstrapModel): string => {
   const resolvers = sortedDynamicResolvers(model.dynamicResolvers);
   const resolverEntries =
     resolvers.length === 0

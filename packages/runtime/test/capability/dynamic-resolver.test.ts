@@ -1011,9 +1011,7 @@ describe("runDynamicCapabilityResolvers", () => {
       name: DYNAMIC_CAPABILITY_EVENT.STEP_STARTED,
       stepRef: "step:1",
     });
-    expect(result.projection.skills[0]?.decision).toBe(
-      DYNAMIC_CAPABILITY_VISIBILITY.BASELINE,
-    );
+    expect(result.projection.skills[0]?.decision).toBe(DYNAMIC_CAPABILITY_VISIBILITY.BASELINE);
   });
 
   it("rejects duplicate resolver ids within a slot before execution", async () => {
