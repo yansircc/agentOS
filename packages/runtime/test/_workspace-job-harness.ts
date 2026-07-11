@@ -12,6 +12,7 @@ import {
 import type { MaterialRef } from "@agent-os/core/material-ref";
 import { materialRefKey } from "@agent-os/core/material-ref";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import { fixtureRefResolver } from "./_material-resolver-fixture";
 import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
 import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
 import type { BoundaryContract } from "@agent-os/core/boundary-contract";
@@ -226,12 +227,12 @@ const makeServices = (
   const quota = {
     tryGrant: () => Effect.succeed({ granted: true, consumed: 0, limit: 1 }),
   };
-  const refs = RefResolverLive({
-    material: (ref: MaterialRef) => {
+  const refs = RefResolverLive(
+    fixtureRefResolver((ref: MaterialRef) => {
       const value = materials[materialRefKey(ref)];
       return value === undefined ? null : value;
-    },
-  });
+    }),
+  );
   const admission = {
     attemptStructured: <O>() =>
       Effect.succeed({

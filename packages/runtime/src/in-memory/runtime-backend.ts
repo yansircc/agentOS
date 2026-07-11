@@ -5,7 +5,12 @@ import {
   SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/core/backend-protocol";
-import { RefResolverLive, type RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
+import {
+  RefResolverLive,
+  RefResolverNone,
+  type RefResolver,
+  RefResolverService,
+} from "@agent-os/core/ref-resolver";
 import {
   Admission,
   AttachedStreamRegistry,
@@ -162,7 +167,7 @@ export const createInMemoryRuntimeBackend = (
       state.addHandler(registration.kind, registration.handler);
     }
   }
-  const refResolverLayer = RefResolverLive(graph.refResolver ?? { material: () => null });
+  const refResolverLayer = RefResolverLive(graph.refResolver ?? RefResolverNone);
   const llmTransportLayer = graph.llmTransport.pipe(Layer.provide(refResolverLayer));
   const admissionLayer = InMemoryAdmissionLive(state).pipe(Layer.provide(llmTransportLayer));
   const dispatchRetryTrigger = deliveryRetryTrigger(state, graph.dispatchTargets ?? {});

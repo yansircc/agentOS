@@ -21,6 +21,7 @@ import { BoundaryEventsLive } from "../../src/cloudflare/boundary-events";
 import { EventBusLive } from "../../src/cloudflare/ledger/event-bus";
 import { LedgerLive } from "../../src/cloudflare/ledger/ledger";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import { fixtureRefResolver } from "../_material-resolver-fixture";
 import { QuotaLive } from "../../src/cloudflare/quota";
 import { withQuota } from "../../src/cloudflare/quota";
 import { ToolError } from "@agent-os/core/errors";
@@ -105,9 +106,7 @@ const buildRuntime = (
   );
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
-  const refs = RefResolverLive({
-    material: () => null,
-  });
+  const refs = RefResolverLive(fixtureRefResolver(() => null));
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );

@@ -9,6 +9,7 @@ import {
   type ToolExecution,
 } from "@agent-os/core/tools";
 import {
+  agentMaterialResolvedEvent,
   agentRunAbortedEvent,
   agentRunCompletedEvent,
   agentRunInterruptedEvent,
@@ -182,6 +183,12 @@ describe("runtime event vocabulary", () => {
         intent: "answer",
         executionIdentity,
         traceContext,
+      }),
+      agentMaterialResolvedEvent({
+        ...runtimeIdentity,
+        runId: 1,
+        materialRef: "credential:_:provider-key",
+        version: "v1",
       }),
       chatIngestedEvent({
         ...runtimeIdentity,

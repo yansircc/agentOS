@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, ManagedRuntime } from "effect";
-import { endpointMaterialRef } from "@agent-os/core/material-ref";
+import { endpointMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
+import { openLive } from "@agent-os/core/live-edge";
 import { Ledger } from "@agent-os/runtime";
 import {
   defineAgentBindings,
@@ -22,6 +23,7 @@ import {
 import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
 import { eventIdentity } from "../../src/cloudflare/ledger/identity";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
+import { fixtureMaterialRequest, fixtureRefResolver } from "../_material-resolver-fixture";
 
 interface TestEnv extends CloudflareAgentEnv {
   readonly ENDPOINT: string;
@@ -67,32 +69,39 @@ const observedInstallation = () =>
   });
 
 describe("Cloudflare deployment installation", () => {
-  it("materializes a deployment spec into the existing mount and layer inputs", () => {
-    const endpointRef = endpointMaterialRef("llm");
-    const spec: CloudflareAgentDeploymentSpec<TestEnv> = {
-      deployment,
-      agentBindings,
-      refResolver: (env) => ({
-        material: (ref) => (ref === endpointRef ? env.ENDPOINT : null),
-      }),
-      projections: () => [],
-    };
+  it.effect("materializes a deployment spec into the existing mount and layer inputs", () =>
+    Effect.gen(function* () {
+      const endpointRef = endpointMaterialRef("llm");
+      const spec: CloudflareAgentDeploymentSpec<TestEnv> = {
+        deployment,
+        agentBindings,
+        refResolver: (env) =>
+          fixtureRefResolver((ref) =>
+            materialRefKey(ref) === materialRefKey(endpointRef) ? env.ENDPOINT : null,
+          ),
+        projections: () => [],
+      };
 
-    const materialized = materializeCloudflareAgentDeployment(spec, {
-      ENDPOINT: "https://llm.example",
-    });
+      const materialized = materializeCloudflareAgentDeployment(spec, {
+        ENDPOINT: "https://llm.example",
+      });
 
-    expect(materialized.mount.driverConfig.manifest).toBe(manifest);
-    expect(materialized.mount.driverConfig.bindings).toBe(agentBindings);
-    expect(materialized.mount.projectionSinks.info.agent.agentId).toBe(
-      "agent.cloudflare-deployment",
-    );
-    expect(materialized.refResolver.material(endpointRef)).toBe("https://llm.example");
-    expect(materialized.extensions).toEqual([]);
-    expect(materialized.declaredIntents).toEqual([]);
-    expect(materialized.dispatchTargets).toEqual({});
-    expect(materialized.mount.projectionSinks.materialized).toEqual([]);
-  });
+      expect(materialized.mount.driverConfig.manifest).toBe(manifest);
+      expect(materialized.mount.driverConfig.bindings).toBe(agentBindings);
+      expect(materialized.mount.projectionSinks.info.agent.agentId).toBe(
+        "agent.cloudflare-deployment",
+      );
+      expect(
+        openLive(
+          (yield* materialized.refResolver.material(fixtureMaterialRequest(endpointRef))).value,
+        ),
+      ).toBe("https://llm.example");
+      expect(materialized.extensions).toEqual([]);
+      expect(materialized.declaredIntents).toEqual([]);
+      expect(materialized.dispatchTargets).toEqual({});
+      expect(materialized.mount.projectionSinks.materialized).toEqual([]);
+    }),
+  );
 
   it.effect("appends and reads InstallationReceipt through the Ledger port", () =>
     Effect.gen(function* () {

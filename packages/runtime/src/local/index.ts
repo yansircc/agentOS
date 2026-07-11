@@ -105,7 +105,6 @@ export interface LocalAgentRuntimeTestLlm extends InMemoryLlmTransportOptions {
 export interface LocalAgentRuntimeTransportLlm {
   readonly kind: "transport";
   readonly transport: Layer.Layer<LlmTransport, never, RefResolverService>;
-  readonly refResolver?: RefResolver;
   readonly route: LlmRoute;
   readonly preflight?: LocalAgentRuntimeLlmPreflight;
 }
@@ -130,6 +129,7 @@ export interface CreateLocalAgentRuntimeOptions {
   readonly env?: CreateLocalWorkspaceEnvOptions["env"];
   readonly inheritEnv?: CreateLocalWorkspaceEnvOptions["inheritEnv"];
   readonly llm?: LocalAgentRuntimeLlm;
+  readonly materialResolver?: RefResolver;
   readonly workspaceOperations?: WorkspaceOperationsOptions;
   readonly capabilities?: ReadonlyArray<CapabilityContract>;
 }
@@ -475,7 +475,6 @@ const localWorkspaceOperations = (options: WorkspaceOperationsOptions | undefine
 
 interface ResolvedLocalAgentRuntimeLlm {
   readonly transport: Layer.Layer<LlmTransport, never, RefResolverService>;
-  readonly refResolver?: RefResolver;
   readonly defaultRoute: LlmRoute;
   readonly preflight?: LocalAgentRuntimeLlmPreflight;
 }
@@ -502,7 +501,6 @@ const localLlmAssembly = (
   if (options?.kind === "transport") {
     return {
       transport: options.transport,
-      refResolver: options.refResolver,
       defaultRoute: options.route,
       preflight: options.preflight,
     };
@@ -517,9 +515,10 @@ const localLlmPreflightDiagnostics = (
   llm: ResolvedLocalAgentRuntimeLlm,
   route: LlmRoute,
   routeBindingRef: string,
+  materialResolver: RefResolver | undefined,
 ): ReadonlyArray<PreflightDiagnostic> => {
   if (llm.preflight !== undefined) {
-    return llm.preflight({ route, refResolver: llm.refResolver, routeBindingRef });
+    return llm.preflight({ route, refResolver: materialResolver, routeBindingRef });
   }
   if (!routeRequiresProviderPreflight(route)) return [];
   return [
@@ -635,6 +634,7 @@ type LocalAgentRuntimeFacadeInput = {
   readonly capabilities: ReadonlyArray<CapabilityContract>;
   readonly resolved: ResolvedRuntime;
   readonly llm: ResolvedLocalAgentRuntimeLlm;
+  readonly materialResolver?: RefResolver;
   readonly defaultRoute: LlmRoute;
 };
 
@@ -647,6 +647,7 @@ const submitLocalAgent = (
     input.llm,
     submitInput.route ?? input.defaultRoute,
     "submit",
+    input.materialResolver,
   );
   if (diagnostics.length > 0) {
     return Promise.reject(new LocalAgentRuntimeResolveError(diagnostics));
@@ -994,7 +995,12 @@ export const lowerLocalAgentRuntime = async (
   const target = localAgentRuntimeTarget(options.target);
   const identity = options.truthIdentity ?? inMemoryConversationTruthIdentity(options.identity);
   const llm = localLlmAssembly(options.llm);
-  const llmPreflightDiagnostics = localLlmPreflightDiagnostics(llm, llm.defaultRoute, "default");
+  const llmPreflightDiagnostics = localLlmPreflightDiagnostics(
+    llm,
+    llm.defaultRoute,
+    "default",
+    options.materialResolver,
+  );
   if (llmPreflightDiagnostics.length > 0) {
     throw new LocalAgentRuntimeResolveError(llmPreflightDiagnostics);
   }
@@ -1017,7 +1023,7 @@ export const lowerLocalAgentRuntime = async (
   const resolved = await resolveRuntime(host, capabilities, {
     identity: options.identity,
     llmTransport: llm.transport,
-    refResolver: llm.refResolver,
+    refResolver: options.materialResolver,
   });
   if (!resolved.ok) {
     throw new LocalAgentRuntimeResolveError(resolved.diagnostics);
@@ -1029,6 +1035,7 @@ export const lowerLocalAgentRuntime = async (
     capabilities,
     resolved: resolved.resolved,
     llm,
+    materialResolver: options.materialResolver,
     defaultRoute: llm.defaultRoute,
   } satisfies LocalAgentRuntimeFacadeInput;
   await hydrateLocalRuntimeLedger(facadeInput, options.initialEvents);

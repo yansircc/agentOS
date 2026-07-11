@@ -10,7 +10,10 @@ import {
   openAIChat,
 } from "../../src/cloudflare/facade-lowering";
 import { cloudflareAgentMountPort, mountCloudflareAgent } from "../../src/cloudflare/mount";
-import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
+import { bindingMaterialRef, materialRefKey, type MaterialRef } from "@agent-os/core/material-ref";
+import { openLive } from "@agent-os/core/live-edge";
+import type { RefResolver } from "@agent-os/core/ref-resolver";
+import { fixtureMaterialRequest } from "../_material-resolver-fixture";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   defineTool,
@@ -38,6 +41,10 @@ interface TestEnv {
 }
 
 const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
+const resolvedMaterial = (resolver: RefResolver, ref: MaterialRef) =>
+  resolver
+    .material(fixtureMaterialRequest(ref))
+    .pipe(Effect.map((resolved) => openLive(resolved.value)));
 
 const target: DispatchTargetNamespace = {
   idFromName: (_name) => ({}) as DurableObjectId,
@@ -112,81 +119,87 @@ describe("defineAgentDO facade lowering", () => {
     expect(mount.projectionSinks.materialized).toEqual([]);
   });
 
-  it("lowers bindings into RefResolver and dispatch targets by MaterialRef shape", () => {
-    const resolved: string[] = [];
-    const materialBindings = [
-      endpoint<TestEnv>("llm").from((e) => {
-        resolved.push("endpoint");
-        return e.LLM_ENDPOINT;
-      }),
-      credential<TestEnv>("llm-key").from((e) => {
-        resolved.push("credential");
-        return e.LLM_KEY;
-      }),
-      durableObjectTarget<TestEnv>("peer").from((e) => {
-        resolved.push("peer");
-        return e.PEER_DO;
-      }),
-    ];
-    const lowered = lowerAgentConfig(
-      {
-        bindings: materialBindings,
-        llms: {
-          default: openAIChat({
-            model: "gpt-4.1-mini",
-            endpoint: "llm",
-            credential: "llm-key",
-          }),
+  it.effect("lowers bindings into RefResolver and dispatch targets by MaterialRef shape", () =>
+    Effect.gen(function* () {
+      const resolved: string[] = [];
+      const materialBindings = [
+        endpoint<TestEnv>("llm").from((e) => {
+          resolved.push("endpoint");
+          return e.LLM_ENDPOINT;
+        }),
+        credential<TestEnv>("llm-key").from((e) => {
+          resolved.push("credential");
+          return e.LLM_KEY;
+        }),
+        durableObjectTarget<TestEnv>("peer").from((e) => {
+          resolved.push("peer");
+          return e.PEER_DO;
+        }),
+      ];
+      const lowered = lowerAgentConfig(
+        {
+          bindings: materialBindings,
+          llms: {
+            default: openAIChat({
+              model: "gpt-4.1-mini",
+              endpoint: "llm",
+              credential: "llm-key",
+            }),
+          },
         },
-      },
-      env,
-    );
+        env,
+      );
 
-    expect(resolved).toEqual([]);
-    expect(lowered.refResolver.material({ kind: "endpoint", ref: "llm" })).toBe(
-      "https://llm.example",
-    );
-    expect(resolved).toEqual(["endpoint"]);
-    expect(
-      lowerMaterialBindings(materialBindings, env).refResolver.material({
-        kind: "endpoint",
-        ref: "llm",
-      }),
-    ).toBe("https://llm.example");
-    expect(resolved).toEqual(["endpoint", "endpoint"]);
-    expect(lowered.refResolver.material({ kind: "credential", ref: "llm-key" })).toBe("secret");
-    expect(resolved).toEqual(["endpoint", "endpoint", "credential"]);
-    const peerKey = materialRefKey(
-      bindingMaterialRef({
-        provider: "cloudflare",
-        bindingKind: "durable_object",
-        ref: "peer",
-      }),
-    );
-    expect(typeof lowered.dispatchTargets[peerKey]?.deliver).toBe("function");
-    expect(lowered.submitBindings?.llmRoutes?.default).toEqual({
-      kind: "openai-chat-compatible",
-      modelId: "gpt-4.1-mini",
-      endpointRef: "llm",
-      credentialRef: "llm-key",
-    });
-  });
+      expect(resolved).toEqual([]);
+      expect(yield* resolvedMaterial(lowered.refResolver, { kind: "endpoint", ref: "llm" })).toBe(
+        "https://llm.example",
+      );
+      expect(resolved).toEqual(["endpoint"]);
+      expect(
+        yield* resolvedMaterial(lowerMaterialBindings(materialBindings, env).refResolver, {
+          kind: "endpoint",
+          ref: "llm",
+        }),
+      ).toBe("https://llm.example");
+      expect(resolved).toEqual(["endpoint", "endpoint"]);
+      expect(
+        yield* resolvedMaterial(lowered.refResolver, { kind: "credential", ref: "llm-key" }),
+      ).toBe("secret");
+      expect(resolved).toEqual(["endpoint", "endpoint", "credential"]);
+      const peerKey = materialRefKey(
+        bindingMaterialRef({
+          provider: "cloudflare",
+          bindingKind: "durable_object",
+          ref: "peer",
+        }),
+      );
+      expect(typeof lowered.dispatchTargets[peerKey]?.deliver).toBe("function");
+      expect(lowered.submitBindings?.llmRoutes?.default).toEqual({
+        kind: "openai-chat-compatible",
+        modelId: "gpt-4.1-mini",
+        endpointRef: "llm",
+        credentialRef: "llm-key",
+      });
+    }),
+  );
 
-  it("uses the same material resolver lowering for low-level consumers", () => {
-    const bindings = [
-      endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),
-      credential<TestEnv>("llm-key").from((e) => e.LLM_KEY),
-    ] as const;
-    const lowered = lowerAgentConfig({ bindings }, env);
-    const materialOnly = lowerMaterialBindings(bindings, env);
+  it.effect("uses the same material resolver lowering for low-level consumers", () =>
+    Effect.gen(function* () {
+      const bindings = [
+        endpoint<TestEnv>("llm").from((e) => e.LLM_ENDPOINT),
+        credential<TestEnv>("llm-key").from((e) => e.LLM_KEY),
+      ] as const;
+      const lowered = lowerAgentConfig({ bindings }, env);
+      const materialOnly = lowerMaterialBindings(bindings, env);
 
-    expect(materialOnly.refResolver.material({ kind: "endpoint", ref: "llm" })).toBe(
-      lowered.refResolver.material({ kind: "endpoint", ref: "llm" }),
-    );
-    expect(materialOnly.refResolver.material({ kind: "credential", ref: "llm-key" })).toBe(
-      lowered.refResolver.material({ kind: "credential", ref: "llm-key" }),
-    );
-  });
+      expect(
+        yield* resolvedMaterial(materialOnly.refResolver, { kind: "endpoint", ref: "llm" }),
+      ).toBe(yield* resolvedMaterial(lowered.refResolver, { kind: "endpoint", ref: "llm" }));
+      expect(
+        yield* resolvedMaterial(materialOnly.refResolver, { kind: "credential", ref: "llm-key" }),
+      ).toBe(yield* resolvedMaterial(lowered.refResolver, { kind: "credential", ref: "llm-key" }));
+    }),
+  );
 
   it("routes durable object bindings by material shape, not helper choice", () => {
     const lowered = lowerAgentConfig(

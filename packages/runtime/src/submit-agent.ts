@@ -39,6 +39,7 @@ import {
   validateOptionalTraceContext,
 } from "@agent-os/core/telemetry-protocol";
 import {
+  agentMaterialResolvedEvent,
   agentRunCompletedEvent,
   agentRunInterruptedEvent,
   agentRunResumedEvent,
@@ -66,7 +67,9 @@ import {
 import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import type { InternalSubmitSpec } from "./internal-submit";
 import { Ledger, runtimeStorageError, type RuntimeStorageError } from "./ledger";
-import { RefResolverService, type RefResolutionFailed } from "@agent-os/core/ref-resolver";
+import { RefResolutionFailed, RefResolverService } from "@agent-os/core/ref-resolver";
+import type { MaterialResolutionReceipt } from "@agent-os/core/ref-resolver";
+import { materialRefKey } from "@agent-os/core/material-ref";
 import { Quota } from "./quota-service";
 import {
   decodeToolArgs,
@@ -335,6 +338,48 @@ export const submitAgentEffect = (
           }),
         );
       }
+      const materialVersions = new Map<string, string>();
+      for (const event of priorEvents) {
+        const decoded = decodeRuntimeLedgerEvent(event);
+        if (
+          decoded._tag === "runtime" &&
+          decoded.event.kind === RUNTIME_EVENT_KIND.AGENT_MATERIAL_RESOLVED &&
+          decoded.event.payload.runId === started.id
+        ) {
+          materialVersions.set(decoded.event.payload.materialRef, decoded.event.payload.version);
+        }
+      }
+      const recordMaterialResolutions = (
+        receipts: ReadonlyArray<MaterialResolutionReceipt>,
+      ): Effect.Effect<void, RuntimeStorageError | JsonStringifyError | RefResolutionFailed> =>
+        Effect.gen(function* () {
+          for (const receipt of receipts) {
+            const key = materialRefKey(receipt.materialRef);
+            const expectedVersion = materialVersions.get(key);
+            if (expectedVersion !== undefined && expectedVersion !== receipt.version) {
+              return yield* Effect.fail(
+                new RefResolutionFailed({
+                  kind: receipt.materialRef.kind,
+                  ref: key,
+                  reason: "material_version_mismatch",
+                  expectedVersion,
+                  actualVersion: receipt.version,
+                }),
+              );
+            }
+            if (expectedVersion !== undefined) continue;
+            yield* appendRuntimeDriverAction(ledger, {
+              kind: "resolve_material",
+              event: agentMaterialResolvedEvent({
+                ...identity,
+                runId: started.id,
+                materialRef: key,
+                version: receipt.version,
+              }),
+            });
+            materialVersions.set(key, receipt.version);
+          }
+        });
       if (spec.resume === undefined) {
         yield* appendRuntimeDriverAction(ledger, {
           kind: "ingest_chat",
@@ -881,6 +926,22 @@ export const submitAgentEffect = (
                     tools: toolDefs.length > 0 ? toolDefs : undefined,
                     tool_choice: toolChoice,
                     traceContext,
+                    materialResolution: {
+                      truthIdentity: identity,
+                      expectedVersions: Object.fromEntries(materialVersions),
+                      onResolved: (receipt) =>
+                        recordMaterialResolutions([receipt]).pipe(
+                          Effect.mapError((failure) =>
+                            failure instanceof RefResolutionFailed
+                              ? failure
+                              : new RefResolutionFailed({
+                                  kind: receipt.materialRef.kind,
+                                  ref: materialRefKey(receipt.materialRef),
+                                  reason: "resolver_failed",
+                                }),
+                          ),
+                        ),
+                    },
                   },
                   { signal },
                 ),
@@ -1422,7 +1483,7 @@ export const submitAgentEffect = (
             // separate quota.
             const attemptOnce: Effect.Effect<
               unknown,
-              ToolError | RuntimeStorageError | JsonStringifyError
+              ToolError | RuntimeStorageError | JsonStringifyError | RefResolutionFailed
             > = Effect.gen(function* () {
               const attempt = Effect.gen(function* () {
                 if (tool.quota !== undefined) {
@@ -1487,6 +1548,17 @@ export const submitAgentEffect = (
                 }
                 return yield* withLocalResolvedToolMaterials(
                   refs,
+                  {
+                    request: (materialRef) => {
+                      const expectedVersion = materialVersions.get(materialRefKey(materialRef));
+                      return {
+                        truthIdentity: identity,
+                        materialRef,
+                        ...(expectedVersion === undefined ? {} : { expectedVersion }),
+                      };
+                    },
+                    onResolved: (receipt) => recordMaterialResolutions([receipt]),
+                  },
                   call.function.name,
                   materialPlan.plan.localRefs,
                   (localMaterials) =>

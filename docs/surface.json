@@ -134,7 +134,7 @@
         },
         {
           "subpath": "./ref-resolver",
-          "audiences": ["advanced"],
+          "audiences": ["advanced", "generated-only"],
           "capability": "material ref resolution"
         },
         {

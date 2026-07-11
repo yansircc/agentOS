@@ -28,7 +28,6 @@ import {
   WORKSPACE_AGENT_COMMAND,
   type WorkspaceAgentInspectInputRequestCommandInput,
 } from "@agent-os/core/workspace-agent";
-import type { MaterialRef } from "@agent-os/core/material-ref";
 import {
   preflightOpenAiCompatibleProviderMaterial,
   type ProviderMaterialPreflightDiagnostic,
@@ -1077,14 +1076,8 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
     bindings.map((binding) => [binding.kind, binding]),
   ) as Record<LlmMaterialEnvKind, LlmMaterialEnvBinding>;
   const modelValue = materialValueFor(bindingByKind.model, env);
-  const refResolver = {
-    material: (ref: MaterialRef): NonNullable<unknown> | null => {
-      const binding = bindings.find(
-        (candidate) => candidate.kind === ref.kind && candidate.ref === ref.ref,
-      );
-      return binding === undefined ? null : materialValueFor(binding, env);
-    },
-  };
+  const endpointValue = materialValueFor(bindingByKind.endpoint, env);
+  const credentialValue = materialValueFor(bindingByKind.credential, env);
   const providerDiagnostics =
     envDiagnostics.length > 0
       ? []
@@ -1095,11 +1088,18 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
             credentialRef: llm.credentialRef,
             modelId: typeof modelValue === "string" ? modelValue : "",
           },
-          refResolver,
           routeBindingRef,
           modelMaterial: {
             ref: llm.modelRef,
             value: modelValue,
+          },
+          materialStatus: {
+            endpoint:
+              typeof endpointValue === "string" && endpointValue.length > 0 ? "present" : "missing",
+            credential:
+              typeof credentialValue === "string" && credentialValue.length > 0
+                ? "present"
+                : "missing",
           },
         });
   const providerDetail = providerMaterialDetailFrom(providerDiagnostics);

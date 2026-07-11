@@ -59,7 +59,7 @@ Audience is declared per package entrypoint, not per package.
 | `@agent-os/core/projection`                         | `advanced`                         | projection algebra                                                                                         |
 | `@agent-os/core/quota`                              | `advanced`                         | quota declarations                                                                                         |
 | `@agent-os/core/recorded-value`                     | `advanced`                         | recorded value algebra                                                                                     |
-| `@agent-os/core/ref-resolver`                       | `advanced`                         | material ref resolution                                                                                    |
+| `@agent-os/core/ref-resolver`                       | `advanced`, `generated-only`       | material ref resolution                                                                                    |
 | `@agent-os/core/runtime-protocol`                   | `generated-only`                   | runtime DTOs emitted by generated targets                                                                  |
 | `@agent-os/core/runtime-scope`                      | `advanced`                         | runtime scope helpers                                                                                      |
 | `@agent-os/core/settlement-contract`                | `advanced`                         | settlement contract algebra                                                                                |

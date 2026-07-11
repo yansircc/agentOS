@@ -26,7 +26,12 @@ import {
   type LlmRequest,
 } from "@agent-os/core/llm-protocol";
 import type { ToolDefinition } from "@agent-os/core/tools";
-import { RefResolverLive, type RefResolverService } from "@agent-os/core/ref-resolver";
+import {
+  RefResolutionFailed,
+  RefResolverLive,
+  type RefResolverService,
+} from "@agent-os/core/ref-resolver";
+import { fixtureRefResolver } from "../_material-resolver-fixture";
 import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/core/errors";
 import {
   callEffectAiLanguageModel,
@@ -44,7 +49,6 @@ import {
   OpenAiCompatibleLlmTransportLive,
   preflightOpenAiCompatibleProviderMaterial,
 } from "../../src/llm-effect-ai/openai-compatible";
-import { ProviderMaterialPreflightDetailSchema } from "../../src/runtime-diagnostic-carrier";
 
 const usage = (spec: {
   readonly inputTokens: number | undefined;
@@ -90,6 +94,13 @@ const openAiRoute = (): LlmRequest["route"] => ({
 const request = (overrides: Partial<LlmRequest> = {}): LlmRequest => ({
   route: openAiRoute(),
   messages: [{ role: "user", content: "hello" }],
+  materialResolution: {
+    truthIdentity: {
+      scopeRef: { kind: "conversation", scopeId: "tenant-a" },
+      effectAuthorityRef: { authorityId: "llm-test", authorityClass: "test" },
+    },
+    expectedVersions: {},
+  },
   ...overrides,
 });
 
@@ -124,9 +135,11 @@ const fakeHttpClient = (
 
 const httpClientLive = (client: HttpClientService) => Layer.succeed(HttpClientTag, client);
 
-const resolverLive = RefResolverLive({
-  material: (ref) => (ref.kind === "endpoint" ? "https://provider.example/base" : "sk-secret"),
-});
+const resolverLive = RefResolverLive(
+  fixtureRefResolver((ref) =>
+    ref.kind === "endpoint" ? "https://provider.example/base" : "sk-secret",
+  ),
+);
 
 const _doCompatibleOpenAiLayer: Layer.Layer<LlmTransport, never, RefResolverService> =
   OpenAiCompatibleLlmTransportLive;
@@ -286,35 +299,13 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
   it("preflights OpenAI-compatible provider material without exposing secret values", () => {
     const diagnostics = preflightOpenAiCompatibleProviderMaterial({
       route: openAiRoute(),
-      refResolver: {
-        material: (ref) => (ref.kind === "credential" ? "sk-secret" : null),
-      },
+      refResolver: fixtureRefResolver((ref) => (ref.kind === "credential" ? "sk-secret" : null)),
       routeBindingRef: "default",
       modelMaterial: { ref: "openai-model", value: "gpt-test" },
     });
 
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        pass: "provider_material",
-        reason: "OpenAI-compatible provider material preflight failed",
-      }),
-    ]);
+    expect(diagnostics).toEqual([]);
     expect(JSON.stringify(diagnostics)).not.toContain("sk-secret");
-    const detail = Schema.decodeUnknownSync(ProviderMaterialPreflightDetailSchema)(
-      JSON.parse(diagnostics[0]?.detail ?? "{}"),
-    );
-    expect(detail).toMatchObject({
-      kind: "provider_material_preflight",
-      provider: "openai-compatible",
-      routeKind: "openai-chat-compatible",
-      routeBindingRef: "default",
-      routeStatus: "present",
-      materials: expect.arrayContaining([
-        { kind: "endpoint", ref: "openai", status: "missing" },
-        { kind: "credential", ref: "openai-key", status: "present" },
-        { kind: "model", ref: "openai-model", status: "present" },
-      ]),
-    });
   });
 
   it.effect("maps openai-chat-compatible provider HTTP failures into provider taxonomy", () =>
@@ -343,6 +334,45 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
         expect(failure.cause.type).toBe("invalid_request_error");
         expect(failure.cause.flags).toEqual(["schema"]);
       }
+    }),
+  );
+
+  it.effect("fails before provider execution when a pinned material version is unavailable", () =>
+    Effect.gen(function* () {
+      let providerCalls = 0;
+      const client = fakeHttpClient(() => {
+        providerCalls += 1;
+        return Effect.succeed(httpResponse(200, {}));
+      });
+      const exit = yield* Effect.exit(
+        Effect.gen(function* () {
+          const transport = yield* LlmTransport;
+          return yield* transport.call(
+            request({
+              materialResolution: {
+                truthIdentity: request().materialResolution!.truthIdentity,
+                expectedVersions: {
+                  "endpoint:_:openai": "deleted-v0",
+                  "credential:_:openai-key": "deleted-v0",
+                },
+              },
+            }),
+          );
+        }).pipe(
+          Effect.provide(makeEffectAiLlmTransportLayer<never>(() => Effect.die("model unused"))),
+          Effect.provide(httpClientLive(client)),
+          Effect.provide(resolverLive),
+        ),
+      );
+      const failure = expectFailure(exit);
+      expect(failure).toBeInstanceOf(UpstreamFailure);
+      expect(failure.cause).toBeInstanceOf(RefResolutionFailed);
+      expect(failure.cause).toMatchObject({
+        reason: "material_version_mismatch",
+        expectedVersion: "deleted-v0",
+        actualVersion: "fixture-v1",
+      });
+      expect(providerCalls).toBe(0);
     }),
   );
 

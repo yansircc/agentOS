@@ -2310,10 +2310,12 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.doesNotMatch(target, /bindWorkspaceToolsForRuntime/);
     assert.match(target, /generatedWorkspaceToolInteractions/);
     assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
-    assert.match(target, /readonly AGENTOS_ENDPOINT_OPENROUTER\?: string;/);
-    assert.match(target, /readonly AGENTOS_CREDENTIAL_OPENROUTER_KEY\?: string;/);
+    assert.match(target, /readonly AGENTOS_MATERIAL_RESOLVER: RefResolver;/);
+    assert.doesNotMatch(target, /readonly AGENTOS_ENDPOINT_OPENROUTER\?: string;/);
+    assert.doesNotMatch(target, /readonly AGENTOS_CREDENTIAL_OPENROUTER_KEY\?: string;/);
     assert.match(target, /readonly AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL\?: string;/);
-    assert.match(target, /materialEnvValue\(env, "AGENTOS_ENDPOINT_OPENROUTER"\)/);
+    assert.doesNotMatch(target, /materialEnvValue\(env, "AGENTOS_ENDPOINT_OPENROUTER"\)/);
+    assert.match(target, /refResolver: \(env\) => env\.AGENTOS_MATERIAL_RESOLVER/);
     assert.match(target, /preflightOpenAiCompatibleProviderMaterial/);
     assert.doesNotMatch(target, /readonly OPENROUTER_KEY\?: string;/);
     assert.doesNotMatch(target, /readonly OPENROUTER_ENDPOINT\?: string;/);
@@ -2413,9 +2415,10 @@ void test("agentos build emits node local agent app target", () => {
     assert.match(local, /lowerLocalAgentRuntime/);
     assert.match(local, /OpenAiCompatibleLlmTransportLive/);
     assert.match(local, /preflightOpenAiCompatibleProviderMaterial/);
-    assert.match(local, /AGENTOS_ENDPOINT_OPENROUTER/);
-    assert.match(local, /AGENTOS_CREDENTIAL_OPENROUTER_KEY/);
+    assert.doesNotMatch(local, /AGENTOS_ENDPOINT_OPENROUTER/);
+    assert.doesNotMatch(local, /AGENTOS_CREDENTIAL_OPENROUTER_KEY/);
     assert.match(local, /AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL/);
+    assert.match(local, /readonly materialResolver\?: RefResolver;/);
     assert.match(local, /export interface LocalAgentApp/);
     assert.match(local, /readonly sessions:/);
     assert.match(local, /readonly workflows:/);
@@ -2425,7 +2428,10 @@ void test("agentos build emits node local agent app target", () => {
     assert.match(local, /projectWorkflowRuns/);
     assert.match(local, /export const createLocalAgentApp/);
     assert.match(local, /target: "node@1"/);
-    assert.match(local, /options\.llm === undefined[\s\S]*generatedLocalLlmFor\(targetEnv\)/);
+    assert.match(
+      local,
+      /options\.llm === undefined[\s\S]*generatedLocalLlmFor\(targetEnv, options\.materialResolver\)/,
+    );
     assert.match(local, /if \(!generatedLlm\.ok\) return rejectTargetFailure\(generatedLlm\)/);
     assert.match(local, /llm: generatedLlm\.value/);
     assert.match(local, /workspaceOperations: generatedWorkspaceOperations/);
@@ -4406,8 +4412,7 @@ void test("agentos build emits skill artifact and load_skill executes determinis
 export const __agentosSkillSmoke = async () => {
   const agent = Object.create(AgentOS.prototype);
   agent.targetEnv = {
-    AGENTOS_ENDPOINT_OPENROUTER: "https://openrouter.example/v1",
-    AGENTOS_CREDENTIAL_OPENROUTER_KEY: "smoke-secret",
+    AGENTOS_MATERIAL_RESOLVER: { material: () => Effect.die("unused") },
     AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model",
   };
   agent.submitWithBindings = async (spec, bindings) => {

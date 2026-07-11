@@ -82,6 +82,9 @@ slug: "api/core"
 - `.:AgentMountPort`
 - `.:AgentMountValidation`
 - `.:AgentMountWarning`
+- `.:agentMaterialResolvedEvent`
+- `.:AgentMaterialResolvedPayload`
+- `.:AgentMaterialResolvedPayloadSchema`
 - `.:agentRunAbortedEvent`
 - `.:AgentRunAbortedPayload`
 - `.:AgentRunAbortedPayloadSchema`
@@ -637,9 +640,9 @@ slug: "api/core"
 - `.:redactedSafeSummaryText`
 - `.:RefResolutionFailed`
 - `.:RefResolver`
-- `.:RefResolverDisposeInput`
 - `.:RefResolverEmpty`
 - `.:RefResolverLive`
+- `.:RefResolverNone`
 - `.:RefResolverService`
 - `.:rejectClaimedAppEvent`
 - `.:rejected`
@@ -652,6 +655,9 @@ slug: "api/core"
 - `.:replayToolResultFromSnapshot`
 - `.:ResolvedMaterial`
 - `.:ResolvedMaterialService`
+- `.:MaterialResolutionReceipt`
+- `.:MaterialResolutionRequest`
+- `.:liveResolvedMaterial`
 - `.:ResolvedToolExecution`
 - `.:ResolvedToolMaterials`
 - `.:resolveRuntimeScope`
@@ -1312,11 +1318,14 @@ slug: "api/core"
 - `./recorded-value:recordedValue`
 - `./recorded-value:RecordedValue`
 - `./ref-resolver:LiveResolvedMaterial`
+- `./ref-resolver:liveResolvedMaterial`
+- `./ref-resolver:MaterialResolutionReceipt`
+- `./ref-resolver:MaterialResolutionRequest`
 - `./ref-resolver:RefResolutionFailed`
 - `./ref-resolver:RefResolver`
-- `./ref-resolver:RefResolverDisposeInput`
 - `./ref-resolver:RefResolverEmpty`
 - `./ref-resolver:RefResolverLive`
+- `./ref-resolver:RefResolverNone`
 - `./ref-resolver:RefResolverService`
 - `./ref-resolver:ResolvedMaterial`
 - `./ref-resolver:ResolvedMaterialService`
@@ -1364,6 +1373,9 @@ slug: "api/core"
 - `./runtime-protocol:AgentMountPort`
 - `./runtime-protocol:AgentMountValidation`
 - `./runtime-protocol:AgentMountWarning`
+- `./runtime-protocol:agentMaterialResolvedEvent`
+- `./runtime-protocol:AgentMaterialResolvedPayload`
+- `./runtime-protocol:AgentMaterialResolvedPayloadSchema`
 - `./runtime-protocol:agentRunAbortedEvent`
 - `./runtime-protocol:AgentRunAbortedPayload`
 - `./runtime-protocol:AgentRunAbortedPayloadSchema`

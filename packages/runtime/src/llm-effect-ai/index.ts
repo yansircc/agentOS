@@ -30,7 +30,7 @@ import {
   post as httpPost,
   type HttpClientRequest,
 } from "effect/unstable/http/HttpClientRequest";
-import { Data, Effect, Layer, Result, Schema } from "effect";
+import { Data, Effect, Layer, Schema } from "effect";
 import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/core/llm-protocol";
 import type {
   LlmMessage,
@@ -102,6 +102,10 @@ export interface OpenAiCompatibleProviderMaterialPreflightInput {
     readonly ref: string;
     readonly value: unknown;
   };
+  readonly materialStatus?: {
+    readonly endpoint: "present" | "missing" | "invalid";
+    readonly credential: "present" | "missing" | "invalid";
+  };
 }
 
 const hasRouteMaterial = (
@@ -145,14 +149,10 @@ const materialStatusForValue = (
 
 const resolverMaterialStatus = (
   refResolver: RefResolver | undefined,
-  ref: ReturnType<typeof endpointMaterialRef> | ReturnType<typeof credentialMaterialRef>,
-  validate: (value: string) => boolean,
+  _ref: ReturnType<typeof endpointMaterialRef> | ReturnType<typeof credentialMaterialRef>,
+  _validate: (value: string) => boolean,
 ): ProviderMaterialPreflightStatus => {
-  if (refResolver === undefined) return "missing";
-  const resolved = Result.try({ try: () => refResolver.material(ref), catch: (cause) => cause });
-  return Result.isFailure(resolved)
-    ? "resolver_threw"
-    : materialStatusForValue(resolved.success, validate);
+  return refResolver === undefined ? "missing" : "present";
 };
 
 export const preflightOpenAiCompatibleProviderMaterial = (
@@ -176,11 +176,12 @@ export const preflightOpenAiCompatibleProviderMaterial = (
       status:
         endpointRef === undefined
           ? "invalid"
-          : resolverMaterialStatus(
+          : (input.materialStatus?.endpoint ??
+            resolverMaterialStatus(
               input.refResolver,
               endpointMaterialRef(endpointRef),
               isHttpEndpoint,
-            ),
+            )),
     },
     {
       kind: "credential",
@@ -188,11 +189,12 @@ export const preflightOpenAiCompatibleProviderMaterial = (
       status:
         credentialRef === undefined
           ? "invalid"
-          : resolverMaterialStatus(
+          : (input.materialStatus?.credential ??
+            resolverMaterialStatus(
               input.refResolver,
               credentialMaterialRef(credentialRef),
               isNonEmptyString,
-            ),
+            )),
     },
     {
       kind: "model",
@@ -885,33 +887,56 @@ export const resolveEffectAiRoute = (
 
 const withStringMaterial = <A, E, R>(
   refs: ResolvedMaterialService,
+  request: LlmRequest,
   ref: ReturnType<typeof endpointMaterialRef> | ReturnType<typeof credentialMaterialRef>,
-  use: (value: string) => Effect.Effect<A, E, R>,
+  use: (value: string, version: string) => Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | RefResolutionFailed, R> =>
-  Effect.acquireUseRelease(
-    refs.material(ref),
-    (handle): Effect.Effect<A, E | RefResolutionFailed, R> => {
-      const value = openLive(handle.value);
-      return typeof value === "string"
-        ? use(value)
-        : Effect.fail(
-            new RefResolutionFailed({
-              kind: ref.kind,
-              ref: materialRefKey(ref),
-              reason: "material_type_mismatch",
-            }),
-          );
-    },
-    (handle) => handle.dispose(),
-  );
+  request.materialResolution === undefined
+    ? Effect.fail(
+        new RefResolutionFailed({
+          kind: ref.kind,
+          ref: materialRefKey(ref),
+          reason: "resolver_failed",
+        }),
+      )
+    : Effect.acquireUseRelease(
+        refs.material({
+          truthIdentity: request.materialResolution.truthIdentity,
+          materialRef: ref,
+          ...(request.materialResolution.expectedVersions?.[materialRefKey(ref)] === undefined
+            ? {}
+            : {
+                expectedVersion: request.materialResolution.expectedVersions[materialRefKey(ref)],
+              }),
+        }),
+        (handle): Effect.Effect<A, E | RefResolutionFailed, R> => {
+          const value = openLive(handle.value);
+          return typeof value === "string"
+            ? (
+                request.materialResolution?.onResolved?.({
+                  materialRef: handle.ref,
+                  version: handle.version,
+                }) ?? Effect.void
+              ).pipe(Effect.andThen(use(value, handle.version)))
+            : Effect.fail(
+                new RefResolutionFailed({
+                  kind: ref.kind,
+                  ref: materialRefKey(ref),
+                  reason: "material_type_mismatch",
+                }),
+              );
+        },
+        (handle) => handle.dispose(),
+      );
 
 const withEffectAiLiveRoute = <Route extends EffectAiSupportedRoute, A, E, R>(
   refs: ResolvedMaterialService,
+  request: LlmRequest,
   route: Route,
   use: (resolved: EffectAiLiveRoute<Route>) => Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | RefResolutionFailed, R> =>
-  withStringMaterial(refs, endpointMaterialRef(route.endpointRef), (endpoint) =>
-    withStringMaterial(refs, credentialMaterialRef(route.credentialRef), (credential) =>
+  withStringMaterial(refs, request, endpointMaterialRef(route.endpointRef), (endpoint) =>
+    withStringMaterial(refs, request, credentialMaterialRef(route.credentialRef), (credential) =>
       use({ route, endpoint, credential }),
     ),
   );
@@ -932,10 +957,11 @@ export const makeEffectAiLlmTransportLayer = <R>(
           call: (request, options) =>
             Effect.gen(function* () {
               const resolved = yield* resolveEffectAiRouteForTransport(request.route);
-              return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
+              return yield* withEffectAiLiveRoute(refs, request, resolved.route, (liveRoute) =>
                 Effect.gen(function* () {
+                  let response: LlmResponse;
                   if (liveRoute.route.kind === "openai-chat-compatible") {
-                    return yield* callOpenAiChatCompatible(
+                    response = yield* callOpenAiChatCompatible(
                       httpClient,
                       {
                         route: liveRoute.route,
@@ -945,16 +971,18 @@ export const makeEffectAiLlmTransportLayer = <R>(
                       request,
                       options,
                     );
+                  } else {
+                    const model = yield* modelFactory({
+                      route: liveRoute.route,
+                      endpoint: liveRoute.endpoint,
+                      credential: liveRoute.credential,
+                    }).pipe(
+                      Effect.provide(context),
+                      Effect.mapError((cause) => new UpstreamFailure({ cause })),
+                    );
+                    response = yield* callEffectAiLanguageModel(model, request, options);
                   }
-                  const model = yield* modelFactory({
-                    route: liveRoute.route,
-                    endpoint: liveRoute.endpoint,
-                    credential: liveRoute.credential,
-                  }).pipe(
-                    Effect.provide(context),
-                    Effect.mapError((cause) => new UpstreamFailure({ cause })),
-                  );
-                  return yield* callEffectAiLanguageModel(model, request, options);
+                  return response;
                 }),
               ).pipe(
                 Effect.mapError((cause) =>
@@ -993,7 +1021,7 @@ export const makeOpenAiCompatibleLlmTransportLayer = (): Layer.Layer<
           call: (request, options) =>
             Effect.gen(function* () {
               const resolved = yield* resolveOpenAiChatCompatibleRouteForTransport(request.route);
-              return yield* withEffectAiLiveRoute(refs, resolved.route, (liveRoute) =>
+              return yield* withEffectAiLiveRoute(refs, request, resolved.route, (liveRoute) =>
                 callOpenAiChatCompatible(httpClient, liveRoute, request, options),
               ).pipe(
                 Effect.mapError((cause) =>

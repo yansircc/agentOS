@@ -19,6 +19,7 @@ import { LlmTransport } from "@agent-os/core/llm-protocol";
 import { MaterializedProjectionRegistry } from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import { fixtureRefResolver } from "../../_material-resolver-fixture";
 import { QuotaLive } from "../../../src/cloudflare/quota";
 import { AdmissionLive } from "../../../src/cloudflare/admission/admission";
 import { BoundaryEventsLive } from "../../../src/cloudflare/boundary-events";
@@ -59,9 +60,7 @@ export const makeRuntime = (
   );
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
-  const refs = RefResolverLive({
-    material: () => null,
-  });
+  const refs = RefResolverLive(fixtureRefResolver(() => null));
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );
@@ -88,8 +87,8 @@ export const makeRuntimeWithRegistry = (
   );
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
-  const refs = RefResolverLive({
-    material: (ref) => {
+  const refs = RefResolverLive(
+    fixtureRefResolver((ref) => {
       switch (ref.kind) {
         case "endpoint":
           return endpoints[ref.ref] ?? null;
@@ -98,8 +97,8 @@ export const makeRuntimeWithRegistry = (
         default:
           return null;
       }
-    },
-  });
+    }),
+  );
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );

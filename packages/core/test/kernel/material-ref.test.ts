@@ -1,4 +1,4 @@
-import { Effect, ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
 import { makePreClaim } from "../../src/effect-claim";
@@ -15,10 +15,28 @@ import {
   materialRefKey,
   materialRequirement,
 } from "../../src/material-ref";
-import { RefResolverLive, RefResolverService, RefResolutionFailed } from "../../src/ref-resolver";
+import {
+  liveResolvedMaterial,
+  RefResolverLive,
+  RefResolverService,
+  RefResolutionFailed,
+} from "../../src/ref-resolver";
 import { openLive } from "../../src/live-edge";
 
 describe("MaterialRef algebra", () => {
+  const truthIdentity = {
+    scopeRef: { kind: "conversation" as const, scopeId: "tenant-bound-run" },
+    effectAuthorityRef: { authorityId: "agent.run", authorityClass: "runtime" },
+  };
+  const request = (
+    materialRef:
+      | ReturnType<typeof credentialMaterialRef>
+      | ReturnType<typeof endpointMaterialRef>
+      | ReturnType<typeof bindingMaterialRef>,
+  ) => ({
+    truthIdentity,
+    materialRef,
+  });
   it("mints material refs and requirements as authored declarations", () => {
     const ref = credentialMaterialRef("CF_API_TOKEN", {
       provider: "cloudflare",
@@ -228,16 +246,32 @@ describe("MaterialRef algebra", () => {
   it("resolves non-secret material through RefResolver material axis", async () => {
     const runtime = ManagedRuntime.make(
       RefResolverLive({
-        material: (ref) => {
-          switch (materialRefKey(ref)) {
+        material: ({ materialRef }) => {
+          switch (materialRefKey(materialRef)) {
             case "endpoint:_:openrouter":
-              return "https://openrouter.ai/api/v1";
+              return Effect.succeed(
+                liveResolvedMaterial({
+                  ref: materialRef,
+                  version: "v1",
+                  value: "https://openrouter.ai/api/v1",
+                }),
+              );
             case "credential:_:OPENROUTER_KEY":
-              return "secret";
+              return Effect.succeed(
+                liveResolvedMaterial({ ref: materialRef, version: "v1", value: "secret" }),
+              );
             case "binding:cloudflare:d1:APP_DB":
-              return { binding: "d1" };
+              return Effect.succeed(
+                liveResolvedMaterial({ ref: materialRef, version: "v1", value: { binding: "d1" } }),
+              );
             default:
-              return null;
+              return Effect.fail(
+                new RefResolutionFailed({
+                  kind: materialRef.kind,
+                  ref: materialRefKey(materialRef),
+                  reason: "material_missing",
+                }),
+              );
           }
         },
       }),
@@ -246,14 +280,16 @@ describe("MaterialRef algebra", () => {
     const resolved = await runtime.runPromise(
       Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const endpoint = yield* refs.material(endpointMaterialRef("openrouter"));
-        const credential = yield* refs.material(credentialMaterialRef("OPENROUTER_KEY"));
+        const endpoint = yield* refs.material(request(endpointMaterialRef("openrouter")));
+        const credential = yield* refs.material(request(credentialMaterialRef("OPENROUTER_KEY")));
         const binding = yield* refs.material(
-          bindingMaterialRef({
-            provider: "cloudflare",
-            bindingKind: "d1",
-            ref: "APP_DB",
-          }),
+          request(
+            bindingMaterialRef({
+              provider: "cloudflare",
+              bindingKind: "d1",
+              ref: "APP_DB",
+            }),
+          ),
         );
         return {
           endpoint: openLive(endpoint.value),
@@ -276,22 +312,35 @@ describe("MaterialRef algebra", () => {
     const disposed: string[] = [];
     const runtime = ManagedRuntime.make(
       RefResolverLive({
-        material: (ref) => (ref.kind === "credential" ? "secret" : null),
-        dispose: ({ ref, material }) => {
-          const materialLabel = typeof material === "string" ? material : JSON.stringify(material);
-          disposed.push(`${materialRefKey(ref)}:${materialLabel}`);
-        },
+        material: ({ materialRef }) =>
+          materialRef.kind === "credential"
+            ? Effect.succeed(
+                liveResolvedMaterial({
+                  ref: materialRef,
+                  version: "v1",
+                  value: "secret",
+                  dispose: () =>
+                    Effect.sync(() => disposed.push(`${materialRefKey(materialRef)}:secret`)),
+                }),
+              )
+            : Effect.fail(
+                new RefResolutionFailed({
+                  kind: materialRef.kind,
+                  ref: materialRefKey(materialRef),
+                  reason: "material_missing",
+                }),
+              ),
       }),
     );
 
     const observed = await runtime.runPromise(
       Effect.gen(function* () {
         const refs = yield* RefResolverService;
-        const handle = yield* refs.material(credentialMaterialRef("OPENROUTER_KEY"));
+        const handle = yield* refs.material(request(credentialMaterialRef("OPENROUTER_KEY")));
         const serialized = JSON.stringify(handle);
         yield* handle.dispose();
         const opened = yield* Effect.acquireUseRelease(
-          refs.material(credentialMaterialRef("OPENROUTER_KEY")),
+          refs.material(request(credentialMaterialRef("OPENROUTER_KEY"))),
           (nextHandle) => {
             const value = openLive(nextHandle.value);
             return typeof value === "string"
@@ -311,7 +360,7 @@ describe("MaterialRef algebra", () => {
     );
 
     expect(observed).toEqual({
-      serialized: '{"ref":{"kind":"credential","ref":"OPENROUTER_KEY"},"value":{}}',
+      serialized: '{"ref":{"kind":"credential","ref":"OPENROUTER_KEY"},"version":"v1","value":{}}',
       opened: "secret",
     });
     expect(disposed).toEqual([
@@ -325,8 +374,18 @@ describe("MaterialRef algebra", () => {
   it("rejects non-string material at string-only transport boundaries", async () => {
     const runtime = ManagedRuntime.make(
       RefResolverLive({
-        material: (ref) =>
-          ref.kind === "endpoint" && ref.ref === "not-a-string" ? { url: "x" } : null,
+        material: ({ materialRef }) =>
+          materialRef.kind === "endpoint" && materialRef.ref === "not-a-string"
+            ? Effect.succeed(
+                liveResolvedMaterial({ ref: materialRef, version: "v1", value: { url: "x" } }),
+              )
+            : Effect.fail(
+                new RefResolutionFailed({
+                  kind: materialRef.kind,
+                  ref: materialRefKey(materialRef),
+                  reason: "material_missing",
+                }),
+              ),
       }),
     );
 
@@ -336,7 +395,7 @@ describe("MaterialRef algebra", () => {
         const ref = endpointMaterialRef("not-a-string");
         return yield* Effect.result(
           Effect.acquireUseRelease(
-            refs.material(ref),
+            refs.material(request(ref)),
             (handle) => {
               const value = openLive(handle.value);
               return typeof value === "string"
@@ -363,6 +422,88 @@ describe("MaterialRef algebra", () => {
       });
     }
 
+    await runtime.dispose();
+  });
+
+  it.effect(
+    "isolates identical refs through host-bound tenant resolvers and fails forged scope closed",
+    () =>
+      Effect.gen(function* () {
+        const ref = credentialMaterialRef("shared-key");
+        const resolverFor = (tenant: string, secret: string) =>
+          RefResolverLive({
+            material: (resolution) =>
+              resolution.truthIdentity.scopeRef.scopeId === tenant
+                ? Effect.succeed(
+                    liveResolvedMaterial({
+                      ref: resolution.materialRef,
+                      version: "v1",
+                      value: secret,
+                    }),
+                  )
+                : Effect.fail(
+                    new RefResolutionFailed({
+                      kind: resolution.materialRef.kind,
+                      ref: materialRefKey(resolution.materialRef),
+                      reason: "material_unauthorized",
+                    }),
+                  ),
+          });
+        const requestFor = (tenant: string) => ({
+          truthIdentity: {
+            scopeRef: { kind: "conversation" as const, scopeId: tenant },
+            effectAuthorityRef: { authorityId: "agent.run", authorityClass: "runtime" },
+          },
+          materialRef: ref,
+        });
+        const resolve = (tenant: string) =>
+          Effect.gen(function* () {
+            const resolver = yield* RefResolverService;
+            return openLive((yield* resolver.material(requestFor(tenant))).value);
+          });
+        const forgedResolution = Effect.gen(function* () {
+          const resolver = yield* RefResolverService;
+          return yield* Effect.result(resolver.material(requestFor("tenant-b")));
+        });
+        const [a, b, forged] = yield* Effect.all(
+          [
+            resolve("tenant-a").pipe(Effect.provide(resolverFor("tenant-a", "secret-a"))),
+            resolve("tenant-b").pipe(Effect.provide(resolverFor("tenant-b", "secret-b"))),
+            forgedResolution.pipe(Effect.provide(resolverFor("tenant-a", "secret-a"))),
+          ] as const,
+          { concurrency: "unbounded" },
+        );
+
+        expect(a).toBe("secret-a");
+        expect(b).toBe("secret-b");
+        expect(forged).toMatchObject({
+          _tag: "Failure",
+          failure: { reason: "material_unauthorized" },
+        });
+      }),
+  );
+
+  it("sanitizes synchronous host resolver failures without exposing provider material", async () => {
+    const secret = "provider-secret-must-not-escape";
+    const runtime = ManagedRuntime.make(
+      RefResolverLive({
+        material: () => Option.getOrThrowWith(Option.none(), () => new TypeError(secret)),
+      }),
+    );
+    const result = await runtime.runPromise(
+      Effect.gen(function* () {
+        const resolver = yield* RefResolverService;
+        return yield* Effect.result(
+          resolver.material(request(credentialMaterialRef("OPENROUTER_KEY"))),
+        );
+      }),
+    );
+
+    expect(result).toMatchObject({
+      _tag: "Failure",
+      failure: { reason: "resolver_failed" },
+    });
+    expect(JSON.stringify(result)).not.toContain(secret);
     await runtime.dispose();
   });
 });

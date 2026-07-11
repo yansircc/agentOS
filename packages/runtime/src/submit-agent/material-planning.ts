@@ -9,6 +9,8 @@ import {
 import { openLive } from "@agent-os/core/live-edge";
 import type {
   RefResolutionFailed,
+  MaterialResolutionReceipt,
+  MaterialResolutionRequest,
   ResolvedMaterial,
   ResolvedMaterialService,
 } from "@agent-os/core/ref-resolver";
@@ -149,28 +151,35 @@ export const materialResolutionToolError = (
     toolName,
     cause: {
       reason:
-        failure.reason === "resolver_threw" ? "material_resolution_failed" : "material_unresolved",
+        failure.reason === "resolver_failed" ? "material_resolution_failed" : "material_unresolved",
       slot: material.slot,
       ref: materialRefKey(material.ref),
     },
   });
 
-export const withLocalResolvedToolMaterials = <A, E, R>(
+export const withLocalResolvedToolMaterials = <A, E, R, E2, R2>(
   refs: ResolvedMaterialService,
+  resolution: {
+    readonly request: (ref: MaterialRef) => MaterialResolutionRequest;
+    readonly onResolved: (receipt: MaterialResolutionReceipt) => Effect.Effect<void, E2, R2>;
+  },
   toolName: string,
   localRefs: ReadonlyArray<LocalToolMaterialRef>,
   use: (materials: ResolvedToolMaterials) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | ToolError, R> => {
+): Effect.Effect<A, E | E2 | ToolError, R | R2> => {
   const loop = (
     index: number,
     materials: Record<string, ResolvedMaterial>,
-  ): Effect.Effect<A, E | ToolError, R> => {
+  ): Effect.Effect<A, E | E2 | ToolError, R | R2> => {
     const local = localRefs[index];
     if (local === undefined) return use(materials);
     return Effect.acquireUseRelease(
-      refs
-        .material(local.ref)
-        .pipe(Effect.mapError((failure) => materialResolutionToolError(toolName, local, failure))),
+      refs.material(resolution.request(local.ref)).pipe(
+        Effect.mapError((failure) => materialResolutionToolError(toolName, local, failure)),
+        Effect.tap((handle) =>
+          resolution.onResolved({ materialRef: handle.ref, version: handle.version }),
+        ),
+      ),
       (handle) => loop(index + 1, { ...materials, [local.slot]: openLive(handle.value) }),
       (handle) => handle.dispose(),
     );

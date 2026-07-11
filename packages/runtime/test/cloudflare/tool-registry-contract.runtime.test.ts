@@ -9,6 +9,7 @@ import { EventBusLive } from "../../src/cloudflare/ledger/event-bus";
 import { LedgerLive } from "../../src/cloudflare/ledger/ledger";
 import { QuotaLive } from "../../src/cloudflare/quota";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import { fixtureRefResolver } from "../_material-resolver-fixture";
 import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
 import { ToolError } from "@agent-os/core/errors";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
@@ -84,9 +85,7 @@ const buildRuntime = (
   );
   const quota = QuotaLive(state, identity).pipe(Layer.provide(eventBus));
   const llmTransport = Layer.succeed(LlmTransport, llm);
-  const refs = RefResolverLive({
-    material,
-  });
+  const refs = RefResolverLive(fixtureRefResolver(material));
   const admission = AdmissionLive(state, identity).pipe(
     Layer.provide(Layer.mergeAll(eventBus, llmTransport)),
   );

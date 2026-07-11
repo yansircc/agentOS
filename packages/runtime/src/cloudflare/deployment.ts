@@ -1,5 +1,9 @@
 import type { ExtensionCapability, ExtensionDeclaration } from "@agent-os/core/extensions";
-import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
+import {
+  RefResolverNone,
+  type RefResolver,
+  type RefResolverService,
+} from "@agent-os/core/ref-resolver";
 import type { EventHandler } from "@agent-os/core/types";
 import type { LlmTransport } from "@agent-os/core/llm-protocol";
 import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
@@ -91,10 +95,6 @@ export interface MaterializedAgentConfig<Env extends CloudflareAgentEnv, Runtime
   ) => Iterable<AgentEventHandlerRegistration>;
 }
 
-const emptyRefResolver: RefResolver = {
-  material: () => null,
-};
-
 const projectionsFor = <Env extends CloudflareAgentEnv>(
   projections: CloudflareAgentProjectionSource<Env> | undefined,
   env: Env,
@@ -123,7 +123,7 @@ export const materializeCloudflareAgentConfig = <Env extends CloudflareAgentEnv,
     mount: mountCloudflareAgent(manifest, agentBindingsFor(config.agentBindings, env), {
       materialized,
     }),
-    refResolver: config.refResolver?.(env) ?? emptyRefResolver,
+    refResolver: config.refResolver?.(env) ?? RefResolverNone,
     llmTransport: config.llmTransport?.(env) ?? MissingLlmTransportLive,
     extensions: config.extensions?.(env) ?? [],
     declaredIntents: config.declaredIntents?.(env) ?? [],

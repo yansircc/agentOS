@@ -64,7 +64,12 @@ import {
 } from "@agent-os/core/runtime-protocol";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
 import { defineSettlementContract } from "@agent-os/core/settlement-contract";
-import { RefResolverLive } from "@agent-os/core/ref-resolver";
+import {
+  RefResolverLive,
+  type MaterialResolutionReceipt,
+  type RefResolver,
+} from "@agent-os/core/ref-resolver";
+import { fixtureRefResolver } from "./_material-resolver-fixture";
 import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
 import {
   credentialMaterialRef,
@@ -118,7 +123,15 @@ const baseSpec = (overrides: Partial<SubmitSpec> = {}): InternalSubmitSpec =>
     scopeRef: { kind: "conversation", scopeId: scope },
   });
 
-const response = (override: Partial<LlmResponse> = {}): LlmResponse => ({
+type TestLlmResponse = LlmResponse & {
+  readonly testMaterialResolutions?: ReadonlyArray<MaterialResolutionReceipt>;
+};
+
+const response = (
+  override: Partial<LlmResponse> & {
+    readonly testMaterialResolutions?: ReadonlyArray<MaterialResolutionReceipt>;
+  } = {},
+): TestLlmResponse => ({
   items: [{ type: "message", text: "done" }],
   usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
   ...override,
@@ -147,12 +160,13 @@ const testWireDescriptor = (route: LlmRoute): LlmWireDescriptor => ({
 });
 
 const makeServices = (
-  responses: ReadonlyArray<LlmResponse> = [response()],
+  responses: ReadonlyArray<TestLlmResponse> = [response()],
   materials: Readonly<Record<string, ResolvedMaterial>> = {},
   materialObserver: {
     readonly onMaterial?: (ref: MaterialRef) => void;
     readonly onDispose?: (ref: MaterialRef, material: ResolvedMaterial) => void;
   } = {},
+  refResolver?: RefResolver,
 ) => {
   const events: LedgerEvent[] = [];
   const llmRequests: LlmRequest[] = [];
@@ -339,24 +353,32 @@ const makeServices = (
         transportAdapterVersion: "1.0.0",
       }),
     call: (request: LlmRequest) =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
         llmRequests.push(request);
         const next = responses[callIndex] ?? response();
         callIndex += 1;
+        for (const receipt of next.testMaterialResolutions ?? []) {
+          yield* (request.materialResolution?.onResolved?.(receipt) ?? Effect.void).pipe(
+            Effect.orDie,
+          );
+        }
         return next;
       }),
   };
   const quota = {
     tryGrant: () => Effect.succeed({ granted: true, consumed: 0, limit: 1 }),
   };
-  const refs = RefResolverLive({
-    material: (ref: MaterialRef) => {
-      materialObserver.onMaterial?.(ref);
-      const value = materials[materialRefKey(ref)];
-      return value === undefined ? null : value;
-    },
-    dispose: ({ ref, material }) => materialObserver.onDispose?.(ref, material),
-  });
+  const refs = RefResolverLive(
+    refResolver ??
+      fixtureRefResolver(
+        (ref: MaterialRef) => {
+          materialObserver.onMaterial?.(ref);
+          const value = materials[materialRefKey(ref)];
+          return value === undefined ? null : value;
+        },
+        ({ ref, material }) => materialObserver.onDispose?.(ref, material),
+      ),
+  );
   const admission = {
     attemptStructured: <O>() =>
       Effect.succeed({

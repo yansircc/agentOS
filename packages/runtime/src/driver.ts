@@ -63,6 +63,9 @@ type RuntimeAppendAction<K extends keyof RuntimeEventActionByKind> = {
 
 type RuntimeEventActionByKind = {
   readonly start: RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_STARTED>;
+  readonly resolve_material: RuntimeEventCommitSpecByKind<
+    typeof RUNTIME_EVENT_KIND.AGENT_MATERIAL_RESOLVED
+  >;
   readonly ingest_chat: RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.CHAT_INGESTED>;
   readonly request_llm: RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.LLM_REQUESTED>;
   readonly record_llm_response: RuntimeEventCommitSpecByKind<

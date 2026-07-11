@@ -494,11 +494,25 @@ export type AgentRunAbortedPayload = {
   readonly traceContext?: TraceContext;
 } & Readonly<Record<string, unknown>>;
 
+export interface AgentMaterialResolvedPayload {
+  readonly runId: number;
+  readonly materialRef: string;
+  readonly version: string;
+  readonly traceContext?: never;
+}
+
 export const AgentRunStartedPayloadSchema: Schema.Decoder<AgentRunStartedPayload> = Schema.Struct({
   intent: Schema.String,
   executionIdentity: Schema.optional(ExecutionIdentitySchema),
   traceContext: Schema.optional(TraceContextSchema),
 });
+
+export const AgentMaterialResolvedPayloadSchema: Schema.Decoder<AgentMaterialResolvedPayload> =
+  Schema.Struct({
+    runId: positiveInt,
+    materialRef: nonEmptyString,
+    version: nonEmptyString,
+  });
 
 export const ChatIngestedPayloadSchema: Schema.Decoder<ChatIngestedPayload> = Schema.Struct({
   runId: positiveInt,
@@ -812,6 +826,10 @@ const runtimeEventDefinition = <const Name extends string, Payload>(
 
 const runtimeEventDefinitions = {
   "agent.run.started": runtimeEventDefinition("AGENT_RUN_STARTED", AgentRunStartedPayloadSchema),
+  "agent.material.resolved": runtimeEventDefinition(
+    "AGENT_MATERIAL_RESOLVED",
+    AgentMaterialResolvedPayloadSchema,
+  ),
   "agent.run.interrupted": runtimeEventDefinition(
     "AGENT_RUN_INTERRUPTED",
     AgentRunInterruptedPayloadSchema,
@@ -1652,6 +1670,8 @@ const runtimeRunId = (event: RuntimeLedgerEvent): number => {
   switch (event.kind) {
     case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
       return event.id;
+    case RUNTIME_EVENT_KIND.AGENT_MATERIAL_RESOLVED:
+      return event.payload.runId;
     case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
     case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
     case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
@@ -2188,6 +2208,15 @@ export const agentRunStartedEvent = (
     intent: spec.intent,
     ...(spec.executionIdentity === undefined ? {} : { executionIdentity: spec.executionIdentity }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
+  });
+
+export const agentMaterialResolvedEvent = (
+  spec: RuntimeEventIdentitySpec & AgentMaterialResolvedPayload,
+): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_MATERIAL_RESOLVED> =>
+  runtimeEvent(spec, RUNTIME_EVENT_KIND.AGENT_MATERIAL_RESOLVED, {
+    runId: spec.runId,
+    materialRef: spec.materialRef,
+    version: spec.version,
   });
 
 export const chatIngestedEvent = (

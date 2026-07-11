@@ -22,7 +22,6 @@ import {
   createLocalRuntimeLedgerSource,
   LocalRuntimeLedgerHydrationError,
   createLocalWorkspaceEnv,
-  LocalAgentRuntimeResolveError,
   lowerLocalAgentRuntime,
 } from "@agent-os/runtime/local";
 import {
@@ -34,6 +33,7 @@ import {
   makeOpenAiCompatibleLlmTransportLayer,
   preflightOpenAiCompatibleProviderMaterial,
 } from "../../src/llm-effect-ai/openai-compatible";
+import { fixtureRefResolver } from "../_material-resolver-fixture";
 
 const withTempWorkspace = async <A>(
   run: (root: string, base: string) => Promise<A>,
@@ -638,6 +638,15 @@ describe("createLocalWorkspaceEnv", () => {
       const runtime = await createLocalAgentRuntime({
         identity: "local-openai-compatible",
         cwd: root,
+        materialResolver: fixtureRefResolver((ref) => {
+          if (ref.kind === "endpoint" && ref.ref === "openai") {
+            return "https://provider.example/v1";
+          }
+          if (ref.kind === "credential" && ref.ref === "openai-key") {
+            return "sk-test";
+          }
+          return null;
+        }),
         llm: {
           kind: "transport",
           route: {
@@ -645,17 +654,6 @@ describe("createLocalWorkspaceEnv", () => {
             endpointRef: "openai",
             credentialRef: "openai-key",
             modelId: "gpt-test",
-          },
-          refResolver: {
-            material: (ref) => {
-              if (ref.kind === "endpoint" && ref.ref === "openai") {
-                return "https://provider.example/v1";
-              }
-              if (ref.kind === "credential" && ref.ref === "openai-key") {
-                return "sk-test";
-              }
-              return null;
-            },
           },
           transport: makeOpenAiCompatibleLlmTransportLayer().pipe(
             Layer.provide(httpClientLive(client)),
@@ -686,53 +684,29 @@ describe("createLocalWorkspaceEnv", () => {
         return Effect.succeed(httpResponse(200, {}));
       });
 
-      let thrown: unknown;
-      try {
-        await createLocalAgentRuntime({
-          identity: "local-openai-compatible-missing-material",
-          cwd: root,
-          llm: {
-            kind: "transport",
-            route: {
-              kind: "openai-chat-compatible",
-              endpointRef: "openai",
-              credentialRef: "openai-key",
-              modelId: "gpt-test",
-            },
-            refResolver: {
-              material: (ref) => (ref.kind === "credential" ? "sk-secret" : null),
-            },
-            transport: makeOpenAiCompatibleLlmTransportLayer().pipe(
-              Layer.provide(httpClientLive(client)),
-            ),
-            preflight: preflightOpenAiCompatibleProviderMaterial,
+      const runtime = await createLocalAgentRuntime({
+        identity: "local-openai-compatible-missing-material",
+        cwd: root,
+        materialResolver: fixtureRefResolver((ref) =>
+          ref.kind === "credential" ? "sk-secret" : null,
+        ),
+        llm: {
+          kind: "transport",
+          route: {
+            kind: "openai-chat-compatible",
+            endpointRef: "openai",
+            credentialRef: "openai-key",
+            modelId: "gpt-test",
           },
-        });
-      } catch (cause) {
-        thrown = cause;
-      }
-
-      expect(thrown).toBeInstanceOf(LocalAgentRuntimeResolveError);
-      const diagnostics = (thrown as LocalAgentRuntimeResolveError).diagnostics;
-      expect(diagnostics).toEqual([
-        expect.objectContaining({
-          pass: "provider_material",
-          reason: "OpenAI-compatible provider material preflight failed",
-        }),
-      ]);
-      const detail = JSON.parse(diagnostics[0]?.detail ?? "{}");
-      expect(detail).toMatchObject({
-        kind: "provider_material_preflight",
-        provider: "openai-compatible",
-        routeKind: "openai-chat-compatible",
-        routeStatus: "present",
-        materials: expect.arrayContaining([
-          { kind: "endpoint", ref: "openai", status: "missing" },
-          { kind: "credential", ref: "openai-key", status: "present" },
-          { kind: "model", ref: "modelId", status: "present" },
-        ]),
+          transport: makeOpenAiCompatibleLlmTransportLayer().pipe(
+            Layer.provide(httpClientLive(client)),
+          ),
+          preflight: preflightOpenAiCompatibleProviderMaterial,
+        },
       });
-      expect(JSON.stringify(diagnostics)).not.toContain("sk-secret");
+      const result = await runtime.submit({ intent: "missing endpoint fails closed" });
+      expect(result).toMatchObject({ ok: false, status: "failed", reason: "upstream_failure" });
+      expect(JSON.stringify(runtime.events())).not.toContain("sk-secret");
       expect(providerCalls).toBe(0);
     });
   });

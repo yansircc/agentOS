@@ -28,6 +28,25 @@ not carriers.
 
 This concept does not choose tenant auth policy or provider API topology.
 
+## Host-Bound Resolution
+
+Generated runtimes accept a host-provided `RefResolver`. The host authenticates
+the tenant and closes over that tenant binding; submit input supplies only
+`MaterialRef` values and cannot select a tenant or provide a resolved value.
+Each resolution request contains the ledger truth identity and an optional
+expected version. A successful resolution returns a versioned `Live` resource
+with an Effect disposer.
+
+The runtime records only `agent.material.resolved` with the symbolic ref key and
+opaque version. It commits that receipt after acquire and before provider use.
+Resume reconstructs the expected-version map from the ledger, so rotation does
+not silently move an existing run to another credential version. Missing,
+unauthorized, deleted, or mismatched material fails closed before provider use.
+
+Cloudflare generated targets receive the resolver through the typed host env;
+Node generated targets receive it through `CreateLocalAgentAppOptions`. Neither
+target generates endpoint or credential environment-variable readers.
+
 ## Related
 
 - [Boundary contract](/boundary-contract/)

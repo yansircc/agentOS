@@ -198,7 +198,9 @@ const uniqueLlmMaterialEnvBindings = (
 const renderMaterialValueFunction = (
   routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
 ): string => {
-  const bindings = uniqueLlmMaterialEnvBindings(routes);
+  const bindings = uniqueLlmMaterialEnvBindings(routes).filter(
+    (binding) => binding.kind === "model",
+  );
   const cases = bindings
     .map(
       (binding) => `  if (ref.kind === ${jsString(binding.kind)} && ref.ref === ${jsString(
@@ -233,7 +235,7 @@ const renderGeneratedProviderPreflight = (
         ? materialValue(env, { kind: "model", ref: ${jsString(route.modelRef)} }) as string
         : "",
     },
-    refResolver: { material: (ref) => materialValue(env, ref) },
+    refResolver,
     routeBindingRef: ${jsString(bindingRef)},
     modelMaterial: {
       ref: ${jsString(route.modelRef)},
@@ -244,6 +246,7 @@ const renderGeneratedProviderPreflight = (
     .join("\n");
   return `const generatedProviderPreflightDiagnosticsFor = (
   env: AgentOSTargetEnv,
+  refResolver: RefResolver,
 ): ReturnType<typeof preflightOpenAiCompatibleProviderMaterial> => [
 ${diagnostics}
 ];`;
@@ -332,6 +335,7 @@ const staticTargetModules = (scope: string) => ({
   clientCore: publicPackageSpecifier(scope, "client"),
   clientSvelte: publicPackageSpecifier(scope, "client/svelte"),
   runtimeProtocol: publicPackageSpecifier(scope, "core/runtime-protocol"),
+  coreRefResolver: publicPackageSpecifier(scope, "core/ref-resolver"),
   coreTools: publicPackageSpecifier(scope, "core/tools"),
   sseHttp: publicPackageSpecifier(scope, "runtime/sse-http"),
   cloudflareSandbox: "@cloudflare/sandbox",
@@ -1039,6 +1043,7 @@ const renderStaticRuntimeBootstrapImports = (
     ),
     renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
     renderTypeImport(["Tool"], modules.coreTools),
+    renderTypeImport(["RefResolver"], modules.coreRefResolver),
     renderCustomToolImports(model),
   ]
     .filter((statement) => statement.length > 0)
@@ -1313,7 +1318,9 @@ const renderWorkspaceStaticTarget = (
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
-  const llmEnvBindings = uniqueLlmMaterialEnvBindings(bootstrap.llmRoutes);
+  const llmEnvBindings = uniqueLlmMaterialEnvBindings(bootstrap.llmRoutes).filter(
+    (binding) => binding.kind === "model",
+  );
   const generatedLlmEnvFields = llmEnvBindings
     .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
@@ -1385,6 +1392,7 @@ const generatedHandler = () => undefined;
 type AgentOSTargetEnv = {
   readonly [binding: string]: unknown;
   readonly SANDBOX_TRANSPORT?: SandboxTransport;
+  readonly AGENTOS_MATERIAL_RESOLVER: RefResolver;
 ${generatedLlmEnvFields}
 };
 
@@ -1507,7 +1515,10 @@ const generatedSubmitBindingsFor = async (
   event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
   dynamicCapability: DynamicCapabilityRunInput | undefined = undefined,
 ): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
-  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
+  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(
+    env,
+    env.AGENTOS_MATERIAL_RESOLVER,
+  );
   if (preflightDiagnostics.length > 0) {
     return targetFailure(
       "OpenAI-compatible provider material preflight failed",
@@ -1557,9 +1568,7 @@ const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTa
     handlers: ${handlerRecord},
     ...generatedCapabilityInstallGraphFor(env).agentBindings,
   }),
-  refResolver: (env) => ({
-    material: (ref) => materialValue(env, ref),
-  }),
+  refResolver: (env) => env.AGENTOS_MATERIAL_RESOLVER,
   llmTransport: () => OpenAiCompatibleLlmTransportLive,
   extensions: (env) => generatedCapabilityInstallGraphFor(env).extensions,
   declaredIntents: (env) => generatedCapabilityInstallGraphFor(env).declaredIntents,
@@ -1703,7 +1712,9 @@ const renderChatStaticTarget = (
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
-  const llmEnvBindings = uniqueLlmMaterialEnvBindings(bootstrap.llmRoutes);
+  const llmEnvBindings = uniqueLlmMaterialEnvBindings(bootstrap.llmRoutes).filter(
+    (binding) => binding.kind === "model",
+  );
   const generatedLlmEnvFields = llmEnvBindings
     .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
@@ -1752,6 +1763,7 @@ const generatedHandler = () => undefined;
 
 type AgentOSTargetEnv = {
   readonly [binding: string]: unknown;
+  readonly AGENTOS_MATERIAL_RESOLVER: RefResolver;
 ${generatedLlmEnvFields}
 };
 
@@ -1762,7 +1774,10 @@ const generatedSubmitBindingsFor = async (
   event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
   dynamicCapability: DynamicCapabilityRunInput | undefined = undefined,
 ): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
-  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
+  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(
+    env,
+    env.AGENTOS_MATERIAL_RESOLVER,
+  );
   if (preflightDiagnostics.length > 0) {
     return targetFailure(
       "OpenAI-compatible provider material preflight failed",
@@ -1801,9 +1816,7 @@ const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTa
   agentBindings: {
     handlers: ${handlerRecord},
   },
-  refResolver: (env) => ({
-    material: (ref) => materialValue(env, ref),
-  }),
+  refResolver: (env) => env.AGENTOS_MATERIAL_RESOLVER,
   llmTransport: () => OpenAiCompatibleLlmTransportLive,
 });
 
@@ -1993,8 +2006,12 @@ const generatedTargetEnvFor = (
 
 const generatedLocalLlmFor = (
   env: AgentOSTargetEnv,
+  materialResolver: RefResolver | undefined,
 ): GeneratedTargetResult<NonNullable<CreateLocalAgentRuntimeOptions["llm"]>> => {
-  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
+  if (materialResolver === undefined) {
+    return targetFailure("generated provider runtime requires a host materialResolver");
+  }
+  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env, materialResolver);
   if (preflightDiagnostics.length > 0) {
     return targetFailure(
       "OpenAI-compatible provider material preflight failed",
@@ -2009,9 +2026,6 @@ const generatedLocalLlmFor = (
       kind: "transport",
       transport: OpenAiCompatibleLlmTransportLive,
       route: routes.value.default,
-      refResolver: {
-        material: (ref) => materialValue(env, ref),
-      },
       preflight: preflightOpenAiCompatibleProviderMaterial,
     },
   };
@@ -2101,6 +2115,7 @@ export interface CreateLocalAgentAppOptions {
   readonly env?: CreateLocalAgentRuntimeOptions["env"];
   readonly inheritEnv?: CreateLocalAgentRuntimeOptions["inheritEnv"];
   readonly llm?: CreateLocalAgentRuntimeOptions["llm"];
+  readonly materialResolver?: RefResolver;
 }
 
 export const createLocalAgentApp = async (
@@ -2109,7 +2124,7 @@ export const createLocalAgentApp = async (
   const targetEnv = generatedTargetEnvFor(options);
   const generatedLlm =
     options.llm === undefined
-      ? generatedLocalLlmFor(targetEnv)
+      ? generatedLocalLlmFor(targetEnv, options.materialResolver)
       : { ok: true as const, value: options.llm };
   if (!generatedLlm.ok) return rejectTargetFailure(generatedLlm);
   const lowered = await lowerLocalAgentRuntime({
@@ -2119,6 +2134,9 @@ export const createLocalAgentApp = async (
     cwd: options.cwd ?? process.cwd(),
     ...(options.env === undefined ? {} : { env: options.env }),
     ...(options.inheritEnv === undefined ? {} : { inheritEnv: options.inheritEnv }),
+    ...(options.materialResolver === undefined
+      ? {}
+      : { materialResolver: options.materialResolver }),
     llm: generatedLlm.value,
     workspaceOperations: generatedWorkspaceOperations,
   });

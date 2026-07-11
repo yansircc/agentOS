@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Effect, Option } from "effect";
 import type { LlmRoute } from "@agent-os/core/llm-protocol";
 import { llmRouteMaterialRefs } from "@agent-os/core/llm-protocol";
 import {
@@ -18,7 +18,11 @@ import {
   type ExternalResourceMaterialRef,
   type MaterialRef,
 } from "@agent-os/core/material-ref";
-import type { RefResolver } from "@agent-os/core/ref-resolver";
+import {
+  liveResolvedMaterial,
+  RefResolutionFailed,
+  type RefResolver,
+} from "@agent-os/core/ref-resolver";
 import {
   validateExecutionDomainRegistry,
   type ExecutionDomainDeclaration,
@@ -264,10 +268,40 @@ export const lowerMaterialBindings = <Env>(
 
   return {
     refResolver: {
-      material: (ref) => {
-        const key = materialRefKey(ref);
+      material: (request) => {
+        const key = materialRefKey(request.materialRef);
         const binding = materialBindings.get(key);
-        return binding === undefined ? null : requireResolvedMaterial(key, binding.resolve(env));
+        if (binding === undefined) {
+          return Effect.fail(
+            new RefResolutionFailed({
+              kind: request.materialRef.kind,
+              ref: key,
+              reason: "material_missing",
+              ...(request.expectedVersion === undefined
+                ? {}
+                : { expectedVersion: request.expectedVersion }),
+            }),
+          );
+        }
+        const version = "host-binding-v1";
+        if (request.expectedVersion !== undefined && request.expectedVersion !== version) {
+          return Effect.fail(
+            new RefResolutionFailed({
+              kind: request.materialRef.kind,
+              ref: key,
+              reason: "material_version_mismatch",
+              expectedVersion: request.expectedVersion,
+              actualVersion: version,
+            }),
+          );
+        }
+        return Effect.succeed(
+          liveResolvedMaterial({
+            ref: request.materialRef,
+            version,
+            value: requireResolvedMaterial(key, binding.resolve(env)),
+          }),
+        );
       },
     },
     dispatchTargets,

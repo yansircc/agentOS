@@ -3,6 +3,11 @@ import type { Effect as EffectType } from "effect";
 import type { AgentSchema } from "@agent-os/core/agent-schema";
 import type { UpstreamFailure } from "@agent-os/core/errors";
 import type { MaterialRef } from "@agent-os/core/material-ref";
+import type {
+  MaterialResolutionReceipt,
+  MaterialResolutionRequest,
+  RefResolutionFailed,
+} from "@agent-os/core/ref-resolver";
 import type { ToolDefinition } from "@agent-os/core/tools";
 
 export const LLM_WIRE_DESCRIPTOR_VERSION = "llm-wire-descriptor-v1";
@@ -267,6 +272,13 @@ export interface LlmRequest {
   readonly tools?: ReadonlyArray<ToolDefinition>;
   readonly traceContext?: unknown;
   readonly tool_choice?: LlmToolChoice;
+  /** Runtime-only resolution context; excluded from provider and snapshot projections. */
+  readonly materialResolution?: Omit<MaterialResolutionRequest, "materialRef"> & {
+    readonly expectedVersions?: Readonly<Record<string, string>>;
+    readonly onResolved?: (
+      receipt: MaterialResolutionReceipt,
+    ) => EffectType.Effect<void, RefResolutionFailed>;
+  };
 }
 
 export type LlmToolChoice =

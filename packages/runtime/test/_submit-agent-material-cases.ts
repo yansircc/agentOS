@@ -33,7 +33,7 @@ import {
 } from "./_submit-agent-harness";
 
 export const registerSubmitAgentMaterialCases = () => {
-  it.effect("passes resolved declared material to tool context without writing it to ledger", () =>
+  it.effect("records only a symbolic version receipt while passing live material to a tool", () =>
     Effect.gen(function* () {
       const tokenRef = credentialMaterialRef("WP_TOKEN", {
         provider: "wordpress",
@@ -110,10 +110,16 @@ export const registerSubmitAgentMaterialCases = () => {
         "agent.run.started",
         "chat.ingested",
         "llm.response",
+        "agent.material.resolved",
         "tool.executed",
         "llm.response",
         "agent.run.completed",
       ]);
+      expect(events.find((event) => event.kind === "agent.material.resolved")?.payload).toEqual({
+        runId: 1,
+        materialRef: materialRefKey(tokenRef),
+        version: "fixture-v1",
+      });
     }),
   );
 
@@ -543,6 +549,75 @@ export const registerSubmitAgentMaterialCases = () => {
       expect(executed?.payload).toMatchObject({
         result: { kind: "authorization_received", resume: authorization },
       });
+    }),
+  );
+
+  it.effect("replays the ledger-pinned material version after an interrupt", () =>
+    Effect.gen(function* () {
+      const tokenRef = credentialMaterialRef("provider-key");
+      const tool = defineTool({
+        name: "approve",
+        description: "approval gate",
+        args: Schema.Struct({}),
+        execute: () => Effect.succeed({ approved: true }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const services = makeServices([
+        response({
+          items: [
+            {
+              type: "tool_call",
+              call: {
+                id: "call-approval",
+                type: "function",
+                function: { name: "approve", arguments: "{}" },
+              },
+            },
+          ],
+          testMaterialResolutions: [{ materialRef: tokenRef, version: "v1" }],
+        }),
+        response({ items: [{ type: "message", text: "resumed" }] }),
+      ]);
+      const first = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { approve: tool },
+          decisionInterrupts: [{ toolName: "approve", reason: "approval_required" }],
+        }),
+        services,
+      );
+      if (first.result.status !== "interrupted" || first.result.inputRequest === undefined) {
+        expect.fail("expected interrupted input request");
+      }
+      yield* services.boundaryEvents.commit(
+        decisionGateBoundaryContract,
+        DECISION_GATE_KIND.DECIDED,
+        {
+          gateRef: first.result.gateRef,
+          decisionRef: "decision/material-resume",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      );
+      const resume = submitResumeDecisionFromInputRequestProjection(
+        projectInputRequest(services.events, first.result.inputRequest.ref),
+        { kind: "approval", approved: true },
+      );
+      if (!resume.ok) expect.fail(`expected resumable request: ${resume.reason}`);
+
+      const resumed = yield* runSubmitWithServices(
+        baseSpec({ tools: { approve: tool }, resume: resume.resume }),
+        services,
+      );
+
+      expect(resumed.result).toMatchObject({ ok: true, final: "resumed" });
+      expect(services.llmRequests[1]?.materialResolution?.expectedVersions).toEqual({
+        [materialRefKey(tokenRef)]: "v1",
+      });
+      expect(
+        services.events.filter((event) => event.kind === "agent.material.resolved"),
+      ).toHaveLength(1);
     }),
   );
 };
