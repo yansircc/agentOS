@@ -20,7 +20,6 @@ import {
   AGENTOS_CONFIG_LLM_ROUTE,
   AGENTOS_CONFIG_PROFILE,
   AGENTOS_CONFIG_TARGET,
-  llmMaterialEnvBindings,
   llmMaterialEnvBindingsForRoutes,
   type AgentOsConfigCloudflareDoTarget,
   type AgentOsConfigClientKind,
@@ -30,7 +29,6 @@ import {
   type AgentOsConfigTarget,
   type AgentOsConfigTargetKind,
   type AgentOsConfigWorkspaceTopology,
-  type LlmMaterialEnvKind,
   type NormalizedAgentOsConfig,
   type NormalizedChatAgentOsConfig,
   type NormalizedWorkspaceAgentOsConfig,
@@ -708,23 +706,61 @@ const renderInstructionFragments = (
   return entries.length === 0 ? "[]" : `[\n${entries.join(",\n")}\n]`;
 };
 
-const renderDynamicCapabilityCatalog = (
+interface StaticRuntimeBootstrapModel {
+  readonly toolNames: ReadonlyArray<string>;
+  readonly customToolNames: ReadonlyArray<string>;
+  readonly manifestTools: NormalizedAgentOsConfig<AuthoredAgentManifest>["deployment"]["manifest"]["tools"];
+  readonly llmRoutes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
+  readonly skills: ReadonlyArray<CompiledAgentSkill>;
+  readonly instructionFragments: ReadonlyArray<CompiledAgentInstructionFragment>;
+  readonly dynamicResolvers: ReadonlyArray<CompiledAgentDynamicResolver>;
+}
+
+const staticRuntimeBootstrapModelFor = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   toolNames: ReadonlyArray<string>,
-  hasSkills: boolean,
+): StaticRuntimeBootstrapModel => {
+  const authoredToolNames = new Set(normalized.authoredToolNames);
+  return {
+    toolNames,
+    customToolNames: toolNames.filter((toolName) => authoredToolNames.has(toolName)),
+    manifestTools: normalized.deployment.manifest.tools,
+    llmRoutes: normalized.llmRoutes,
+    skills: normalized.skills,
+    instructionFragments: normalized.instructionFragments,
+    dynamicResolvers: normalized.dynamicResolvers,
+  };
+};
+
+const renderCustomToolImports = (model: StaticRuntimeBootstrapModel): string =>
+  model.customToolNames
+    .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
+    .join("\n");
+
+const renderCustomToolRecord = (model: StaticRuntimeBootstrapModel): string =>
+  model.customToolNames.length === 0
+    ? "{}"
+    : `{\n${model.customToolNames
+        .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
+        .join("\n")}\n}`;
+
+const renderDynamicCapabilityCatalog = (
+  model: StaticRuntimeBootstrapModel,
 ): string => {
-  const manifestTools = normalized.deployment.manifest.tools ?? {};
+  const manifestTools = model.manifestTools ?? {};
   const dynamicToolNames = [
-    ...toolNames,
-    ...(hasSkills ? [GENERATED_LOAD_SKILL_TOOL_NAME, GENERATED_READ_SKILL_FILE_TOOL_NAME] : []),
+    ...model.toolNames,
+    ...(model.skills.length > 0
+      ? [GENERATED_LOAD_SKILL_TOOL_NAME, GENERATED_READ_SKILL_FILE_TOOL_NAME]
+      : []),
   ];
   return JSON.stringify(
     stableJsonValue({
-      instructions: normalized.instructionFragments.map((fragment) => ({
+      instructions: model.instructionFragments.map((fragment) => ({
         digest: fragment.digest,
         id: fragment.fragmentId,
       })),
-      skills: normalized.skills.map((skill) => ({
+      skills: model.skills.map((skill) => ({
         digest: skill.digest,
         id: skill.name,
       })),
@@ -751,11 +787,9 @@ const renderDynamicResolverImportStatements = (
     .join("\n");
 
 const renderDynamicCapabilitySupport = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
-  toolNames: ReadonlyArray<string>,
-  hasSkills: boolean,
+  model: StaticRuntimeBootstrapModel,
 ): string => {
-  const resolvers = sortedDynamicResolvers(normalized.dynamicResolvers);
+  const resolvers = sortedDynamicResolvers(model.dynamicResolvers);
   const resolverEntries =
     resolvers.length === 0
       ? "[]"
@@ -770,14 +804,10 @@ const renderDynamicCapabilitySupport = (
           .join("\n")}\n]`;
   return `${renderDynamicResolverImportStatements(resolvers)}
 
-const generatedDynamicCapabilityCatalog = ${renderDynamicCapabilityCatalog(
-    normalized,
-    toolNames,
-    hasSkills,
-  )} satisfies DynamicCapabilityCompiledCatalog;
+const generatedDynamicCapabilityCatalog = ${renderDynamicCapabilityCatalog(model)} satisfies DynamicCapabilityCompiledCatalog;
 
 const generatedInstructionFragments = ${renderInstructionFragments(
-    normalized.instructionFragments,
+    model.instructionFragments,
   )} satisfies ReadonlyArray<SubmitInstructionFragment>;
 
 const generatedDynamicCapabilityResolvers = ${resolverEntries} satisfies ReadonlyArray<DynamicCapabilityResolverDefinition>;
@@ -975,6 +1005,104 @@ const generatedFrameworkToolsFor = (
 `;
 };
 
+const renderStaticRuntimeBootstrapImports = (
+  model: StaticRuntimeBootstrapModel,
+  modules: ReturnType<typeof staticTargetModules>,
+): string =>
+  [
+    `import semanticDeclarations from "./manifest.json";`,
+    renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
+    renderNamedImport(
+      ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
+      modules.openAiCompatibleTransport,
+    ),
+    renderNamedImport(
+      ["DYNAMIC_CAPABILITY_EVENT", "manifestTruthIdentity"],
+      modules.runtimeProtocol,
+    ),
+    renderNamedImport(
+      [
+        "deterministicToolInvocation",
+        ...(model.skills.length > 0 ? ["defineProductTool"] : []),
+        "unsafeRunToolByName",
+      ],
+      modules.coreTools,
+    ),
+    renderNamedImport(model.skills.length > 0 ? ["Effect", "Schema"] : ["Effect"], modules.effect),
+    renderTypeImport(
+      [
+        "AgentManifest",
+        "AgentSubmitBindings",
+        "DynamicCapabilityCompiledCatalog",
+        "DynamicCapabilityEventRef",
+        "DynamicCapabilityProjection",
+        "DynamicCapabilityRunInput",
+        "SubmitInstructionFragment",
+      ],
+      modules.runtimeProtocol,
+    ),
+    renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
+    renderTypeImport(["Tool"], modules.coreTools),
+    renderCustomToolImports(model),
+  ]
+    .filter((statement) => statement.length > 0)
+    .join("\n");
+
+const renderStaticRuntimeBootstrap = (model: StaticRuntimeBootstrapModel): string => `
+const semanticManifest = semanticDeclarations as AgentManifest;
+const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
+
+type GeneratedTargetFailure = {
+  readonly ok: false;
+  readonly message: string;
+  readonly diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
+};
+
+type GeneratedTargetResult<Value> =
+  | { readonly ok: true; readonly value: Value }
+  | GeneratedTargetFailure;
+
+const targetFailure = (
+  message: string,
+  diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>,
+): GeneratedTargetFailure => ({
+  ok: false,
+  message,
+  ...(diagnostics === undefined || diagnostics.length === 0 ? {} : { diagnostics }),
+});
+
+const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> => {
+  const error = Error(failure.message) as Error & {
+    diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
+  };
+  if (failure.diagnostics !== undefined) error.diagnostics = failure.diagnostics;
+  return Promise.reject(error);
+};
+
+const generatedCustomTools = ${renderCustomToolRecord(model)} satisfies Readonly<Record<string, Tool>>;
+${renderDynamicCapabilitySupport(model)}
+${renderSkillSupport(model.skills)}
+
+const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
+  const value = env[name];
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+${renderMaterialValueFunction(model.llmRoutes)}
+${renderGeneratedProviderPreflight(model.llmRoutes)}
+
+const requiredStringMaterial = (
+  kind: string,
+  ref: string,
+  value: NonNullable<unknown> | null,
+): GeneratedTargetResult<string> => {
+  if (typeof value === "string" && value.length > 0) return { ok: true, value };
+  return targetFailure(\`missing \${kind} material: \${ref}\`);
+};
+
+${renderGeneratedLlmRoutesFor(model.llmRoutes)}
+`;
+
 const renderSubmitSpecFromRunInput = (
   hasSkills: boolean,
 ): string => `const submitSpecFromRunInput = (
@@ -1171,24 +1299,14 @@ const renderWorkspaceStaticTarget = (
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
-  const hasSkills = normalized.skills.length > 0;
-  const hasDynamicCapability = true;
+  const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);
+  const hasSkills = bootstrap.skills.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
     (toolName): toolName is WorkspaceToolName =>
       isWorkspaceToolName(toolName) && !authoredToolNames.has(toolName),
   );
-  const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
-  const toolImports = customToolNames
-    .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
-    .join("\n");
-  const customToolRecord =
-    customToolNames.length === 0
-      ? "{}"
-      : `{\n${customToolNames
-          .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
-          .join("\n")}\n}`;
   const workspaceToolArray = `[${workspaceToolList.map(jsString).join(", ")}] as const`;
   const usesMutationTools = workspaceToolList.some((toolName) =>
     workspaceMutationToolNames.has(toolName),
@@ -1199,12 +1317,12 @@ const renderWorkspaceStaticTarget = (
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
-  const llmEnvBindings = uniqueLlmMaterialEnvBindings(normalized.llmRoutes);
+  const llmEnvBindings = uniqueLlmMaterialEnvBindings(bootstrap.llmRoutes);
   const generatedLlmEnvFields = llmEnvBindings
     .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
   const imports = [
-    `import semanticDeclarations from "./manifest.json";`,
+    renderStaticRuntimeBootstrapImports(bootstrap, modules),
     `import deploymentProvenance from "./deployment.json";`,
     ...(hasSchedules
       ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")]
@@ -1215,18 +1333,9 @@ const renderWorkspaceStaticTarget = (
         "WORKSPACE_OPERATION_HOST_FACT",
         "defineHost",
         "resolveRuntimeInstallGraph",
-        ...(hasDynamicCapability ? ["runDynamicCapabilityResolvers"] : []),
         "workspaceOperations",
       ],
       modules.runtimeCapability,
-    ),
-    renderNamedImport(
-      ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
-      modules.openAiCompatibleTransport,
-    ),
-    renderNamedImport(
-      ["DYNAMIC_CAPABILITY_EVENT", "manifestTruthIdentity"],
-      modules.runtimeProtocol,
     ),
     renderNamedImport(
       ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
@@ -1238,40 +1347,10 @@ const renderWorkspaceStaticTarget = (
     ),
     renderNamedImport(["makeCloudflareWorkspaceEnv"], modules.workspaceEnvCloudflare),
     renderNamedImport(["getSandbox"], modules.cloudflareSandbox),
-    renderNamedImport(
-      [
-        "deterministicToolInvocation",
-        ...(hasSkills ? ["defineProductTool"] : []),
-        "unsafeRunToolByName",
-      ],
-      modules.coreTools,
-    ),
-    renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
     renderTypeImport(
-      [
-        "AgentManifest",
-        "AgentSubmitBindings",
-        "InputRequestSettlement",
-        "SubmitResult",
-        "SubmitRunInput",
-      ],
+      ["InputRequestSettlement", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
     ),
-    ...(hasDynamicCapability
-      ? [
-          renderTypeImport(
-            [
-              "DynamicCapabilityCompiledCatalog",
-              "DynamicCapabilityEventRef",
-              "DynamicCapabilityProjection",
-              "DynamicCapabilityRunInput",
-              "SubmitInstructionFragment",
-            ],
-            modules.runtimeProtocol,
-          ),
-          renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
-        ]
-      : []),
     renderTypeImport(
       [
         "AgentSessionListProjection",
@@ -1298,17 +1377,13 @@ const renderWorkspaceStaticTarget = (
       ],
       modules.workspaceAgentHost,
     ),
-    renderTypeImport(["Tool"], modules.coreTools),
     renderTypeImport(["Sandbox", "SandboxTransport"], modules.cloudflareSandbox),
-    ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
   return `${imports}
 
 export const targetDeclarations = semanticDeclarations;
 export const targetDeployment = deploymentProvenance;
 
-const semanticManifest = semanticDeclarations as AgentManifest;
-const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
 const generatedHandler = () => undefined;
 
 type AgentOSTargetEnv = {
@@ -1317,37 +1392,9 @@ type AgentOSTargetEnv = {
 ${generatedLlmEnvFields}
 };
 
-type GeneratedTargetFailure = {
-  readonly ok: false;
-  readonly message: string;
-  readonly diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
-};
-
-type GeneratedTargetResult<Value> =
-  | { readonly ok: true; readonly value: Value }
-  | GeneratedTargetFailure;
-
-const targetFailure = (
-  message: string,
-  diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>,
-): GeneratedTargetFailure => ({
-  ok: false,
-  message,
-  ...(diagnostics === undefined || diagnostics.length === 0 ? {} : { diagnostics }),
-});
-
-const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> => {
-  const error = Error(failure.message) as Error & {
-    diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
-  };
-  if (failure.diagnostics !== undefined) error.diagnostics = failure.diagnostics;
-  return Promise.reject(error);
-};
+${renderStaticRuntimeBootstrap(bootstrap)}
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
-const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
-${hasDynamicCapability ? renderDynamicCapabilitySupport(normalized, toolNames, hasSkills) : ""}
-${renderSkillSupport(normalized.skills)}
 const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
 
 const workspaceNamespaceFor = (env: AgentOSTargetEnv): DurableObjectNamespace<Sandbox> =>
@@ -1458,25 +1505,6 @@ const generatedCapabilityInstallGraphFor = (env: AgentOSTargetEnv) => {
   }
   return graph.resolved;
 };
-
-const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
-  const value = env[name];
-  return typeof value === "string" && value.length > 0 ? value : null;
-};
-
-${renderMaterialValueFunction(normalized.llmRoutes)}
-${renderGeneratedProviderPreflight(normalized.llmRoutes)}
-
-const requiredStringMaterial = (
-  kind: string,
-  ref: string,
-  value: NonNullable<unknown> | null,
-): GeneratedTargetResult<string> => {
-  if (typeof value === "string" && value.length > 0) return { ok: true, value };
-  return targetFailure(\`missing \${kind} material: \${ref}\`);
-};
-
-${renderGeneratedLlmRoutesFor(normalized.llmRoutes)}
 
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
@@ -1673,81 +1701,31 @@ const renderChatStaticTarget = (
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
-  const hasSkills = normalized.skills.length > 0;
-  const hasDynamicCapability = true;
+  const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);
+  const hasSkills = bootstrap.skills.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
-  const authoredToolNames = new Set(normalized.authoredToolNames);
-  const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
-  const toolImports = customToolNames
-    .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
-    .join("\n");
-  const customToolRecord =
-    customToolNames.length === 0
-      ? "{}"
-      : `{\n${customToolNames
-          .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
-          .join("\n")}\n}`;
   const handlerRecord = `{\n${normalized.deployment.manifest.handlers
     .map((handler) => `  ${jsString(handler)}: generatedHandler,`)
     .join("\n")}\n}`;
-  const llmEnvBindings = uniqueLlmMaterialEnvBindings(normalized.llmRoutes);
+  const llmEnvBindings = uniqueLlmMaterialEnvBindings(bootstrap.llmRoutes);
   const generatedLlmEnvFields = llmEnvBindings
     .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
   const imports = [
-    `import semanticDeclarations from "./manifest.json";`,
+    renderStaticRuntimeBootstrapImports(bootstrap, modules),
     `import deploymentProvenance from "./deployment.json";`,
     ...(hasSchedules
       ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")]
       : []),
     renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
-    renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
-    renderNamedImport(
-      ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
-      modules.openAiCompatibleTransport,
-    ),
-    renderNamedImport(
-      ["DYNAMIC_CAPABILITY_EVENT", "manifestTruthIdentity"],
-      modules.runtimeProtocol,
-    ),
     renderNamedImport(
       ["projectAgentSession", "projectAgentSessions", "projectWorkflowRun", "projectWorkflowRuns"],
       modules.runtimeRunProjector,
     ),
-    renderNamedImport(
-      [
-        "deterministicToolInvocation",
-        ...(hasSkills ? ["defineProductTool"] : []),
-        "unsafeRunToolByName",
-      ],
-      modules.coreTools,
-    ),
-    renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
     renderTypeImport(
-      [
-        "AgentManifest",
-        "AgentSubmitBindings",
-        "InputRequestSettlement",
-        "SubmitResult",
-        "SubmitRunInput",
-      ],
+      ["InputRequestSettlement", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
     ),
-    ...(hasDynamicCapability
-      ? [
-          renderTypeImport(
-            [
-              "DynamicCapabilityCompiledCatalog",
-              "DynamicCapabilityEventRef",
-              "DynamicCapabilityProjection",
-              "DynamicCapabilityRunInput",
-              "SubmitInstructionFragment",
-            ],
-            modules.runtimeProtocol,
-          ),
-          renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
-        ]
-      : []),
     renderTypeImport(
       [
         "AgentSessionListProjection",
@@ -1768,16 +1746,12 @@ const renderChatStaticTarget = (
       ],
       modules.workspaceAgentHost,
     ),
-    renderTypeImport(["Tool"], modules.coreTools),
-    ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
   return `${imports}
 
 export const targetDeclarations = semanticDeclarations;
 export const targetDeployment = deploymentProvenance;
 
-const semanticManifest = semanticDeclarations as AgentManifest;
-const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
 const generatedHandler = () => undefined;
 
 type AgentOSTargetEnv = {
@@ -1785,55 +1759,7 @@ type AgentOSTargetEnv = {
 ${generatedLlmEnvFields}
 };
 
-type GeneratedTargetFailure = {
-  readonly ok: false;
-  readonly message: string;
-  readonly diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
-};
-
-type GeneratedTargetResult<Value> =
-  | { readonly ok: true; readonly value: Value }
-  | GeneratedTargetFailure;
-
-const targetFailure = (
-  message: string,
-  diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>,
-): GeneratedTargetFailure => ({
-  ok: false,
-  message,
-  ...(diagnostics === undefined || diagnostics.length === 0 ? {} : { diagnostics }),
-});
-
-const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> => {
-  const error = Error(failure.message) as Error & {
-    diagnostics?: ReturnType<typeof preflightOpenAiCompatibleProviderMaterial>;
-  };
-  if (failure.diagnostics !== undefined) error.diagnostics = failure.diagnostics;
-  return Promise.reject(error);
-};
-
-const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
-${renderDynamicCapabilitySupport(normalized, toolNames, hasSkills)}
-${renderSkillSupport(normalized.skills)}
-
-const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
-  const value = env[name];
-  return typeof value === "string" && value.length > 0 ? value : null;
-};
-
-${renderMaterialValueFunction(normalized.llmRoutes)}
-${renderGeneratedProviderPreflight(normalized.llmRoutes)}
-
-const requiredStringMaterial = (
-  kind: string,
-  ref: string,
-  value: NonNullable<unknown> | null,
-): GeneratedTargetResult<string> => {
-  if (typeof value === "string" && value.length > 0) return { ok: true, value };
-  return targetFailure(\`missing \${kind} material: \${ref}\`);
-};
-
-${renderGeneratedLlmRoutesFor(normalized.llmRoutes)}
+${renderStaticRuntimeBootstrap(bootstrap)}
 
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
@@ -1963,24 +1889,15 @@ const renderLocalAgentApp = (
   if (normalized.target.kind !== AGENTOS_CONFIG_TARGET.NODE_V1) {
     throw new TypeError(`local agent app renderer received ${normalized.target.kind}`);
   }
+  const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);
   const hasChannels = normalized.channels.length > 0;
-  const hasSkills = normalized.skills.length > 0;
+  const hasSkills = bootstrap.skills.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
   const authoredToolNames = new Set(normalized.authoredToolNames);
   const workspaceToolList = toolNames.filter(
     (toolName): toolName is WorkspaceToolName =>
       isWorkspaceToolName(toolName) && !authoredToolNames.has(toolName),
   );
-  const customToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
-  const toolImports = customToolNames
-    .map((toolName, index) => `import tool_${index} from ${jsString(importToolPath(toolName))};`)
-    .join("\n");
-  const customToolRecord =
-    customToolNames.length === 0
-      ? "{}"
-      : `{\n${customToolNames
-          .map((toolName, index) => `  ${jsString(toolName)}: tool_${index},`)
-          .join("\n")}\n}`;
   const workspaceToolArray = `[${workspaceToolList.map(jsString).join(", ")}] as const`;
   const usesMutationTools = workspaceToolList.some((toolName) =>
     workspaceMutationToolNames.has(toolName),
@@ -1988,11 +1905,8 @@ const renderLocalAgentApp = (
   const usesShellTools = workspaceToolList.some((toolName) =>
     workspaceShellToolNames.has(toolName),
   );
-  const llmEnvByKind = Object.fromEntries(
-    llmMaterialEnvBindings(normalized.llm).map((binding) => [binding.kind, binding.envName]),
-  ) as Record<LlmMaterialEnvKind, string>;
   const imports = [
-    `import semanticDeclarations from "./manifest.json";`,
+    renderStaticRuntimeBootstrapImports(bootstrap, modules),
     ...(hasChannels ? [renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")] : []),
     ...(hasChannels ? [renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)] : []),
     ...(hasSchedules
@@ -2010,18 +1924,9 @@ const renderLocalAgentApp = (
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
     renderNamedImport(["projectInputRequestSettlement"], modules.runtimeRunProjector),
-    renderNamedImport(["runDynamicCapabilityResolvers"], modules.runtimeCapability),
     ...(hasSchedules
       ? [renderNamedImport(["projectScheduleFireHistory"], modules.runtimeSchedule)]
       : []),
-    renderNamedImport(
-      ["DYNAMIC_CAPABILITY_EVENT", "manifestTruthIdentity"],
-      modules.runtimeProtocol,
-    ),
-    renderNamedImport(
-      ["OpenAiCompatibleLlmTransportLive", "preflightOpenAiCompatibleProviderMaterial"],
-      modules.openAiCompatibleTransport,
-    ),
     renderNamedImport(
       [
         "projectAgentSession",
@@ -2033,21 +1938,9 @@ const renderLocalAgentApp = (
       modules.runtimeRunProjector,
     ),
     renderTypeImport(
-      ["AgentManifest", "InputRequestSettlement", "SubmitResult", "SubmitRunInput"],
+      ["InputRequestSettlement", "SubmitResult", "SubmitRunInput"],
       modules.runtimeProtocol,
     ),
-    renderTypeImport(
-      [
-        "AgentSubmitBindings",
-        "DynamicCapabilityCompiledCatalog",
-        "DynamicCapabilityEventRef",
-        "DynamicCapabilityProjection",
-        "DynamicCapabilityRunInput",
-        "SubmitInstructionFragment",
-      ],
-      modules.runtimeProtocol,
-    ),
-    renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
     ...(hasSchedules
       ? [
           renderTypeImport(
@@ -2078,46 +1971,14 @@ const renderLocalAgentApp = (
       ["WorkspaceAgentCustomCommandInput", "WorkspaceAgentInspectInputRequestCommandInput"],
       modules.workspaceAgentHost,
     ),
-    renderNamedImport(
-      [
-        ...(hasSkills ? ["defineProductTool"] : []),
-        "deterministicToolInvocation",
-        "unsafeRunToolByName",
-      ],
-      modules.coreTools,
-    ),
-    renderNamedImport(hasSkills ? ["Effect", "Schema"] : ["Effect"], modules.effect),
-    renderTypeImport(["Tool"], modules.coreTools),
-    ...(toolImports.length === 0 ? [] : [toolImports]),
   ].join("\n");
   return `${imports}
 
-const semanticManifest = semanticDeclarations as AgentManifest;
-const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
-
 type AgentOSTargetEnv = Readonly<Record<string, string | undefined>>;
 
-type GeneratedTargetFailure = {
-  readonly ok: false;
-  readonly message: string;
-};
-
-type GeneratedTargetResult<Value> =
-  | { readonly ok: true; readonly value: Value }
-  | GeneratedTargetFailure;
-
-const targetFailure = (message: string): GeneratedTargetFailure => ({
-  ok: false,
-  message,
-});
-
-const rejectTargetFailure = (failure: GeneratedTargetFailure): Promise<never> =>
-  Promise.reject(Error(failure.message));
+${renderStaticRuntimeBootstrap(bootstrap)}
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
-const generatedCustomTools = ${customToolRecord} satisfies Readonly<Record<string, Tool>>;
-${renderDynamicCapabilitySupport(normalized, toolNames, hasSkills)}
-${renderSkillSupport(normalized.skills)}
 
 const cleanEnv = (source: AgentOSTargetEnv): Record<string, string> => {
   const env: Record<string, string> = {};
@@ -2134,44 +1995,29 @@ const generatedTargetEnvFor = (
   ...(options.env === undefined ? {} : cleanEnv(options.env)),
 });
 
-const materialEnvValue = (env: AgentOSTargetEnv, name: string): string | null => {
-  const value = env[name];
-  return typeof value === "string" && value.length > 0 ? value : null;
-};
-
-const materialValue = (
-  env: AgentOSTargetEnv,
-  ref: { readonly kind: string; readonly ref: string },
-): NonNullable<unknown> | null => {
-  if (ref.kind === "endpoint" && ref.ref === ${jsString(normalized.llm.endpointRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.endpoint)});
-  }
-  if (ref.kind === "credential" && ref.ref === ${jsString(normalized.llm.credentialRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.credential)});
-  }
-  if (ref.kind === "model" && ref.ref === ${jsString(normalized.llm.modelRef)}) {
-    return materialEnvValue(env, ${jsString(llmEnvByKind.model)});
-  }
-  return null;
-};
-
 const generatedLocalLlmFor = (
   env: AgentOSTargetEnv,
-): NonNullable<CreateLocalAgentRuntimeOptions["llm"]> => {
-  const modelValue = materialValue(env, { kind: "model", ref: ${jsString(normalized.llm.modelRef)} });
+): GeneratedTargetResult<NonNullable<CreateLocalAgentRuntimeOptions["llm"]>> => {
+  const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(env);
+  if (preflightDiagnostics.length > 0) {
+    return targetFailure(
+      "OpenAI-compatible provider material preflight failed",
+      preflightDiagnostics,
+    );
+  }
+  const routes = generatedLlmRoutesFor(env);
+  if (!routes.ok) return routes;
   return {
-    kind: "transport",
-    transport: OpenAiCompatibleLlmTransportLive,
-    route: {
-      kind: "openai-chat-compatible",
-      endpointRef: ${jsString(normalized.llm.endpointRef)},
-      credentialRef: ${jsString(normalized.llm.credentialRef)},
-      modelId: typeof modelValue === "string" ? modelValue : "",
+    ok: true,
+    value: {
+      kind: "transport",
+      transport: OpenAiCompatibleLlmTransportLive,
+      route: routes.value.default,
+      refResolver: {
+        material: (ref) => materialValue(env, ref),
+      },
+      preflight: preflightOpenAiCompatibleProviderMaterial,
     },
-    refResolver: {
-      material: (ref) => materialValue(env, ref),
-    },
-    preflight: preflightOpenAiCompatibleProviderMaterial,
   };
 };
 
@@ -2265,6 +2111,11 @@ export const createLocalAgentApp = async (
   options: CreateLocalAgentAppOptions = {},
 ): Promise<LocalAgentApp> => {
   const targetEnv = generatedTargetEnvFor(options);
+  const generatedLlm =
+    options.llm === undefined
+      ? generatedLocalLlmFor(targetEnv)
+      : { ok: true as const, value: options.llm };
+  if (!generatedLlm.ok) return rejectTargetFailure(generatedLlm);
   const lowered = await lowerLocalAgentRuntime({
     target: "node@1",
     identity: semanticManifest.agentId,
@@ -2272,7 +2123,7 @@ export const createLocalAgentApp = async (
     cwd: options.cwd ?? process.cwd(),
     ...(options.env === undefined ? {} : { env: options.env }),
     ...(options.inheritEnv === undefined ? {} : { inheritEnv: options.inheritEnv }),
-    llm: options.llm ?? generatedLocalLlmFor(targetEnv),
+    llm: generatedLlm.value,
     workspaceOperations: generatedWorkspaceOperations,
   });
   const sessions = {

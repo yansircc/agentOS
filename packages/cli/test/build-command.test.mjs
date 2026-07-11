@@ -2425,7 +2425,9 @@ void test("agentos build emits node local agent app target", () => {
     assert.match(local, /projectWorkflowRuns/);
     assert.match(local, /export const createLocalAgentApp/);
     assert.match(local, /target: "node@1"/);
-    assert.match(local, /llm: options\.llm \?\? generatedLocalLlmFor\(targetEnv\)/);
+    assert.match(local, /options\.llm === undefined[\s\S]*generatedLocalLlmFor\(targetEnv\)/);
+    assert.match(local, /if \(!generatedLlm\.ok\) return rejectTargetFailure\(generatedLlm\)/);
+    assert.match(local, /llm: generatedLlm\.value/);
     assert.match(local, /workspaceOperations: generatedWorkspaceOperations/);
     assert.match(local, /toolInteractions: generatedWorkspaceToolInteractions/);
     assert.match(local, /runtime: LocalAgentAppRuntime/);
@@ -4212,6 +4214,17 @@ void test("static target wires one dynamic capability registry for cloudflare an
       "const workspace = linkedFor({ ...baseConfig, profile: 'workspace@1', target: cloudflareTarget, workspace: { binding: 'Sandbox', root: '/workspace' } }, '.agentos/generated/target.ts');",
       "const chat = linkedFor({ ...baseConfig, profile: 'chat@1', target: cloudflareTarget }, '.agentos/generated/target.ts');",
       "const node = linkedFor({ ...baseConfig, profile: 'workspace@1', target: { kind: 'node@1' }, workspace: { binding: 'Sandbox', root: '/workspace' } }, '.agentos/generated/local.ts');",
+      "const count = (text, marker) => text.split(marker).length - 1;",
+      "const commonMarkers = [",
+      "  'const semanticManifest =',",
+      "  'const semanticTruthIdentity =',",
+      "  'const generatedCustomTools =',",
+      "  'const generatedDynamicCapabilityCatalog =',",
+      "  'const generatedDynamicCapabilityResolvers =',",
+      "  'const materialValue =',",
+      "  'const generatedProviderPreflightDiagnosticsFor =',",
+      "  'const generatedLlmRoutesFor =',",
+      "];",
       "const markers = (target) => ({",
       "  runResolvers: target.text.includes('runDynamicCapabilityResolvers'),",
       "  registry: target.text.includes('generatedDynamicCapabilityResolvers'),",
@@ -4230,8 +4243,26 @@ void test("static target wires one dynamic capability registry for cloudflare an
       "  customToolImport: target.text.includes('../../agent/tools/echo'),",
       "  moduleGraphDynamicImports: target.dynamicImports.map((entry) => entry.source).sort(),",
       "  moduleGraphToolImports: target.toolImports.map((entry) => entry.source).sort(),",
+      "  commonCounts: Object.fromEntries(commonMarkers.map((marker) => [marker, count(target.text, marker)])),",
       "});",
-      "console.log(JSON.stringify({ workspace: markers(workspace), chat: markers(chat), node: markers(node) }));",
+      "const hostIsolation = {",
+      "  workspace: {",
+      "    workspaceSandbox: workspace.text.includes('generatedWorkspaceSandboxId') && workspace.text.includes('workspaceSandboxFor') && workspace.text.includes('@cloudflare/sandbox'),",
+      "    workspaceHostGraph: workspace.text.includes('generatedCapabilityInstallGraphFor'),",
+      "    cloudflareLifecycle: workspace.text.includes('createAgentDurableObject'),",
+      "    excludesNode: !workspace.text.includes('lowerLocalAgentRuntime') && !workspace.text.includes('createLocalAgentApp') && !workspace.text.includes('generatedTargetEnvFor'),",
+      "  },",
+      "  chat: {",
+      "    cloudflareLifecycle: chat.text.includes('createAgentDurableObject'),",
+      "    excludesWorkspace: !chat.text.includes('generatedWorkspaceSandboxId') && !chat.text.includes('workspaceSandboxFor') && !chat.text.includes('generatedCapabilityInstallGraphFor') && !chat.text.includes('@cloudflare/sandbox'),",
+      "    excludesNode: !chat.text.includes('lowerLocalAgentRuntime') && !chat.text.includes('createLocalAgentApp') && !chat.text.includes('generatedTargetEnvFor'),",
+      "  },",
+      "  node: {",
+      "    nodeLifecycle: node.text.includes('lowerLocalAgentRuntime') && node.text.includes('createLocalAgentApp') && node.text.includes('generatedTargetEnvFor'),",
+      "    excludesCloudflare: !node.text.includes('createAgentDurableObject') && !node.text.includes('@cloudflare/sandbox') && !node.text.includes('generatedCapabilityInstallGraphFor'),",
+      "  },",
+      "};",
+      "console.log(JSON.stringify({ workspace: markers(workspace), chat: markers(chat), node: markers(node), hostIsolation }));",
     ].join("\n"),
   );
   assert.equal(result.status, 0, result.stderr);
@@ -4255,9 +4286,22 @@ void test("static target wires one dynamic capability registry for cloudflare an
           ["../../agent/tools/echo"],
           `${profile} target authored tool module graph mismatch`,
         );
+      } else if (marker === "commonCounts") {
+        for (const [commonMarker, occurrences] of Object.entries(present)) {
+          assert.equal(
+            occurrences,
+            1,
+            `${profile} target emitted ${occurrences} copies of ${commonMarker}`,
+          );
+        }
       } else {
         assert.equal(present, true, `${profile} target missing ${marker}`);
       }
+    }
+  }
+  for (const [profile, markers] of Object.entries(output.hostIsolation)) {
+    for (const [marker, present] of Object.entries(markers)) {
+      assert.equal(present, true, `${profile} target violated host isolation: ${marker}`);
     }
   }
 });
