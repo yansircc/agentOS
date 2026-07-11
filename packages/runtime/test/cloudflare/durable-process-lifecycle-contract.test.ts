@@ -117,6 +117,9 @@ describe("cloudflare-do durable process lifecycle", () => {
       expect(() => insert({ completed_at: 12 })).not.toThrow();
 
       const illegal = [
+        { fire_at: Number.NaN },
+        { fire_at: Number.POSITIVE_INFINITY },
+        { fire_at: Number.NEGATIVE_INFINITY },
         { claimed_at: 11 },
         { claim_token: "claim" },
         { claim_deadline_at: 12 },
@@ -131,7 +134,9 @@ describe("cloudflare-do durable process lifecycle", () => {
         { completed_at: 12, cancel_requested_at: 11, cancelled_at: 13 },
         { completed_at: Number.POSITIVE_INFINITY },
       ];
-      for (const overrides of illegal) expect(() => insert(overrides)).toThrow();
+      for (const overrides of illegal) {
+        expect(() => insert(overrides), JSON.stringify(overrides)).toThrow();
+      }
 
       const id = insert().one().id;
       expect(() => sql.exec("UPDATE due_work SET claimed_at = ? WHERE id = ?", 11, id)).toThrow();

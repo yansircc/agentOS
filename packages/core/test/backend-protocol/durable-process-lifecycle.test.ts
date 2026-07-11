@@ -94,7 +94,11 @@ describe("durable process lifecycle row algebra", () => {
     }
   });
 
-  it("rejects every non-finite nullable timestamp", () => {
+  it("rejects every non-finite lifecycle timestamp", () => {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(durableProcessLifecycleState(snapshot({ fireAt: value })).ok).toBe(false);
+    }
+
     const fields = [
       "completedAt",
       "claimedAt",

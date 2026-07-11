@@ -235,6 +235,9 @@ describe("node-postgres event+due atomicity", () => {
       await expect(insert({ completed_at: "12" })).resolves.toBeUndefined();
 
       const illegal: ReadonlyArray<Record<string, string>> = [
+        { fire_at: "'NaN'::double precision" },
+        { fire_at: "'Infinity'::double precision" },
+        { fire_at: "'-Infinity'::double precision" },
         { claimed_at: "11" },
         { claim_token: "'claim'" },
         { claim_deadline_at: "12" },

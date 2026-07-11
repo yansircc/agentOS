@@ -70,6 +70,26 @@ const parseCreateTableColumns = (body: string): string[] =>
     return /^(primary|unique|foreign|constraint|check)$/i.test(name) ? [] : [name];
   });
 
+const finiteDueWorkColumns = (createSql: string): ReadonlyArray<string> => {
+  const constraint =
+    /CONSTRAINT due_work_finite_timestamps CHECK \((.*?)\), CONSTRAINT due_work_claim_tuple/iu.exec(
+      createSql,
+    )?.[1];
+  if (constraint === undefined) {
+    throw new TypeError("due_work finite timestamp constraint is not parseable");
+  }
+  const columns = Array.from(
+    constraint.matchAll(
+      /\b([a-z_]+) BETWEEN -1\.7976931348623157e308 AND 1\.7976931348623157e308/giu,
+    ),
+    (match) => match[1]!,
+  );
+  if (columns.length === 0 || new Set(columns).size !== columns.length) {
+    throw new TypeError("due_work finite timestamp constraint has invalid columns");
+  }
+  return columns;
+};
+
 class InMemorySqlCursor {
   readonly columnNames: string[];
 
@@ -532,22 +552,19 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   }
 
   private assertRowConstraints(tableName: string, row: Row): void {
+    const createSql = this.tables.get(tableName)?.createSql;
     if (
       tableName !== "due_work" ||
-      !this.tables.get(tableName)?.createSql?.includes("due_work_claim_tuple")
+      createSql === null ||
+      createSql === undefined ||
+      !createSql.includes("due_work_claim_tuple")
     ) {
       return;
     }
     if (typeof row.kind !== "string" || row.kind.length === 0) {
       throw new TypeError("due_work kind constraint failed");
     }
-    for (const field of [
-      "completed_at",
-      "claimed_at",
-      "claim_deadline_at",
-      "cancel_requested_at",
-      "cancelled_at",
-    ]) {
+    for (const field of finiteDueWorkColumns(createSql)) {
       const value = row[field];
       if (value !== null && (typeof value !== "number" || !Number.isFinite(value))) {
         throw new TypeError(`due_work ${field} finite constraint failed`);
