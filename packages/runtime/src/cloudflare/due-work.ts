@@ -191,25 +191,39 @@ export const ensureDueWorkSchema = (sql: SqlStorage): Effect.Effect<void, SqlErr
       const schemaSql = sql
         .exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'due_work'")
         .toArray()[0]?.sql;
-      if (
-        typeof schemaSql !== "string" ||
-        normalizeSqliteCreateProjection(schemaSql) !== SQLITE_DUE_WORK_CREATE_PROJECTION
-      ) {
-        throw new TypeError("due_work schema does not enforce the durable lifecycle contract");
-      }
-      sql.exec(`
-        CREATE INDEX IF NOT EXISTS idx_due_work_pending
-          ON due_work (fire_at)
-          WHERE completed_at IS NULL
-      `);
-      sql.exec(`
-        CREATE INDEX IF NOT EXISTS idx_due_work_claim_deadline
-          ON due_work (claim_deadline_at)
-          WHERE completed_at IS NULL AND claim_token IS NOT NULL
-      `);
+      return (
+        typeof schemaSql === "string" &&
+        normalizeSqliteCreateProjection(schemaSql) === SQLITE_DUE_WORK_CREATE_PROJECTION
+      );
     },
     catch: (cause) => new SqlError({ cause }),
-  });
+  }).pipe(
+    Effect.flatMap((schemaValid) =>
+      schemaValid
+        ? Effect.try({
+            try: () => {
+              sql.exec(`
+                CREATE INDEX IF NOT EXISTS idx_due_work_pending
+                  ON due_work (fire_at)
+                  WHERE completed_at IS NULL
+              `);
+              sql.exec(`
+                CREATE INDEX IF NOT EXISTS idx_due_work_claim_deadline
+                  ON due_work (claim_deadline_at)
+                  WHERE completed_at IS NULL AND claim_token IS NOT NULL
+              `);
+            },
+            catch: (cause) => new SqlError({ cause }),
+          })
+        : Effect.fail(
+            new SqlError({
+              cause: new TypeError(
+                "due_work schema does not enforce the durable lifecycle contract",
+              ),
+            }),
+          ),
+    ),
+  );
 
 export const findNextDue = (sql: SqlStorage): Effect.Effect<number | null, SqlError> =>
   Effect.try({
