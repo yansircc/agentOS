@@ -41,6 +41,67 @@ describe("ledger archive protocol", () => {
     ).resolves.toMatchObject({ eventCount: 1, firstEventId: 1, lastEventId: 1 });
   });
 
+  it("preserves every own JSON key through canonical archive roundtrip", async () => {
+    const payload = JSON.parse(
+      '{"nested":[{"__proto__":{"kept":true},"constructor":"value","prototype":null}]}',
+    ) as Record<string, unknown>;
+    const artifact = await createLedgerArchiveArtifact({
+      identity,
+      previousSegmentSha256: null,
+      events: [event(1, payload)],
+    });
+
+    expect(new TextDecoder().decode(artifact.bytes)).toContain('"__proto__"');
+    const decoded = await decodeLedgerArchiveArtifact(artifact.bytes, artifact.sha256);
+    const decodedPayload = decoded.segment.events[0]!.payload as {
+      readonly nested: ReadonlyArray<Record<string, unknown>>;
+    };
+    expect(decodedPayload).toEqual(payload);
+    expect(Object.hasOwn(decodedPayload.nested[0]!, "__proto__")).toBe(true);
+  });
+
+  it("rejects object and array cycles with the same traversal", async () => {
+    const cyclicObject: Record<string, unknown> = {};
+    cyclicObject.self = cyclicObject;
+    const cyclicArray: unknown[] = [];
+    cyclicArray.push(cyclicArray);
+
+    await expect(
+      createLedgerArchiveArtifact({
+        identity,
+        previousSegmentSha256: null,
+        events: [event(1, cyclicObject)],
+      }),
+    ).rejects.toMatchObject({ reason: "cyclic value" });
+    await expect(
+      createLedgerArchiveArtifact({
+        identity,
+        previousSegmentSha256: null,
+        events: [event(1, cyclicArray)],
+      }),
+    ).rejects.toMatchObject({ reason: "cyclic value" });
+  });
+
+  it("rejects invalid UTF-8 and valid JSON bytes that are not byte-canonical", async () => {
+    const artifact = await createLedgerArchiveArtifact({
+      identity,
+      previousSegmentSha256: null,
+      events: [event(1)],
+    });
+    const invalidUtf8 = new Uint8Array(artifact.bytes);
+    invalidUtf8[invalidUtf8.length - 2] = 0xff;
+    await expect(decodeLedgerArchiveArtifact(invalidUtf8)).rejects.toMatchObject({
+      reason: "archive bytes are not valid UTF-8",
+    });
+
+    const nonCanonical = new Uint8Array(artifact.bytes.length + 1);
+    nonCanonical.set(artifact.bytes);
+    nonCanonical[nonCanonical.length - 1] = 0x20;
+    await expect(decodeLedgerArchiveArtifact(nonCanonical)).rejects.toMatchObject({
+      reason: "archive bytes are not canonical",
+    });
+  });
+
   it("rejects empty, mixed-truth, duplicate, and corrupt segments", async () => {
     await expect(
       createLedgerArchiveArtifact({ identity, previousSegmentSha256: null, events: [] }),

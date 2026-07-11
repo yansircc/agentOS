@@ -38,9 +38,12 @@ export class LedgerArchiveProtocolError extends Data.TaggedError(
 )<{ readonly reason: string }> {}
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
+const textDecoder = new TextDecoder("utf-8", { fatal: true });
 const hex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+
+const sameBytes = (left: Uint8Array, right: Uint8Array): boolean =>
+  left.byteLength === right.byteLength && left.every((byte, index) => byte === right[index]);
 
 const stableJsonValue = (value: unknown, seen: Set<object>): unknown => {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
@@ -49,21 +52,28 @@ const stableJsonValue = (value: unknown, seen: Set<object>): unknown => {
       throw new LedgerArchiveProtocolError({ reason: "non-finite number" });
     return value;
   }
-  if (Array.isArray(value)) return value.map((entry) => stableJsonValue(entry, seen));
-  if (!Predicate.isObject(value)) {
+  const isArray = Array.isArray(value);
+  if (!isArray && !Predicate.isObject(value)) {
     throw new LedgerArchiveProtocolError({ reason: "value is not canonical JSON" });
   }
-  if (seen.has(value)) throw new LedgerArchiveProtocolError({ reason: "cyclic value" });
-  seen.add(value);
-  const record = value as Readonly<Record<string, unknown>>;
-  const output: Record<string, unknown> = {};
-  for (const key of Object.keys(record).sort()) {
-    const entry = record[key];
-    if (entry === undefined) throw new LedgerArchiveProtocolError({ reason: "undefined value" });
-    output[key] = stableJsonValue(entry, seen);
+  const container = value as object;
+  if (seen.has(container)) throw new LedgerArchiveProtocolError({ reason: "cyclic value" });
+  seen.add(container);
+  try {
+    if (isArray) {
+      return Array.from(value, (entry) => stableJsonValue(entry, seen));
+    }
+    const record = value as Readonly<Record<string, unknown>>;
+    const output = Object.create(null) as Record<string, unknown>;
+    for (const key of Object.keys(record).sort()) {
+      const entry = record[key];
+      if (entry === undefined) throw new LedgerArchiveProtocolError({ reason: "undefined value" });
+      output[key] = stableJsonValue(entry, seen);
+    }
+    return output;
+  } finally {
+    seen.delete(container);
   }
-  seen.delete(value);
-  return output;
 };
 
 export const canonicalLedgerArchiveJson = (value: unknown): string =>
@@ -136,9 +146,15 @@ export const decodeLedgerArchiveArtifact = async (
   bytes: Uint8Array,
   expectedSha256?: string,
 ): Promise<LedgerArchiveArtifact> => {
+  let text: string;
+  try {
+    text = textDecoder.decode(bytes);
+  } catch {
+    throw new LedgerArchiveProtocolError({ reason: "archive bytes are not valid UTF-8" });
+  }
   let value: unknown;
   try {
-    value = JSON.parse(textDecoder.decode(bytes));
+    value = JSON.parse(text);
   } catch {
     throw new LedgerArchiveProtocolError({ reason: "archive bytes are not JSON" });
   }
@@ -162,7 +178,7 @@ export const decodeLedgerArchiveArtifact = async (
     previousSegmentSha256,
     events: record.events,
   });
-  if (textDecoder.decode(artifact.bytes) !== textDecoder.decode(bytes)) {
+  if (!sameBytes(artifact.bytes, bytes)) {
     throw new LedgerArchiveProtocolError({ reason: "archive bytes are not canonical" });
   }
   if (expectedSha256 !== undefined && artifact.sha256 !== expectedSha256) {
