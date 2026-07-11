@@ -9,8 +9,11 @@ import type {
 } from "@agent-os/core/types";
 import type { TelemetryFanoutDiagnostic, TraceContext } from "@agent-os/core/telemetry-protocol";
 import { Effect } from "effect";
-import { describe, expect, it } from "@effect/vitest";
 import {
+  BACKEND_CONFORMANCE_LAWS,
+  BACKEND_CONFORMANCE_LAW_ID,
+  BACKEND_CONFORMANCE_PROTOCOL_VERSION,
+  BACKEND_CONFORMANCE_REQUIRED_CAPABILITIES,
   DISPATCH_EVENT_KINDS,
   DISPATCH_MAX_ATTEMPTS,
   backendProtocolProjectionKey,
@@ -26,10 +29,16 @@ import {
   type DispatchTargetResult,
   type GrantResult,
   type ResourceProjection,
-} from "../../../src/backend-protocol";
+  validateBackendConformanceReport,
+  type BackendConformanceLaw,
+  type BackendConformanceLawId,
+  type BackendConformanceLawResult,
+  type BackendConformanceReport,
+} from "@agent-os/core/backend-protocol";
 import type { BindingMaterialRef } from "@agent-os/core/material-ref";
 import { makeOperationRef, makePreClaim, type FactOwnerRef } from "@agent-os/core/effect-claim";
 import type { DispatchToScopeResult } from "@agent-os/core/types";
+import { expectConformance as expect } from "./conformance-assert";
 
 export type ContractDispatchReceiver = (
   envelope: DispatchEnvelope,
@@ -113,6 +122,10 @@ export interface RuntimeBackendContractDriver {
     targetIdentity: BackendProtocolEventIdentity,
     envelope: DispatchEnvelope,
   ) => Promise<DispatchReceiverResult>;
+  readonly receiveConcurrent: (
+    targetIdentity: BackendProtocolEventIdentity,
+    envelopes: ReadonlyArray<DispatchEnvelope>,
+  ) => Promise<ReadonlyArray<DispatchReceiverResult>>;
   readonly drainDispatchDue: (
     identity: BackendProtocolEventIdentity,
     now: number,
@@ -275,11 +288,19 @@ const expectEventsIdentity = (
 
 const SCHEDULED_REQUESTED = "durable_trigger.scheduled.requested";
 
-export const runRuntimeBackendContractSuite = (
-  name: string,
+export interface BackendConformanceLawExecution {
+  readonly lawId: BackendConformanceLawId;
+  readonly effect: () => Effect.Effect<void>;
+}
+
+const createBaseBackendConformanceLaws = (
   makeDriver: RuntimeBackendContractDriverFactory,
   options: RuntimeBackendContractSuiteOptions,
-): void => {
+): ReadonlyArray<BackendConformanceLawExecution> => {
+  const executions: BackendConformanceLawExecution[] = [];
+  const law = (lawId: BackendConformanceLawId, effect: () => Effect.Effect<void>): void => {
+    executions.push({ lawId, effect });
+  };
   const storageErrorTag = options.storageErrorTag ?? "agent_os.runtime_storage_error";
   const contractIdentity = (scopeId: string): BackendProtocolEventIdentity =>
     contractEventIdentity(scopeId, options.runtimeFactOwner);
@@ -308,8 +329,8 @@ export const runRuntimeBackendContractSuite = (
       }),
     );
 
-  describe(name + " runtime backend protocol contract", () => {
-    it.effect("satisfies the ledger prefix law for cursor, limit, kind, and stream reads", () =>
+  {
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_READ_PREFIX, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const identity = contractIdentity("ledger-prefix");
@@ -355,7 +376,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("satisfies the ledger batch atomicity law", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_BATCH_ATOMICITY, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const identity = contractIdentity("ledger-batch-atomic");
@@ -381,7 +402,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("satisfies the ledger durable ack law", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_DURABLE_ACK, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const identity = contractIdentity("ledger-durable-ack");
@@ -409,7 +430,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("satisfies the ledger per-truth ordering law", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_PER_TRUTH_ORDERING, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const alpha = contractIdentity("ledger-order-alpha");
@@ -443,7 +464,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("satisfies the ledger owner integrity law", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_OWNER_INTEGRITY, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const identity = contractIdentity("ledger-owner-integrity");
@@ -471,7 +492,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("satisfies the ledger idempotent append law for empty batches", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_IDEMPOTENT_APPEND, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const identity = contractIdentity("ledger-idempotent-empty");
@@ -500,7 +521,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("satisfies the ledger read-your-writes law", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.LEDGER_READ_YOUR_WRITES, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const identity = contractIdentity("ledger-read-your-writes");
@@ -520,7 +541,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("fires scheduled due events exactly once", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.SCHEDULER_EXACTLY_ONCE, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           yield* promise(() =>
@@ -563,7 +584,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("drains scheduler and delivery retry work from one due-work queue", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.DUE_WORK_SHARED_QUEUE, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           let receiveAttempts = 0;
@@ -613,43 +634,35 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect(
-      "delivers dispatches and dedupes receiver inbound facts by source and idempotency key",
-      () =>
-        withDriver((driver) =>
-          Effect.gen(function* () {
-            yield* promise(() => driver.registerDispatchReceiver(contractIdentity("receiver")));
-            const spec = dispatchSpec(driver, "receiver", "same-key", "app.received", { value: 1 });
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_RECEIVER_DEDUPE, () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          yield* promise(() => driver.registerDispatchReceiver(contractIdentity("receiver")));
+          const spec = dispatchSpec(driver, "receiver", "same-key", "app.received", { value: 1 });
 
-            yield* promise(() => driver.dispatchToScope(contractIdentity("sender"), spec));
-            yield* promise(() => driver.dispatchToScope(contractIdentity("sender"), spec));
+          yield* promise(() => driver.dispatchToScope(contractIdentity("sender"), spec));
+          yield* promise(() => driver.dispatchToScope(contractIdentity("sender"), spec));
 
-            const receiverIdentity = contractIdentity("receiver");
-            const receiverEvents = yield* promise(() => driver.events(receiverIdentity));
-            expect(kindsOf(receiverEvents)).toEqual([
-              DISPATCH_EVENT_KINDS.INBOUND_ACCEPTED,
-              "app.received",
-            ]);
-            expectEventsIdentity(receiverEvents, receiverIdentity);
-            expect(receiverEvents[1]?.payload).toEqual({ value: 1 });
+          const receiverIdentity = contractIdentity("receiver");
+          const receiverEvents = yield* promise(() => driver.events(receiverIdentity));
+          expect(kindsOf(receiverEvents)).toEqual([
+            DISPATCH_EVENT_KINDS.INBOUND_ACCEPTED,
+            "app.received",
+          ]);
+          expectEventsIdentity(receiverEvents, receiverIdentity);
+          expect(receiverEvents[1]?.payload).toEqual({ value: 1 });
 
-            const senderIdentity = contractIdentity("sender");
-            const senderEvents = yield* promise(() => driver.events(senderIdentity));
-            expectEventsIdentity(senderEvents, senderIdentity);
-            expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED)).toHaveLength(
-              2,
-            );
-            expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)).toHaveLength(
-              2,
-            );
-            expect(yield* promise(() => driver.pendingDueCount(contractIdentity("sender")))).toBe(
-              0,
-            );
-          }),
-        ),
+          const senderIdentity = contractIdentity("sender");
+          const senderEvents = yield* promise(() => driver.events(senderIdentity));
+          expectEventsIdentity(senderEvents, senderIdentity);
+          expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_REQUESTED)).toHaveLength(2);
+          expect(payloadsOf(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED)).toHaveLength(2);
+          expect(yield* promise(() => driver.pendingDueCount(contractIdentity("sender")))).toBe(0);
+        }),
+      ),
     );
 
-    it.effect("rejects malformed trace context before dispatch propagation", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_TRACE_CONTEXT, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           yield* promise(() => driver.registerDispatchReceiver(contractIdentity("receiver")));
@@ -669,7 +682,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("records retry attempts and later delivery after transient dispatch failure", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_RETRY_DELIVERY, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           let receiveAttempts = 0;
@@ -754,132 +767,128 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect(
-      "drains Queue, HTTP, and provider target adapters through enqueue acknowledgements",
-      () =>
-        withDriver((driver) =>
-          Effect.gen(function* () {
-            const targets = [
-              { label: "queue", targetScope: "image-queue", event: "image.job.queued" },
-              { label: "http", targetScope: "image-http", event: "image.provider.invoked" },
-              { label: "provider", targetScope: "image-provider", event: "image.provider.done" },
-            ] as const;
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_EXTERNAL_ENQUEUE_ACK, () =>
+      withDriver((driver) =>
+        Effect.gen(function* () {
+          const targets = [
+            { label: "queue", targetScope: "image-queue", event: "image.job.queued" },
+            { label: "http", targetScope: "image-http", event: "image.provider.invoked" },
+            { label: "provider", targetScope: "image-provider", event: "image.provider.done" },
+          ] as const;
 
-            for (const target of targets) {
-              let attempts = 0;
-              yield* promise(() =>
-                driver.setDispatchTargetAdapter((envelope) => {
-                  attempts += 1;
-                  if (attempts === 1) return Promise.reject(`${target.label} unavailable`);
-                  return Promise.resolve({
-                    _tag: "enqueued",
-                    acknowledgement: dispatchExternalEnqueueAcknowledgement({
-                      targetKind: target.label,
-                      targetScope: envelope.targetScope,
-                      idempotencyKey: envelope.idempotencyKey,
-                    }),
-                  });
-                }),
-              );
-
-              const sourceScope = `external-sender-${target.label}`;
-              const idempotencyKey = `${target.label}-adapter`;
-              const result = yield* promise(() =>
-                driver.dispatchToScope(
-                  contractIdentity(sourceScope),
-                  dispatchSpec(driver, target.targetScope, idempotencyKey, target.event, {
-                    prompt: "test",
+          for (const target of targets) {
+            let attempts = 0;
+            yield* promise(() =>
+              driver.setDispatchTargetAdapter((envelope) => {
+                attempts += 1;
+                if (attempts === 1) return Promise.reject(`${target.label} unavailable`);
+                return Promise.resolve({
+                  _tag: "enqueued",
+                  acknowledgement: dispatchExternalEnqueueAcknowledgement({
+                    targetKind: target.label,
+                    targetScope: envelope.targetScope,
+                    idempotencyKey: envelope.idempotencyKey,
                   }),
-                ),
-              );
-              const firstEvents = yield* promise(() =>
-                driver.events(contractIdentity(sourceScope)),
-              );
-              const failed = payloadsOf<{
-                readonly outboundEventId: number;
-                readonly attempt: number;
-                readonly terminal: boolean;
-                readonly nextAttemptAt?: number;
-              }>(firstEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED);
-              expect(failed).toHaveLength(1);
-              expect(failed[0]).toMatchObject({
-                outboundEventId: result.outboundEventId,
-                attempt: 1,
-                terminal: false,
-              });
-              expect(typeof failed[0]?.nextAttemptAt).toBe("number");
+                });
+              }),
+            );
 
-              expect(
-                yield* promise(() =>
-                  driver.drainDispatchDue(contractIdentity(sourceScope), failed[0]!.nextAttemptAt!),
-                ),
-              ).toEqual({
-                delivered: 0,
-                failed: 0,
-              });
+            const sourceScope = `external-sender-${target.label}`;
+            const idempotencyKey = `${target.label}-adapter`;
+            const result = yield* promise(() =>
+              driver.dispatchToScope(
+                contractIdentity(sourceScope),
+                dispatchSpec(driver, target.targetScope, idempotencyKey, target.event, {
+                  prompt: "test",
+                }),
+              ),
+            );
+            const firstEvents = yield* promise(() => driver.events(contractIdentity(sourceScope)));
+            const failed = payloadsOf<{
+              readonly outboundEventId: number;
+              readonly attempt: number;
+              readonly terminal: boolean;
+              readonly nextAttemptAt?: number;
+            }>(firstEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED);
+            expect(failed).toHaveLength(1);
+            expect(failed[0]).toMatchObject({
+              outboundEventId: result.outboundEventId,
+              attempt: 1,
+              terminal: false,
+            });
+            expect(typeof failed[0]?.nextAttemptAt).toBe("number");
 
-              const sourceIdentity = contractIdentity(sourceScope);
-              const senderEvents = yield* promise(() => driver.events(sourceIdentity));
-              expectEventsIdentity(senderEvents, sourceIdentity);
-              const delivered = payloadsOf<{
-                readonly outboundEventId: number;
-                readonly attempt: number;
-              }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED);
-              expect(delivered).toHaveLength(0);
-              const enqueued = payloadsOf<{
-                readonly outboundEventId: number;
-                readonly enqueueAcknowledgement: unknown;
-                readonly deliveryReceipt?: unknown;
-                readonly claim: unknown;
-                readonly attempt: number;
-              }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED);
-              expect(enqueued).toHaveLength(1);
-              expect(enqueued[0]).toMatchObject({
-                outboundEventId: result.outboundEventId,
-                enqueueAcknowledgement: {
-                  acknowledgementId: expect.stringMatching(
-                    `^dispatch\\.${target.label}\\.enqueued:.*:${idempotencyKey}$`,
-                  ),
-                  acknowledgementKind: "external_enqueue",
-                },
-                attempt: 2,
-                claim: {
-                  phase: "indeterminate",
-                  indeterminateRef: {
-                    indeterminateKind: "provider_pending",
-                    reason: "provider_pending",
-                  },
-                },
-              });
-              expect(enqueued[0]).not.toHaveProperty("deliveryReceipt");
-              expect(
-                yield* promise(() =>
-                  driver.drainDispatchDue(sourceIdentity, failed[0]!.nextAttemptAt!),
+            expect(
+              yield* promise(() =>
+                driver.drainDispatchDue(contractIdentity(sourceScope), failed[0]!.nextAttemptAt!),
+              ),
+            ).toEqual({
+              delivered: 0,
+              failed: 0,
+            });
+
+            const sourceIdentity = contractIdentity(sourceScope);
+            const senderEvents = yield* promise(() => driver.events(sourceIdentity));
+            expectEventsIdentity(senderEvents, sourceIdentity);
+            const delivered = payloadsOf<{
+              readonly outboundEventId: number;
+              readonly attempt: number;
+            }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_DELIVERED);
+            expect(delivered).toHaveLength(0);
+            const enqueued = payloadsOf<{
+              readonly outboundEventId: number;
+              readonly enqueueAcknowledgement: unknown;
+              readonly deliveryReceipt?: unknown;
+              readonly claim: unknown;
+              readonly attempt: number;
+            }>(senderEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED);
+            expect(enqueued).toHaveLength(1);
+            expect(enqueued[0]).toMatchObject({
+              outboundEventId: result.outboundEventId,
+              enqueueAcknowledgement: {
+                acknowledgementId: expect.stringMatching(
+                  `^dispatch\\.${target.label}\\.enqueued:.*:${idempotencyKey}$`,
                 ),
-              ).toEqual({
-                delivered: 0,
-                failed: 0,
-              });
-              const redrainedEvents = yield* promise(() => driver.events(sourceIdentity));
-              expect(
-                payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED),
-              ).toHaveLength(1);
-              expect(
-                payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED),
-              ).toHaveLength(1);
-              expect(
-                yield* promise(() => driver.events(contractIdentity(target.targetScope))),
-              ).toEqual([]);
-              expect(
-                yield* promise(() => driver.pendingDueCount(contractIdentity(sourceScope))),
-              ).toBe(0);
-              expect(attempts).toBe(2);
-            }
-          }),
-        ),
+                acknowledgementKind: "external_enqueue",
+              },
+              attempt: 2,
+              claim: {
+                phase: "indeterminate",
+                indeterminateRef: {
+                  indeterminateKind: "provider_pending",
+                  reason: "provider_pending",
+                },
+              },
+            });
+            expect(enqueued[0]).not.toHaveProperty("deliveryReceipt");
+            expect(
+              yield* promise(() =>
+                driver.drainDispatchDue(sourceIdentity, failed[0]!.nextAttemptAt!),
+              ),
+            ).toEqual({
+              delivered: 0,
+              failed: 0,
+            });
+            const redrainedEvents = yield* promise(() => driver.events(sourceIdentity));
+            expect(payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_FAILED)).toHaveLength(
+              1,
+            );
+            expect(
+              payloadsOf(redrainedEvents, DISPATCH_EVENT_KINDS.OUTBOUND_ENQUEUED),
+            ).toHaveLength(1);
+            expect(
+              yield* promise(() => driver.events(contractIdentity(target.targetScope))),
+            ).toEqual([]);
+            expect(
+              yield* promise(() => driver.pendingDueCount(contractIdentity(sourceScope))),
+            ).toBe(0);
+            expect(attempts).toBe(2);
+          }
+        }),
+      ),
     );
 
-    it.effect("marks dispatch terminal failure at the shared attempt cap", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_TERMINAL_ATTEMPT_CAP, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           yield* promise(() =>
@@ -920,7 +929,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("uses the shared dispatch backoff schedule", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_BACKOFF_SCHEDULE, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           let receiveAttempts = 0;
@@ -961,7 +970,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("absorbs failing event handlers without dropping facts or later handlers", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.FANOUT_HANDLER_FAILURE_ISOLATION, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const calls: string[] = [];
@@ -986,7 +995,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("treats stream sink failure as post-commit diagnostics", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.FANOUT_STREAM_SINK_POST_COMMIT, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const calls: number[] = [];
@@ -1022,7 +1031,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("keeps resource reservation semantics identical", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.RESOURCE_RESERVATION, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const resourceIdentity = contractIdentity("resource-scope");
@@ -1087,7 +1096,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("terminalizes resource reservations idempotently", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.RESOURCE_TERMINAL_IDEMPOTENCY, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const resourceIdentity = contractIdentity("resource-terminal");
@@ -1144,7 +1153,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("serializes concurrent resource reserve decisions", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.RESOURCE_CONCURRENT_SERIALIZATION, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const resourceIdentity = contractIdentity("resource-concurrent-reserve");
@@ -1200,7 +1209,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("dedupes concurrent resource reserves by idempotency key", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.RESOURCE_CONCURRENT_IDEMPOTENCY, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const resourceIdentity = contractIdentity("resource-concurrent-idempotency");
@@ -1241,7 +1250,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("keeps quota grant, rate-limit, and malformed-fact semantics identical", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.QUOTA_GRANT_SEMANTICS, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const quotaIdentity = contractIdentity("quota-scope");
@@ -1293,7 +1302,7 @@ export const runRuntimeBackendContractSuite = (
       ),
     );
 
-    it.effect("claims one due dispatch retry across concurrent drainers", () =>
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_CONCURRENT_DRAIN_CLAIM, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const senderIdentity = contractIdentity("concurrent-sender");
@@ -1374,14 +1383,18 @@ export const runRuntimeBackendContractSuite = (
         }),
       ),
     );
-  });
+  }
+  return executions;
 };
 
-export const runDispatchReceiveConcurrencyContract = (
-  name: string,
+const createDispatchReceiveConcurrencyLaw = (
   makeDriver: RuntimeBackendContractDriverFactory,
   options: RuntimeBackendContractSuiteOptions,
-): void => {
+): ReadonlyArray<BackendConformanceLawExecution> => {
+  const executions: BackendConformanceLawExecution[] = [];
+  const law = (lawId: BackendConformanceLawId, effect: () => Effect.Effect<void>): void => {
+    executions.push({ lawId, effect });
+  };
   const contractIdentity = (scopeId: string): BackendProtocolEventIdentity =>
     contractEventIdentity(scopeId, options.runtimeFactOwner);
 
@@ -1398,8 +1411,8 @@ export const runDispatchReceiveConcurrencyContract = (
       }),
     );
 
-  describe(name + " dispatch receive concurrency contract", () => {
-    it.effect("linearizes concurrent dispatch receives by source and idempotency key", () =>
+  {
+    law(BACKEND_CONFORMANCE_LAW_ID.DISPATCH_CONCURRENT_RECEIVE_LINEARIZATION, () =>
       withDriver((driver) =>
         Effect.gen(function* () {
           const senderIdentity = contractIdentity("concurrent-receive-sender");
@@ -1416,7 +1429,7 @@ export const runDispatchReceiveConcurrencyContract = (
             ),
           );
           const acceptResults = yield* promise(() =>
-            Promise.all(envelopes.map((envelope) => driver.receive(receiverIdentity, envelope))),
+            driver.receiveConcurrent(receiverIdentity, envelopes),
           );
 
           expect(acceptResults).toHaveLength(concurrency);
@@ -1449,5 +1462,79 @@ export const runDispatchReceiveConcurrencyContract = (
         }),
       ),
     );
+  }
+  return executions;
+};
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
+
+export const createBackendConformanceLaws = (
+  makeDriver: RuntimeBackendContractDriverFactory,
+  options: RuntimeBackendContractSuiteOptions,
+): ReadonlyArray<BackendConformanceLawExecution> => {
+  const executions = [
+    ...createBaseBackendConformanceLaws(makeDriver, options),
+    ...createDispatchReceiveConcurrencyLaw(makeDriver, options),
+  ];
+  const expected = BACKEND_CONFORMANCE_LAWS.map((entry) => entry.id);
+  const actual = executions.map((entry) => entry.lawId);
+  if (
+    actual.length !== expected.length ||
+    actual.some((lawId, index) => lawId !== expected[index])
+  ) {
+    throw new Error("backend conformance executable laws do not exactly cover the core manifest");
+  }
+  return executions;
+};
+
+export interface BackendConformanceRegistrar {
+  readonly describe: (name: string, define: () => void) => void;
+  readonly law: (definition: BackendConformanceLaw, effect: () => Effect.Effect<void>) => void;
+}
+
+export const registerBackendConformanceSuite = (
+  registrar: BackendConformanceRegistrar,
+  name: string,
+  makeDriver: RuntimeBackendContractDriverFactory,
+  options: RuntimeBackendContractSuiteOptions,
+): void => {
+  const executions = createBackendConformanceLaws(makeDriver, options);
+  registrar.describe(`${name} backend conformance`, () => {
+    for (const [index, execution] of executions.entries()) {
+      registrar.law(BACKEND_CONFORMANCE_LAWS[index]!, execution.effect);
+    }
   });
+};
+
+export const runBackendConformance = async (
+  backendId: string,
+  makeDriver: RuntimeBackendContractDriverFactory,
+  options: RuntimeBackendContractSuiteOptions,
+): Promise<BackendConformanceReport> => {
+  const results: BackendConformanceLawResult[] = [];
+  for (const execution of createBackendConformanceLaws(makeDriver, options)) {
+    try {
+      await Effect.runPromise(execution.effect());
+      results.push({ lawId: execution.lawId, status: "passed", issues: [] });
+    } catch (error) {
+      results.push({
+        lawId: execution.lawId,
+        status: "failed",
+        issues: [{ code: "law.failed", message: errorMessage(error) }],
+      });
+    }
+  }
+  const report: BackendConformanceReport = {
+    protocolVersion: BACKEND_CONFORMANCE_PROTOCOL_VERSION,
+    backendId,
+    capabilities: BACKEND_CONFORMANCE_REQUIRED_CAPABILITIES,
+    results,
+    ok: results.every((result) => result.status === "passed"),
+  };
+  const validation = validateBackendConformanceReport(report);
+  if (!validation.ok) {
+    throw new Error(`invalid backend conformance report: ${validation.issues.join(", ")}`);
+  }
+  return validation.report;
 };

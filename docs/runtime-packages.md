@@ -34,63 +34,63 @@ Audience is declared per package entrypoint, not per package.
 
 <!-- agentos:generated entrypoint-audience-map:start -->
 
-| Entrypoint                                          | Audience                           | Capability                                                                                 |
-| --------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `@agent-os/core`                                    | `advanced`                         | neutral substrate algebra and brands                                                       |
-| `@agent-os/core/abort`                              | `advanced`                         | abort vocabulary                                                                           |
-| `@agent-os/core/agent-schema`                       | `advanced`                         | agent schema authoring algebra                                                             |
-| `@agent-os/core/authored-value`                     | `advanced`                         | authored value ownership                                                                   |
-| `@agent-os/core/backend-protocol`                   | `advanced`                         | backend protocol DTOs                                                                      |
-| `@agent-os/core/backend-protocol/reference`         | `advanced`                         | backend protocol reference helpers                                                         |
-| `@agent-os/core/boundary-contract`                  | `advanced`                         | boundary contract declarations                                                             |
-| `@agent-os/core/carrier`                            | `advanced`                         | carrier algebra                                                                            |
-| `@agent-os/core/context`                            | `advanced`                         | context value helpers                                                                      |
-| `@agent-os/core/effect-claim`                       | `advanced`                         | effect claim vocabulary                                                                    |
-| `@agent-os/core/errors`                             | `advanced`                         | shared error classes                                                                       |
-| `@agent-os/core/extensions`                         | `advanced`                         | extension declarations                                                                     |
-| `@agent-os/core/live-edge`                          | `advanced`                         | live edge protocol                                                                         |
-| `@agent-os/core/llm-protocol`                       | `advanced`                         | LLM protocol DTOs                                                                          |
-| `@agent-os/core/material-ref`                       | `advanced`                         | material refs                                                                              |
-| `@agent-os/core/projection`                         | `advanced`                         | projection algebra                                                                         |
-| `@agent-os/core/quota`                              | `advanced`                         | quota declarations                                                                         |
-| `@agent-os/core/recorded-value`                     | `advanced`                         | recorded value algebra                                                                     |
-| `@agent-os/core/ref-resolver`                       | `advanced`                         | material ref resolution                                                                    |
-| `@agent-os/core/runtime-protocol`                   | `generated-only`                   | runtime DTOs emitted by generated targets                                                  |
-| `@agent-os/core/runtime-scope`                      | `advanced`                         | runtime scope helpers                                                                      |
-| `@agent-os/core/settlement-contract`                | `advanced`                         | settlement contract algebra                                                                |
-| `@agent-os/core/telemetry-protocol`                 | `advanced`                         | telemetry protocol DTOs                                                                    |
-| `@agent-os/core/tools`                              | `generated-only`                   | tool definitions emitted by generated targets                                              |
-| `@agent-os/core/types`                              | `advanced`                         | shared type helpers                                                                        |
-| `@agent-os/core/workspace-agent`                    | `advanced`                         | workspace agent command/projection vocabulary                                              |
-| `@agent-os/runtime`                                 | `advanced`                         | backend-neutral runtime service algebra                                                    |
-| `@agent-os/runtime/admission`                       | `advanced`                         | admission service contract                                                                 |
-| `@agent-os/runtime/ag-ui`                           | `advanced`                         | AG-UI wire projection                                                                      |
-| `@agent-os/runtime/cloudflare`                      | `generated-only`, `advanced`       | Cloudflare Durable Object runtime adapter                                                  |
-| `@agent-os/runtime/cloudflare/do-rpc`               | `advanced`                         | Cloudflare DO RPC bridge                                                                   |
-| `@agent-os/runtime/cloudflare/ops-api`              | `advanced`                         | Cloudflare ops API bridge                                                                  |
-| `@agent-os/runtime/capability`                      | `generated-only`, `advanced`       | capability contract declarations and install graph resolver                                |
-| `@agent-os/runtime/channel`                         | `generated-only`, `advanced`       | pure verified inbound channel contract for generated targets                               |
-| `@agent-os/runtime/external-effect`                 | `advanced`                         | vocabulary-neutral idempotent external-effect attempt runner and attempt projection        |
-| `@agent-os/runtime/schedule`                        | `generated-only`, `advanced`       | pure UTC time ingress contract and schedule fire history projection for generated targets  |
-| `@agent-os/runtime/in-memory`                       | `advanced`                         | in-memory runtime adapter                                                                  |
-| `@agent-os/runtime/local`                           | `generated-only`, `advanced`       | local node workspace runtime lowerer and dev/test facade                                   |
-| `@agent-os/runtime/llm-effect-ai`                   | `advanced`                         | provider-neutral Effect AI LLM transport adapter                                           |
-| `@agent-os/runtime/llm-effect-ai/openai-compatible` | `generated-only`, `advanced`       | OpenAI-compatible chat-completions transport adapter                                       |
-| `@agent-os/runtime/llm-effect-ai/anthropic`         | `advanced`                         | Anthropic Effect AI provider adapter                                                       |
-| `@agent-os/runtime/node`                            | `advanced`                         | Node runtime adapter                                                                       |
-| `@agent-os/runtime/run-projector`                   | `generated-only`, `advanced`       | runtime run projection helpers                                                             |
-| `@agent-os/runtime/sse-http`                        | `generated-only`, `advanced`       | SSE HTTP helpers                                                                           |
-| `@agent-os/runtime/telemetry-otlp`                  | `advanced`                         | OTLP telemetry projection                                                                  |
-| `@agent-os/runtime/testing`                         | `advanced`                         | deterministic in-memory WorkspaceEnv fixture and external-effect conformance report helper |
-| `@agent-os/runtime/workspace-agent`                 | `generated-only`                   | generated workspace agent host types                                                       |
-| `@agent-os/runtime/workspace-binding`               | `generated-only`                   | generated workspace tool binding                                                           |
-| `@agent-os/client`                                  | `default-direct`                   | transport-neutral client store and runtime ledger stream decoder                           |
-| `@agent-os/client/react`                            | `default-direct`                   | React client adapter                                                                       |
-| `@agent-os/client/svelte`                           | `default-direct`, `generated-only` | Svelte client adapter                                                                      |
-| `@agent-os/client/product-shell-client`             | `default-direct`                   | product-shell client composition for product commands plus runtime ledger projection       |
-| `@agent-os/client/workspace-agent`                  | `generated-only`                   | generated workspace agent client                                                           |
-| `@agent-os/evals`                                   | `default-direct`                   | generated app eval authoring DSL                                                           |
-| `@agent-os/cli`                                     | `default-direct`                   | developer CLI command package                                                              |
+| Entrypoint                                          | Audience                           | Capability                                                                                                 |
+| --------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@agent-os/core`                                    | `advanced`                         | neutral substrate algebra and brands                                                                       |
+| `@agent-os/core/abort`                              | `advanced`                         | abort vocabulary                                                                                           |
+| `@agent-os/core/agent-schema`                       | `advanced`                         | agent schema authoring algebra                                                                             |
+| `@agent-os/core/authored-value`                     | `advanced`                         | authored value ownership                                                                                   |
+| `@agent-os/core/backend-protocol`                   | `advanced`                         | backend protocol DTOs, conformance manifest, and report validation                                         |
+| `@agent-os/core/backend-protocol/reference`         | `advanced`                         | backend protocol reference helpers                                                                         |
+| `@agent-os/core/boundary-contract`                  | `advanced`                         | boundary contract declarations                                                                             |
+| `@agent-os/core/carrier`                            | `advanced`                         | carrier algebra                                                                                            |
+| `@agent-os/core/context`                            | `advanced`                         | context value helpers                                                                                      |
+| `@agent-os/core/effect-claim`                       | `advanced`                         | effect claim vocabulary                                                                                    |
+| `@agent-os/core/errors`                             | `advanced`                         | shared error classes                                                                                       |
+| `@agent-os/core/extensions`                         | `advanced`                         | extension declarations                                                                                     |
+| `@agent-os/core/live-edge`                          | `advanced`                         | live edge protocol                                                                                         |
+| `@agent-os/core/llm-protocol`                       | `advanced`                         | LLM protocol DTOs                                                                                          |
+| `@agent-os/core/material-ref`                       | `advanced`                         | material refs                                                                                              |
+| `@agent-os/core/projection`                         | `advanced`                         | projection algebra                                                                                         |
+| `@agent-os/core/quota`                              | `advanced`                         | quota declarations                                                                                         |
+| `@agent-os/core/recorded-value`                     | `advanced`                         | recorded value algebra                                                                                     |
+| `@agent-os/core/ref-resolver`                       | `advanced`                         | material ref resolution                                                                                    |
+| `@agent-os/core/runtime-protocol`                   | `generated-only`                   | runtime DTOs emitted by generated targets                                                                  |
+| `@agent-os/core/runtime-scope`                      | `advanced`                         | runtime scope helpers                                                                                      |
+| `@agent-os/core/settlement-contract`                | `advanced`                         | settlement contract algebra                                                                                |
+| `@agent-os/core/telemetry-protocol`                 | `advanced`                         | telemetry protocol DTOs                                                                                    |
+| `@agent-os/core/tools`                              | `generated-only`                   | tool definitions emitted by generated targets                                                              |
+| `@agent-os/core/types`                              | `advanced`                         | shared type helpers                                                                                        |
+| `@agent-os/core/workspace-agent`                    | `advanced`                         | workspace agent command/projection vocabulary                                                              |
+| `@agent-os/runtime`                                 | `advanced`                         | backend-neutral runtime service algebra                                                                    |
+| `@agent-os/runtime/admission`                       | `advanced`                         | admission service contract                                                                                 |
+| `@agent-os/runtime/ag-ui`                           | `advanced`                         | AG-UI wire projection                                                                                      |
+| `@agent-os/runtime/cloudflare`                      | `generated-only`, `advanced`       | Cloudflare Durable Object runtime adapter                                                                  |
+| `@agent-os/runtime/cloudflare/do-rpc`               | `advanced`                         | Cloudflare DO RPC bridge                                                                                   |
+| `@agent-os/runtime/cloudflare/ops-api`              | `advanced`                         | Cloudflare ops API bridge                                                                                  |
+| `@agent-os/runtime/capability`                      | `generated-only`, `advanced`       | capability contract declarations and install graph resolver                                                |
+| `@agent-os/runtime/channel`                         | `generated-only`, `advanced`       | pure verified inbound channel contract for generated targets                                               |
+| `@agent-os/runtime/external-effect`                 | `advanced`                         | vocabulary-neutral idempotent external-effect attempt runner and attempt projection                        |
+| `@agent-os/runtime/schedule`                        | `generated-only`, `advanced`       | pure UTC time ingress contract and schedule fire history projection for generated targets                  |
+| `@agent-os/runtime/in-memory`                       | `advanced`                         | in-memory runtime adapter                                                                                  |
+| `@agent-os/runtime/local`                           | `generated-only`, `advanced`       | local node workspace runtime lowerer and dev/test facade                                                   |
+| `@agent-os/runtime/llm-effect-ai`                   | `advanced`                         | provider-neutral Effect AI LLM transport adapter                                                           |
+| `@agent-os/runtime/llm-effect-ai/openai-compatible` | `generated-only`, `advanced`       | OpenAI-compatible chat-completions transport adapter                                                       |
+| `@agent-os/runtime/llm-effect-ai/anthropic`         | `advanced`                         | Anthropic Effect AI provider adapter                                                                       |
+| `@agent-os/runtime/node`                            | `advanced`                         | Node runtime adapter                                                                                       |
+| `@agent-os/runtime/run-projector`                   | `generated-only`, `advanced`       | runtime run projection helpers                                                                             |
+| `@agent-os/runtime/sse-http`                        | `generated-only`, `advanced`       | SSE HTTP helpers                                                                                           |
+| `@agent-os/runtime/telemetry-otlp`                  | `advanced`                         | OTLP telemetry projection                                                                                  |
+| `@agent-os/runtime/testing`                         | `advanced`                         | deterministic in-memory WorkspaceEnv fixture plus reusable backend and external-effect conformance runners |
+| `@agent-os/runtime/workspace-agent`                 | `generated-only`                   | generated workspace agent host types                                                                       |
+| `@agent-os/runtime/workspace-binding`               | `generated-only`                   | generated workspace tool binding                                                                           |
+| `@agent-os/client`                                  | `default-direct`                   | transport-neutral client store and runtime ledger stream decoder                                           |
+| `@agent-os/client/react`                            | `default-direct`                   | React client adapter                                                                                       |
+| `@agent-os/client/svelte`                           | `default-direct`, `generated-only` | Svelte client adapter                                                                                      |
+| `@agent-os/client/product-shell-client`             | `default-direct`                   | product-shell client composition for product commands plus runtime ledger projection                       |
+| `@agent-os/client/workspace-agent`                  | `generated-only`                   | generated workspace agent client                                                                           |
+| `@agent-os/evals`                                   | `default-direct`                   | generated app eval authoring DSL                                                                           |
+| `@agent-os/cli`                                     | `default-direct`                   | developer CLI command package                                                                              |
 
 <!-- agentos:generated entrypoint-audience-map:end -->
 

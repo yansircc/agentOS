@@ -80,6 +80,12 @@ receipts, and external-system outcomes to each scenario's required observation
 keys. The helper validates the report shape; it does not define product facts or
 durable-operation vocabulary.
 
+`./testing` also exposes the executable backend conformance harness. Core owns the
+ordered law manifest and report contract; runtime/testing owns only driver execution.
+`runBackendConformance` runs every required law with a fresh driver and validates the
+result through the core protocol. `registerBackendConformanceSuite` maps the same law
+bodies into a caller-provided test registrar without importing a test framework.
+
 The scenario set is partitioned by executable owner. Runner-owned join
 scenarios are limited to `request_before_effect`,
 `duplicate_attempt_reuses_existing`, `running_replay_uses_caller_request`, and
@@ -839,6 +845,11 @@ product-control-plane lifecycle.
 - `./testing:EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS`
 - `./testing:EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS`
 - `./testing:EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS`
+- `./testing:BackendConformanceLawExecution`
+- `./testing:BackendConformanceRegistrar`
+- `./testing:ContractDispatchReceiver`
+- `./testing:ContractDispatchTargetAdapter`
+- `./testing:createBackendConformanceLaws`
 - `./testing:createInMemoryWorkspaceEnv`
 - `./testing:CreateInMemoryWorkspaceEnvOptions`
 - `./testing:ExternalEffectConformanceAdapter`
@@ -853,6 +864,13 @@ product-control-plane lifecycle.
 - `./testing:externalEffectConformance`
 - `./testing:InMemoryWorkspaceEnvError`
 - `./testing:InMemoryWorkspaceExecScript`
+- `./testing:registerBackendConformanceSuite`
+- `./testing:runBackendConformance`
+- `./testing:RuntimeBackendContractDriver`
+- `./testing:RuntimeBackendContractDriverFactory`
+- `./testing:RuntimeBackendContractSuiteOptions`
+- `./testing:RuntimeBackendDispatchSpec`
+- `./testing:RuntimeBackendLedgerCommitSpec`
 - `./workspace-agent:defineWorkspaceAgentMount`
 - `./workspace-agent:isWorkspaceAgentCommandName`
 - `./workspace-agent:isWorkspaceAgentProjectionName`

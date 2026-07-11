@@ -12,6 +12,11 @@ Runtime code expresses programs against Effect Tags. It does not import Worker
 modules, Durable Object state, SQL storage implementations, or platform alarm
 APIs.
 
+The `./testing` subpath executes the core-owned backend conformance manifest against
+an adapter-provided driver. The public programmatic runner has no Vitest dependency,
+creates and disposes one driver per law, and returns a core-validated report. Repo
+test runners register those same law bodies through an injected registrar.
+
 Effect AI provider peers are subpath-local by contract. The
 `llm-effect-ai/openai-compatible` subpath imports no Anthropic provider package
 and is covered by packed consumer proof without `@effect/ai-anthropic`

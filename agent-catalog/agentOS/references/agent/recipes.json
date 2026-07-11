@@ -39,7 +39,7 @@
       "commands": ["pnpm --filter @agent-os/core test", "pnpm --filter @agent-os/core test"],
       "evidence": [
         "packages/core/test/kernel/effect-claim.test.ts",
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
+        "packages/runtime/src/testing/backend-conformance.ts"
       ],
       "next": ["recipe.projection-reader", "recipe.streaming-chatbot"]
     },

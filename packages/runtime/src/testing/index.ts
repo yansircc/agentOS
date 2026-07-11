@@ -19,6 +19,8 @@ import {
   utf8Bytes,
 } from "../workspace-env-core/path-policy";
 
+export * from "./backend-conformance";
+
 /**
  * Scripted result for one exact in-memory workspace command.
  *

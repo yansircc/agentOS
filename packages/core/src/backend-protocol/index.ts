@@ -40,6 +40,7 @@ export {
   normalizeBackendPageLimit,
   type BackendPagePolicy,
 } from "./page-policy";
+export * from "./conformance";
 
 export const DISPATCH_OUTBOUND_REQUESTED = "dispatch.outbound.requested";
 export const DISPATCH_OUTBOUND_ENQUEUED = "dispatch.outbound.enqueued";

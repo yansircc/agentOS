@@ -170,7 +170,8 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { defineExternalEffectAttempt, runExternalEffectAttempt, type DefinedExternalEffectAttempt, type RunExternalEffectAttemptSpec } from "${publicSpecifier("@agent-os/runtime/external-effect")}";`,
       `import { bindWorkspaceToolsForRuntime } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
       `import { createLocalAgentRuntime } from "${publicSpecifier("@agent-os/runtime/local")}";`,
-      `import { EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS, createInMemoryWorkspaceEnv, externalEffectConformance } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
+      `import { EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS, createInMemoryWorkspaceEnv, externalEffectConformance, runBackendConformance, type RuntimeBackendContractDriver, type RuntimeBackendContractDriverFactory } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
+      `import { BACKEND_CONFORMANCE_LAWS, validateBackendConformanceReport } from "${publicSpecifier("@agent-os/core/backend-protocol")}";`,
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { LlmTransport, type LlmTransportRouteDescriptor } from "${publicSpecifier("@agent-os/core/llm-protocol")}";`,
       `import type { SubmitRunInput } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
@@ -184,6 +185,11 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "void createInMemoryWorkspaceEnv;",
       "void externalEffectConformance;",
       "void EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS;",
+      "void runBackendConformance;",
+      "void BACKEND_CONFORMANCE_LAWS;",
+      "void validateBackendConformanceReport;",
+      "const _brokenBackendFactory: RuntimeBackendContractDriverFactory = () => new Proxy({ bindingRef: { provider: 'broken', bindingKind: 'test', ref: 'broken' }, addHandler: () => ({ unsubscribe: () => undefined }), dispose: async () => undefined } as unknown as RuntimeBackendContractDriver, { get: (target, key) => key === 'then' ? undefined : key in target ? target[key as keyof RuntimeBackendContractDriver] : async () => { throw new Error(`intentional broken backend: ${String(key)}`); } });",
+      "void _brokenBackendFactory;",
       "void deterministicToolExecution;",
       "type _SubmitRunInput = SubmitRunInput;",
       "type _ExternalEffectSpec = RunExternalEffectAttemptSpec<{ readonly input: string }, never, { readonly status: 'ok' }, { readonly requestId: string }, string, never, never>;",
@@ -216,7 +222,8 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { defineExternalEffectAttempt, runExternalEffectAttempt } from "${publicSpecifier("@agent-os/runtime/external-effect")}";`,
       `import { AG_UI_WIRE_COMPATIBILITY } from "${publicSpecifier("@agent-os/runtime/ag-ui")}";`,
       `import { workspaceEnvMaterialRef } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
-      `import { EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS, createInMemoryWorkspaceEnv, externalEffectConformance } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
+      `import { EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS, createInMemoryWorkspaceEnv, externalEffectConformance, runBackendConformance } from "${publicSpecifier("@agent-os/runtime/testing")}";`,
+      `import { BACKEND_CONFORMANCE_LAWS, BACKEND_CONFORMANCE_LAW_ID, validateBackendConformanceReport } from "${publicSpecifier("@agent-os/core/backend-protocol")}";`,
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "const testingEnv = createInMemoryWorkspaceEnv({",
@@ -250,7 +257,11 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "  }),",
       "}));",
       "if (conformanceReport.status !== 'passed' || conformanceReport.scenarios.length !== EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS.length) throw new Error('external-effect conformance report failed');",
-      "if (!compileAgentTree || !ABORT || !triggerParseOk || !defineExternalEffectAttempt || !runExternalEffectAttempt || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !externalEffectConformance || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
+      "const brokenBackendFactory = () => new Proxy({ bindingRef: { provider: 'broken', bindingKind: 'test', ref: 'broken' }, addHandler: () => ({ unsubscribe: () => undefined }), dispose: async () => undefined }, { get: (target, key) => key === 'then' ? undefined : key in target ? target[key] : async () => { throw new Error(`intentional broken backend: ${String(key)}`); } });",
+      "const backendReport = await runBackendConformance('packed-broken-backend', brokenBackendFactory, { runtimeFactOwner: '@agent-os/packed-consumer' });",
+      "if (backendReport.results.length !== BACKEND_CONFORMANCE_LAWS.length || backendReport.results.find((result) => result.lawId === BACKEND_CONFORMANCE_LAW_ID.LEDGER_READ_PREFIX)?.status !== 'failed') throw new Error('backend conformance did not identify the broken law');",
+      "if (validateBackendConformanceReport(backendReport).ok !== true) throw new Error('backend conformance report failed core validation');",
+      "if (!compileAgentTree || !ABORT || !triggerParseOk || !defineExternalEffectAttempt || !runExternalEffectAttempt || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !externalEffectConformance || !runBackendConformance || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
@@ -732,9 +743,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     "Review generated consumer output",
     "REVIEW_BODY_MARKER_659",
     "references/checklist.md",
-    "REVIEW_REFERENCE_MARKER_659",
     "scripts/audit.sh",
-    "REVIEW_SCRIPT_MARKER_659",
     "generatedLoadedSkill",
     "generatedSkillFilePathCatalog",
     "${skill.name}: ${skill.description}",
@@ -742,6 +751,18 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   for (const fragment of requiredSkillFragments) {
     if (!generatedText.includes(fragment)) {
       fail(`generated target consumer missing packaged skill fragment ${fragment}`);
+    }
+  }
+  const skillResources = readJson(path.join(dir, ".agentos", "generated", "skill-resources.json"));
+  const decodedSkillResources = Object.values(skillResources).map((encoded) =>
+    Buffer.from(encoded, "base64").toString("utf8"),
+  );
+  for (const expectedResource of ["REVIEW_REFERENCE_MARKER_659", "REVIEW_SCRIPT_MARKER_659"]) {
+    if (!decodedSkillResources.includes(expectedResource)) {
+      fail(`generated target consumer missing opaque skill resource ${expectedResource}`);
+    }
+    if (generatedText.includes(expectedResource)) {
+      fail(`generated target consumer leaked opaque skill resource ${expectedResource}`);
     }
   }
   for (const forbiddenFragment of [

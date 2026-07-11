@@ -40,8 +40,8 @@
     },
     {
       "path": "docs/agent/errors.json",
-      "sha256": "6bcff3128e6c311366e643817bc449e7e19621547bb17d7efb6372f25adeec9b",
-      "byteSize": 25757
+      "sha256": "b152bcadea953a52e4005760a3d10b9902f024fe7aa7082635da1f24edf44c21",
+      "byteSize": 25673
     },
     {
       "path": "docs/agent/external-vocabulary.source.json",
@@ -55,33 +55,33 @@
     },
     {
       "path": "docs/agent/invariant-matrix.json",
-      "sha256": "83b57dae5bb9a237c72a8704715f85f223928c24638a2a3cece04d667d11955a",
-      "byteSize": 15208
+      "sha256": "d2f53615fea4b823e5a8f0a4c792b699ea56067ed4b88ed168a181d7e00188ff",
+      "byteSize": 15187
     },
     {
       "path": "docs/agent/invariants.source.json",
-      "sha256": "cbf387d650629e88efa23d13bd1856146df7eb95cdb27f3d458d251322b7906d",
-      "byteSize": 7071
+      "sha256": "1013bb89ce96efc87056e50b73fc5c5064d2fb136e1cc79ec0d2989db01c1d93",
+      "byteSize": 7050
     },
     {
       "path": "docs/agent/primitive-evidence.source.json",
-      "sha256": "c5909934699fb3c76bf66fe4c5c658e2db9a87309261506f1f5c50fa6410b45b",
-      "byteSize": 8607
+      "sha256": "6d4bee01fe0410cb2546fa43495184974973ad72284204e51ec03856cc5a8371",
+      "byteSize": 8565
     },
     {
       "path": "docs/agent/primitives.json",
-      "sha256": "4bcd854d44eda53d1b4160d195be0e6af1156678439b8f222c88c5d91692366e",
-      "byteSize": 40874
+      "sha256": "bfa7782d3c7e8c4fc3a49ec02e0187da52593716a26446b34ec251dd4c39a864",
+      "byteSize": 40832
     },
     {
       "path": "docs/agent/recipes.json",
-      "sha256": "8ac8f559322b519836ed9327f7f3682bacd2a7e06c7ecd1708778aa089a7555a",
-      "byteSize": 5377
+      "sha256": "812353cc57f3b0b771cd451364ca48415b1575870e7dfa31495f06f8f3a8ef7c",
+      "byteSize": 5356
     },
     {
       "path": "docs/agent/recipes.source.json",
-      "sha256": "234897df8e34d813138ce8557d45eef2aaae97283cf279cdce96d15ced75826b",
-      "byteSize": 5283
+      "sha256": "08f6f28add6881078503beb5142d3dde024266d0bc797a2a0f926a7c9991e290",
+      "byteSize": 5262
     },
     {
       "path": "docs/agent/schemas/capability-rules.source.schema.json",
@@ -120,18 +120,18 @@
     },
     {
       "path": "docs/api/core.md",
-      "sha256": "de867a5b23f104fb40d6ae7cd8b454eb566ab0aed3f64a2b4ca6caedee9584e3",
-      "byteSize": 71054
+      "sha256": "8945f20487b71f61fad9a7f21c8479dd49bc37a08d0c7819af9a424805a9e4ff",
+      "byteSize": 71843
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "279f8dde1672ce9d78b0395e7f5c8858b1fc00b565b022576d0fd45d45d5f11c",
-      "byteSize": 36040
+      "sha256": "2a140401f4eb7eec4fc4154ee505dc994f5111d36fed273a7f58815a8ff2c60b",
+      "byteSize": 36986
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "a63c877e0fb0a744d28d13c3208289f121427a6e99f663dbdb04d4c686749d77",
-      "byteSize": 29957
+      "sha256": "f18c1b9cb3d2830af477bbbfaaae1fb57e09e957c93564c02a3fb6305455eaab",
+      "byteSize": 30869
     },
     {
       "path": "docs/start-here.md",
@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/surface.json",
-      "sha256": "00c5d409d7a9c45de3321d50b4293993dc5c5b580f04a9826ead952abf9b475d",
-      "byteSize": 19373
+      "sha256": "9d45db07f86088bae95a32c5db549b7355b626aa4b0815bd42a607ede2b45066",
+      "byteSize": 19434
     },
     {
       "path": "package.json",
@@ -187,18 +187,18 @@
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "b2cb1640a3e1e34539ad5928bc1a2bae28dcab262831e8a46252012eb85cc36c",
-      "byteSize": 14263
+      "sha256": "07ba5e6417b5dc6de481163222e27f3f38914276c118f8dc9d53fd9809457fbf",
+      "byteSize": 15175
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/core.md",
-      "sha256": "dfcaeb9dd1ea02ee3939db246f1fcb8a7dd5c2a8679b395b8882981603dbff8d",
-      "byteSize": 71056
+      "sha256": "0e14ed702f1a523e5288d55253971698ea6d92dc585afab14e5001f6ca76213f",
+      "byteSize": 71845
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "4e145e388d4b4d4ede05cfa5e2c0a089d3972f620e0840aca7dca539d8a0c147",
-      "byteSize": 36042
+      "sha256": "80089a598f03cb77229c232012ac43aa26c640102dcac6966ccccafc10bb5626",
+      "byteSize": 36988
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",
@@ -217,13 +217,13 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/recipes.json",
-      "sha256": "8ac8f559322b519836ed9327f7f3682bacd2a7e06c7ecd1708778aa089a7555a",
-      "byteSize": 5377
+      "sha256": "812353cc57f3b0b771cd451364ca48415b1575870e7dfa31495f06f8f3a8ef7c",
+      "byteSize": 5356
     },
     {
       "path": "agent-catalog/agentOS/references/agent/primitives.json",
-      "sha256": "4bcd854d44eda53d1b4160d195be0e6af1156678439b8f222c88c5d91692366e",
-      "byteSize": 40874
+      "sha256": "bfa7782d3c7e8c4fc3a49ec02e0187da52593716a26446b34ec251dd4c39a864",
+      "byteSize": 40832
     },
     {
       "path": "agent-catalog/agentOS/references/agent/decision-graph.json",
@@ -232,13 +232,13 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/errors.json",
-      "sha256": "6bcff3128e6c311366e643817bc449e7e19621547bb17d7efb6372f25adeec9b",
-      "byteSize": 25757
+      "sha256": "b152bcadea953a52e4005760a3d10b9902f024fe7aa7082635da1f24edf44c21",
+      "byteSize": 25673
     },
     {
       "path": "agent-catalog/agentOS/references/agent/invariant-matrix.json",
-      "sha256": "83b57dae5bb9a237c72a8704715f85f223928c24638a2a3cece04d667d11955a",
-      "byteSize": 15208
+      "sha256": "d2f53615fea4b823e5a8f0a4c792b699ea56067ed4b88ed168a181d7e00188ff",
+      "byteSize": 15187
     }
   ],
   "outputHashScope": "all generated files except references/provenance.json to avoid a self-referential hash",

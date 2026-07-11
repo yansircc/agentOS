@@ -229,7 +229,7 @@
         "docs/tutorials/streaming-chatbot.md"
       ],
       "tests": [
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/src/testing/backend-conformance.ts",
         "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts",
         "packages/runtime/test/in-memory/backend-protocol-contract.test.ts"
       ]

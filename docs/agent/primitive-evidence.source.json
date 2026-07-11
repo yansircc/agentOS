@@ -152,7 +152,7 @@
     },
     {
       "primitive": "primitive.runtime.Ledger",
-      "tests": ["packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"]
+      "tests": ["packages/runtime/src/testing/backend-conformance.ts"]
     },
     {
       "primitive": "primitive.runtime.LedgerCommitEventSpec",
@@ -160,7 +160,7 @@
     },
     {
       "primitive": "primitive.runtime.LedgerTruthIdentity",
-      "tests": ["packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"]
+      "tests": ["packages/runtime/src/testing/backend-conformance.ts"]
     },
     {
       "primitive": "primitive.runtime.MaterializedProjectionDefinition",

@@ -1,8 +1,9 @@
 import { ManagedRuntime } from "effect";
-import { describe } from "@effect/vitest";
+import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import {
   DISPATCH_EVENT_KINDS,
+  BACKEND_CONFORMANCE_LAW_ID,
   backendProtocolEventIdentityKey,
   backendProtocolTruthIdentityKey,
   dispatchTargetDelivered,
@@ -15,10 +16,12 @@ import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@age
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 import {
-  runRuntimeBackendContractSuite,
+  registerBackendConformanceSuite,
+  runBackendConformance,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
+} from "@agent-os/runtime/testing";
+import { VITEST_BACKEND_CONFORMANCE_REGISTRAR } from "../backend-conformance-registrar";
 
 const bindingRef = bindingMaterialRef({
   provider: "test",
@@ -154,6 +157,8 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
       return handle.runPromise(dispatch.dispatchToScope(spec));
     },
     receive: acceptDispatch,
+    receiveConcurrent: (identity, envelopes) =>
+      Promise.all(envelopes.map((envelope) => acceptDispatch(identity, envelope))),
     drainDispatchDue: async (identity, now) => {
       const handle = runtime(identity);
       const ledger = await handle.runPromise(Ledger);
@@ -217,8 +222,110 @@ const makeInMemoryContractDriver = (): RuntimeBackendContractDriver => {
   };
 };
 
-describe("in-memory backend protocol driver", () => {
-  runRuntimeBackendContractSuite("in-memory", makeInMemoryContractDriver, {
-    runtimeFactOwner: RUNTIME_FACT_OWNER,
+registerBackendConformanceSuite(
+  VITEST_BACKEND_CONFORMANCE_REGISTRAR,
+  "in-memory",
+  makeInMemoryContractDriver,
+  { runtimeFactOwner: RUNTIME_FACT_OWNER },
+);
+
+const expectBrokenLaw = async (
+  backendId: string,
+  mutate: (driver: RuntimeBackendContractDriver) => RuntimeBackendContractDriver,
+  lawId: string,
+): Promise<void> => {
+  const report = await runBackendConformance(
+    backendId,
+    () => mutate(makeInMemoryContractDriver()),
+    { runtimeFactOwner: RUNTIME_FACT_OWNER },
+  );
+  expect(report.ok).toBe(false);
+  expect(report.results.find((result) => result.lawId === lawId)?.status).toBe("failed");
+};
+
+describe("backend conformance red cases", () => {
+  it("rejects a backend that lies about page limits", async () => {
+    await expectBrokenLaw(
+      "broken-page-policy",
+      (driver) => ({
+        ...driver,
+        events: (identity, options) =>
+          identity.scopeRef.scopeId === "ledger-prefix" && options?.limit === 2
+            ? driver.events(identity)
+            : driver.events(identity, options),
+      }),
+      BACKEND_CONFORMANCE_LAW_ID.LEDGER_READ_PREFIX,
+    );
+  });
+
+  it("rejects a backend that exposes a partial batch after rejection", async () => {
+    await expectBrokenLaw(
+      "broken-batch-atomicity",
+      (driver) => ({
+        ...driver,
+        commit: async (events) => {
+          if (events.some((event) => event.kind.startsWith("ledger_law.batch"))) {
+            await driver.commit(events.slice(0, 1));
+            throw new Error("partial batch committed");
+          }
+          return driver.commit(events);
+        },
+      }),
+      BACKEND_CONFORMANCE_LAW_ID.LEDGER_BATCH_ATOMICITY,
+    );
+  });
+
+  it("rejects acknowledgement before a durable read", async () => {
+    await expectBrokenLaw(
+      "broken-durable-ack",
+      (driver) => ({
+        ...driver,
+        events: (identity, options) =>
+          identity.scopeRef.scopeId === "ledger-durable-ack"
+            ? Promise.resolve([])
+            : driver.events(identity, options),
+      }),
+      BACKEND_CONFORMANCE_LAW_ID.LEDGER_DURABLE_ACK,
+    );
+  });
+
+  it("rejects non-linearized concurrent dispatch receives", async () => {
+    await expectBrokenLaw(
+      "broken-dispatch-linearization",
+      (driver) => ({
+        ...driver,
+        receiveConcurrent: (identity, envelopes) =>
+          driver.receiveConcurrent(
+            identity,
+            envelopes.map((envelope) => ({
+              ...envelope,
+              idempotencyKey: `${envelope.idempotencyKey}:${envelope.outboundEventId}`,
+            })),
+          ),
+      }),
+      BACKEND_CONFORMANCE_LAW_ID.DISPATCH_CONCURRENT_RECEIVE_LINEARIZATION,
+    );
+  });
+
+  it("rejects non-serialized concurrent resource reservations", async () => {
+    await expectBrokenLaw(
+      "broken-resource-serialization",
+      (driver) => {
+        let sharedReservation:
+          | ReturnType<RuntimeBackendContractDriver["reserveResource"]>
+          | undefined;
+        return {
+          ...driver,
+          reserveResource: (identity, spec) => {
+            if (identity.scopeRef.scopeId !== "resource-concurrent-reserve") {
+              return driver.reserveResource(identity, spec);
+            }
+            sharedReservation ??= driver.reserveResource(identity, spec);
+            return sharedReservation;
+          },
+        };
+      },
+      BACKEND_CONFORMANCE_LAW_ID.RESOURCE_CONCURRENT_SERIALIZATION,
+    );
   });
 });

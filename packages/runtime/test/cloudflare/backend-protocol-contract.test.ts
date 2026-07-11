@@ -1,6 +1,5 @@
 import type { EventHandler, LedgerEvent } from "@agent-os/core/types";
 import { ManagedRuntime } from "effect";
-import { describe } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
@@ -20,11 +19,12 @@ import { cloudflareRouteKeyFromScopeRef } from "../../src/cloudflare/ledger/iden
 import { makeCloudflareBackendCoreLayer } from "../../src/cloudflare/runtime-core";
 import { makeInMemoryDurableObjectState } from "./_in-memory-do";
 import {
-  runRuntimeBackendContractSuite,
+  registerBackendConformanceSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
+} from "@agent-os/runtime/testing";
 import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
+import { VITEST_BACKEND_CONFORMANCE_REGISTRAR } from "../backend-conformance-registrar";
 
 const bindingRef = bindingMaterialRef({
   provider: "cloudflare",
@@ -95,7 +95,7 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
   ) => {
     const handle = runtimeFor(identity);
     const dispatch = await handle.runPromise(Dispatch);
-    return handle.runPromise(dispatch.receive(envelope));
+    return handle.runPromise(dispatch.receive({ ...envelope, targetScope: routeKey(identity) }));
   };
 
   const registerDispatchReceiver = (
@@ -200,6 +200,8 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
       return handle.runPromise(dispatch.dispatchToScope(spec));
     },
     receive: acceptDispatch,
+    receiveConcurrent: (identity, envelopes) =>
+      Promise.all(envelopes.map((envelope) => acceptDispatch(identity, envelope))),
     drainDispatchDue: async (identity, now) => {
       const handle = runtimeFor(identity);
       const ledger = await handle.runPromise(Ledger);
@@ -261,8 +263,9 @@ const makeCloudflareDoContractDriver = (): RuntimeBackendContractDriver => {
   };
 };
 
-describe("cloudflare-do backend protocol driver", () => {
-  runRuntimeBackendContractSuite("cloudflare-do", makeCloudflareDoContractDriver, {
-    runtimeFactOwner: RUNTIME_FACT_OWNER,
-  });
-});
+registerBackendConformanceSuite(
+  VITEST_BACKEND_CONFORMANCE_REGISTRAR,
+  "cloudflare-do",
+  makeCloudflareDoContractDriver,
+  { runtimeFactOwner: RUNTIME_FACT_OWNER },
+);

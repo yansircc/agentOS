@@ -14,36 +14,41 @@ algebra, durable trigger authoring, and ledger-derived projections.
 
 ## Audience
 
-| Entrypoint                                          | Audience                     | Capability                                                                                 |
-| --------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------ |
-| `@agent-os/runtime`                                 | `advanced`                   | backend-neutral runtime service algebra                                                    |
-| `@agent-os/runtime/admission`                       | `advanced`                   | admission service contract                                                                 |
-| `@agent-os/runtime/ag-ui`                           | `advanced`                   | AG-UI wire projection                                                                      |
-| `@agent-os/runtime/cloudflare`                      | `generated-only`, `advanced` | Cloudflare Durable Object runtime adapter                                                  |
-| `@agent-os/runtime/cloudflare/do-rpc`               | `advanced`                   | Cloudflare DO RPC bridge                                                                   |
-| `@agent-os/runtime/cloudflare/ops-api`              | `advanced`                   | Cloudflare ops API bridge                                                                  |
-| `@agent-os/runtime/capability`                      | `generated-only`, `advanced` | capability contract declarations and install graph resolver                                |
-| `@agent-os/runtime/channel`                         | `generated-only`, `advanced` | pure verified inbound channel contract for generated targets                               |
-| `@agent-os/runtime/external-effect`                 | `advanced`                   | vocabulary-neutral idempotent external-effect attempt runner and attempt projection        |
-| `@agent-os/runtime/schedule`                        | `generated-only`, `advanced` | pure UTC time ingress contract and schedule fire history projection for generated targets  |
-| `@agent-os/runtime/in-memory`                       | `advanced`                   | in-memory runtime adapter                                                                  |
-| `@agent-os/runtime/local`                           | `generated-only`, `advanced` | local node workspace runtime lowerer and dev/test facade                                   |
-| `@agent-os/runtime/llm-effect-ai`                   | `advanced`                   | provider-neutral Effect AI LLM transport adapter                                           |
-| `@agent-os/runtime/llm-effect-ai/openai-compatible` | `generated-only`, `advanced` | OpenAI-compatible chat-completions transport adapter                                       |
-| `@agent-os/runtime/llm-effect-ai/anthropic`         | `advanced`                   | Anthropic Effect AI provider adapter                                                       |
-| `@agent-os/runtime/node`                            | `advanced`                   | Node runtime adapter                                                                       |
-| `@agent-os/runtime/run-projector`                   | `generated-only`, `advanced` | runtime run projection helpers                                                             |
-| `@agent-os/runtime/sse-http`                        | `generated-only`, `advanced` | SSE HTTP helpers                                                                           |
-| `@agent-os/runtime/telemetry-otlp`                  | `advanced`                   | OTLP telemetry projection                                                                  |
-| `@agent-os/runtime/testing`                         | `advanced`                   | deterministic in-memory WorkspaceEnv fixture and external-effect conformance report helper |
-| `@agent-os/runtime/workspace-agent`                 | `generated-only`             | generated workspace agent host types                                                       |
-| `@agent-os/runtime/workspace-binding`               | `generated-only`             | generated workspace tool binding                                                           |
+| Entrypoint                                          | Audience                     | Capability                                                                                                 |
+| --------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@agent-os/runtime`                                 | `advanced`                   | backend-neutral runtime service algebra                                                                    |
+| `@agent-os/runtime/admission`                       | `advanced`                   | admission service contract                                                                                 |
+| `@agent-os/runtime/ag-ui`                           | `advanced`                   | AG-UI wire projection                                                                                      |
+| `@agent-os/runtime/cloudflare`                      | `generated-only`, `advanced` | Cloudflare Durable Object runtime adapter                                                                  |
+| `@agent-os/runtime/cloudflare/do-rpc`               | `advanced`                   | Cloudflare DO RPC bridge                                                                                   |
+| `@agent-os/runtime/cloudflare/ops-api`              | `advanced`                   | Cloudflare ops API bridge                                                                                  |
+| `@agent-os/runtime/capability`                      | `generated-only`, `advanced` | capability contract declarations and install graph resolver                                                |
+| `@agent-os/runtime/channel`                         | `generated-only`, `advanced` | pure verified inbound channel contract for generated targets                                               |
+| `@agent-os/runtime/external-effect`                 | `advanced`                   | vocabulary-neutral idempotent external-effect attempt runner and attempt projection                        |
+| `@agent-os/runtime/schedule`                        | `generated-only`, `advanced` | pure UTC time ingress contract and schedule fire history projection for generated targets                  |
+| `@agent-os/runtime/in-memory`                       | `advanced`                   | in-memory runtime adapter                                                                                  |
+| `@agent-os/runtime/local`                           | `generated-only`, `advanced` | local node workspace runtime lowerer and dev/test facade                                                   |
+| `@agent-os/runtime/llm-effect-ai`                   | `advanced`                   | provider-neutral Effect AI LLM transport adapter                                                           |
+| `@agent-os/runtime/llm-effect-ai/openai-compatible` | `generated-only`, `advanced` | OpenAI-compatible chat-completions transport adapter                                                       |
+| `@agent-os/runtime/llm-effect-ai/anthropic`         | `advanced`                   | Anthropic Effect AI provider adapter                                                                       |
+| `@agent-os/runtime/node`                            | `advanced`                   | Node runtime adapter                                                                                       |
+| `@agent-os/runtime/run-projector`                   | `generated-only`, `advanced` | runtime run projection helpers                                                                             |
+| `@agent-os/runtime/sse-http`                        | `generated-only`, `advanced` | SSE HTTP helpers                                                                                           |
+| `@agent-os/runtime/telemetry-otlp`                  | `advanced`                   | OTLP telemetry projection                                                                                  |
+| `@agent-os/runtime/testing`                         | `advanced`                   | deterministic in-memory WorkspaceEnv fixture plus reusable backend and external-effect conformance runners |
+| `@agent-os/runtime/workspace-agent`                 | `generated-only`             | generated workspace agent host types                                                                       |
+| `@agent-os/runtime/workspace-binding`               | `generated-only`             | generated workspace tool binding                                                                           |
 
 ## Invariant
 
 Runtime code expresses programs against Effect Tags. It does not import Worker
 modules, Durable Object state, SQL storage implementations, or platform alarm
 APIs.
+
+The `./testing` subpath executes the core-owned backend conformance manifest against
+an adapter-provided driver. The public programmatic runner has no Vitest dependency,
+creates and disposes one driver per law, and returns a core-validated report. Repo
+test runners register those same law bodies through an injected registrar.
 
 Effect AI provider peers are subpath-local by contract. The
 `llm-effect-ai/openai-compatible` subpath imports no Anthropic provider package

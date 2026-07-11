@@ -678,7 +678,7 @@
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "runtime",
       "testEvidence": {
-        "tests": ["packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"]
+        "tests": ["packages/runtime/src/testing/backend-conformance.ts"]
       }
     },
     {
@@ -712,7 +712,7 @@
       "docs": "docs/concepts/durable-truth.md",
       "capabilityKind": "runtime",
       "testEvidence": {
-        "tests": ["packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"]
+        "tests": ["packages/runtime/src/testing/backend-conformance.ts"]
       }
     },
     {

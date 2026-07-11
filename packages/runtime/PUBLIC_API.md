@@ -750,6 +750,11 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./testing:EXTERNAL_EFFECT_ADAPTER_OBSERVED_SCENARIOS`
 - `./testing:EXTERNAL_EFFECT_CONFORMANCE_SCENARIOS`
 - `./testing:EXTERNAL_EFFECT_RUNNER_JOIN_SCENARIOS`
+- `./testing:BackendConformanceLawExecution`
+- `./testing:BackendConformanceRegistrar`
+- `./testing:ContractDispatchReceiver`
+- `./testing:ContractDispatchTargetAdapter`
+- `./testing:createBackendConformanceLaws`
 - `./testing:createInMemoryWorkspaceEnv`
 - `./testing:CreateInMemoryWorkspaceEnvOptions`
 - `./testing:ExternalEffectConformanceAdapter`
@@ -764,6 +769,13 @@ Status: 0.5.x active development. Public exports are listed for accidental expor
 - `./testing:externalEffectConformance`
 - `./testing:InMemoryWorkspaceEnvError`
 - `./testing:InMemoryWorkspaceExecScript`
+- `./testing:registerBackendConformanceSuite`
+- `./testing:runBackendConformance`
+- `./testing:RuntimeBackendContractDriver`
+- `./testing:RuntimeBackendContractDriverFactory`
+- `./testing:RuntimeBackendContractSuiteOptions`
+- `./testing:RuntimeBackendDispatchSpec`
+- `./testing:RuntimeBackendLedgerCommitSpec`
 - `./workspace-agent:defineWorkspaceAgentMount`
 - `./workspace-agent:isWorkspaceAgentCommandName`
 - `./workspace-agent:isWorkspaceAgentProjectionName`

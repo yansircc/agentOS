@@ -14,6 +14,10 @@ adapter, target ambient implementation, or disputed event-projection fold.
 Core is a neutral axioms package. Package names are build metadata only; durable owner
 identity remains the frozen owner id string declared by the owning protocol or carrier.
 
+Backend conformance facts are core algebra. The backend-protocol subpath owns the
+protocol version, ordered law manifest, capability matrix, report schema, and positive
+validator. It does not import a test runner or execute backend drivers.
+
 ## Minimal Usage
 
 ```ts

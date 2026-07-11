@@ -65,7 +65,7 @@
         {
           "subpath": "./backend-protocol",
           "audiences": ["advanced"],
-          "capability": "backend protocol DTOs"
+          "capability": "backend protocol DTOs, conformance manifest, and report validation"
         },
         {
           "subpath": "./backend-protocol/reference",
@@ -305,7 +305,7 @@
         {
           "subpath": "./testing",
           "audiences": ["advanced"],
-          "capability": "deterministic in-memory WorkspaceEnv fixture and external-effect conformance report helper",
+          "capability": "deterministic in-memory WorkspaceEnv fixture plus reusable backend and external-effect conformance runners",
           "surfaceClass": "stable-contract"
         },
         {

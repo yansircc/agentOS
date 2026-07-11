@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { describe } from "@effect/vitest";
+import { Effect } from "effect";
+import { describe, it } from "vite-plus/test";
 import type {
   BackendProtocolEventIdentity,
   DispatchEnvelope,
@@ -15,10 +16,18 @@ import {
   type BackendProtocolContractTestDO,
 } from "./test-worker";
 import {
-  runRuntimeBackendContractSuite,
+  registerBackendConformanceSuite,
+  type BackendConformanceRegistrar,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
+} from "@agent-os/runtime/testing";
+
+const CLOUDFLARE_BACKEND_CONFORMANCE_REGISTRAR: BackendConformanceRegistrar = {
+  describe,
+  law: (definition, effect) => {
+    it(`${definition.id}: ${definition.title}`, () => Effect.runPromise(effect()));
+  },
+};
 
 interface TestEnv {
   readonly BACKEND_PROTOCOL_CONTRACT_DO: DurableObjectNamespace<BackendProtocolContractTestDO>;
@@ -127,7 +136,24 @@ const makeCloudflareProductionRuntimeContractDriver = (): RuntimeBackendContract
     dispatchToScope: (identity, spec) =>
       withInstance(identity, (instance) => instance.dispatchToScope(identity, spec)),
     receive: (identity, envelope) =>
-      withInstance(identity, (instance) => instance.__agentosReceiveDispatch(envelope)),
+      withInstance(identity, (instance) =>
+        instance.__agentosReceiveDispatch({ ...envelope, targetScope: routeKey(identity) }),
+      ),
+    receiveConcurrent: async (identity, envelopes) => {
+      const key = routeKey(identity);
+      await withInstance(identity, () => undefined);
+      const stub = stubForRoute(key);
+      const results = [];
+      for (const envelope of envelopes) {
+        const received = await stub.__agentosTryReceiveDispatch({
+          ...envelope,
+          targetScope: key,
+        });
+        if (!received.ok) throw new Error(received.error);
+        results.push(received.result);
+      }
+      return results;
+    },
     drainDispatchDue: (identity, now) =>
       withInstance(identity, (instance) => instance.drainDispatchDue(identity, now)),
     nextDueAt: (identity) => withInstance(identity, (instance) => instance.nextDueAt(identity)),
@@ -157,12 +183,9 @@ const makeCloudflareProductionRuntimeContractDriver = (): RuntimeBackendContract
   };
 };
 
-describe("cloudflare-do production runtime backend protocol driver", () => {
-  runRuntimeBackendContractSuite(
-    "cloudflare-do production runtime",
-    makeCloudflareProductionRuntimeContractDriver,
-    {
-      runtimeFactOwner: RUNTIME_FACT_OWNER,
-    },
-  );
-});
+registerBackendConformanceSuite(
+  CLOUDFLARE_BACKEND_CONFORMANCE_REGISTRAR,
+  "cloudflare-do production runtime",
+  makeCloudflareProductionRuntimeContractDriver,
+  { runtimeFactOwner: RUNTIME_FACT_OWNER },
+);

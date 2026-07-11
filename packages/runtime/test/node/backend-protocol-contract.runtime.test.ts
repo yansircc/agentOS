@@ -8,12 +8,12 @@ import { DISPATCH_EVENT_KINDS, DELIVERY_RETRY_TRIGGER_KIND } from "@agent-os/cor
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../../src/node";
 import { PsqlCli } from "../../src/node/host";
 import {
-  runDispatchReceiveConcurrencyContract,
-  runRuntimeBackendContractSuite,
+  registerBackendConformanceSuite,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
-} from "../../../core/test/backend-protocol/contract/runtime-backend-contract";
+} from "@agent-os/runtime/testing";
 import { startPostgresRuntimeHarnessEffect, type PostgresRuntimeHarness } from "./postgres-harness";
+import { VITEST_BACKEND_CONFORMANCE_REGISTRAR } from "../backend-conformance-registrar";
 
 const bindingRef = bindingMaterialRef({
   provider: "node",
@@ -68,6 +68,8 @@ const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractD
     fireDue: (identity, now) => backend.fireDue(identity, now),
     dispatchToScope: (identity, spec) => backend.dispatchToScope(identity, spec),
     receive: (identity, envelope) => backend.receive(identity, envelope),
+    receiveConcurrent: (identity, envelopes) =>
+      Promise.all(envelopes.map((envelope) => backend.receive(identity, envelope))),
     drainDispatchDue: (identity, now) => backend.drainDispatchDue(identity, now),
     nextDueAt: (identity) => backend.nextDueAt(identity),
     pendingDueCount: (identity) => backend.pendingDueCount(identity),
@@ -82,15 +84,15 @@ const makeNodePostgresContractDriver = async (): Promise<RuntimeBackendContractD
   };
 };
 
-describe("node-postgres backend protocol driver", () => {
-  runRuntimeBackendContractSuite("node-postgres", makeNodePostgresContractDriver, {
+registerBackendConformanceSuite(
+  VITEST_BACKEND_CONFORMANCE_REGISTRAR,
+  "node-postgres",
+  makeNodePostgresContractDriver,
+  {
     runtimeFactOwner: RUNTIME_FACT_OWNER,
     storageErrorTag: "agent_os.sql_error",
-  });
-  runDispatchReceiveConcurrencyContract("node-postgres", makeNodePostgresContractDriver, {
-    runtimeFactOwner: RUNTIME_FACT_OWNER,
-  });
-});
+  },
+);
 
 describe("node-postgres event+due atomicity", () => {
   const withDueInsertFailure = async (

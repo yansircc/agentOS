@@ -69,7 +69,7 @@
       "statement": "For each scopeRef and effectAuthorityRef, ledger facts are the only durable truth and observable state is recomputed from those facts.",
       "docs": "docs/concepts/durable-truth.md",
       "tests": [
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/src/testing/backend-conformance.ts",
         "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts",
         "packages/runtime/test/in-memory/backend-protocol-contract.test.ts"
       ]

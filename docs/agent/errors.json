@@ -214,7 +214,7 @@
       "fix": "Decode trace context at the runtime boundary and reject malformed trace metadata before provider or ledger projection consumes it.",
       "sourceFiles": [
         "packages/core/src/telemetry-protocol/index.ts",
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts"
+        "packages/runtime/src/testing/backend-conformance.ts"
       ]
     },
     {
@@ -338,7 +338,7 @@
       "fix": "Grant or release resources through the resource ledger before attempting a reservation that would exceed available capacity.",
       "sourceFiles": [
         "packages/core/src/errors.ts",
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/src/testing/backend-conformance.ts",
         "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts",
         "packages/runtime/test/cloudflare/resources-in-memory-runtime.test.ts"
       ]
@@ -350,7 +350,7 @@
       "fix": "Do not consume or release a reservation after its terminal resource fact has already been committed.",
       "sourceFiles": [
         "packages/core/src/errors.ts",
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
+        "packages/runtime/src/testing/backend-conformance.ts",
         "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts"
       ]
     },
@@ -391,8 +391,8 @@
       "docs": "docs/concepts/durable-truth.md",
       "fix": "Map backend storage failures into the runtime-owned storage error at the runtime service boundary; keep backend-specific storage errors inside backend adapters.",
       "sourceFiles": [
-        "packages/core/test/backend-protocol/contract/runtime-backend-contract.ts",
         "packages/runtime/src/ledger.ts",
+        "packages/runtime/src/testing/backend-conformance.ts",
         "packages/runtime/test/cloudflare/admission/attempt-structured.runtime.test.ts",
         "packages/runtime/test/cloudflare/materialized-projections.runtime.test.ts",
         "packages/runtime/test/cloudflare/quota-contract.runtime.test.ts",
