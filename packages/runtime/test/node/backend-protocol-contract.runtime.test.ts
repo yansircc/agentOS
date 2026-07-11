@@ -11,7 +11,7 @@ import {
   backendProtocolTruthIdentityKey,
 } from "@agent-os/core/backend-protocol";
 import { NodePostgresBackend, type NodePostgresEventSubscription } from "../../src/node";
-import { PsqlCli, sqlJson, sqlString } from "../../src/node/host";
+import { PsqlCli, quoteIdentifier, sqlJson, sqlString } from "../../src/node/host";
 import {
   registerBackendConformanceSuite,
   type ContractDispatchReceiver,
@@ -167,6 +167,90 @@ describe("node-postgres event+due atomicity", () => {
       await createdBackends[0]?.dispose();
     }
   };
+
+  it("rejects direct rows outside the durable lifecycle algebra", async () => {
+    await withBackend("lifecycle_constraints", async (_backend, sql) => {
+      const insert = (overrides: Record<string, string> = {}): Promise<void> => {
+        const row = {
+          identity_key: "'lifecycle-test'",
+          identity: "'{}'::jsonb",
+          fire_at: "10",
+          kind: "'test.trigger'",
+          payload: "'{}'::jsonb",
+          completed_at: "NULL",
+          claimed_at: "NULL",
+          claim_token: "NULL",
+          claim_deadline_at: "NULL",
+          redrive_count: "0",
+          cancel_requested_at: "NULL",
+          cancel_reason: "NULL",
+          cancelled_at: "NULL",
+          ...overrides,
+        };
+        return sql.exec(`
+          INSERT INTO agentos_due_work
+            (identity_key, identity, fire_at, kind, payload, completed_at, claimed_at,
+             claim_token, claim_deadline_at, redrive_count, cancel_requested_at,
+             cancel_reason, cancelled_at)
+          VALUES (${Object.values(row).join(", ")})
+        `);
+      };
+
+      await expect(insert({ cancel_requested_at: "11" })).resolves.toBeUndefined();
+      await expect(insert({ completed_at: "12" })).resolves.toBeUndefined();
+
+      const illegal: ReadonlyArray<Record<string, string>> = [
+        { claimed_at: "11" },
+        { claim_token: "'claim'" },
+        { claim_deadline_at: "12" },
+        { claimed_at: "11", claim_token: "'claim'" },
+        { claimed_at: "11", claim_deadline_at: "12" },
+        { claim_token: "'claim'", claim_deadline_at: "12" },
+        { claimed_at: "11", claim_token: "''", claim_deadline_at: "12" },
+        { redrive_count: "1" },
+        { redrive_count: "-1" },
+        { cancel_reason: "'stop'" },
+        { cancelled_at: "12" },
+        { completed_at: "12", cancelled_at: "12" },
+        { completed_at: "12", cancel_requested_at: "11", cancelled_at: "13" },
+        { completed_at: "'Infinity'::double precision" },
+        { claimed_at: "'NaN'::double precision" },
+      ];
+      for (const overrides of illegal) await expect(insert(overrides)).rejects.toBeTruthy();
+
+      await insert();
+      await expect(
+        sql.exec("UPDATE agentos_due_work SET claimed_at = 11 WHERE kind = 'test.trigger'"),
+      ).rejects.toBeTruthy();
+    });
+  });
+
+  it("fails closed on a pre-existing unconstrained due-work schema", async () => {
+    if (harness === undefined) throw new Error("postgres harness not started");
+    const schema = `agentos_unconstrained_${randomUUID().replace(/-/g, "_")}`;
+    const sql = new PsqlCli({ databaseUrl: harness.databaseUrl, schema });
+    await sql.exec(`
+      CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(schema)};
+      CREATE TABLE agentos_due_work (
+        id BIGSERIAL PRIMARY KEY,
+        identity_key TEXT NOT NULL,
+        identity JSONB NOT NULL,
+        fire_at DOUBLE PRECISION NOT NULL,
+        kind TEXT NOT NULL,
+        payload JSONB NOT NULL
+      );
+    `);
+    const backend = new NodePostgresBackend({
+      databaseUrl: harness.databaseUrl,
+      schema,
+      bindingRef,
+    });
+    try {
+      await expect(backend.initialize()).rejects.toBeTruthy();
+    } finally {
+      await backend.dispose();
+    }
+  });
 
   it("rolls back scheduled intent event when due-work insert fails", async () => {
     const identity = contractIdentity("schedule-atomic-rollback");

@@ -13,6 +13,7 @@ interface Table {
   nextId: number;
   columns: string[];
   rows: Row[];
+  createSql: string | null;
 }
 
 interface InMemoryStorage {
@@ -35,6 +36,7 @@ const cloneTable = (table: Table): Table => ({
   nextId: table.nextId,
   columns: [...table.columns],
   rows: table.rows.map(cloneRow),
+  createSql: table.createSql,
 });
 
 const splitComma = (value: string): string[] =>
@@ -168,7 +170,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     }
     if (/^CREATE (?:TABLE|(?:UNIQUE )?INDEX) IF NOT EXISTS /i.test(normalized)) {
       const tableMatch = /^CREATE TABLE IF NOT EXISTS ([a-z_]+) \((.*)\)$/i.exec(normalized);
-      if (tableMatch !== null) this.defineTable(tableMatch[1]!, tableMatch[2]!);
+      if (tableMatch !== null) this.defineTable(tableMatch[1]!, tableMatch[2]!, normalized);
       return new InMemorySqlCursor([]);
     }
     if (/^INSERT INTO /i.test(normalized)) {
@@ -189,13 +191,16 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
   private table(name: string): Table {
     const existing = this.tables.get(name);
     if (existing !== undefined) return existing;
-    const table = { nextId: 1, columns: [], rows: [] };
+    const table = { nextId: 1, columns: [], rows: [], createSql: null };
     this.tables.set(name, table);
     return table;
   }
 
-  private defineTable(name: string, body: string): Table {
+  private defineTable(name: string, body: string, createSql: string): Table {
+    const existing = this.tables.get(name);
+    if (existing !== undefined) return existing;
     const table = this.table(name);
+    table.createSql = createSql;
     for (const column of parseCreateTableColumns(body)) this.addColumn(name, column);
     return table;
   }
@@ -304,6 +309,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       row[columns[i]!] = args[i];
     }
     this.applyDefaults(tableName, row);
+    this.assertRowConstraints(tableName, row);
     if (row.id === undefined && hasAutoincrementId(tableName)) {
       row.id = table.nextId;
       table.nextId += 1;
@@ -339,10 +345,12 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       );
       if (row === undefined) return new InMemorySqlCursor([]);
       const redrive = row.claim_token !== null && row.claim_token !== undefined;
-      row.claimed_at = claimedAt;
-      row.claim_token = token;
-      row.claim_deadline_at = deadlineAt;
-      row.redrive_count = Number(row.redrive_count ?? 0) + (redrive ? 1 : 0);
+      this.assignRow("due_work", row, {
+        claimed_at: claimedAt,
+        claim_token: token,
+        claim_deadline_at: deadlineAt,
+        redrive_count: Number(row.redrive_count ?? 0) + (redrive ? 1 : 0),
+      });
       return new InMemorySqlCursor([cloneRow(row)]);
     }
 
@@ -355,7 +363,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
           candidate.id === id && candidate.claim_token === token && candidate.completed_at === null,
       );
       if (row === undefined) return new InMemorySqlCursor([]);
-      row.completed_at = completedAt;
+      this.assignRow("due_work", row, { completed_at: completedAt });
       return new InMemorySqlCursor([{ id }]);
     }
 
@@ -390,7 +398,7 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
     const predicate = compileWhere(match[3]!, args.slice(argIndex));
     for (const row of this.table(match[1]!).rows) {
       if (predicate(row)) {
-        Object.assign(row, updates);
+        this.assignRow(match[1]!, row, updates);
       }
     }
     return new InMemorySqlCursor([]);
@@ -403,15 +411,18 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
         (candidate) => candidate.id === id && candidate.completed_at === null,
       );
       if (row === undefined) return new InMemorySqlCursor([]);
-      row.cancel_requested_at ??= requestedAt;
-      row.cancel_reason ??= reason ?? null;
+      const updates: Row = {
+        cancel_requested_at: row.cancel_requested_at ?? requestedAt,
+        cancel_reason: row.cancel_reason ?? reason ?? null,
+      };
       if (row.claim_token !== null && row.claim_token !== undefined) {
         if (row.claim_deadline_at === null || row.claim_deadline_at === undefined) {
-          row.claim_deadline_at = deadlineIfNull;
+          updates.claim_deadline_at = deadlineIfNull;
         } else if (Number(row.claim_deadline_at) > Number(deadlineThreshold)) {
-          row.claim_deadline_at = deadline;
+          updates.claim_deadline_at = deadline;
         }
       }
+      this.assignRow("due_work", row, updates);
       return new InMemorySqlCursor([{ id }]);
     }
 
@@ -425,14 +436,20 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       return true;
     });
     if (row === undefined) return new InMemorySqlCursor([]);
-    row.cancel_requested_at ??= requestedAt;
-    row.cancel_reason ??= reason ?? null;
-    row.cancelled_at = cancelledAt;
-    row.completed_at = completedAt;
+    this.assignRow("due_work", row, {
+      cancel_requested_at: row.cancel_requested_at ?? requestedAt,
+      cancel_reason: row.cancel_reason ?? reason ?? null,
+      cancelled_at: cancelledAt,
+      completed_at: completedAt,
+    });
     return new InMemorySqlCursor([]);
   }
 
   private select(sql: string, args: readonly unknown[]): InMemorySqlCursor {
+    if (/^SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'due_work'$/i.test(sql)) {
+      const createSql = this.tables.get("due_work")?.createSql;
+      return new InMemorySqlCursor(createSql === undefined ? [] : [{ sql: createSql }]);
+    }
     if (/^SELECT MIN\(next_at\) AS m FROM \( SELECT fire_at AS next_at FROM due_work /i.test(sql)) {
       const values = this.table("due_work")
         .rows.filter((row) => row.completed_at === null)
@@ -505,6 +522,63 @@ export class InMemoryDurableObjectStorage implements InMemoryStorage {
       row.cancel_requested_at ??= null;
       row.cancel_reason ??= null;
       row.cancelled_at ??= null;
+    }
+  }
+
+  private assignRow(tableName: string, row: Row, updates: Row): void {
+    const candidate = { ...row, ...updates };
+    this.assertRowConstraints(tableName, candidate);
+    Object.assign(row, candidate);
+  }
+
+  private assertRowConstraints(tableName: string, row: Row): void {
+    if (
+      tableName !== "due_work" ||
+      !this.tables.get(tableName)?.createSql?.includes("due_work_claim_tuple")
+    ) {
+      return;
+    }
+    if (typeof row.kind !== "string" || row.kind.length === 0) {
+      throw new TypeError("due_work kind constraint failed");
+    }
+    for (const field of [
+      "completed_at",
+      "claimed_at",
+      "claim_deadline_at",
+      "cancel_requested_at",
+      "cancelled_at",
+    ]) {
+      const value = row[field];
+      if (value !== null && (typeof value !== "number" || !Number.isFinite(value))) {
+        throw new TypeError(`due_work ${field} finite constraint failed`);
+      }
+    }
+    const claimFieldCount = [row.claimed_at, row.claim_token, row.claim_deadline_at].filter(
+      (value) => value !== null,
+    ).length;
+    if (
+      (claimFieldCount !== 0 && claimFieldCount !== 3) ||
+      (row.claim_token !== null &&
+        (typeof row.claim_token !== "string" || row.claim_token.length === 0))
+    ) {
+      throw new TypeError("due_work claim tuple constraint failed");
+    }
+    if (!Number.isInteger(row.redrive_count) || Number(row.redrive_count) < 0) {
+      throw new TypeError("due_work redrive count constraint failed");
+    }
+    if (Number(row.redrive_count) > 0 && row.claim_token === null) {
+      throw new TypeError("due_work redrive claim constraint failed");
+    }
+    if (row.cancel_reason !== null && row.cancel_requested_at === null) {
+      throw new TypeError("due_work cancel reason constraint failed");
+    }
+    if (
+      row.cancelled_at !== null &&
+      (row.completed_at === null ||
+        row.cancel_requested_at === null ||
+        row.cancelled_at !== row.completed_at)
+    ) {
+      throw new TypeError("due_work cancelled terminal constraint failed");
     }
   }
 

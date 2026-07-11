@@ -794,6 +794,38 @@ export const durableProcessLifecycleState = (
   if (!Number.isInteger(snapshot.redriveCount) || snapshot.redriveCount < 0) {
     return { ok: false, cause: new TypeError("durable process redriveCount malformed") };
   }
+  const timestampFields = [
+    ["completedAt", snapshot.completedAt],
+    ["claimedAt", snapshot.claimedAt],
+    ["claimDeadlineAt", snapshot.claimDeadlineAt],
+    ["cancelRequestedAt", snapshot.cancelRequestedAt],
+    ["cancelledAt", snapshot.cancelledAt],
+  ] as const;
+  for (const [name, value] of timestampFields) {
+    if (value !== null && !Number.isFinite(value)) {
+      return { ok: false, cause: new TypeError(`durable process ${name} malformed`) };
+    }
+  }
+  const claimFieldCount = [
+    snapshot.claimedAt,
+    snapshot.claimToken,
+    snapshot.claimDeadlineAt,
+  ].filter((value) => value !== null).length;
+  if (claimFieldCount !== 0 && claimFieldCount !== 3) {
+    return {
+      ok: false,
+      cause: new TypeError("durable process claim fields must be all null or all present"),
+    };
+  }
+  if (snapshot.claimToken !== null && snapshot.claimToken.length === 0) {
+    return { ok: false, cause: new TypeError("durable process claimToken malformed") };
+  }
+  if (snapshot.redriveCount > 0 && snapshot.claimToken === null) {
+    return {
+      ok: false,
+      cause: new TypeError("durable process redriveCount requires claim"),
+    };
+  }
   if (snapshot.cancelReason !== null && snapshot.cancelRequestedAt === null) {
     return {
       ok: false,
@@ -806,13 +838,13 @@ export const durableProcessLifecycleState = (
       cause: new TypeError("durable process cancelledAt requires completedAt"),
     };
   }
-  const claim = durableProcessClaimState(snapshot);
-  if (snapshot.claimToken !== null && claim === null) {
+  if (snapshot.cancelledAt !== null && snapshot.cancelledAt !== snapshot.completedAt) {
     return {
       ok: false,
-      cause: new TypeError("durable process claimToken requires claimedAt and claimDeadlineAt"),
+      cause: new TypeError("durable process cancelledAt must equal completedAt"),
     };
   }
+  const claim = durableProcessClaimState(snapshot);
   const cancellation = durableProcessCancellationState(snapshot);
   const base = durableProcessBase(snapshot);
   if (snapshot.cancelledAt !== null) {

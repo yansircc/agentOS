@@ -1,5 +1,5 @@
 import { Effect, ManagedRuntime } from "effect";
-import { describe } from "@effect/vitest";
+import { describe, expect, it } from "@effect/vitest";
 import {
   DurableTriggerRegistry,
   Ledger,
@@ -10,6 +10,7 @@ import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import {
   commitDurableTriggerIntent,
+  ensureDueWorkSchema,
   selectDurableProcessLifecycle,
 } from "../../src/cloudflare/due-work";
 import { EventBus } from "../../src/cloudflare/ledger/event-bus";
@@ -83,4 +84,75 @@ const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): DurableProcessL
 
 describe("cloudflare-do durable process lifecycle", () => {
   runDurableProcessLifecycleContract("cloudflare-do", makeDriver);
+
+  it.effect("rejects direct rows outside the durable lifecycle algebra", () =>
+    Effect.gen(function* () {
+      const sql = makeInMemoryDurableObjectState().storage.sql;
+      yield* ensureDueWorkSchema(sql);
+      const insert = (overrides: Record<string, unknown> = {}) => {
+        const row = {
+          fire_at: 10,
+          kind: "test.trigger",
+          payload: "{}",
+          completed_at: null,
+          claimed_at: null,
+          claim_token: null,
+          claim_deadline_at: null,
+          redrive_count: 0,
+          cancel_requested_at: null,
+          cancel_reason: null,
+          cancelled_at: null,
+          ...overrides,
+        };
+        return sql.exec(
+          `INSERT INTO due_work
+            (fire_at, kind, payload, completed_at, claimed_at, claim_token,
+             claim_deadline_at, redrive_count, cancel_requested_at, cancel_reason, cancelled_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+          ...Object.values(row),
+        );
+      };
+
+      expect(() => insert({ cancel_requested_at: 11 })).not.toThrow();
+      expect(() => insert({ completed_at: 12 })).not.toThrow();
+
+      const illegal = [
+        { claimed_at: 11 },
+        { claim_token: "claim" },
+        { claim_deadline_at: 12 },
+        { claimed_at: 11, claim_token: "claim" },
+        { claimed_at: 11, claim_deadline_at: 12 },
+        { claim_token: "claim", claim_deadline_at: 12 },
+        { claimed_at: 11, claim_token: "", claim_deadline_at: 12 },
+        { redrive_count: 1 },
+        { cancel_reason: "stop" },
+        { cancelled_at: 12 },
+        { completed_at: 12, cancelled_at: 12 },
+        { completed_at: 12, cancel_requested_at: 11, cancelled_at: 13 },
+        { completed_at: Number.POSITIVE_INFINITY },
+      ];
+      for (const overrides of illegal) expect(() => insert(overrides)).toThrow();
+
+      const id = insert().one().id;
+      expect(() => sql.exec("UPDATE due_work SET claimed_at = ? WHERE id = ?", 11, id)).toThrow();
+    }),
+  );
+
+  it.effect("fails closed on a pre-existing unconstrained due-work schema", () =>
+    Effect.gen(function* () {
+      const sql = makeInMemoryDurableObjectState().storage.sql;
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS due_work (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fire_at INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          payload TEXT NOT NULL
+        )
+      `);
+      const rejected = yield* ensureDueWorkSchema(sql).pipe(
+        Effect.match({ onFailure: () => true, onSuccess: () => false }),
+      );
+      expect(rejected).toBe(true);
+    }),
+  );
 });

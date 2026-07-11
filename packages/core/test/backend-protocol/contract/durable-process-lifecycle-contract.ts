@@ -153,9 +153,13 @@ export const runDurableProcessLifecycleContract = (
               );
 
               yield* Effect.promise(() => driver.drainDue(10));
-              expect(phaseFor(yield* Effect.promise(() => driver.processes()), scheduled.id)).toBe(
-                "completed",
-              );
+              expect(
+                stateFor(yield* Effect.promise(() => driver.processes()), scheduled.id),
+              ).toMatchObject({
+                phase: "completed",
+                claim: { token: expect.any(String) },
+                completedAt: expect.any(Number),
+              });
               yield* Effect.promise(() =>
                 driver.cancel(completedTrigger.kind, scheduled.id, "cancel after completed"),
               );
@@ -170,9 +174,19 @@ export const runDurableProcessLifecycleContract = (
               yield* Effect.promise(() =>
                 driver.cancel(completedTrigger.kind, cancelled.id, "cancel before acquire"),
               );
-              expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
-                "cancelled",
+              const cancelledState = stateFor(
+                yield* Effect.promise(() => driver.processes()),
+                cancelled.id,
               );
+              expect(cancelledState).toMatchObject({
+                phase: "cancelled",
+                cancellation: {
+                  requestedAt: expect.any(Number),
+                  cancelledAt: expect.any(Number),
+                },
+              });
+              if (cancelledState?.phase !== "cancelled") expect.fail("expected cancelled state");
+              expect(cancelledState.cancellation.cancelledAt).toBe(cancelledState.completedAt);
               yield* Effect.promise(() => driver.drainDue(20));
               expect(phaseFor(yield* Effect.promise(() => driver.processes()), cancelled.id)).toBe(
                 "cancelled",
@@ -214,6 +228,7 @@ export const runDurableProcessLifecycleContract = (
                 stateFor(yield* Effect.promise(() => driver.processes()), claimed.id),
               ).toMatchObject({
                 phase: "completed_after_cancel_requested",
+                claim: { token: expect.any(String) },
                 cancellation: { reason: "cancel while claimed" },
               });
 
@@ -224,9 +239,13 @@ export const runDurableProcessLifecycleContract = (
               yield* Effect.promise(() => blocking.waitForAcquire(2));
               const redriveSecondDrain = driver.drainDue(202);
               yield* Effect.promise(() => blocking.waitForAcquire(3));
-              expect(phaseFor(yield* Effect.promise(() => driver.processes()), redriven.id)).toBe(
-                "redriven",
-              );
+              expect(
+                stateFor(yield* Effect.promise(() => driver.processes()), redriven.id),
+              ).toMatchObject({
+                phase: "redriven",
+                redriveCount: 1,
+                claim: { token: expect.any(String) },
+              });
               blocking.releaseAcquire(2);
               yield* Effect.promise(() => redriveSecondDrain);
               blocking.releaseAcquire(1);
@@ -237,6 +256,7 @@ export const runDurableProcessLifecycleContract = (
               ).toMatchObject({
                 phase: "completed",
                 redriveCount: 1,
+                claim: { token: expect.any(String) },
               });
               yield* Effect.promise(() => driver.drainDue(202));
               const redrivenDone = payloadsOf<{ readonly id: string; readonly mode: string }>(

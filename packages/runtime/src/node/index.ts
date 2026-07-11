@@ -233,8 +233,57 @@ export class NodePostgresBackend {
         redrive_count INTEGER NOT NULL DEFAULT 0,
         cancel_requested_at DOUBLE PRECISION,
         cancel_reason TEXT,
-        cancelled_at DOUBLE PRECISION
+        cancelled_at DOUBLE PRECISION,
+        CONSTRAINT agentos_due_work_kind_nonempty CHECK (kind <> ''),
+        CONSTRAINT agentos_due_work_finite_timestamps CHECK (
+          (completed_at IS NULL OR completed_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
+          AND (claimed_at IS NULL OR claimed_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
+          AND (claim_deadline_at IS NULL OR claim_deadline_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
+          AND (cancel_requested_at IS NULL OR cancel_requested_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
+          AND (cancelled_at IS NULL OR cancelled_at NOT IN ('NaN'::DOUBLE PRECISION, 'Infinity'::DOUBLE PRECISION, '-Infinity'::DOUBLE PRECISION))
+        ),
+        CONSTRAINT agentos_due_work_claim_tuple CHECK (
+          (claim_token IS NULL AND claimed_at IS NULL AND claim_deadline_at IS NULL)
+          OR
+          (claim_token IS NOT NULL AND claim_token <> ''
+            AND claimed_at IS NOT NULL AND claim_deadline_at IS NOT NULL)
+        ),
+        CONSTRAINT agentos_due_work_redrive_count CHECK (redrive_count >= 0),
+        CONSTRAINT agentos_due_work_redrive_claim CHECK (
+          redrive_count = 0 OR claim_token IS NOT NULL
+        ),
+        CONSTRAINT agentos_due_work_cancel_reason CHECK (
+          cancel_reason IS NULL OR cancel_requested_at IS NOT NULL
+        ),
+        CONSTRAINT agentos_due_work_cancelled_terminal CHECK (
+          cancelled_at IS NULL
+          OR (
+            completed_at IS NOT NULL
+            AND cancel_requested_at IS NOT NULL
+            AND cancelled_at = completed_at
+          )
+        )
       );
+      DO $agentos$
+      BEGIN
+        IF (
+          SELECT COUNT(*) <> 7
+          FROM pg_constraint
+          WHERE conrelid = 'agentos_due_work'::regclass
+            AND conname IN (
+              'agentos_due_work_kind_nonempty',
+              'agentos_due_work_finite_timestamps',
+              'agentos_due_work_claim_tuple',
+              'agentos_due_work_redrive_count',
+              'agentos_due_work_redrive_claim',
+              'agentos_due_work_cancel_reason',
+              'agentos_due_work_cancelled_terminal'
+            )
+        ) THEN
+          RAISE EXCEPTION 'agentos_due_work schema does not enforce the durable lifecycle contract';
+        END IF;
+      END
+      $agentos$;
       CREATE INDEX IF NOT EXISTS agentos_due_work_pending_idx
         ON agentos_due_work (identity_key, completed_at, fire_at, id);
     `);

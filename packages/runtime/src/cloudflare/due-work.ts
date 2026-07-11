@@ -112,16 +112,6 @@ const dueWorkRowFromSql = (row: Record<string, unknown>): DueWorkParseResult<Due
   };
 };
 
-const ensureDueWorkColumn = (sql: SqlStorage, name: string, ddl: string): void => {
-  const exists = sql
-    .exec("PRAGMA table_info(due_work)")
-    .toArray()
-    .some((row) => row.name === name);
-  if (!exists) {
-    sql.exec(`ALTER TABLE due_work ADD COLUMN ${ddl}`);
-  }
-};
-
 export const ensureDueWorkSchema = (sql: SqlStorage): Effect.Effect<void, SqlError> =>
   Effect.try({
     try: () => {
@@ -138,16 +128,55 @@ export const ensureDueWorkSchema = (sql: SqlStorage): Effect.Effect<void, SqlErr
           redrive_count INTEGER NOT NULL DEFAULT 0,
           cancel_requested_at INTEGER,
           cancel_reason TEXT,
-          cancelled_at INTEGER
+          cancelled_at INTEGER,
+          CONSTRAINT due_work_kind_nonempty CHECK (kind <> ''),
+          CONSTRAINT due_work_finite_timestamps CHECK (
+            (completed_at IS NULL OR completed_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+            AND (claimed_at IS NULL OR claimed_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+            AND (claim_deadline_at IS NULL OR claim_deadline_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+            AND (cancel_requested_at IS NULL OR cancel_requested_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+            AND (cancelled_at IS NULL OR cancelled_at BETWEEN -1.7976931348623157e308 AND 1.7976931348623157e308)
+          ),
+          CONSTRAINT due_work_claim_tuple CHECK (
+            (claim_token IS NULL AND claimed_at IS NULL AND claim_deadline_at IS NULL)
+            OR
+            (claim_token IS NOT NULL AND claim_token <> ''
+              AND claimed_at IS NOT NULL AND claim_deadline_at IS NOT NULL)
+          ),
+          CONSTRAINT due_work_redrive_count CHECK (
+            typeof(redrive_count) = 'integer' AND redrive_count >= 0
+          ),
+          CONSTRAINT due_work_redrive_claim CHECK (
+            redrive_count = 0 OR claim_token IS NOT NULL
+          ),
+          CONSTRAINT due_work_cancel_reason CHECK (
+            cancel_reason IS NULL OR cancel_requested_at IS NOT NULL
+          ),
+          CONSTRAINT due_work_cancelled_terminal CHECK (
+            cancelled_at IS NULL
+            OR (
+              completed_at IS NOT NULL
+              AND cancel_requested_at IS NOT NULL
+              AND cancelled_at = completed_at
+            )
+          )
         )
       `);
-      ensureDueWorkColumn(sql, "claimed_at", "claimed_at INTEGER");
-      ensureDueWorkColumn(sql, "claim_token", "claim_token TEXT");
-      ensureDueWorkColumn(sql, "claim_deadline_at", "claim_deadline_at INTEGER");
-      ensureDueWorkColumn(sql, "redrive_count", "redrive_count INTEGER NOT NULL DEFAULT 0");
-      ensureDueWorkColumn(sql, "cancel_requested_at", "cancel_requested_at INTEGER");
-      ensureDueWorkColumn(sql, "cancel_reason", "cancel_reason TEXT");
-      ensureDueWorkColumn(sql, "cancelled_at", "cancelled_at INTEGER");
+      const schemaSql = sql
+        .exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'due_work'")
+        .toArray()[0]?.sql;
+      const requiredConstraints = [
+        "due_work_kind_nonempty",
+        "due_work_finite_timestamps",
+        "due_work_claim_tuple",
+        "due_work_redrive_count",
+        "due_work_redrive_claim",
+        "due_work_cancel_reason",
+        "due_work_cancelled_terminal",
+      ];
+      const schemaInvalid =
+        typeof schemaSql !== "string" ||
+        requiredConstraints.some((constraint) => !schemaSql.includes(constraint));
       sql.exec(`
         CREATE INDEX IF NOT EXISTS idx_due_work_pending
           ON due_work (fire_at)
@@ -158,9 +187,22 @@ export const ensureDueWorkSchema = (sql: SqlStorage): Effect.Effect<void, SqlErr
           ON due_work (claim_deadline_at)
           WHERE completed_at IS NULL AND claim_token IS NOT NULL
       `);
+      return !schemaInvalid;
     },
     catch: (cause) => new SqlError({ cause }),
-  }).pipe(Effect.asVoid);
+  }).pipe(
+    Effect.flatMap((schemaValid) =>
+      schemaValid
+        ? Effect.void
+        : Effect.fail(
+            new SqlError({
+              cause: new TypeError(
+                "due_work schema does not enforce the durable lifecycle contract",
+              ),
+            }),
+          ),
+    ),
+  );
 
 export const findNextDue = (sql: SqlStorage): Effect.Effect<number | null, SqlError> =>
   Effect.try({
