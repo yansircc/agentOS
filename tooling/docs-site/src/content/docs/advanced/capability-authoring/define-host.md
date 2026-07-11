@@ -9,7 +9,7 @@ slug: "advanced/capability-authoring/define-host"
 
 ## Invariant
 
-`invariant.host.fact-owner`: Host profiles are the single source of truth for environment-provided facts. Capabilities may only require facts declared by host profiles, and materialized host facts enter capability code only through `CapabilityInstallContext.host`.
+`invariant.host.fact-owner`: Host profiles are the single source of truth for environment-provided facts. Capabilities may only require facts declared by host profiles, and materialized host facts enter capability code only through `CapabilityInstallContext.host`. `materialize` must return the complete host-facts record synchronously so graph validation observes one closed fact set.
 
 ## Usage
 

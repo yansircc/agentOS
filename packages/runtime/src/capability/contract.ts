@@ -72,7 +72,7 @@ export interface DefineCapabilitySpec {
   readonly requires?: CapabilityRequirements;
   readonly install: (
     ctx: CapabilityInstallContext,
-  ) => CapabilityInstallation | Promise<CapabilityInstallation>;
+  ) => CapabilityInstallation;
   readonly diagnostics?: () => ReadonlyArray<{
     readonly capabilityId?: string;
     readonly reason: string;
@@ -91,7 +91,7 @@ export interface CapabilityContract {
   readonly requires: CapabilityRequirements;
   readonly install: (
     ctx: CapabilityInstallContext,
-  ) => CapabilityInstallation | Promise<CapabilityInstallation>;
+  ) => CapabilityInstallation;
   readonly diagnostics: () => ReadonlyArray<{
     readonly capabilityId?: string;
     readonly reason: string;

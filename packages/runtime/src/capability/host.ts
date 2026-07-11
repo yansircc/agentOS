@@ -23,7 +23,7 @@ export interface DefineHostSpec {
     readonly config: Readonly<Record<string, unknown>>;
     readonly secrets: Readonly<Record<string, string>>;
     readonly identity: string;
-  }) => ResolvedHostFacts | Promise<ResolvedHostFacts>;
+  }) => ResolvedHostFacts;
 }
 
 /**
@@ -36,7 +36,7 @@ export interface HostProfile {
     readonly config: Readonly<Record<string, unknown>>;
     readonly secrets: Readonly<Record<string, string>>;
     readonly identity: string;
-  }) => ResolvedHostFacts | Promise<ResolvedHostFacts>;
+  }) => ResolvedHostFacts;
 }
 
 /**

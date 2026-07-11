@@ -48,7 +48,7 @@ const testCapability = (
   overrides: Partial<{
     readonly version: string;
     readonly requires: CapabilityContract["requires"];
-    readonly install: () => CapabilityInstallation | Promise<CapabilityInstallation>;
+    readonly install: () => CapabilityInstallation;
   }> = {},
 ): CapabilityContract =>
   defineCapability({
@@ -108,7 +108,7 @@ describe("resolveRuntime", () => {
       requires: {
         hostFacts: ["durability.do"],
       },
-      install: async () => ({}),
+      install: () => ({}),
     });
 
     const result = await resolveRuntime(nodeHost, [testCapability], { identity: "test" });
@@ -211,16 +211,35 @@ describe("resolveRuntime", () => {
     ]);
   });
 
+  it("fails closed when untyped JavaScript returns an async host materialization", async () => {
+    const host = defineHost({
+      target: "async-host@1",
+      provides: [],
+      materialize: (async () => ({})) as unknown as () => Readonly<Record<string, unknown>>,
+    });
+
+    const result = await resolveRuntime(host, [], { identity: "async-host" });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "host_fact",
+        reason: expect.stringContaining("failed to materialize"),
+        detail: expect.stringContaining("async result"),
+      }),
+    ]);
+  });
+
   it("fails preflight when capabilityId is duplicate", async () => {
     const cap1 = defineCapability({
       capabilityId: workspaceOpCarrier.ownerId,
       carrier: workspaceOpCarrier,
-      install: async () => ({}),
+      install: () => ({}),
     });
     const cap2 = defineCapability({
       capabilityId: workspaceOpCarrier.ownerId,
       carrier: workspaceOpCarrier,
-      install: async () => ({}),
+      install: () => ({}),
     });
 
     const result = await resolveRuntime(nodeHost, [cap1, cap2], { identity: "test" });
@@ -297,6 +316,24 @@ describe("resolveRuntime", () => {
         }),
       ]),
     );
+  });
+
+  it("fails closed when untyped JavaScript returns an async capability installation", async () => {
+    const capability = testCapability("@agent-os/test.async-install", "resolve.async-install.", {
+      install: (async () => ({})) as unknown as () => CapabilityInstallation,
+    });
+
+    const result = await resolveRuntime(nodeHost, [capability], { identity: "async-install" });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.diagnostics).toEqual([
+      expect.objectContaining({
+        pass: "install",
+        capabilityId: capability.capabilityId,
+        reason: expect.stringContaining("install failed"),
+        detail: expect.stringContaining("async result"),
+      }),
+    ]);
   });
 
   it("fails closed when diagnostic sink commit fails", async () => {
