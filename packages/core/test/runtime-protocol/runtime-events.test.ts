@@ -16,13 +16,18 @@ import {
   agentRunStartedEvent,
   agentSessionTurnSubmittedEvent,
   chatIngestedEvent,
+  decodeRuntimeEventPayload,
   decodeRuntimeLedgerEvent,
   decodeRuntimeLedgerEventSafe,
   EXTERNAL_TOOL_REPLAY_REQUIRES_RECEIPT_REASON,
   llmRequestedEvent,
   llmResponseEvent,
+  ingressDeliveryAcceptedEvent,
+  ingressDeliveryFailedEvent,
+  ingressDeliveryRequestedEvent,
   productRunLinkedEvent,
   RUNTIME_EVENT_KIND,
+  RUNTIME_EVENT_KINDS,
   RUNTIME_ABORT_EVENT_KINDS,
   runtimeCompletedAfterToolsEvent,
   runtimeHistoryCompactedEvent,
@@ -201,6 +206,41 @@ describe("runtime event vocabulary", () => {
         inputDigest: "sha256:input",
         traceContext,
       }),
+      productRunLinkedEvent({
+        ...runtimeIdentity,
+        productRef: "product:1",
+        runtimeRunId: 1,
+        idempotencyKey: "product:1:run:1",
+        inputDigest: "sha256:product-input",
+        traceContext,
+      }),
+      ingressDeliveryRequestedEvent({
+        ...runtimeIdentity,
+        deliveryKey: "delivery:1",
+        slot: { kind: "channel", id: "email" },
+        principal: { authority: "agentos.app", subject: "agent:daily" },
+        attempt: 1,
+        traceContext,
+      }),
+      ingressDeliveryAcceptedEvent({
+        ...runtimeIdentity,
+        requestedEventId: 1,
+        deliveryKey: "delivery:accepted",
+        slot: { kind: "channel", id: "email" },
+        receipt: { anchorId: "receipt:1", anchorKind: "ledger_event" },
+        attempt: 1,
+        traceContext,
+      }),
+      ingressDeliveryFailedEvent({
+        ...runtimeIdentity,
+        requestedEventId: 1,
+        deliveryKey: "delivery:failed",
+        slot: { kind: "channel", id: "email" },
+        attempt: 1,
+        retryable: false,
+        reason: "delivery_failed",
+        traceContext,
+      }),
       scheduleFireRequestedEvent({
         ...runtimeIdentity,
         scheduleId: "daily-summary",
@@ -349,13 +389,27 @@ describe("runtime event vocabulary", () => {
       ),
     ];
 
+    const constructorKinds = specs.map((spec) => spec.kind);
+    expect(new Set(constructorKinds).size).toBe(constructorKinds.length);
+    expect([...constructorKinds].sort()).toEqual([...RUNTIME_EVENT_KINDS].sort());
+    expect(Object.values(RUNTIME_EVENT_KIND)).toEqual(RUNTIME_EVENT_KINDS);
+    expect(new Set(Object.keys(RUNTIME_EVENT_KIND)).size).toBe(RUNTIME_EVENT_KINDS.length);
+
     for (const [index, spec] of specs.entries()) {
-      const decoded = decodeRuntimeLedgerEvent(ledgerEvent(index + 1, spec));
+      expect(decodeRuntimeEventPayload(spec.kind, spec.payload)).toEqual(spec.payload);
+      const event = ledgerEvent(index + 1, spec);
+      const decoded = decodeRuntimeLedgerEvent(event);
+      expect(decodeRuntimeLedgerEventSafe(event)).toEqual(decoded);
       expect(decoded._tag).toBe("runtime");
       if (decoded._tag === "runtime") {
         expect(decoded.event.kind).toBe(spec.kind);
         expect(decoded.event.payload).toEqual(spec.payload);
       }
+
+      const invalid = rawEvent(index + 1_000, spec.kind, {});
+      expect(() => decodeRuntimeEventPayload(spec.kind, {})).toThrow();
+      expect(() => decodeRuntimeLedgerEvent(invalid)).toThrow();
+      expect(decodeRuntimeLedgerEventSafe(invalid)).toBeNull();
     }
   });
 

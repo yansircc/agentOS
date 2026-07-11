@@ -52,39 +52,6 @@ const isInputRequestResumePayload = (value: unknown): value is InputRequestResum
 const InputRequestResumePayloadSchema: Schema.Decoder<InputRequestResumePayload> =
   Schema.declare<InputRequestResumePayload>(isInputRequestResumePayload);
 
-export const RUNTIME_EVENT_KIND = {
-  AGENT_RUN_STARTED: "agent.run.started",
-  AGENT_RUN_INTERRUPTED: "agent.run.interrupted",
-  AGENT_RUN_RESUMED: "agent.run.resumed",
-  CHAT_INGESTED: "chat.ingested",
-  AGENT_SESSION_TURN_SUBMITTED: "agent_session.turn_submitted",
-  WORKFLOW_RUN_SUBMITTED: "workflow.run_submitted",
-  PRODUCT_RUN_LINKED: "product.run_linked",
-  INGRESS_DELIVERY_REQUESTED: "ingress.delivery_requested",
-  INGRESS_DELIVERY_ACCEPTED: "ingress.delivery_accepted",
-  INGRESS_DELIVERY_FAILED: "ingress.delivery_failed",
-  SCHEDULE_FIRE_REQUESTED: "schedule.fire_requested",
-  SCHEDULE_FIRE_DISPATCHED: "schedule.fire_dispatched",
-  SCHEDULE_FIRE_FAILED: "schedule.fire_failed",
-  LLM_REQUESTED: "llm.requested",
-  LLM_RESPONSE: "llm.response",
-  TOOL_EXECUTED: "tool.executed",
-  TOOL_REJECTED: "tool.rejected",
-  RUNTIME_HISTORY_COMPACTED: "runtime.history_compacted",
-  RUNTIME_REKEYED: "runtime.rekeyed",
-  RUNTIME_COMPLETED_AFTER_TOOLS: "runtime.completed_after_tools",
-  AGENT_RUN_COMPLETED: "agent.run.completed",
-  AGENT_ABORTED_BUDGET_TOKENS: "agent.aborted.budget_tokens",
-  AGENT_ABORTED_BUDGET_TIME: "agent.aborted.budget_time",
-  AGENT_ABORTED_TOOL_ERROR: "agent.aborted.tool_error",
-  AGENT_ABORTED_UPSTREAM_FAILURE: "agent.aborted.upstream_failure",
-  AGENT_ABORTED_RETRIES: "agent.aborted.retries",
-  AGENT_ABORTED_CLIENT_DISCONNECT: "agent.aborted.client_disconnect",
-  AGENT_ABORTED_DECISION_REJECTED: "agent.aborted.rejected",
-  AGENT_ABORTED_DECISION_CANCELLED: "agent.aborted.cancelled",
-  AGENT_ABORTED_DECISION_EXPIRED: "agent.aborted.expired",
-} as const;
-
 export const TOOL_RESULT_SNAPSHOT_VERSION = "tool-result-snapshot-v1";
 export const EXTERNAL_TOOL_EXECUTION_RECEIPT_VERSION = "external-tool-execution-receipt-v1";
 export const RECEIPT_BACKED_TOOL_RESULT_VERSION = "receipt-backed-tool-result-v1";
@@ -93,19 +60,10 @@ export const TOOL_EXECUTION_CLAIM_MUST_BE_LIVED_REASON = "tool_execution_claim_m
 export const EXTERNAL_TOOL_EXECUTION_REQUIRES_RECEIPT_REASON =
   "external_tool_execution_requires_receipt";
 
-export type RuntimeEventKind = (typeof RUNTIME_EVENT_KIND)[keyof typeof RUNTIME_EVENT_KIND];
 export type RuntimeAbortEventKind = AbortKind;
 
 export const RUNTIME_ABORT_EVENT_KINDS: ReadonlyArray<RuntimeAbortEventKind> = Object.values(ABORT);
-
-export const RUNTIME_EVENT_KINDS: ReadonlyArray<RuntimeEventKind> =
-  Object.values(RUNTIME_EVENT_KIND);
-
-const runtimeEventKindSet = new Set<string>(RUNTIME_EVENT_KINDS);
 const DECISION_GATE_CONSUMED_EVENT_KIND = "decision_gate.consumed";
-
-export const isRuntimeEventKind = (kind: string): kind is RuntimeEventKind =>
-  runtimeEventKindSet.has(kind);
 
 export const isRuntimeAbortEventKind = (kind: string): kind is RuntimeAbortEventKind =>
   (RUNTIME_ABORT_EVENT_KINDS as ReadonlyArray<string>).includes(kind);
@@ -847,37 +805,140 @@ export const AgentRunAbortedPayloadSchema: Schema.Decoder<AgentRunAbortedPayload
     [unknownRecord],
   );
 
+const runtimeEventDefinition = <const Name extends string, Payload>(
+  name: Name,
+  schema: Schema.Decoder<Payload>,
+) => ({ name, schema }) as const;
+
+const runtimeEventDefinitions = {
+  "agent.run.started": runtimeEventDefinition("AGENT_RUN_STARTED", AgentRunStartedPayloadSchema),
+  "agent.run.interrupted": runtimeEventDefinition(
+    "AGENT_RUN_INTERRUPTED",
+    AgentRunInterruptedPayloadSchema,
+  ),
+  "agent.run.resumed": runtimeEventDefinition("AGENT_RUN_RESUMED", AgentRunResumedPayloadSchema),
+  "chat.ingested": runtimeEventDefinition("CHAT_INGESTED", ChatIngestedPayloadSchema),
+  "agent_session.turn_submitted": runtimeEventDefinition(
+    "AGENT_SESSION_TURN_SUBMITTED",
+    AgentSessionTurnSubmittedPayloadSchema,
+  ),
+  "workflow.run_submitted": runtimeEventDefinition(
+    "WORKFLOW_RUN_SUBMITTED",
+    WorkflowRunSubmittedPayloadSchema,
+  ),
+  "product.run_linked": runtimeEventDefinition("PRODUCT_RUN_LINKED", ProductRunLinkedPayloadSchema),
+  "ingress.delivery_requested": runtimeEventDefinition(
+    "INGRESS_DELIVERY_REQUESTED",
+    IngressDeliveryRequestedPayloadSchema,
+  ),
+  "ingress.delivery_accepted": runtimeEventDefinition(
+    "INGRESS_DELIVERY_ACCEPTED",
+    IngressDeliveryAcceptedPayloadSchema,
+  ),
+  "ingress.delivery_failed": runtimeEventDefinition(
+    "INGRESS_DELIVERY_FAILED",
+    IngressDeliveryFailedPayloadSchema,
+  ),
+  "schedule.fire_requested": runtimeEventDefinition(
+    "SCHEDULE_FIRE_REQUESTED",
+    ScheduleFireRequestedPayloadSchema,
+  ),
+  "schedule.fire_dispatched": runtimeEventDefinition(
+    "SCHEDULE_FIRE_DISPATCHED",
+    ScheduleFireDispatchedPayloadSchema,
+  ),
+  "schedule.fire_failed": runtimeEventDefinition(
+    "SCHEDULE_FIRE_FAILED",
+    ScheduleFireFailedPayloadSchema,
+  ),
+  "llm.requested": runtimeEventDefinition("LLM_REQUESTED", LlmRequestedPayloadSchema),
+  "llm.response": runtimeEventDefinition("LLM_RESPONSE", LlmResponsePayloadSchema),
+  "tool.executed": runtimeEventDefinition("TOOL_EXECUTED", ToolExecutedPayloadSchema),
+  "tool.rejected": runtimeEventDefinition("TOOL_REJECTED", ToolRejectedPayloadSchema),
+  "runtime.history_compacted": runtimeEventDefinition(
+    "RUNTIME_HISTORY_COMPACTED",
+    RuntimeHistoryCompactedPayloadSchema,
+  ),
+  "runtime.rekeyed": runtimeEventDefinition("RUNTIME_REKEYED", RuntimeRekeyedPayloadSchema),
+  "runtime.completed_after_tools": runtimeEventDefinition(
+    "RUNTIME_COMPLETED_AFTER_TOOLS",
+    RuntimeCompletedAfterToolsPayloadSchema,
+  ),
+  "agent.run.completed": runtimeEventDefinition(
+    "AGENT_RUN_COMPLETED",
+    AgentRunCompletedPayloadSchema,
+  ),
+  [ABORT.BUDGET_TOKENS]: runtimeEventDefinition(
+    "AGENT_ABORTED_BUDGET_TOKENS",
+    AgentRunAbortedPayloadSchema,
+  ),
+  [ABORT.BUDGET_TIME]: runtimeEventDefinition(
+    "AGENT_ABORTED_BUDGET_TIME",
+    AgentRunAbortedPayloadSchema,
+  ),
+  [ABORT.TOOL_ERROR]: runtimeEventDefinition(
+    "AGENT_ABORTED_TOOL_ERROR",
+    AgentRunAbortedPayloadSchema,
+  ),
+  [ABORT.UPSTREAM_FAILURE]: runtimeEventDefinition(
+    "AGENT_ABORTED_UPSTREAM_FAILURE",
+    AgentRunAbortedPayloadSchema,
+  ),
+  [ABORT.RETRIES]: runtimeEventDefinition("AGENT_ABORTED_RETRIES", AgentRunAbortedPayloadSchema),
+  [ABORT.CLIENT_DISCONNECT]: runtimeEventDefinition(
+    "AGENT_ABORTED_CLIENT_DISCONNECT",
+    AgentRunAbortedPayloadSchema,
+  ),
+  [ABORT.DECISION_REJECTED]: runtimeEventDefinition(
+    "AGENT_ABORTED_DECISION_REJECTED",
+    AgentRunAbortedPayloadSchema,
+  ),
+  [ABORT.DECISION_CANCELLED]: runtimeEventDefinition(
+    "AGENT_ABORTED_DECISION_CANCELLED",
+    AgentRunAbortedPayloadSchema,
+  ),
+  [ABORT.DECISION_EXPIRED]: runtimeEventDefinition(
+    "AGENT_ABORTED_DECISION_EXPIRED",
+    AgentRunAbortedPayloadSchema,
+  ),
+} as const;
+
+export type RuntimeEventKind = keyof typeof runtimeEventDefinitions;
+
+type RuntimeEventKindObject = {
+  readonly [K in RuntimeEventKind as (typeof runtimeEventDefinitions)[K]["name"]]: K;
+};
+
+const runtimeEventDefinitionEntries = Object.entries(runtimeEventDefinitions);
+const runtimeEventDefinitionNames = runtimeEventDefinitionEntries.map(
+  ([, definition]) => definition.name,
+);
+if (new Set(runtimeEventDefinitionNames).size !== runtimeEventDefinitionEntries.length) {
+  Option.getOrThrowWith(
+    Option.none(),
+    () => new TypeError("runtime event definition names repeat"),
+  );
+}
+
+export const RUNTIME_EVENT_KIND = Object.freeze(
+  Object.fromEntries(
+    runtimeEventDefinitionEntries.map(([kind, definition]) => [definition.name, kind]),
+  ),
+) as RuntimeEventKindObject;
+
+export const RUNTIME_EVENT_KINDS = Object.freeze(
+  runtimeEventDefinitionEntries.map(([kind]) => kind),
+) as ReadonlyArray<RuntimeEventKind>;
+
+const runtimeEventKindSet = new Set<string>(RUNTIME_EVENT_KINDS);
+
+export const isRuntimeEventKind = (kind: string): kind is RuntimeEventKind =>
+  runtimeEventKindSet.has(kind);
+
 export type RuntimeEventPayloadByKind = {
-  readonly [RUNTIME_EVENT_KIND.AGENT_RUN_STARTED]: AgentRunStartedPayload;
-  readonly [RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED]: AgentRunInterruptedPayload;
-  readonly [RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED]: AgentRunResumedPayload;
-  readonly [RUNTIME_EVENT_KIND.CHAT_INGESTED]: ChatIngestedPayload;
-  readonly [RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED]: AgentSessionTurnSubmittedPayload;
-  readonly [RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED]: WorkflowRunSubmittedPayload;
-  readonly [RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED]: ProductRunLinkedPayload;
-  readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED]: IngressDeliveryRequestedPayload;
-  readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED]: IngressDeliveryAcceptedPayload;
-  readonly [RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED]: IngressDeliveryFailedPayload;
-  readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED]: ScheduleFireRequestedPayload;
-  readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED]: ScheduleFireDispatchedPayload;
-  readonly [RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED]: ScheduleFireFailedPayload;
-  readonly [RUNTIME_EVENT_KIND.LLM_REQUESTED]: LlmRequestedPayload;
-  readonly [RUNTIME_EVENT_KIND.LLM_RESPONSE]: LlmResponsePayload;
-  readonly [RUNTIME_EVENT_KIND.TOOL_EXECUTED]: ToolExecutedPayload;
-  readonly [RUNTIME_EVENT_KIND.TOOL_REJECTED]: ToolRejectedPayload;
-  readonly [RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED]: RuntimeHistoryCompactedPayload;
-  readonly [RUNTIME_EVENT_KIND.RUNTIME_REKEYED]: RuntimeRekeyedPayload;
-  readonly [RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS]: RuntimeCompletedAfterToolsPayload;
-  readonly [RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED]: AgentRunCompletedPayload;
-  readonly [ABORT.BUDGET_TOKENS]: AgentRunAbortedPayload;
-  readonly [ABORT.BUDGET_TIME]: AgentRunAbortedPayload;
-  readonly [ABORT.TOOL_ERROR]: AgentRunAbortedPayload;
-  readonly [ABORT.UPSTREAM_FAILURE]: AgentRunAbortedPayload;
-  readonly [ABORT.RETRIES]: AgentRunAbortedPayload;
-  readonly [ABORT.CLIENT_DISCONNECT]: AgentRunAbortedPayload;
-  readonly [ABORT.DECISION_REJECTED]: AgentRunAbortedPayload;
-  readonly [ABORT.DECISION_CANCELLED]: AgentRunAbortedPayload;
-  readonly [ABORT.DECISION_EXPIRED]: AgentRunAbortedPayload;
+  readonly [K in RuntimeEventKind]: Schema.Schema.Type<
+    (typeof runtimeEventDefinitions)[K]["schema"]
+  >;
 };
 
 type RuntimeLedgerEventShapeByKind<K extends RuntimeEventKind> = Omit<
@@ -929,213 +990,27 @@ export type DecodeRuntimeLedgerEventResult =
       readonly event: LedgerEvent;
     };
 
-const decodeRuntimePayload = <K extends RuntimeEventKind>(
+function decodeRuntimePayload<K extends RuntimeEventKind>(
   kind: K,
   payload: unknown,
-): RuntimeEventPayloadByKind[K] => {
-  switch (kind) {
-    case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
-      return Schema.decodeUnknownSync(AgentRunStartedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
-      return Schema.decodeUnknownSync(AgentRunInterruptedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
-      return Schema.decodeUnknownSync(AgentRunResumedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.CHAT_INGESTED:
-      return Schema.decodeUnknownSync(ChatIngestedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
-      return Schema.decodeUnknownSync(AgentSessionTurnSubmittedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
-      return Schema.decodeUnknownSync(WorkflowRunSubmittedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
-      return Schema.decodeUnknownSync(ProductRunLinkedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
-      return Schema.decodeUnknownSync(IngressDeliveryRequestedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED:
-      return Schema.decodeUnknownSync(IngressDeliveryAcceptedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED:
-      return Schema.decodeUnknownSync(IngressDeliveryFailedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
-      return Schema.decodeUnknownSync(ScheduleFireRequestedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
-      return Schema.decodeUnknownSync(ScheduleFireDispatchedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
-      return Schema.decodeUnknownSync(ScheduleFireFailedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
-      return Schema.decodeUnknownSync(LlmRequestedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.LLM_RESPONSE:
-      return Schema.decodeUnknownSync(LlmResponsePayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
-      return Schema.decodeUnknownSync(ToolExecutedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.TOOL_REJECTED:
-      return Schema.decodeUnknownSync(ToolRejectedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
-      return Schema.decodeUnknownSync(RuntimeHistoryCompactedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
-      return Schema.decodeUnknownSync(RuntimeRekeyedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
-      return Schema.decodeUnknownSync(RuntimeCompletedAfterToolsPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
-      return Schema.decodeUnknownSync(AgentRunCompletedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-    case ABORT.BUDGET_TOKENS:
-    case ABORT.BUDGET_TIME:
-    case ABORT.TOOL_ERROR:
-    case ABORT.UPSTREAM_FAILURE:
-    case ABORT.RETRIES:
-    case ABORT.CLIENT_DISCONNECT:
-    case ABORT.DECISION_REJECTED:
-    case ABORT.DECISION_CANCELLED:
-    case ABORT.DECISION_EXPIRED:
-      return Schema.decodeUnknownSync(AgentRunAbortedPayloadSchema)(
-        payload,
-      ) as RuntimeEventPayloadByKind[K];
-  }
-};
+): RuntimeEventPayloadByKind[K];
+function decodeRuntimePayload(
+  kind: RuntimeEventKind,
+  payload: unknown,
+): RuntimeEventPayloadByKind[RuntimeEventKind] {
+  return Schema.decodeUnknownSync(runtimeEventDefinitions[kind].schema)(payload);
+}
 
-const decodeRuntimePayloadOption = <K extends RuntimeEventKind>(
+function decodeRuntimePayloadOption<K extends RuntimeEventKind>(
   kind: K,
   payload: unknown,
-): Option.Option<RuntimeEventPayloadByKind[K]> => {
-  switch (kind) {
-    case RUNTIME_EVENT_KIND.AGENT_RUN_STARTED:
-      return Schema.decodeUnknownOption(AgentRunStartedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED:
-      return Schema.decodeUnknownOption(AgentRunInterruptedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED:
-      return Schema.decodeUnknownOption(AgentRunResumedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.CHAT_INGESTED:
-      return Schema.decodeUnknownOption(ChatIngestedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.AGENT_SESSION_TURN_SUBMITTED:
-      return Schema.decodeUnknownOption(AgentSessionTurnSubmittedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.WORKFLOW_RUN_SUBMITTED:
-      return Schema.decodeUnknownOption(WorkflowRunSubmittedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.PRODUCT_RUN_LINKED:
-      return Schema.decodeUnknownOption(ProductRunLinkedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_REQUESTED:
-      return Schema.decodeUnknownOption(IngressDeliveryRequestedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_ACCEPTED:
-      return Schema.decodeUnknownOption(IngressDeliveryAcceptedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.INGRESS_DELIVERY_FAILED:
-      return Schema.decodeUnknownOption(IngressDeliveryFailedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_REQUESTED:
-      return Schema.decodeUnknownOption(ScheduleFireRequestedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_DISPATCHED:
-      return Schema.decodeUnknownOption(ScheduleFireDispatchedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.SCHEDULE_FIRE_FAILED:
-      return Schema.decodeUnknownOption(ScheduleFireFailedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.LLM_REQUESTED:
-      return Schema.decodeUnknownOption(LlmRequestedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.LLM_RESPONSE:
-      return Schema.decodeUnknownOption(LlmResponsePayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.TOOL_EXECUTED:
-      return Schema.decodeUnknownOption(ToolExecutedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.TOOL_REJECTED:
-      return Schema.decodeUnknownOption(ToolRejectedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.RUNTIME_HISTORY_COMPACTED:
-      return Schema.decodeUnknownOption(RuntimeHistoryCompactedPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.RUNTIME_REKEYED:
-      return Schema.decodeUnknownOption(RuntimeRekeyedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case RUNTIME_EVENT_KIND.RUNTIME_COMPLETED_AFTER_TOOLS:
-      return Schema.decodeUnknownOption(RuntimeCompletedAfterToolsPayloadSchema)(
-        payload,
-      ) as Option.Option<RuntimeEventPayloadByKind[K]>;
-    case RUNTIME_EVENT_KIND.AGENT_RUN_COMPLETED:
-      return Schema.decodeUnknownOption(AgentRunCompletedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-    case ABORT.BUDGET_TOKENS:
-    case ABORT.BUDGET_TIME:
-    case ABORT.TOOL_ERROR:
-    case ABORT.UPSTREAM_FAILURE:
-    case ABORT.RETRIES:
-    case ABORT.CLIENT_DISCONNECT:
-    case ABORT.DECISION_REJECTED:
-    case ABORT.DECISION_CANCELLED:
-    case ABORT.DECISION_EXPIRED:
-      return Schema.decodeUnknownOption(AgentRunAbortedPayloadSchema)(payload) as Option.Option<
-        RuntimeEventPayloadByKind[K]
-      >;
-  }
-};
+): Option.Option<RuntimeEventPayloadByKind[K]>;
+function decodeRuntimePayloadOption(
+  kind: RuntimeEventKind,
+  payload: unknown,
+): Option.Option<RuntimeEventPayloadByKind[RuntimeEventKind]> {
+  return Schema.decodeUnknownOption(runtimeEventDefinitions[kind].schema)(payload);
+}
 
 export const decodeRuntimeEventPayload = <K extends RuntimeEventKind>(
   kind: K,
