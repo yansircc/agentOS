@@ -42,6 +42,7 @@ describe("in-memory ledger archive", () => {
         throughEventId: first[3]!.id,
       });
       expect(secondReceipt.previousSegmentSha256).toBe(receipt.segmentSha256);
+      expect(await archive.archive({ identity, throughEventId: first[2]!.id })).toEqual(receipt);
       expect(await archive.evict(secondReceipt)).toEqual({ evicted: 1 });
       expect(await runtime.runPromise(ledger.events(identity))).toEqual(baseline);
 
@@ -72,6 +73,33 @@ describe("in-memory ledger archive", () => {
       backend.state.corruptArchiveForTest(receipt);
       await expect(runtime.runPromise(ledger.events(identity))).rejects.toBeTruthy();
       await expect(archive.evict(receipt)).rejects.toBeTruthy();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("rejects eviction when an earlier segment in the current chain is corrupt", async () => {
+    const identity = truthIdentity("archive-chain-tamper");
+    const backend = createTestInMemoryRuntimeBackend({ identity });
+    const runtime = ManagedRuntime.make(backend.layer);
+    try {
+      const ledger = await runtime.runPromise(Ledger);
+      const archive = await runtime.runPromise(LedgerArchive);
+      const committed = await runtime.runPromise(
+        ledger.commit([
+          { ...identity, kind: "archive.a", payload: { value: 1 } },
+          { ...identity, kind: "archive.b", payload: { value: 2 } },
+        ]),
+      );
+      const first = await archive.archive({ identity, throughEventId: committed[0]!.id });
+      const second = await archive.archive({ identity, throughEventId: committed[1]!.id });
+      backend.state.corruptArchiveForTest(first);
+      await expect(archive.evict(second)).rejects.toBeTruthy();
+      await expect(
+        runtime.runPromise(
+          ledger.commit([{ ...identity, kind: "archive.c", payload: { value: 3 } }]),
+        ),
+      ).rejects.toBeTruthy();
     } finally {
       await runtime.dispose();
     }

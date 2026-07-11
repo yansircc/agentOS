@@ -42,11 +42,17 @@ describe("cloudflare ledger archive", () => {
       expect(attempts.filter((result) => result.status === "rejected")).toHaveLength(1);
       const winner = attempts.find((result) => result.status === "fulfilled");
       if (winner?.status !== "fulfilled") expect.fail("expected one archive successor");
+      expect(await instance.archiveLedger(truth, winner.value.lastEventId)).toEqual(winner.value);
       const tail = await instance.archiveLedger(truth, committed[2]!.id);
       expect(tail.previousSegmentSha256).toBe(winner.value.segmentSha256);
-      await instance.evictArchivedLedger(winner.value);
-      await instance.evictArchivedLedger(tail);
       expect(await instance.events(truth)).toEqual(baseline);
+      await instance.evictArchivedLedger(winner.value);
+      instance.corruptArchiveForTest(winner.value);
+      await expect(instance.evictArchivedLedger(tail)).rejects.toBeTruthy();
+      const [later] = await instance.commit([
+        { ...commitIdentity, kind: "archive.d", payload: { value: 4 } },
+      ]);
+      await expect(instance.archiveLedger(truth, later!.id)).rejects.toBeTruthy();
     });
   });
 

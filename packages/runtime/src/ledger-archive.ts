@@ -1,5 +1,6 @@
 import { Context, Data } from "effect";
 import {
+  LEDGER_ARCHIVE_PROTOCOL_VERSION,
   canonicalLedgerArchiveJson,
   decodeLedgerArchiveArtifact,
   validateLedgerArchiveChain,
@@ -35,17 +36,38 @@ export class LedgerArchive extends Context.Service<
 const sameEvent = (left: LedgerEvent, right: LedgerEvent): boolean =>
   canonicalLedgerArchiveJson(left) === canonicalLedgerArchiveJson(right);
 
+export const ledgerArchiveReceiptForExactCut = (
+  stored: ReadonlyArray<StoredLedgerArchiveSegment>,
+  throughEventId: number,
+): LedgerArchiveReceipt | undefined => {
+  const exact = stored.find((entry) => entry.receipt.lastEventId === throughEventId);
+  if (exact !== undefined) return exact.receipt;
+  const latest = stored.at(-1);
+  if (latest !== undefined && throughEventId <= latest.receipt.lastEventId) {
+    throw new LedgerArchiveError({
+      operation: "archive",
+      cause: "archive cut does not match an existing segment boundary",
+    });
+  }
+  return undefined;
+};
+
 export const decodeLedgerArchiveSegments = async (
   identity: LedgerTruthIdentity,
   stored: ReadonlyArray<StoredLedgerArchiveSegment>,
 ): Promise<ReadonlyArray<LedgerArchiveArtifact>> => {
   const artifacts: LedgerArchiveArtifact[] = [];
   for (const entry of stored) {
-    if (entry.receipt.truthKey !== ledgerTruthKey(identity)) {
+    if (
+      entry.receipt.protocolVersion !== LEDGER_ARCHIVE_PROTOCOL_VERSION ||
+      entry.receipt.archiveRef.length === 0 ||
+      entry.receipt.truthKey !== ledgerTruthKey(identity)
+    ) {
       throw new LedgerArchiveError({ operation: "read", cause: "receipt truth mismatch" });
     }
     const artifact = await decodeLedgerArchiveArtifact(entry.bytes, entry.receipt.segmentSha256);
     if (
+      ledgerTruthKey(artifact.segment.identity) !== ledgerTruthKey(identity) ||
       artifact.segment.events.length !== entry.receipt.eventCount ||
       artifact.segment.events[0]!.id !== entry.receipt.firstEventId ||
       artifact.segment.events.at(-1)!.id !== entry.receipt.lastEventId ||

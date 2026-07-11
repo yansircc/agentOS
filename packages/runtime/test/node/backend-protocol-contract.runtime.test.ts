@@ -389,14 +389,27 @@ describe("node-postgres event+due atomicity", () => {
       expect(attempts.filter((result) => result.status === "rejected")).toHaveLength(1);
       const winner = attempts.find((result) => result.status === "fulfilled");
       if (winner?.status !== "fulfilled") expect.fail("expected one archive successor");
+      expect(
+        await competitor.archiveLedger({
+          identity,
+          throughEventId: winner.value.lastEventId,
+        }),
+      ).toEqual(winner.value);
       const tail = await backend.archiveLedger({
         identity,
         throughEventId: committed[2]!.id,
       });
       expect(tail.previousSegmentSha256).toBe(winner.value.segmentSha256);
-      await competitor.evictArchivedLedger(winner.value);
-      await backend.evictArchivedLedger(tail);
       expect(await backend.events(identity)).toEqual(baseline);
+      await competitor.evictArchivedLedger(winner.value);
+      await competitor.corruptArchiveForTest(winner.value);
+      await expect(backend.evictArchivedLedger(tail)).rejects.toBeTruthy();
+      const [later] = await backend.commit([
+        { ...commitIdentity, kind: "archive.d", payload: { value: 4 } },
+      ]);
+      await expect(
+        competitor.archiveLedger({ identity, throughEventId: later!.id }),
+      ).rejects.toBeTruthy();
     });
   });
 });

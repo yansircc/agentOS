@@ -92,6 +92,7 @@ import {
 import { nodePostgresQuotaGrantDecision } from "./quota";
 import {
   decodeLedgerArchiveSegments,
+  ledgerArchiveReceiptForExactCut,
   mergeLedgerArchiveEvents,
   queryLedgerArchiveEvents,
   type StoredLedgerArchiveSegment,
@@ -102,6 +103,42 @@ import {
   type ResourceReserveTransactionRow,
   type ResourceTerminalTransactionRow,
 } from "./resource";
+
+interface NodePostgresArchiveRow extends StoredLedgerArchiveSegment {
+  readonly encodedBytes: string;
+}
+
+const archiveSnapshotSql = (
+  truthKey: string,
+  stored: ReadonlyArray<NodePostgresArchiveRow>,
+): string => {
+  const exactRows =
+    stored.length === 0
+      ? "FALSE"
+      : stored
+          .map(
+            (entry) =>
+              `(segment_sha256 = ${sqlString(entry.receipt.segmentSha256)} AND ` +
+              `previous_segment_sha256 IS NOT DISTINCT FROM ${
+                entry.receipt.previousSegmentSha256 === null
+                  ? "NULL"
+                  : sqlString(entry.receipt.previousSegmentSha256)
+              } AND ` +
+              `first_event_id = ${sqlNumber(entry.receipt.firstEventId)} AND ` +
+              `last_event_id = ${sqlNumber(entry.receipt.lastEventId)} AND ` +
+              `archive_ref = ${sqlString(entry.receipt.archiveRef)} AND ` +
+              `bytes = ${sqlString(entry.encodedBytes)} AND receipt = ${sqlJson(entry.receipt)})`,
+          )
+          .join(" OR ");
+  return `
+    (SELECT COUNT(*) FROM agentos_event_archive_segments
+      WHERE truth_key = ${sqlString(truthKey)}) = ${stored.length}
+    AND NOT EXISTS (
+      SELECT 1 FROM agentos_event_archive_segments
+      WHERE truth_key = ${sqlString(truthKey)} AND NOT (${exactRows})
+    )
+  `;
+};
 
 export interface NodePostgresBackendOptions {
   readonly databaseUrl: string;
@@ -330,21 +367,21 @@ export class NodePostgresBackend {
     const truthKey = backendProtocolTruthIdentityKey(spec.identity);
     return this.#withArchiveLock(truthKey, async () => {
       const stored = await this.#archiveSegments(spec.identity);
-      const previous = stored.at(-1);
-      const previousLastId = previous?.receipt.lastEventId ?? 0;
+      const artifacts = await decodeLedgerArchiveSegments(spec.identity, stored);
+      const retry = ledgerArchiveReceiptForExactCut(stored, spec.throughEventId);
+      if (retry !== undefined) return retry;
+      const previous = artifacts.at(-1);
+      const previousLastId = previous?.segment.events.at(-1)?.id ?? 0;
       const hot = await this.#hotTruthEvents(spec.identity);
       const events = hot.filter(
         (event) => event.id > previousLastId && event.id <= spec.throughEventId,
       );
       if (events.length === 0) {
-        if (previous !== undefined && spec.throughEventId <= previous.receipt.lastEventId) {
-          return previous.receipt;
-        }
         throw new SqlError({ cause: "no hot events to archive" });
       }
       const artifact = await createLedgerArchiveArtifact({
         identity: spec.identity,
-        previousSegmentSha256: previous?.receipt.segmentSha256 ?? null,
+        previousSegmentSha256: previous?.sha256 ?? null,
         events,
       });
       const archiveRef = `postgres:${truthKey}:${artifact.sha256}`;
@@ -357,13 +394,13 @@ export class NodePostgresBackend {
         INSERT INTO agentos_event_archive_segments
           (segment_sha256, truth_key, previous_segment_sha256, first_event_id,
            last_event_id, archive_ref, bytes, receipt)
-        VALUES (
+        SELECT
           ${sqlString(receipt.segmentSha256)}, ${sqlString(truthKey)},
           ${receipt.previousSegmentSha256 === null ? "NULL" : sqlString(receipt.previousSegmentSha256)},
           ${sqlNumber(receipt.firstEventId)}, ${sqlNumber(receipt.lastEventId)},
           ${sqlString(receipt.archiveRef)}, ${sqlString(Buffer.from(artifact.bytes).toString("base64"))},
           ${sqlJson(receipt)}
-        )
+        WHERE ${archiveSnapshotSql(truthKey, stored)}
         ON CONFLICT DO NOTHING
       `);
       const readback = (await this.#archiveSegments(spec.identity)).find(
@@ -391,25 +428,22 @@ export class NodePostgresBackend {
 
   async evictArchivedLedger(receipt: LedgerArchiveReceipt): Promise<{ readonly evicted: number }> {
     return this.#withArchiveLock(receipt.truthKey, async () => {
-      const rows = await this.#sql.json<{
-        readonly receipt: LedgerArchiveReceipt;
-        readonly bytes: string;
-      }>(`
-        SELECT receipt AS "receipt", bytes AS "bytes"
-        FROM agentos_event_archive_segments
-        WHERE segment_sha256 = ${sqlString(receipt.segmentSha256)}
-      `);
-      const stored = rows[0];
-      if (
-        stored === undefined ||
-        canonicalLedgerArchiveJson(stored.receipt) !== canonicalLedgerArchiveJson(receipt)
-      ) {
+      const stored = await this.#archiveSegmentsForTruthKey(receipt.truthKey);
+      const targetIndex = stored.findIndex(
+        (entry) =>
+          entry.receipt.segmentSha256 === receipt.segmentSha256 &&
+          canonicalLedgerArchiveJson(entry.receipt) === canonicalLedgerArchiveJson(receipt),
+      );
+      if (targetIndex < 0) {
         throw new SqlError({ cause: "archive receipt is not authoritative" });
       }
-      const artifact = await decodeLedgerArchiveArtifact(
-        Uint8Array.from(Buffer.from(stored.bytes, "base64")),
-        receipt.segmentSha256,
+      const target = stored[targetIndex]!;
+      const decodedTarget = await decodeLedgerArchiveArtifact(
+        target.bytes,
+        target.receipt.segmentSha256,
       );
+      const artifacts = await decodeLedgerArchiveSegments(decodedTarget.segment.identity, stored);
+      const artifact = artifacts[targetIndex]!;
       const hot = await this.#hotTruthEvents(artifact.segment.identity);
       const ids = new Set(artifact.segment.events.map((event) => event.id));
       const candidates = hot.filter((event) => ids.has(event.id));
@@ -431,10 +465,14 @@ export class NodePostgresBackend {
           DELETE FROM agentos_events
           WHERE truth_key = ${sqlString(receipt.truthKey)}
             AND id IN (${Array.from(ids, sqlNumber).join(", ")})
+            AND ${archiveSnapshotSql(receipt.truthKey, stored)}
           RETURNING id
         )
         SELECT json_build_object('count', COUNT(*)::int)::text FROM deleted
       `);
+      if (deleted.count !== candidates.length) {
+        throw new SqlError({ cause: "archive chain changed before eviction" });
+      }
       return { evicted: deleted.count };
     });
   }
@@ -1566,20 +1604,49 @@ export class NodePostgresBackend {
 
   async #archiveSegments(
     identity: BackendProtocolTruthIdentity,
-  ): Promise<ReadonlyArray<StoredLedgerArchiveSegment>> {
+  ): Promise<ReadonlyArray<NodePostgresArchiveRow>> {
+    return this.#archiveSegmentsForTruthKey(backendProtocolTruthIdentityKey(identity));
+  }
+
+  async #archiveSegmentsForTruthKey(
+    truthKey: string,
+  ): Promise<ReadonlyArray<NodePostgresArchiveRow>> {
     const rows = await this.#sql.json<{
       readonly receipt: LedgerArchiveReceipt;
       readonly bytes: string;
+      readonly segmentSha256: string;
+      readonly truthKey: string;
+      readonly previousSegmentSha256: string | null;
+      readonly firstEventId: number;
+      readonly lastEventId: number;
+      readonly archiveRef: string;
     }>(`
-      SELECT receipt AS "receipt", bytes AS "bytes"
+      SELECT receipt AS "receipt", bytes AS "bytes",
+             segment_sha256 AS "segmentSha256", truth_key AS "truthKey",
+             previous_segment_sha256 AS "previousSegmentSha256",
+             first_event_id::int AS "firstEventId", last_event_id::int AS "lastEventId",
+             archive_ref AS "archiveRef"
       FROM agentos_event_archive_segments
-      WHERE truth_key = ${sqlString(backendProtocolTruthIdentityKey(identity))}
+      WHERE truth_key = ${sqlString(truthKey)}
       ORDER BY first_event_id ASC
     `);
-    return rows.map((row) => ({
-      receipt: row.receipt,
-      bytes: Uint8Array.from(Buffer.from(row.bytes, "base64")),
-    }));
+    return rows.map((row) => {
+      if (
+        row.segmentSha256 !== row.receipt.segmentSha256 ||
+        row.truthKey !== row.receipt.truthKey ||
+        row.previousSegmentSha256 !== row.receipt.previousSegmentSha256 ||
+        row.firstEventId !== row.receipt.firstEventId ||
+        row.lastEventId !== row.receipt.lastEventId ||
+        row.archiveRef !== row.receipt.archiveRef
+      ) {
+        throw new SqlError({ cause: "archive row mismatch" });
+      }
+      return {
+        receipt: row.receipt,
+        bytes: Uint8Array.from(Buffer.from(row.bytes, "base64")),
+        encodedBytes: row.bytes,
+      };
+    });
   }
 
   async #withArchiveLock<A>(key: string, run: () => Promise<A>): Promise<A> {

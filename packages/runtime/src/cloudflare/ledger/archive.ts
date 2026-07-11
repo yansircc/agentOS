@@ -9,6 +9,8 @@ import {
 } from "@agent-os/core/backend-protocol";
 import { backendProtocolTruthIdentityKey } from "@agent-os/core/backend-protocol";
 import {
+  decodeLedgerArchiveSegments,
+  ledgerArchiveReceiptForExactCut,
   LedgerArchive,
   LedgerArchiveError,
   type StoredLedgerArchiveSegment,
@@ -32,25 +34,62 @@ const parseReceipt = (value: unknown): LedgerArchiveReceipt => {
   return JSON.parse(value) as LedgerArchiveReceipt;
 };
 
+interface CloudflareArchiveRow extends StoredLedgerArchiveSegment {
+  readonly encodedBytes: string;
+}
+
+const selectCloudflareArchiveRows = (
+  sql: SqlStorage,
+  truthKey: string,
+): ReadonlyArray<CloudflareArchiveRow> =>
+  sql
+    .exec(
+      `SELECT segment_sha256, truth_key, previous_segment_sha256, first_event_id,
+              last_event_id, archive_ref, receipt, bytes
+       FROM ledger_archive_segments
+       WHERE truth_key = ? ORDER BY first_event_id ASC`,
+      truthKey,
+    )
+    .toArray()
+    .map((row) => {
+      const record = row as unknown as Readonly<Record<string, unknown>>;
+      const receipt = parseReceipt(record.receipt);
+      if (
+        typeof record.bytes !== "string" ||
+        record.segment_sha256 !== receipt.segmentSha256 ||
+        record.truth_key !== receipt.truthKey ||
+        record.previous_segment_sha256 !== receipt.previousSegmentSha256 ||
+        Number(record.first_event_id) !== receipt.firstEventId ||
+        Number(record.last_event_id) !== receipt.lastEventId ||
+        record.archive_ref !== receipt.archiveRef
+      ) {
+        throw new LedgerArchiveError({ operation: "read", cause: "archive row mismatch" });
+      }
+      return {
+        receipt,
+        bytes: decodeBase64(record.bytes),
+        encodedBytes: record.bytes,
+      };
+    });
+
+const sameCloudflareArchiveRows = (
+  left: ReadonlyArray<CloudflareArchiveRow>,
+  right: ReadonlyArray<CloudflareArchiveRow>,
+): boolean =>
+  left.length === right.length &&
+  left.every(
+    (entry, index) =>
+      entry.encodedBytes === right[index]?.encodedBytes &&
+      canonicalLedgerArchiveJson(entry.receipt) ===
+        canonicalLedgerArchiveJson(right[index]?.receipt),
+  );
+
 export const selectCloudflareArchiveSegments = (
   sql: SqlStorage,
   identity: BackendProtocolTruthIdentity,
 ): ReadonlyArray<StoredLedgerArchiveSegment> => {
   ensureLedgerSchema(sql);
-  return sql
-    .exec(
-      `SELECT receipt, bytes FROM ledger_archive_segments
-       WHERE truth_key = ? ORDER BY first_event_id ASC`,
-      backendProtocolTruthIdentityKey(identity),
-    )
-    .toArray()
-    .map((row) => {
-      const record = row as unknown as { readonly receipt: unknown; readonly bytes: unknown };
-      if (typeof record.bytes !== "string") {
-        throw new LedgerArchiveError({ operation: "read", cause: "archive bytes are not text" });
-      }
-      return { receipt: parseReceipt(record.receipt), bytes: decodeBase64(record.bytes) };
-    });
+  return selectCloudflareArchiveRows(sql, backendProtocolTruthIdentityKey(identity));
 };
 
 export const CloudflareLedgerArchiveLive = (
@@ -60,25 +99,25 @@ export const CloudflareLedgerArchiveLive = (
   ensureLedgerSchema(sql);
   return Layer.succeed(LedgerArchive, {
     archive: async (spec) => {
-      const stored = selectCloudflareArchiveSegments(sql, spec.identity);
-      const previous = stored.at(-1);
+      const truthKey = backendProtocolTruthIdentityKey(spec.identity);
+      const stored = selectCloudflareArchiveRows(sql, truthKey);
+      const artifacts = await decodeLedgerArchiveSegments(spec.identity, stored);
+      const retry = ledgerArchiveReceiptForExactCut(stored, spec.throughEventId);
+      if (retry !== undefined) return retry;
+      const previous = artifacts.at(-1);
       const hot = selectLedgerEvents(sql, spec.identity, {});
-      const previousLastId = previous?.receipt.lastEventId ?? 0;
+      const previousLastId = previous?.segment.events.at(-1)?.id ?? 0;
       const events = hot.filter(
         (event) => event.id > previousLastId && event.id <= spec.throughEventId,
       );
       if (events.length === 0) {
-        if (previous !== undefined && spec.throughEventId <= previous.receipt.lastEventId) {
-          return previous.receipt;
-        }
         throw new LedgerArchiveError({ operation: "archive", cause: "no hot events to archive" });
       }
       const artifact = await createLedgerArchiveArtifact({
         identity: spec.identity,
-        previousSegmentSha256: previous?.receipt.segmentSha256 ?? null,
+        previousSegmentSha256: previous?.sha256 ?? null,
         events,
       });
-      const truthKey = backendProtocolTruthIdentityKey(spec.identity);
       const archiveRef = `sqlite:${encodeURIComponent(truthKey)}:${artifact.sha256}`;
       const receipt = await createLedgerArchiveReceipt({
         artifact,
@@ -86,6 +125,9 @@ export const CloudflareLedgerArchiveLive = (
         readback: artifact.bytes,
       });
       state.storage.transactionSync(() => {
+        if (!sameCloudflareArchiveRows(stored, selectCloudflareArchiveRows(sql, truthKey))) {
+          return;
+        }
         sql.exec(
           `INSERT INTO ledger_archive_segments
               (segment_sha256, truth_key, previous_segment_sha256, first_event_id,
@@ -102,7 +144,7 @@ export const CloudflareLedgerArchiveLive = (
           canonicalLedgerArchiveJson(receipt),
         );
       });
-      const readback = selectCloudflareArchiveSegments(sql, spec.identity).find(
+      const readback = selectCloudflareArchiveRows(sql, truthKey).find(
         (entry) => entry.receipt.previousSegmentSha256 === receipt.previousSegmentSha256,
       );
       if (readback === undefined) {
@@ -130,27 +172,25 @@ export const CloudflareLedgerArchiveLive = (
       return readbackReceipt;
     },
     evict: async (receipt) => {
-      const row = sql
-        .exec(
-          `SELECT receipt, bytes FROM ledger_archive_segments WHERE segment_sha256 = ?`,
-          receipt.segmentSha256,
-        )
-        .toArray()[0] as { readonly receipt?: unknown; readonly bytes?: unknown } | undefined;
-      if (
-        row === undefined ||
-        typeof row.bytes !== "string" ||
-        canonicalLedgerArchiveJson(parseReceipt(row.receipt)) !==
-          canonicalLedgerArchiveJson(receipt)
-      ) {
+      const stored = selectCloudflareArchiveRows(sql, receipt.truthKey);
+      const targetIndex = stored.findIndex(
+        (entry) =>
+          entry.receipt.segmentSha256 === receipt.segmentSha256 &&
+          canonicalLedgerArchiveJson(entry.receipt) === canonicalLedgerArchiveJson(receipt),
+      );
+      if (targetIndex < 0) {
         throw new LedgerArchiveError({
           operation: "evict",
           cause: "receipt is not authoritative",
         });
       }
-      const artifact = await decodeLedgerArchiveArtifact(
-        decodeBase64(row.bytes),
-        receipt.segmentSha256,
+      const target = stored[targetIndex]!;
+      const decodedTarget = await decodeLedgerArchiveArtifact(
+        target.bytes,
+        target.receipt.segmentSha256,
       );
+      const artifacts = await decodeLedgerArchiveSegments(decodedTarget.segment.identity, stored);
+      const artifact = artifacts[targetIndex]!;
       const hot = selectLedgerEvents(sql, artifact.segment.identity, {});
       const ids = new Set(artifact.segment.events.map((event) => event.id));
       const candidates = hot.filter((event) => ids.has(event.id));
@@ -168,6 +208,11 @@ export const CloudflareLedgerArchiveLive = (
         throw new LedgerArchiveError({ operation: "evict", cause: "hot event set mismatch" });
       }
       state.storage.transactionSync(() => {
+        if (
+          !sameCloudflareArchiveRows(stored, selectCloudflareArchiveRows(sql, receipt.truthKey))
+        ) {
+          throw new LedgerArchiveError({ operation: "evict", cause: "archive chain changed" });
+        }
         sql.exec(
           `DELETE FROM events WHERE id IN (${Array.from(ids, () => "?").join(", ")})`,
           ...ids,

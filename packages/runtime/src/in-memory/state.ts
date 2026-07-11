@@ -10,7 +10,6 @@ import {
   createLedgerArchiveArtifact,
   createLedgerArchiveReceipt,
   canonicalLedgerArchiveJson,
-  decodeLedgerArchiveArtifact,
   validateLedgerArchiveChain,
   backendProtocolEventIdentityKey,
   backendProtocolTruthIdentityKey,
@@ -74,7 +73,12 @@ import {
   type InMemoryDueWorkRow,
 } from "./due-work-state";
 import { fireInMemoryEvents, type InMemoryEventSink } from "./telemetry-state";
-import { LedgerArchiveError, mergeLedgerArchiveEvents } from "../ledger-archive";
+import {
+  decodeLedgerArchiveSegments,
+  ledgerArchiveReceiptForExactCut,
+  LedgerArchiveError,
+  mergeLedgerArchiveEvents,
+} from "../ledger-archive";
 export {
   inMemoryConversationRuntimeIdentity,
   inMemoryConversationTruthIdentity,
@@ -244,20 +248,27 @@ export class InMemoryBackendState {
     const key = backendProtocolTruthIdentityKey(spec.identity);
     return this.withArchiveLock(key, async () => {
       const segments = this.archiveSegments.get(key) ?? [];
-      const previous = segments.at(-1);
-      const previousLastId = previous?.receipt.lastEventId ?? 0;
+      if (segments.some((segment) => segment.tampered)) {
+        throw new LedgerArchiveError({ operation: "archive", cause: "archive chain is corrupt" });
+      }
+      const stored = segments.map((segment) => ({
+        receipt: segment.receipt,
+        bytes: segment.bytes,
+      }));
+      const artifacts = await decodeLedgerArchiveSegments(spec.identity, stored);
+      const retry = ledgerArchiveReceiptForExactCut(stored, spec.throughEventId);
+      if (retry !== undefined) return retry;
+      const previous = artifacts.at(-1);
+      const previousLastId = previous?.segment.events.at(-1)?.id ?? 0;
       const events = (this.rowsByTruthIdentityKey.get(key) ?? []).filter(
         (event) => event.id > previousLastId && event.id <= spec.throughEventId,
       );
       if (events.length === 0) {
-        if (previous !== undefined && spec.throughEventId <= previous.receipt.lastEventId) {
-          return previous.receipt;
-        }
         throw new LedgerArchiveError({ operation: "archive", cause: "no hot events to archive" });
       }
       const artifact = await createLedgerArchiveArtifact({
         identity: spec.identity,
-        previousSegmentSha256: previous?.artifact.sha256 ?? null,
+        previousSegmentSha256: previous?.sha256 ?? null,
         events,
       });
       const bytes = new Uint8Array(artifact.bytes);
@@ -272,26 +283,33 @@ export class InMemoryBackendState {
   async evictArchivedLedger(receipt: LedgerArchiveReceipt): Promise<{ readonly evicted: number }> {
     return this.withArchiveLock(receipt.truthKey, async () => {
       const segments = this.archiveSegments.get(receipt.truthKey) ?? [];
-      const stored = segments.find(
-        (segment) => segment.receipt.segmentSha256 === receipt.segmentSha256,
-      );
-      if (
-        stored === undefined ||
-        canonicalLedgerArchiveJson(stored.receipt) !== canonicalLedgerArchiveJson(receipt) ||
-        stored.tampered
-      ) {
+      if (segments.some((segment) => segment.tampered)) {
         throw new LedgerArchiveError({ operation: "evict", cause: "receipt is not authoritative" });
       }
-      await decodeLedgerArchiveArtifact(stored.bytes, stored.receipt.segmentSha256);
-      const ids = new Set(stored.artifact.segment.events.map((event) => event.id));
+      const stored = segments.map((segment) => ({
+        receipt: segment.receipt,
+        bytes: segment.bytes,
+      }));
+      const targetIndex = stored.findIndex(
+        (segment) =>
+          segment.receipt.segmentSha256 === receipt.segmentSha256 &&
+          canonicalLedgerArchiveJson(segment.receipt) === canonicalLedgerArchiveJson(receipt),
+      );
+      if (targetIndex < 0) {
+        throw new LedgerArchiveError({ operation: "evict", cause: "receipt is not authoritative" });
+      }
+      const artifacts = await decodeLedgerArchiveSegments(
+        segments[targetIndex]!.artifact.segment.identity,
+        stored,
+      );
+      const artifact = artifacts[targetIndex]!;
+      const ids = new Set(artifact.segment.events.map((event) => event.id));
       const hot = this.rows.filter((event) => ids.has(event.id));
       if (hot.length === 0) return { evicted: 0 };
       if (
         hot.length !== ids.size ||
         hot.some((event) => {
-          const archived = stored.artifact.segment.events.find(
-            (candidate) => candidate.id === event.id,
-          );
+          const archived = artifact.segment.events.find((candidate) => candidate.id === event.id);
           return (
             archived === undefined ||
             canonicalLedgerArchiveJson(event) !== canonicalLedgerArchiveJson(archived)
