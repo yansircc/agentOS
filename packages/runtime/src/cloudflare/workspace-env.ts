@@ -24,10 +24,18 @@ export interface CloudflareWorkspaceEnvResolverInput {
   readonly artifactReadback?: WorkspaceSessionArtifactReadback;
 }
 
+export interface CloudflareWorkspaceIdentityInput {
+  readonly scope: string;
+}
+
+export interface CloudflareWorkspaceLeaseIdentity extends CloudflareWorkspaceIdentityInput {
+  readonly runId: string;
+}
+
 export interface CloudflareWorkspaceEnvBinding {
   readonly getSandbox: (
     sandboxId: string,
-    input: CloudflareWorkspaceEnvResolverInput,
+    input: CloudflareWorkspaceIdentityInput,
   ) => CloudflareWorkspaceEnvClient | Promise<CloudflareWorkspaceEnvClient>;
 }
 
@@ -35,12 +43,9 @@ export interface CloudflareWorkspaceEnvResolverOptions {
   readonly binding: CloudflareWorkspaceEnvBinding;
   readonly cwd?: string;
   readonly shellFileOperationTimeoutMs?: CloudflareWorkspaceEnvOptions["shellFileOperationTimeoutMs"];
-  readonly sandboxId?: (input: CloudflareWorkspaceEnvResolverInput) => string;
-  readonly workspaceRef?: (input: CloudflareWorkspaceEnvResolverInput) => string;
-  readonly cleanup?: (
-    env: WorkspaceEnv,
-    input: CloudflareWorkspaceEnvResolverInput,
-  ) => void | Promise<void>;
+  readonly sandboxId?: (input: CloudflareWorkspaceIdentityInput) => string;
+  readonly workspaceRef?: (input: CloudflareWorkspaceIdentityInput) => string;
+  readonly cleanup?: (input: CloudflareWorkspaceLeaseIdentity) => void | Promise<void>;
 }
 
 export interface CloudflareSandboxWorkspaceNamespace {
@@ -69,15 +74,8 @@ export interface CloudflareSandboxWorkspaceEnvResolverOptions {
   readonly cwd?: string;
   readonly shellFileOperationTimeoutMs?: CloudflareWorkspaceEnvOptions["shellFileOperationTimeoutMs"];
   readonly scopePrefix?: string;
-  readonly workspaceRef?: (input: CloudflareWorkspaceEnvResolverInput) => string;
-  readonly cleanup?: (input: {
-    readonly scope: string;
-    readonly runId: string;
-    readonly sandboxId: string;
-    readonly workspaceRef: string;
-    readonly env: WorkspaceEnv;
-    readonly client: CloudflareWorkspaceEnvClient;
-  }) => void | Promise<void>;
+  readonly workspaceRef?: (input: CloudflareWorkspaceIdentityInput) => string;
+  readonly cleanup?: (input: CloudflareWorkspaceLeaseIdentity) => void | Promise<void>;
 }
 
 export interface CloudflareWorkspaceEnvLease {
@@ -98,11 +96,11 @@ export class CloudflareWorkspaceEnvResolverError extends Error {
   override readonly name = "CloudflareWorkspaceEnvResolverError";
 }
 
-const defaultSandboxId = (input: CloudflareWorkspaceEnvResolverInput): string =>
-  `workspace-job:${input.scope}:${input.runId}`;
+const defaultSandboxId = (input: CloudflareWorkspaceIdentityInput): string =>
+  `workspace-job:${input.scope}`;
 
-const defaultWorkspaceRef = (input: CloudflareWorkspaceEnvResolverInput): string =>
-  `cloudflare-sandbox:${input.scope}:${input.runId}`;
+const defaultWorkspaceRef = (input: CloudflareWorkspaceIdentityInput): string =>
+  `cloudflare-sandbox:${input.scope}`;
 
 const validateClient = (client: CloudflareWorkspaceEnvClient): void => {
   if (typeof client !== "object" || client === null) {
@@ -161,12 +159,12 @@ const validateSandboxClient = (client: unknown): CloudflareSandboxWorkspaceClien
 };
 
 const scopedSandboxId = (
-  input: CloudflareWorkspaceEnvResolverInput,
+  input: CloudflareWorkspaceIdentityInput,
   scopePrefix: string | undefined,
 ): string => {
-  const source = [scopePrefix ?? "", input.scope, input.runId].join(":");
+  const source = [scopePrefix ?? "", input.scope].join(":");
   const suffix = hashBase36(source);
-  const parts = [labelPart(scopePrefix ?? ""), "wj", labelPart(input.runId)].filter(
+  const parts = [labelPart(scopePrefix ?? ""), "wj", labelPart(input.scope)].filter(
     (part) => part.length > 0,
   );
   const base = parts.join("-");
@@ -176,11 +174,71 @@ const scopedSandboxId = (
 };
 
 const scopedWorkspaceRef = (
-  input: CloudflareWorkspaceEnvResolverInput,
+  input: CloudflareWorkspaceIdentityInput,
   scopePrefix: string | undefined,
 ): string => {
   const prefix = scopePrefix === undefined || scopePrefix.length === 0 ? "" : `${scopePrefix}:`;
   return `${prefix}${defaultWorkspaceRef(input)}`;
+};
+
+const workspaceScope = (
+  input: CloudflareWorkspaceEnvResolverInput,
+): CloudflareWorkspaceIdentityInput => {
+  if (input.scope.trim().length === 0) {
+    throw new CloudflareWorkspaceEnvResolverError("Cloudflare workspace scope must be non-empty");
+  }
+  return { scope: input.scope };
+};
+
+const runLeaseKey = (input: CloudflareWorkspaceEnvResolverInput): string => {
+  if (input.runId.trim().length === 0) {
+    throw new CloudflareWorkspaceEnvResolverError("Cloudflare workspace runId must be non-empty");
+  }
+  return `${input.scope}\u0000${input.runId}`;
+};
+
+const runLeaseIdentity = (
+  input: CloudflareWorkspaceEnvResolverInput,
+): CloudflareWorkspaceLeaseIdentity => ({ scope: input.scope, runId: input.runId });
+
+interface CloudflareWorkspaceResource {
+  readonly sandboxId: string;
+  readonly workspaceRef: string;
+  readonly env: WorkspaceEnv;
+}
+
+const resolveWorkspaceResource = async (
+  resources: Map<string, Promise<CloudflareWorkspaceResource>>,
+  scope: CloudflareWorkspaceIdentityInput,
+  create: () => Promise<CloudflareWorkspaceResource>,
+): Promise<CloudflareWorkspaceResource> => {
+  const existing = resources.get(scope.scope);
+  if (existing !== undefined) return existing;
+  const pending = create();
+  resources.set(scope.scope, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    resources.delete(scope.scope);
+    throw error;
+  }
+};
+
+const resolveRunLease = async (
+  leases: Map<string, Promise<CloudflareWorkspaceEnvLease>>,
+  key: string,
+  create: () => Promise<CloudflareWorkspaceEnvLease>,
+): Promise<CloudflareWorkspaceEnvLease> => {
+  const existing = leases.get(key);
+  if (existing !== undefined) return existing;
+  const pending = create();
+  leases.set(key, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    leases.delete(key);
+    throw error;
+  }
 };
 
 const labelPart = (value: string): string =>
@@ -208,12 +266,33 @@ const makeSessionlessCloudflareWorkspaceClient = (
     client.execWithSessionToken(command, DISABLED_SANDBOX_SESSION_TOKEN, options),
 });
 
+const defineCloudflareWorkspaceLease = (
+  resource: CloudflareWorkspaceResource,
+  input: CloudflareWorkspaceEnvResolverInput,
+  cleanup: () => Promise<void>,
+): CloudflareWorkspaceEnvLease => ({
+  ...resource,
+  session: defineWorkspaceSessionLease({
+    identity: {
+      scope: input.scope,
+      runId: input.runId,
+      workspaceRef: resource.workspaceRef,
+    },
+    env: resource.env,
+    ...(input.repo === undefined ? {} : { repo: input.repo }),
+    ...(input.permissions === undefined ? {} : { permissions: input.permissions }),
+    ...(input.resourceLimits === undefined ? {} : { resourceLimits: input.resourceLimits }),
+    ...(input.artifactReadback === undefined ? {} : { artifactReadback: input.artifactReadback }),
+    cleanup,
+  }),
+  cleanup,
+});
+
 /**
- * Resolves a run-scoped Cloudflare Sandbox workspace into a WorkspaceEnv.
+ * Resolves a scope-owned Cloudflare Sandbox workspace into a run lease.
  *
- * The resolver owns the host lifecycle axis: `scope/runId` determines the
- * sandbox id, so a run receives one sandbox lease and products receive only
- * the provider-neutral WorkspaceEnv.
+ * Authenticated scope is the sole persistent workspace identity. Runtime-owned
+ * run id selects only a transient lease over that shared WorkspaceEnv.
  *
  * @agentosPrimitive primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver
  * @agentosInvariant invariant.workspace-job.host-workspace-lifecycle
@@ -223,65 +302,48 @@ const makeSessionlessCloudflareWorkspaceClient = (
 export const createCloudflareWorkspaceEnvResolver = (
   options: CloudflareWorkspaceEnvResolverOptions,
 ): CloudflareWorkspaceEnvResolver => {
-  const leases = new Map<string, CloudflareWorkspaceEnvLease>();
-  const keyOf = (input: CloudflareWorkspaceEnvResolverInput): string =>
-    `${input.scope}\u0000${input.runId}`;
+  const resources = new Map<string, Promise<CloudflareWorkspaceResource>>();
+  const leases = new Map<string, Promise<CloudflareWorkspaceEnvLease>>();
   return {
     resolve: async (input) => {
-      const key = keyOf(input);
-      const existing = leases.get(key);
-      if (existing !== undefined) return existing;
-
-      const sandboxId = options.sandboxId?.(input) ?? defaultSandboxId(input);
-      const workspaceRef = options.workspaceRef?.(input) ?? defaultWorkspaceRef(input);
-      const client = await options.binding.getSandbox(sandboxId, input);
-      validateClient(client);
-      const env = makeCloudflareWorkspaceEnv({
-        client,
-        cwd: options.cwd,
-        workspaceRef,
-        ...(options.shellFileOperationTimeoutMs === undefined
-          ? {}
-          : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
+      const scope = workspaceScope(input);
+      const key = runLeaseKey(input);
+      return resolveRunLease(leases, key, async () => {
+        const resource = await resolveWorkspaceResource(resources, scope, async () => {
+          const sandboxId = options.sandboxId?.(scope) ?? defaultSandboxId(scope);
+          const workspaceRef = options.workspaceRef?.(scope) ?? defaultWorkspaceRef(scope);
+          const client = await options.binding.getSandbox(sandboxId, scope);
+          validateClient(client);
+          const env = makeCloudflareWorkspaceEnv({
+            client,
+            cwd: options.cwd,
+            workspaceRef,
+            ...(options.shellFileOperationTimeoutMs === undefined
+              ? {}
+              : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
+          });
+          return { sandboxId, workspaceRef, env };
+        });
+        const cleanup = async () => {
+          try {
+            await options.cleanup?.(runLeaseIdentity(input));
+          } finally {
+            leases.delete(key);
+          }
+        };
+        return defineCloudflareWorkspaceLease(resource, input, cleanup);
       });
-      const cleanup = async () => {
-        try {
-          await options.cleanup?.(env, input);
-        } finally {
-          leases.delete(key);
-        }
-      };
-      const session = defineWorkspaceSessionLease({
-        identity: { scope: input.scope, runId: input.runId, workspaceRef },
-        env,
-        ...(input.repo === undefined ? {} : { repo: input.repo }),
-        ...(input.permissions === undefined ? {} : { permissions: input.permissions }),
-        ...(input.resourceLimits === undefined ? {} : { resourceLimits: input.resourceLimits }),
-        ...(input.artifactReadback === undefined
-          ? {}
-          : { artifactReadback: input.artifactReadback }),
-        cleanup,
-      });
-      const lease = {
-        sandboxId,
-        workspaceRef,
-        env,
-        session,
-        cleanup,
-      };
-      leases.set(key, lease);
-      return lease;
     },
   };
 };
 
 /**
- * Resolves a run-scoped Cloudflare Sandbox binding into a WorkspaceEnv.
+ * Resolves a scope-owned Cloudflare Sandbox binding into a run lease.
  *
  * This high-level host helper owns the Sandbox binding composition: products
  * choose the Durable Object namespace, while agentOS fixes
- * `scope/runId -> sandbox lease`, validates the binding/client shape, disables
- * implicit default sessions, and pins one transport per run. The lower-level
+ * `scope -> sandbox resource`, validates the binding/client shape, disables
+ * implicit default sessions, and pins one transport per workspace. The lower-level
  * resolver remains available for tests or non-Sandbox hosts.
  *
  * @agentosPrimitive primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver
@@ -292,65 +354,42 @@ export const createCloudflareWorkspaceEnvResolver = (
 export const createCloudflareSandboxWorkspaceEnvResolver = (
   options: CloudflareSandboxWorkspaceEnvResolverOptions,
 ): CloudflareWorkspaceEnvResolver => {
-  const leases = new Map<string, CloudflareWorkspaceEnvLease>();
-  const keyOf = (input: CloudflareWorkspaceEnvResolverInput): string =>
-    `${input.scope}\u0000${input.runId}`;
+  const resources = new Map<string, Promise<CloudflareWorkspaceResource>>();
+  const leases = new Map<string, Promise<CloudflareWorkspaceEnvLease>>();
   return {
     resolve: async (input) => {
-      const key = keyOf(input);
-      const existing = leases.get(key);
-      if (existing !== undefined) return existing;
-
-      const sandboxId = scopedSandboxId(input, options.scopePrefix);
-      const workspaceRef =
-        options.workspaceRef?.(input) ?? scopedWorkspaceRef(input, options.scopePrefix);
-      const binding = validateSandboxNamespace(options.binding);
-      const client = validateSandboxClient(binding.get(binding.idFromName(sandboxId)));
-      await client.setSandboxName(sandboxId, true);
-      await client.setTransport(options.transport ?? "rpc");
-      const workspaceClient = makeSessionlessCloudflareWorkspaceClient(client);
-      validateClient(workspaceClient);
-      const env = makeCloudflareWorkspaceEnv({
-        client: workspaceClient,
-        cwd: options.cwd,
-        workspaceRef,
-        ...(options.shellFileOperationTimeoutMs === undefined
-          ? {}
-          : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
-      });
-      const cleanup = async () => {
-        try {
-          await options.cleanup?.({
-            ...input,
-            sandboxId,
-            workspaceRef,
-            env,
+      const scope = workspaceScope(input);
+      const key = runLeaseKey(input);
+      return resolveRunLease(leases, key, async () => {
+        const resource = await resolveWorkspaceResource(resources, scope, async () => {
+          const sandboxId = scopedSandboxId(scope, options.scopePrefix);
+          const workspaceRef =
+            options.workspaceRef?.(scope) ?? scopedWorkspaceRef(scope, options.scopePrefix);
+          const binding = validateSandboxNamespace(options.binding);
+          const client = validateSandboxClient(binding.get(binding.idFromName(sandboxId)));
+          await client.setSandboxName(sandboxId, true);
+          await client.setTransport(options.transport ?? "rpc");
+          const workspaceClient = makeSessionlessCloudflareWorkspaceClient(client);
+          validateClient(workspaceClient);
+          const env = makeCloudflareWorkspaceEnv({
             client: workspaceClient,
+            cwd: options.cwd,
+            workspaceRef,
+            ...(options.shellFileOperationTimeoutMs === undefined
+              ? {}
+              : { shellFileOperationTimeoutMs: options.shellFileOperationTimeoutMs }),
           });
-        } finally {
-          leases.delete(key);
-        }
-      };
-      const session = defineWorkspaceSessionLease({
-        identity: { scope: input.scope, runId: input.runId, workspaceRef },
-        env,
-        ...(input.repo === undefined ? {} : { repo: input.repo }),
-        ...(input.permissions === undefined ? {} : { permissions: input.permissions }),
-        ...(input.resourceLimits === undefined ? {} : { resourceLimits: input.resourceLimits }),
-        ...(input.artifactReadback === undefined
-          ? {}
-          : { artifactReadback: input.artifactReadback }),
-        cleanup,
+          return { sandboxId, workspaceRef, env };
+        });
+        const cleanup = async () => {
+          try {
+            await options.cleanup?.(runLeaseIdentity(input));
+          } finally {
+            leases.delete(key);
+          }
+        };
+        return defineCloudflareWorkspaceLease(resource, input, cleanup);
       });
-      const lease = {
-        sandboxId,
-        workspaceRef,
-        env,
-        session,
-        cleanup,
-      };
-      leases.set(key, lease);
-      return lease;
     },
   };
 };

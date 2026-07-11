@@ -409,7 +409,7 @@ describe("Cloudflare DO workspace host helpers", () => {
     expect(historyEvents[0]).toMatchObject({ event: "ag_ui" });
   });
 
-  it("resolves one Cloudflare WorkspaceEnv lease per scope/run and validates bindings", async () => {
+  it("derives one Cloudflare WorkspaceEnv per scope and distinct run leases", async () => {
     const sandboxIds: string[] = [];
     const cleaned: string[] = [];
     const readbackInputs: unknown[] = [];
@@ -423,7 +423,7 @@ describe("Cloudflare DO workspace host helpers", () => {
           };
         },
       },
-      cleanup: (_env, input) => {
+      cleanup: (input) => {
         cleaned.push(input.runId);
       },
     });
@@ -453,12 +453,18 @@ describe("Cloudflare DO workspace host helpers", () => {
 
     expect(first).toBe(second);
     expect(third).not.toBe(first);
-    expect(sandboxIds).toEqual(["workspace-job:scope-1:run-1", "workspace-job:scope-1:run-2"]);
-    expect(first.env.domain.ref).toBe("cloudflare-sandbox:scope-1:run-1");
+    expect(third.env).toBe(first.env);
+    expect(sandboxIds).toEqual(["workspace-job:scope-1"]);
+    expect(first.env.domain.ref).toBe("cloudflare-sandbox:scope-1");
     expect(first.session.identity).toEqual({
       scope: "scope-1",
       runId: "run-1",
-      workspaceRef: "cloudflare-sandbox:scope-1:run-1",
+      workspaceRef: "cloudflare-sandbox:scope-1",
+    });
+    expect(third.session.identity).toEqual({
+      scope: "scope-1",
+      runId: "run-2",
+      workspaceRef: "cloudflare-sandbox:scope-1",
     });
     expect(first.session.env).toBe(first.env);
     expect(third.session.repo).toEqual({ repoRef: "repo:example", root: "/workspace" });
@@ -481,12 +487,9 @@ describe("Cloudflare DO workspace host helpers", () => {
     await cleanupWorkspaceSessionLease(first.session, { reason: "completed" });
     const afterCleanup = await resolver.resolve({ scope: "scope-1", runId: "run-1" });
     expect(afterCleanup).not.toBe(first);
+    expect(afterCleanup.env).toBe(first.env);
     expect(cleaned).toEqual(["run-1"]);
-    expect(sandboxIds).toEqual([
-      "workspace-job:scope-1:run-1",
-      "workspace-job:scope-1:run-2",
-      "workspace-job:scope-1:run-1",
-    ]);
+    expect(sandboxIds).toEqual(["workspace-job:scope-1"]);
 
     const invalid = createCloudflareWorkspaceEnvResolver({
       binding: {
@@ -523,10 +526,47 @@ describe("Cloudflare DO workspace host helpers", () => {
 
     expect(second).not.toBe(first);
     expect(cleanupCalls).toBe(1);
-    expect(sandboxIds).toEqual(["workspace-job:scope-1:run-1", "workspace-job:scope-1:run-1"]);
+    expect(second.env).toBe(first.env);
+    expect(sandboxIds).toEqual(["workspace-job:scope-1"]);
   });
 
-  it("resolves Cloudflare Sandbox bindings with run-scoped leases and sessionless transport", async () => {
+  it("isolates workspace identity by authenticated scope under concurrent resolution", async () => {
+    const sandboxIds: string[] = [];
+    const resolver = createCloudflareWorkspaceEnvResolver({
+      binding: {
+        getSandbox: async (sandboxId) => {
+          sandboxIds.push(sandboxId);
+          await Promise.resolve();
+          return {
+            id: sandboxId,
+            exec: async () => ({ exitCode: 0, stdout: "ok", stderr: "" }),
+          };
+        },
+      },
+    });
+
+    const [scopeAFirst, scopeAFirstDuplicate, scopeASecond, scopeB] = await Promise.all([
+      resolver.resolve({ scope: "scope-a", runId: "run-1" }),
+      resolver.resolve({ scope: "scope-a", runId: "run-1" }),
+      resolver.resolve({ scope: "scope-a", runId: "run-2" }),
+      resolver.resolve({ scope: "scope-b", runId: "run-1" }),
+    ]);
+
+    expect(scopeAFirst).toBe(scopeAFirstDuplicate);
+    expect(scopeAFirst.env).toBe(scopeASecond.env);
+    expect(scopeAFirst.workspaceRef).toBe(scopeASecond.workspaceRef);
+    expect(scopeAFirst.session.identity.runId).toBe("run-1");
+    expect(scopeASecond.session.identity.runId).toBe("run-2");
+    expect(scopeB.env).not.toBe(scopeAFirst.env);
+    expect(scopeB.workspaceRef).not.toBe(scopeAFirst.workspaceRef);
+    expect(sandboxIds).toEqual(["workspace-job:scope-a", "workspace-job:scope-b"]);
+
+    await expect(resolver.resolve({ scope: " ", runId: "run-3" })).rejects.toThrow(
+      "Cloudflare workspace scope must be non-empty",
+    );
+  });
+
+  it("resolves Cloudflare Sandbox bindings with scope-owned resources and run leases", async () => {
     const requestedIds: string[] = [];
     const sandboxNames: Array<{ name: string; normalizeId: boolean | undefined }> = [];
     const transports: string[] = [];
@@ -571,8 +611,8 @@ describe("Cloudflare DO workspace host helpers", () => {
       shellFileOperationTimeoutMs: 42_000,
       scopePrefix: "ZeroY",
       transport: "rpc",
-      cleanup: ({ runId, sandboxId, workspaceRef }) => {
-        cleaned.push(`${runId}:${sandboxId}:${workspaceRef}`);
+      cleanup: ({ runId }) => {
+        cleaned.push(runId);
       },
     });
 
@@ -582,17 +622,15 @@ describe("Cloudflare DO workspace host helpers", () => {
 
     expect(first).toBe(second);
     expect(third).not.toBe(first);
-    expect(first.sandboxId).toMatch(/^zeroy-wj-run-abc-123-[a-z0-9]+$/);
+    expect(third.env).toBe(first.env);
+    expect(first.sandboxId).toMatch(/^zeroy-wj-customer-site-[a-z0-9]+$/);
     expect(first.sandboxId).not.toContain(":");
     expect(first.sandboxId.length).toBeLessThanOrEqual(63);
-    expect(first.workspaceRef).toBe("ZeroY:cloudflare-sandbox:Customer Site:Run-ABC-123");
-    expect(first.env.domain.ref).toBe("ZeroY:cloudflare-sandbox:Customer Site:Run-ABC-123");
-    expect(requestedIds).toEqual([first.sandboxId, third.sandboxId]);
-    expect(sandboxNames).toEqual([
-      { name: first.sandboxId, normalizeId: true },
-      { name: third.sandboxId, normalizeId: true },
-    ]);
-    expect(transports).toEqual(["rpc", "rpc"]);
+    expect(first.workspaceRef).toBe("ZeroY:cloudflare-sandbox:Customer Site");
+    expect(first.env.domain.ref).toBe("ZeroY:cloudflare-sandbox:Customer Site");
+    expect(requestedIds).toEqual([first.sandboxId]);
+    expect(sandboxNames).toEqual([{ name: first.sandboxId, normalizeId: true }]);
+    expect(transports).toEqual(["rpc"]);
 
     await first.env.exec("pwd", { timeoutMs: 100 });
     expect(execCalls).toEqual([
@@ -609,10 +647,9 @@ describe("Cloudflare DO workspace host helpers", () => {
     await first.cleanup();
     const afterCleanup = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
     expect(afterCleanup).not.toBe(first);
-    expect(cleaned).toEqual([
-      `Run-ABC-123:${first.sandboxId}:ZeroY:cloudflare-sandbox:Customer Site:Run-ABC-123`,
-    ]);
-    expect(requestedIds).toEqual([first.sandboxId, third.sandboxId, afterCleanup.sandboxId]);
+    expect(afterCleanup.env).toBe(first.env);
+    expect(cleaned).toEqual(["Run-ABC-123"]);
+    expect(requestedIds).toEqual([first.sandboxId]);
 
     const invalid = createCloudflareSandboxWorkspaceEnvResolver({
       binding: {} as never,
@@ -657,8 +694,9 @@ describe("Cloudflare DO workspace host helpers", () => {
     const second = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
 
     expect(second).not.toBe(first);
+    expect(second.env).toBe(first.env);
     expect(cleanupCalls).toBe(1);
-    expect(requestedIds).toEqual([first.sandboxId, second.sandboxId]);
+    expect(requestedIds).toEqual([first.sandboxId]);
   });
 
   it("allows hosts to declare the WorkspaceEnv ref carried by workspace operations", async () => {
@@ -685,15 +723,15 @@ describe("Cloudflare DO workspace host helpers", () => {
         typeof createCloudflareSandboxWorkspaceEnvResolver
       >[0]["binding"],
       scopePrefix: "ZeroY",
-      workspaceRef: ({ runId }) => runId,
+      workspaceRef: ({ scope }) => scope,
     });
 
     const lease = await resolver.resolve({ scope: "Customer Site", runId: "Run-ABC-123" });
 
-    expect(lease.sandboxId).toMatch(/^zeroy-wj-run-abc-123-[a-z0-9]+$/);
+    expect(lease.sandboxId).toMatch(/^zeroy-wj-customer-site-[a-z0-9]+$/);
     expect(requestedIds).toEqual([lease.sandboxId]);
-    expect(lease.workspaceRef).toBe("Run-ABC-123");
-    expect(lease.env.domain.ref).toBe("Run-ABC-123");
+    expect(lease.workspaceRef).toBe("Customer Site");
+    expect(lease.env.domain.ref).toBe("Customer Site");
   });
 
   it("installs workspace-op provider handlers that commit only through boundary capability", async () => {
