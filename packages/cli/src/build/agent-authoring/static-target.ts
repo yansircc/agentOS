@@ -189,11 +189,17 @@ interface StaticTargetPlanShared {
   readonly files: StaticTargetSharedFiles;
 }
 
+interface StaticTargetClientProjection {
+  readonly kind: AgentOsConfigClientKind;
+  readonly moduleImports: ReadonlyArray<StaticTargetModuleImport>;
+  readonly files: ReadonlyArray<StaticTargetGeneratedFile>;
+}
+
 interface StaticTargetPlan {
   readonly shared: StaticTargetPlanShared;
   readonly profile: { readonly kind: AgentOsConfigProfile };
   readonly host: { readonly kind: AgentOsConfigTargetKind };
-  readonly client: { readonly kind: AgentOsConfigClientKind };
+  readonly client: StaticTargetClientProjection;
 }
 
 const generatedPath = <Path extends StaticTargetGeneratedFilePath>(path: Path, text: string) => ({
@@ -2656,15 +2662,15 @@ const renderCloudflareWranglerConfig = (
   });
 };
 
-const generatedClientModuleImports = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+const generatedProfileClientModuleImports = (
+  profile: AgentOsConfigProfile,
   modules: ReturnType<typeof staticTargetModules>,
 ): ReadonlyArray<StaticTargetModuleImport> => [
   {
     kind: "workspace-client",
     source: modules.workspaceAgentClient,
     imports:
-      normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
         ? [
             "createWorkspaceAgentClientBridge",
             "CreateWorkspaceAgentClientOptions",
@@ -2683,44 +2689,44 @@ const generatedClientModuleImports = (
             "WorkspaceAgentCommandOutputByName",
           ],
   },
-  ...(normalized.client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
-    ? [
-        {
-          kind: "client-transport" as const,
-          source: "./sveltekit.remote",
-          imports: ["invokeAgentCommand", "runEventStream"],
-        },
-        {
-          kind: "client-transport" as const,
-          source: modules.svelteKitServer,
-          imports: ["command", "getRequestEvent", "query"],
-        },
-        {
-          kind: "client-transport" as const,
-          source: modules.sseHttp,
-          imports: ["decodeSseHttpEvents", "responseToSseHttpChunks"],
-        },
-        {
-          kind: "client-core" as const,
-          source: modules.clientCore,
-          imports: ["AgentClientSnapshot"],
-        },
-        {
-          kind: "client-framework" as const,
-          source: modules.clientSvelte,
-          imports: ["clientReadable", "selectClientReadable"],
-        },
-        {
-          kind: "client-framework" as const,
-          source: modules.svelteStore,
-          imports: ["Readable"],
-        },
-      ]
-    : []),
+];
+
+const generatedSvelteKitClientModuleImports = (
+  modules: ReturnType<typeof staticTargetModules>,
+): ReadonlyArray<StaticTargetModuleImport> => [
+  {
+    kind: "client-transport",
+    source: "./sveltekit.remote",
+    imports: ["invokeAgentCommand", "runEventStream"],
+  },
+  {
+    kind: "client-transport",
+    source: modules.svelteKitServer,
+    imports: ["command", "getRequestEvent", "query"],
+  },
+  {
+    kind: "client-transport",
+    source: modules.sseHttp,
+    imports: ["decodeSseHttpEvents", "responseToSseHttpChunks"],
+  },
+  {
+    kind: "client-core",
+    source: modules.clientCore,
+    imports: ["AgentClientSnapshot"],
+  },
+  {
+    kind: "client-framework",
+    source: modules.clientSvelte,
+    imports: ["clientReadable", "selectClientReadable"],
+  },
+  {
+    kind: "client-framework",
+    source: modules.svelteStore,
+    imports: ["Readable"],
+  },
 ];
 
 const renderWorkspaceSvelteKitRemote = (
-  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
@@ -3189,7 +3195,6 @@ export const runEventStream = query.live(optionalAfterIdInput, (input) => {
 `;
 
 const renderChatSvelteKitRemote = (
-  normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["command", "getRequestEvent", "query"], modules.svelteKitServer)}
 ${renderNamedImport(["decodeSseHttpEvents", "responseToSseHttpChunks"], modules.sseHttp)}
@@ -3475,20 +3480,9 @@ export const runEventStream = query.live(optionalAfterIdInput, (input) => {
 });
 `;
 
-const renderSvelteKitRemote = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+const renderWorkspaceBrowserDirectClient = (
   modules: ReturnType<typeof staticTargetModules>,
-): string =>
-  normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
-    ? renderWorkspaceSvelteKitRemote(normalized, modules)
-    : renderChatSvelteKitRemote(normalized, modules);
-
-const renderWorkspaceStaticClient = (
-  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
-  modules: ReturnType<typeof staticTargetModules>,
-): string => {
-  if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
-    return `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentClient)}
+): string => `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentClient)}
 ${renderTypeImport(
   [
     "AgentSessionListProjection",
@@ -3523,9 +3517,10 @@ export const createAgentOSClient = (
   options: GeneratedAgentClientOptions = {},
 ): GeneratedAgentClient => createWorkspaceAgentClientBridge(options);
 `;
-  }
 
-  return `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentClient)}
+const renderWorkspaceSvelteKitClient = (
+  modules: ReturnType<typeof staticTargetModules>,
+): string => `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentClient)}
 import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";
 ${renderNamedImport(["clientReadable", "selectClientReadable"], modules.clientSvelte)}
 ${renderTypeImport(["AgentClientSnapshot"], modules.clientCore)}
@@ -3599,12 +3594,14 @@ export const createAgentOSClient = (
   };
 };
 `;
-};
 
-const renderChatStaticClient = (
-  normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>,
+const chatStaticClientFragments = (
   modules: ReturnType<typeof staticTargetModules>,
-): string => {
+): {
+  readonly commonImports: string;
+  readonly commonTypes: string;
+  readonly commonMethods: string;
+} => {
   const commonImports = `${renderNamedImport(
     ["WORKSPACE_AGENT_COMMAND", "createWorkspaceAgentClient"],
     modules.workspaceAgentClient,
@@ -3630,8 +3627,12 @@ ${renderGeneratedClientTypeMethods("chat")}
   const commonMethods = `
     client,
 ${renderGeneratedClientMethods("chat")}`;
-  if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
-    return `${commonImports}
+  return { commonImports, commonTypes, commonMethods };
+};
+
+const renderChatBrowserDirectClient = (modules: ReturnType<typeof staticTargetModules>): string => {
+  const { commonImports, commonTypes, commonMethods } = chatStaticClientFragments(modules);
+  return `${commonImports}
 ${commonTypes}
 }
 
@@ -3643,8 +3644,10 @@ export const createAgentOSClient = (
   };
 };
 `;
-  }
+};
 
+const renderChatSvelteKitClient = (modules: ReturnType<typeof staticTargetModules>): string => {
+  const { commonImports, commonTypes, commonMethods } = chatStaticClientFragments(modules);
   return `${commonImports}
 import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";
 ${renderNamedImport(["clientReadable", "selectClientReadable"], modules.clientSvelte)}
@@ -3686,14 +3689,6 @@ export const createAgentOSClient = (
 `;
 };
 
-const renderStaticClient = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
-  modules: ReturnType<typeof staticTargetModules>,
-): string =>
-  normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
-    ? renderWorkspaceStaticClient(normalized, modules)
-    : renderChatStaticClient(normalized, modules);
-
 const renderStaticClientTypes = (): string => `export type {
   GeneratedAgentClient,
   GeneratedAgentClientOptions,
@@ -3701,6 +3696,44 @@ const renderStaticClientTypes = (): string => `export type {
 
 export { createAgentOSClient } from "./client";
 `;
+
+const staticTargetClientProjectionFor = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): StaticTargetClientProjection => {
+  const candidates =
+    normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? {
+          browserDirect: renderWorkspaceBrowserDirectClient(modules),
+          svelteKit: renderWorkspaceSvelteKitClient(modules),
+          svelteKitRemote: renderWorkspaceSvelteKitRemote(modules),
+        }
+      : {
+          browserDirect: renderChatBrowserDirectClient(modules),
+          svelteKit: renderChatSvelteKitClient(modules),
+          svelteKitRemote: renderChatSvelteKitRemote(modules),
+        };
+  const baseModuleImports = generatedProfileClientModuleImports(normalized.profile, modules);
+  if (normalized.client.kind === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
+    return {
+      kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1,
+      moduleImports: baseModuleImports,
+      files: [
+        generatedPath(".agentos/generated/client.ts", candidates.browserDirect),
+        generatedPath(".agentos/generated/client.d.ts", renderStaticClientTypes()),
+      ],
+    };
+  }
+  return {
+    kind: AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1,
+    moduleImports: [...baseModuleImports, ...generatedSvelteKitClientModuleImports(modules)],
+    files: [
+      generatedPath(".agentos/generated/sveltekit.remote.ts", candidates.svelteKitRemote),
+      generatedPath(".agentos/generated/client.ts", candidates.svelteKit),
+      generatedPath(".agentos/generated/client.d.ts", renderStaticClientTypes()),
+    ],
+  };
+};
 
 const staticTargetPlanFor = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
@@ -3818,7 +3851,7 @@ const staticTargetPlanFor = (
     },
     profile: { kind: normalized.profile },
     host: { kind: normalized.target.kind },
-    client: { kind: normalized.client.kind },
+    client: staticTargetClientProjectionFor(normalized, modules),
   };
 };
 
@@ -3959,7 +3992,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           profile: normalized.profile,
           target: normalized.target.kind,
           llmRoute: normalized.llm.route,
-          client: normalized.client.kind,
+          client: plan.client.kind,
           workspaceTopology: normalized.workspace.topology,
           toolNames,
         },
@@ -4095,10 +4128,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       source: "./wrangler.jsonc",
       imports: [],
     },
-    ...generatedClientModuleImports(
-      normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
-      modules,
-    ),
+    ...plan.client.moduleImports,
   ];
   return {
     ok: true,
@@ -4133,29 +4163,14 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
           ),
         ),
-        ...(normalized.client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
-          ? [
-              generatedPath(
-                ".agentos/generated/sveltekit.remote.ts",
-                renderSvelteKitRemote(
-                  normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
-                  modules,
-                ),
-              ),
-            ]
-          : []),
-        generatedPath(
-          ".agentos/generated/client.ts",
-          renderStaticClient(normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>, modules),
-        ),
-        generatedPath(".agentos/generated/client.d.ts", renderStaticClientTypes()),
+        ...plan.client.files,
       ],
       moduleGraph,
       canonicalDeployment: {
         profile: normalized.profile,
         target: normalized.target.kind,
         llmRoute: normalized.llm.route,
-        client: normalized.client.kind,
+        client: plan.client.kind,
         ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
           ? { workspaceTopology: normalized.workspace.topology }
           : {}),

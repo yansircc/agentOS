@@ -4385,6 +4385,26 @@ void test("generated command projections derive profile coverage from one typed 
   assert.doesNotMatch(output.dispatch, /WORKSPACE_AGENT_COMMAND\.READ_STATE/u);
 });
 
+void test("static target plan owns the client axis decision", () => {
+  const source = readFileSync(
+    path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
+    "utf8",
+  );
+  const projectionStart = source.indexOf("const staticTargetClientProjectionFor =");
+  const planStart = source.indexOf("const staticTargetPlanFor =");
+  assert.notEqual(projectionStart, -1);
+  assert.notEqual(planStart, -1);
+  const projectionSource = source.slice(projectionStart, planStart);
+  assert.equal(source.match(/normalized\.client\.kind/gu)?.length, 1);
+  assert.match(projectionSource, /normalized\.client\.kind/);
+  assert.match(projectionSource, /moduleImports:/);
+  assert.match(projectionSource, /files:/);
+  assert.doesNotMatch(
+    source.slice(source.indexOf("const renderWorkspaceSvelteKitRemote ="), projectionStart),
+    /normalized\.client\.kind/,
+  );
+});
+
 void test("static target injects skill advert and load_skill for workspace and chat profiles", () => {
   const result = runTypeScript(
     [
