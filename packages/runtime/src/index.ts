@@ -195,6 +195,7 @@ export {
   createAttachedStreamSseResponse,
   createSseHttpResponse,
   createSseHttpTextResponse,
+  createSseHttpWritableResponse,
   decodeSseHttpEvents,
   encodeSseHttpData,
   encodeSseHttpEvent,
@@ -203,7 +204,21 @@ export {
   responseToSseHttpChunks,
   SSE_HTTP_CONTENT_TYPE,
 } from "./sse-http";
-export type { SseHttpChunk, SseHttpEvent, SseHttpResponseOptions, SseHttpSource } from "./sse-http";
+export type {
+  SseHttpChunk,
+  SseHttpEvent,
+  SseHttpResponseOptions,
+  SseHttpSource,
+  SseHttpWritableResponse,
+} from "./sse-http";
+export {
+  decodeSubmitLiveFrame,
+  encodeSubmitLiveFrame,
+  recordLlmStreamFrame,
+  SUBMIT_LIVE_MAX_FRAME_BYTES,
+  SubmitLiveFrameError,
+} from "./submit-live";
+export type { RecordedLlmStreamFrame, SubmitLiveFrame } from "./submit-live";
 export {
   classifyStructuredCallFailure,
   decodeStructuredOutputFromItems,

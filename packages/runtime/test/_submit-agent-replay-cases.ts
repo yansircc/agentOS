@@ -17,6 +17,7 @@ import {
   runSubmit,
   type LlmRoute,
 } from "./_submit-agent-harness";
+import { llmStreamFromResponse } from "@agent-os/core/llm-protocol";
 
 export const registerSubmitAgentReplayCases = () => {
   it("replay mode live LLM provider adapter not called when call snapshot is present", () => {
@@ -30,11 +31,13 @@ export const registerSubmitAgentReplayCases = () => {
           transportAdapterId: "test-runtime@1.0.0",
           transportAdapterVersion: "1.0.0",
         }),
-      call: () =>
-        Effect.sync(() => {
-          liveLlmProviderAdapterCalled = true;
-          return response({ items: [{ type: "message", text: "live" }] });
-        }),
+      stream: () =>
+        llmStreamFromResponse(
+          Effect.sync(() => {
+            liveLlmProviderAdapterCalled = true;
+            return response({ items: [{ type: "message", text: "live" }] });
+          }),
+        ),
     };
     const spec = baseSpec();
     const snapshot = llmCallSnapshotFromResponse({
@@ -50,7 +53,7 @@ export const registerSubmitAgentReplayCases = () => {
 
     expect(replayed.items).toEqual([{ type: "message", text: "snapshot" }]);
     expect(liveLlmProviderAdapterCalled).toBe(false);
-    expect(liveLlm.call).toBeDefined();
+    expect(liveLlm.stream).toBeDefined();
   });
 
   it.effect("replay mode live tool execute not called when tool result snapshot is present", () =>

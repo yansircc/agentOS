@@ -1,7 +1,8 @@
-import { Context, Schema } from "effect";
+import { Context, Effect, Option, Schema, Stream } from "effect";
 import type { Effect as EffectType } from "effect";
+import type { Stream as StreamType } from "effect";
 import type { AgentSchema } from "@agent-os/core/agent-schema";
-import type { UpstreamFailure } from "@agent-os/core/errors";
+import { UpstreamFailure } from "@agent-os/core/errors";
 import type { MaterialRef } from "@agent-os/core/material-ref";
 import type {
   MaterialResolutionReceipt,
@@ -61,10 +62,10 @@ export class LlmTransport extends Context.Service<
     readonly resolveRoute: (
       route: LlmRoute,
     ) => EffectType.Effect<LlmTransportRouteDescriptor, UpstreamFailure>;
-    readonly call: (
+    readonly stream: (
       request: LlmRequest,
       options?: LlmCallOptions,
-    ) => EffectType.Effect<LlmResponse, UpstreamFailure>;
+    ) => StreamType.Stream<LlmStreamFrame, UpstreamFailure>;
   }
 >()("@agent-os/LlmTransport") {}
 
@@ -190,6 +191,183 @@ export interface LlmResponse {
   readonly usage: LlmUsage;
   readonly continuation?: LlmResponseContinuation;
 }
+
+/**
+ * Provider-neutral live projection emitted before the terminal response.
+ * Provider-native stream parts never cross this boundary.
+ *
+ * @public
+ */
+export type LlmStreamDelta =
+  | { readonly type: "text_start"; readonly id: string }
+  | { readonly type: "text_delta"; readonly id: string; readonly text: string }
+  | { readonly type: "text_end"; readonly id: string }
+  | {
+      readonly type: "reasoning";
+      readonly item: Extract<LlmOutputItem, { readonly type: "reasoning" }>;
+    }
+  | {
+      readonly type: "tool_call";
+      readonly item: Extract<LlmOutputItem, { readonly type: "tool_call" }>;
+    }
+  | {
+      readonly type: "tool_result";
+      readonly item: Extract<LlmOutputItem, { readonly type: "tool_result" }>;
+    }
+  | {
+      readonly type: "refusal";
+      readonly item: Extract<LlmOutputItem, { readonly type: "refusal" }>;
+    }
+  | {
+      readonly type: "error";
+      readonly item: Extract<LlmOutputItem, { readonly type: "error" }>;
+    };
+
+/**
+ * Ordered output for one provider invocation. Exactly one terminal frame must
+ * end the stream; deltas are ephemeral projections and never durable truth.
+ *
+ * @public
+ */
+export type LlmStreamFrame =
+  | {
+      readonly sequence: number;
+      readonly kind: "delta";
+      readonly delta: LlmStreamDelta;
+    }
+  | {
+      readonly sequence: number;
+      readonly kind: "terminal";
+      readonly response: LlmResponse;
+    };
+
+const llmResponseShape = Schema.Struct({
+  items: Schema.Array(LlmOutputItemSchema),
+  usage: LlmUsageSchema,
+});
+
+const hasValidResponseShape = (value: unknown): value is Pick<LlmResponse, "items" | "usage"> =>
+  Option.isSome(Schema.decodeUnknownOption(llmResponseShape)(value));
+
+const llmStreamFailure = (reason: string, detail?: unknown): UpstreamFailure =>
+  new UpstreamFailure({ cause: { reason, ...(detail === undefined ? {} : { detail }) } });
+
+/** Builds an ordered ephemeral delta frame. @public */
+export const llmStreamDeltaFrame = (sequence: number, delta: LlmStreamDelta): LlmStreamFrame => ({
+  sequence,
+  kind: "delta",
+  delta,
+});
+
+/**
+ * Positively validates the terminal consumer shape before constructing the
+ * sole terminal frame for an invocation.
+ *
+ * @public
+ */
+export const llmStreamTerminalFrame = (
+  sequence: number,
+  response: LlmResponse,
+): Effect.Effect<LlmStreamFrame, UpstreamFailure> =>
+  hasValidResponseShape(response)
+    ? Effect.succeed({ sequence, kind: "terminal", response })
+    : Effect.fail(llmStreamFailure("llm_stream_terminal_decode_failed"));
+
+/** Projects a complete fixture response through the same public frame algebra. @public */
+export const llmStreamFramesFromResponse = (
+  response: LlmResponse,
+): Effect.Effect<ReadonlyArray<LlmStreamFrame>, UpstreamFailure> =>
+  Effect.gen(function* () {
+    const frames: LlmStreamFrame[] = [];
+    let sequence = 0;
+    let textIndex = 0;
+    for (const item of response.items) {
+      if (item.type === "message") {
+        const id = `text-${textIndex++}`;
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "text_start", id }));
+        if (item.text.length > 0) {
+          frames.push(llmStreamDeltaFrame(sequence++, { type: "text_delta", id, text: item.text }));
+        }
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "text_end", id }));
+        continue;
+      }
+      if (item.type === "reasoning") {
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "reasoning", item }));
+      } else if (item.type === "tool_call") {
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "tool_call", item }));
+      } else if (item.type === "tool_result") {
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "tool_result", item }));
+      } else if (item.type === "refusal") {
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "refusal", item }));
+      } else {
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "error", item }));
+      }
+    }
+    frames.push(yield* llmStreamTerminalFrame(sequence, response));
+    return frames;
+  });
+
+/** Lifts a terminal fixture/interpreter effect into the sole stream algebra. @public */
+export const llmStreamFromResponse = (
+  response: Effect.Effect<LlmResponse, UpstreamFailure>,
+): StreamType.Stream<LlmStreamFrame, UpstreamFailure> =>
+  Stream.fromIterableEffect(response.pipe(Effect.flatMap(llmStreamFramesFromResponse)));
+
+/**
+ * Folds the sole stream primitive for terminal-only consumers. Sequence gaps,
+ * duplicate terminals, post-terminal frames, and close-before-terminal fail
+ * closed instead of producing a partial response.
+ *
+ * @public
+ */
+export const drainLlmStream = (
+  stream: StreamType.Stream<LlmStreamFrame, UpstreamFailure>,
+  onFrame?: (frame: LlmStreamFrame) => Effect.Effect<void, UpstreamFailure>,
+): Effect.Effect<LlmResponse, UpstreamFailure> =>
+  Stream.runFoldEffect(
+    stream,
+    (): { readonly expectedSequence: number; readonly terminal: LlmResponse | undefined } => ({
+      expectedSequence: 0,
+      terminal: undefined,
+    }),
+    (state, frame) => {
+      if (frame.sequence !== state.expectedSequence) {
+        return Effect.fail(
+          llmStreamFailure("llm_stream_sequence_gap", {
+            expected: state.expectedSequence,
+            actual: frame.sequence,
+          }),
+        );
+      }
+      if (state.terminal !== undefined) {
+        return Effect.fail(llmStreamFailure("llm_stream_frame_after_terminal"));
+      }
+      if (frame.kind === "delta") {
+        return (onFrame?.(frame) ?? Effect.void).pipe(
+          Effect.as({
+            expectedSequence: state.expectedSequence + 1,
+            terminal: undefined,
+          }),
+        );
+      }
+      if (!hasValidResponseShape(frame.response)) {
+        return Effect.fail(llmStreamFailure("llm_stream_terminal_decode_failed"));
+      }
+      return (onFrame?.(frame) ?? Effect.void).pipe(
+        Effect.as({
+          expectedSequence: state.expectedSequence + 1,
+          terminal: frame.response,
+        }),
+      );
+    },
+  ).pipe(
+    Effect.flatMap((state) =>
+      state.terminal === undefined
+        ? Effect.fail(llmStreamFailure("llm_stream_closed_without_terminal"))
+        : Effect.succeed(state.terminal),
+    ),
+    Effect.withSpan("agentos.llm_transport.drain_stream"),
+  );
 
 export interface LlmSnapshotToolDefinition {
   readonly type: "function";

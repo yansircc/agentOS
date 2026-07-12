@@ -6,7 +6,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Predicate } from "effect";
-import { LlmTransport } from "@agent-os/core/llm-protocol";
+import { LlmTransport, llmStreamFromResponse } from "@agent-os/core/llm-protocol";
 import {
   createAgentDurableObject,
   durableObjectDispatchTarget,
@@ -1057,197 +1057,201 @@ const facadeSubmitLlmTransport = Layer.succeed(LlmTransport, {
       transportAdapterVersion: "1.0.0",
     });
   },
-  call: (request) => {
-    const route = request.route;
-    const toolNames = request.tools?.map((tool) => tool.function.name) ?? [];
-    const messageText = request.messages.map((message) => message.content ?? "").join("\n");
-    const requestJson = JSON.stringify(request);
-    if (requestJson.includes(FACADE_SECRET)) {
-      return Effect.fail(
-        new UpstreamFailure({
-          cause: {
-            reason: "facade_submit_test_llm_request_leaked_provider_material",
-          },
-        }),
-      );
-    }
-    const routeOk = route.kind === "openai-chat-compatible" && route.modelId === "gpt-4.1-mini";
-    if (routeOk && messageText.includes("lookup")) {
-      return Effect.succeed({
-        items: [{ type: "message" as const, text: "facade done" }],
-        usage: {
-          promptTokens: 3,
-          completionTokens: 4,
-          totalTokens: 7,
-        },
-      });
-    }
-    if (routeOk && messageText.includes("apply")) {
-      const hasToolResult = request.messages.some(
-        (message) =>
-          message.role === "tool" && message.content?.includes('"materialMatched":true') === true,
-      );
-      if (hasToolResult) {
-        return Effect.succeed({
-          items: [{ type: "message" as const, text: "facade done" }],
-          usage: {
-            promptTokens: 2,
-            completionTokens: 3,
-            totalTokens: 5,
-          },
-        });
-      }
-      return Effect.succeed({
-        items: [
-          {
-            type: "tool_call" as const,
-            call: {
-              id: "call-apply",
-              type: "function" as const,
-              function: {
-                name: "apply",
-                arguments: '{"key":"abc"}',
+  stream: (request) =>
+    llmStreamFromResponse(
+      (() => {
+        const route = request.route;
+        const toolNames = request.tools?.map((tool) => tool.function.name) ?? [];
+        const messageText = request.messages.map((message) => message.content ?? "").join("\n");
+        const requestJson = JSON.stringify(request);
+        if (requestJson.includes(FACADE_SECRET)) {
+          return Effect.fail(
+            new UpstreamFailure({
+              cause: {
+                reason: "facade_submit_test_llm_request_leaked_provider_material",
               },
+            }),
+          );
+        }
+        const routeOk = route.kind === "openai-chat-compatible" && route.modelId === "gpt-4.1-mini";
+        if (routeOk && messageText.includes("lookup")) {
+          return Effect.succeed({
+            items: [{ type: "message" as const, text: "facade done" }],
+            usage: {
+              promptTokens: 3,
+              completionTokens: 4,
+              totalTokens: 7,
             },
-          },
-        ],
-        usage: {
-          promptTokens: 3,
-          completionTokens: 2,
-          totalTokens: 5,
-        },
-      });
-    }
-    if (routeOk && messageText.includes("intent")) {
-      const hasToolResult = request.messages.some(
-        (message) =>
-          message.role === "tool" &&
-          message.content?.includes('"projectedState":{"label":"abc"') === true,
-      );
-      if (hasToolResult) {
-        return Effect.succeed({
-          items: [{ type: "message" as const, text: "facade intent done" }],
-          usage: {
-            promptTokens: 2,
-            completionTokens: 3,
-            totalTokens: 5,
-          },
-        });
-      }
-      return Effect.succeed({
-        items: [
-          {
-            type: "tool_call" as const,
-            call: {
-              id: "call-intent",
-              type: "function" as const,
-              function: {
-                name: "intent",
-                arguments: '{"label":"abc"}',
+          });
+        }
+        if (routeOk && messageText.includes("apply")) {
+          const hasToolResult = request.messages.some(
+            (message) =>
+              message.role === "tool" &&
+              message.content?.includes('"materialMatched":true') === true,
+          );
+          if (hasToolResult) {
+            return Effect.succeed({
+              items: [{ type: "message" as const, text: "facade done" }],
+              usage: {
+                promptTokens: 2,
+                completionTokens: 3,
+                totalTokens: 5,
               },
-            },
-          },
-        ],
-        usage: {
-          promptTokens: 3,
-          completionTokens: 2,
-          totalTokens: 5,
-        },
-      });
-    }
-    if (routeOk && messageText.includes("write first only")) {
-      const hasFirstWrite = request.messages.some(
-        (message) => message.role === "tool" && message.content?.includes('"value":"first"'),
-      );
-      if (hasFirstWrite) {
-        return Effect.succeed({
-          items: [{ type: "message" as const, text: "facade done" }],
-          usage: {
-            promptTokens: 2,
-            completionTokens: 3,
-            totalTokens: 5,
-          },
-        });
-      }
-      return Effect.succeed({
-        items: [
-          {
-            type: "tool_call" as const,
-            call: {
-              id: "call-write-first",
-              type: "function" as const,
-              function: {
-                name: "write_first",
-                arguments: '{"value":"first"}',
-              },
-            },
-          },
-        ],
-        usage: {
-          promptTokens: 3,
-          completionTokens: 2,
-          totalTokens: 5,
-        },
-      });
-    }
-    if (routeOk && messageText.includes("write artifacts")) {
-      const hasFirstWrite = request.messages.some(
-        (message) => message.role === "tool" && message.content?.includes('"value":"first"'),
-      );
-      if (hasFirstWrite) {
-        return Effect.succeed({
-          items: [
-            {
-              type: "tool_call" as const,
-              call: {
-                id: "call-write-second",
-                type: "function" as const,
-                function: {
-                  name: "write_second",
-                  arguments: '{"value":"second"}',
+            });
+          }
+          return Effect.succeed({
+            items: [
+              {
+                type: "tool_call" as const,
+                call: {
+                  id: "call-apply",
+                  type: "function" as const,
+                  function: {
+                    name: "apply",
+                    arguments: '{"key":"abc"}',
+                  },
                 },
               },
+            ],
+            usage: {
+              promptTokens: 3,
+              completionTokens: 2,
+              totalTokens: 5,
             },
-          ],
-          usage: {
-            promptTokens: 3,
-            completionTokens: 2,
-            totalTokens: 5,
-          },
-        });
-      }
-      return Effect.succeed({
-        items: [
-          {
-            type: "tool_call" as const,
-            call: {
-              id: "call-write-first",
-              type: "function" as const,
-              function: {
-                name: "write_first",
-                arguments: '{"value":"first"}',
+          });
+        }
+        if (routeOk && messageText.includes("intent")) {
+          const hasToolResult = request.messages.some(
+            (message) =>
+              message.role === "tool" &&
+              message.content?.includes('"projectedState":{"label":"abc"') === true,
+          );
+          if (hasToolResult) {
+            return Effect.succeed({
+              items: [{ type: "message" as const, text: "facade intent done" }],
+              usage: {
+                promptTokens: 2,
+                completionTokens: 3,
+                totalTokens: 5,
               },
+            });
+          }
+          return Effect.succeed({
+            items: [
+              {
+                type: "tool_call" as const,
+                call: {
+                  id: "call-intent",
+                  type: "function" as const,
+                  function: {
+                    name: "intent",
+                    arguments: '{"label":"abc"}',
+                  },
+                },
+              },
+            ],
+            usage: {
+              promptTokens: 3,
+              completionTokens: 2,
+              totalTokens: 5,
             },
-          },
-        ],
-        usage: {
-          promptTokens: 3,
-          completionTokens: 2,
-          totalTokens: 5,
-        },
-      });
-    }
-    return Effect.fail(
-      new UpstreamFailure({
-        cause: {
-          reason: "facade_submit_test_llm_request_mismatch",
-          routeKind: route.kind,
-          modelId: route.modelId,
-          toolNames,
-        },
-      }),
-    );
-  },
+          });
+        }
+        if (routeOk && messageText.includes("write first only")) {
+          const hasFirstWrite = request.messages.some(
+            (message) => message.role === "tool" && message.content?.includes('"value":"first"'),
+          );
+          if (hasFirstWrite) {
+            return Effect.succeed({
+              items: [{ type: "message" as const, text: "facade done" }],
+              usage: {
+                promptTokens: 2,
+                completionTokens: 3,
+                totalTokens: 5,
+              },
+            });
+          }
+          return Effect.succeed({
+            items: [
+              {
+                type: "tool_call" as const,
+                call: {
+                  id: "call-write-first",
+                  type: "function" as const,
+                  function: {
+                    name: "write_first",
+                    arguments: '{"value":"first"}',
+                  },
+                },
+              },
+            ],
+            usage: {
+              promptTokens: 3,
+              completionTokens: 2,
+              totalTokens: 5,
+            },
+          });
+        }
+        if (routeOk && messageText.includes("write artifacts")) {
+          const hasFirstWrite = request.messages.some(
+            (message) => message.role === "tool" && message.content?.includes('"value":"first"'),
+          );
+          if (hasFirstWrite) {
+            return Effect.succeed({
+              items: [
+                {
+                  type: "tool_call" as const,
+                  call: {
+                    id: "call-write-second",
+                    type: "function" as const,
+                    function: {
+                      name: "write_second",
+                      arguments: '{"value":"second"}',
+                    },
+                  },
+                },
+              ],
+              usage: {
+                promptTokens: 3,
+                completionTokens: 2,
+                totalTokens: 5,
+              },
+            });
+          }
+          return Effect.succeed({
+            items: [
+              {
+                type: "tool_call" as const,
+                call: {
+                  id: "call-write-first",
+                  type: "function" as const,
+                  function: {
+                    name: "write_first",
+                    arguments: '{"value":"first"}',
+                  },
+                },
+              },
+            ],
+            usage: {
+              promptTokens: 3,
+              completionTokens: 2,
+              totalTokens: 5,
+            },
+          });
+        }
+        return Effect.fail(
+          new UpstreamFailure({
+            cause: {
+              reason: "facade_submit_test_llm_request_mismatch",
+              routeKind: route.kind,
+              modelId: route.modelId,
+              toolNames,
+            },
+          }),
+        );
+      })(),
+    ),
 });
 
 const facadeSubmitManifest = defineAgentManifest({

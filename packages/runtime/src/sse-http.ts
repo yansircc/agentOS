@@ -18,6 +18,14 @@ export interface SseHttpResponseOptions {
   readonly onCancel?: () => void | Promise<void>;
 }
 
+export interface SseHttpWritableResponse {
+  readonly response: Response;
+  readonly write: (chunk: SseHttpChunk) => Promise<void>;
+  readonly close: () => Promise<void>;
+  readonly abort: (reason?: unknown) => Promise<void>;
+  readonly closed: Promise<void>;
+}
+
 const isAsyncIterable = (value: SseHttpSource): value is AsyncIterable<SseHttpChunk> =>
   typeof (value as { readonly [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] ===
   "function";
@@ -141,6 +149,27 @@ export const createSseHttpResponse = (
     },
   });
   return new Response(stream, { headers: sseHeaders(options.headers) });
+};
+
+/**
+ * Creates a backpressured writable SSE response for invocation-coupled runtime
+ * producers. The writer promise settles only when the Web Stream accepts the
+ * chunk; response-body cancellation rejects `closed` and pending writes.
+ * @experimental
+ */
+export const createSseHttpWritableResponse = (
+  options: Omit<SseHttpResponseOptions, "onCancel"> = {},
+): SseHttpWritableResponse => {
+  const encoder = new TextEncoder();
+  const stream = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = stream.writable.getWriter();
+  return {
+    response: new Response(stream.readable, { headers: sseHeaders(options.headers) }),
+    write: (chunk) => writer.write(typeof chunk === "string" ? encoder.encode(chunk) : chunk),
+    close: () => writer.close(),
+    abort: (reason) => writer.abort(reason),
+    closed: writer.closed,
+  };
 };
 
 /**

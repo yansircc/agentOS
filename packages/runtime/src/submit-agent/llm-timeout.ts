@@ -107,9 +107,10 @@ export const runTimedLlmAttempt = <A, E, R>(
         orElse: () => Effect.fail(llmTimeoutError(timeout, budgetTimeMs)),
       }),
       Effect.tapError((error) =>
-        isLlmCallTimedOut(error)
-          ? abortLlmController(controller, "agent_os.llm_call_timeout")
-          : Effect.void,
+        abortLlmController(
+          controller,
+          isLlmCallTimedOut(error) ? "agent_os.llm_call_timeout" : "agent_os.llm_stream_failed",
+        ),
       ),
       Effect.onInterrupt(() => abortLlmController(controller, "llm_call_interrupted")),
     );

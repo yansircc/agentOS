@@ -64,6 +64,7 @@ export interface AgentFacadeRuntimeClient {
 
 export interface AgentFacadeRuntimeClientWithSubmit extends AgentFacadeRuntimeClient {
   readonly submit: (spec: AgentSubmitSpec) => Promise<SubmitResult>;
+  readonly submitLive: (spec: AgentSubmitSpec) => Promise<Response>;
   readonly resumeInputRequest: (
     spec: WorkspaceAgentResumeInputRequestCommandInput,
   ) => Promise<SubmitResult>;
@@ -243,6 +244,10 @@ export function defineAgentDO<Env extends CloudflareAgentEnv>(
 
       submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
         return this.submitWithBindings(spec, this._submitBindings);
+      }
+
+      submitLive(spec: AgentSubmitSpec): Promise<Response> {
+        return this.submitLiveWithBindings(spec, this._submitBindings);
       }
 
       resumeInputRequest(

@@ -4,6 +4,7 @@ import { expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import {
   LlmTransport,
+  llmStreamFromResponse,
   type LlmRequest,
   type LlmResponse,
   type LlmRoute,
@@ -216,13 +217,15 @@ const makeServices = (
         transportAdapterId: "test-runtime@1.0.0",
         transportAdapterVersion: "1.0.0",
       }),
-    call: (request: LlmRequest) =>
-      Effect.sync(() => {
-        llmRequests.push(request);
-        const next = responses[callIndex] ?? response();
-        callIndex += 1;
-        return next;
-      }),
+    stream: (request: LlmRequest) =>
+      llmStreamFromResponse(
+        Effect.sync(() => {
+          llmRequests.push(request);
+          const next = responses[callIndex] ?? response();
+          callIndex += 1;
+          return next;
+        }),
+      ),
   };
   const quota = {
     tryGrant: () => Effect.succeed({ granted: true, consumed: 0, limit: 1 }),

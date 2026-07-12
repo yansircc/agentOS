@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import {
   HttpClient as HttpClientTag,
   type HttpClient as HttpClientService,
@@ -51,12 +51,25 @@ const withTempWorkspace = async <A>(
 const nodeCommand = (script: string): string =>
   `${JSON.stringify(process.execPath)} -e ${JSON.stringify(script)}`;
 
-const httpResponse = (status: number, body: unknown): HttpClientResponse =>
-  ({
+const httpResponse = (status: number, body: unknown): HttpClientResponse => {
+  const record = body as {
+    readonly choices?: ReadonlyArray<{ readonly message?: Readonly<Record<string, unknown>> }>;
+    readonly usage?: unknown;
+  };
+  const message = record.choices?.[0]?.message ?? {};
+  const events = [
+    { choices: [{ delta: message, finish_reason: null }] },
+    { choices: [{ delta: {}, finish_reason: "stop" }] },
+    ...(record.usage === undefined ? [] : [{ choices: [], usage: record.usage }]),
+  ];
+  const streamText = `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
+  return {
     status,
     json: Effect.succeed(body),
     text: Effect.succeed(JSON.stringify(body)),
-  }) as unknown as HttpClientResponse;
+    stream: Stream.fromIterable([new TextEncoder().encode(streamText)]),
+  } as unknown as HttpClientResponse;
+};
 
 const fakeHttpClient = (
   execute: (request: HttpClientRequest) => Effect.Effect<HttpClientResponse>,
@@ -166,6 +179,7 @@ describe("createLocalWorkspaceEnv", () => {
         "inspectInputRequest",
         "resumeInputRequest",
         "submit",
+        "submitLive",
       ]);
       const initialInspection = runtime.inspect();
       expect(initialInspection.compile).toEqual({
@@ -757,6 +771,7 @@ describe("createLocalWorkspaceEnv", () => {
         "inspectInputRequest",
         "resumeInputRequest",
         "submit",
+        "submitLive",
       ]);
       expect(localLowered.runtime.inspect().compile).toEqual({
         status: "available",

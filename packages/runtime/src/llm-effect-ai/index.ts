@@ -12,6 +12,7 @@ import type {
 import type {
   AnyPart as ResponseAnyPart,
   ProviderMetadata as ResponseProviderMetadata,
+  StreamPart as ResponseStreamPart,
   ToolCallPart as ResponseToolCallPart,
   ToolResultPart as ResponseToolResultPart,
   Usage as ResponseUsage,
@@ -30,11 +31,13 @@ import {
   post as httpPost,
   type HttpClientRequest,
 } from "effect/unstable/http/HttpClientRequest";
-import { Data, Effect, Layer, Schema } from "effect";
+import { Data, Effect, Layer, Schema, Stream } from "effect";
 import {
   LlmProviderContinuationFailure,
   LlmProviderContinuationStoreNone,
   LlmTransport,
+  llmStreamDeltaFrame,
+  llmStreamTerminalFrame,
   llmRouteFingerprint,
   projectAgentSchemaForLlmTool,
   validateProviderContinuationBinding,
@@ -46,6 +49,7 @@ import type {
   LlmResponse,
   LlmRoute,
   LlmCallOptions,
+  LlmStreamFrame,
   LlmTransportRouteDescriptor,
   LlmToolCall,
   LlmUsage,
@@ -394,7 +398,7 @@ const effectAiWireDescriptor = (resolved: EffectAiResolvedRoute): LlmWireDescrip
         method: "POST",
         url: endpointPlaceholder(resolved.route.endpointRef) + "/chat/completions",
         headers: [
-          ["accept", "application/json"],
+          ["accept", "text/event-stream"],
           ["authorization", "Bearer " + credentialPlaceholder(resolved.route.credentialRef)],
           ["content-type", "application/json"],
         ],
@@ -670,6 +674,189 @@ export const normalizeEffectAiResponse = (
     }),
   );
 
+interface EffectAiStreamState {
+  readonly sequence: number;
+  readonly items: ReadonlyArray<LlmOutputItem>;
+  readonly textItems: ReadonlyMap<string, number>;
+  readonly reasoningIds: ReadonlySet<string>;
+  readonly toolParamIds: ReadonlySet<string>;
+  readonly terminal: boolean;
+}
+
+const initialEffectAiStreamState = (): EffectAiStreamState => ({
+  sequence: 0,
+  items: [],
+  textItems: new Map(),
+  reasoningIds: new Set(),
+  toolParamIds: new Set(),
+  terminal: false,
+});
+
+const effectAiStreamDecodeFailure = (field: string): UpstreamFailure =>
+  new UpstreamFailure({
+    cause: new ProviderOutputDecodeError({ field, reason: "missing_or_invalid_field" }),
+  });
+
+const withEffectAiFrame = (
+  state: EffectAiStreamState,
+  frame: LlmStreamFrame,
+  patch: Partial<Omit<EffectAiStreamState, "sequence">> = {},
+): readonly [EffectAiStreamState, ReadonlyArray<LlmStreamFrame>] => [
+  { ...state, ...patch, sequence: state.sequence + 1 },
+  [frame],
+];
+
+const normalizeEffectAiStreamPart = (
+  state: EffectAiStreamState,
+  part: ResponseStreamPart<Record<string, AnyTool>>,
+): Effect.Effect<readonly [EffectAiStreamState, ReadonlyArray<LlmStreamFrame>], UpstreamFailure> =>
+  Effect.gen(function* () {
+    if (state.terminal) return yield* effectAiStreamDecodeFailure("stream.part_after_finish");
+    switch (part.type) {
+      case "text-start": {
+        if (state.textItems.has(part.id)) {
+          return yield* effectAiStreamDecodeFailure(`stream.text.${part.id}.duplicate_start`);
+        }
+        const items = [...state.items, { type: "message" as const, text: "" }];
+        const textItems = new Map(state.textItems).set(part.id, items.length - 1);
+        return withEffectAiFrame(
+          state,
+          llmStreamDeltaFrame(state.sequence, { type: "text_start", id: part.id }),
+          { items, textItems },
+        );
+      }
+      case "text-delta": {
+        const index = state.textItems.get(part.id);
+        const current = index === undefined ? undefined : state.items[index];
+        if (index === undefined || current?.type !== "message") {
+          return yield* effectAiStreamDecodeFailure(`stream.text.${part.id}.delta_without_start`);
+        }
+        const items = [...state.items];
+        items[index] = { type: "message", text: current.text + part.delta };
+        return withEffectAiFrame(
+          state,
+          llmStreamDeltaFrame(state.sequence, {
+            type: "text_delta",
+            id: part.id,
+            text: part.delta,
+          }),
+          { items },
+        );
+      }
+      case "text-end": {
+        if (!state.textItems.has(part.id)) {
+          return yield* effectAiStreamDecodeFailure(`stream.text.${part.id}.end_without_start`);
+        }
+        const textItems = new Map(state.textItems);
+        textItems.delete(part.id);
+        return withEffectAiFrame(
+          state,
+          llmStreamDeltaFrame(state.sequence, { type: "text_end", id: part.id }),
+          { textItems },
+        );
+      }
+      case "reasoning-start": {
+        if (state.reasoningIds.has(part.id)) {
+          return yield* effectAiStreamDecodeFailure(`stream.reasoning.${part.id}.duplicate_start`);
+        }
+        const item = { type: "reasoning" as const, redacted: true as const };
+        return withEffectAiFrame(
+          state,
+          llmStreamDeltaFrame(state.sequence, { type: "reasoning", item }),
+          {
+            items: [...state.items, item],
+            reasoningIds: new Set(state.reasoningIds).add(part.id),
+          },
+        );
+      }
+      case "reasoning-delta":
+        return state.reasoningIds.has(part.id)
+          ? [state, []]
+          : yield* effectAiStreamDecodeFailure(`stream.reasoning.${part.id}.delta_without_start`);
+      case "reasoning-end": {
+        if (!state.reasoningIds.has(part.id)) {
+          return yield* effectAiStreamDecodeFailure(
+            `stream.reasoning.${part.id}.end_without_start`,
+          );
+        }
+        const reasoningIds = new Set(state.reasoningIds);
+        reasoningIds.delete(part.id);
+        return [{ ...state, reasoningIds }, []];
+      }
+      case "tool-params-start":
+        return state.toolParamIds.has(part.id)
+          ? yield* effectAiStreamDecodeFailure(`stream.tool.${part.id}.duplicate_start`)
+          : [{ ...state, toolParamIds: new Set(state.toolParamIds).add(part.id) }, []];
+      case "tool-params-delta":
+        return state.toolParamIds.has(part.id)
+          ? [state, []]
+          : yield* effectAiStreamDecodeFailure(`stream.tool.${part.id}.delta_without_start`);
+      case "tool-params-end": {
+        if (!state.toolParamIds.has(part.id)) {
+          return yield* effectAiStreamDecodeFailure(`stream.tool.${part.id}.end_without_start`);
+        }
+        const toolParamIds = new Set(state.toolParamIds);
+        toolParamIds.delete(part.id);
+        return [{ ...state, toolParamIds }, []];
+      }
+      case "tool-call": {
+        const item = {
+          type: "tool_call" as const,
+          call: yield* normalizeToolCall(part).pipe(
+            Effect.mapError((cause) => new UpstreamFailure({ cause })),
+          ),
+        };
+        return withEffectAiFrame(
+          state,
+          llmStreamDeltaFrame(state.sequence, { type: "tool_call", item }),
+          { items: [...state.items, item] },
+        );
+      }
+      case "tool-result": {
+        const item = yield* normalizeToolResult(part).pipe(
+          Effect.mapError((cause) => new UpstreamFailure({ cause })),
+        );
+        return withEffectAiFrame(
+          state,
+          llmStreamDeltaFrame(state.sequence, { type: "tool_result", item }),
+          { items: [...state.items, item] },
+        );
+      }
+      case "error": {
+        const item = { type: "error" as const, message: String(part.error) };
+        return withEffectAiFrame(
+          state,
+          llmStreamDeltaFrame(state.sequence, { type: "error", item }),
+          { items: [...state.items, item] },
+        );
+      }
+      case "finish": {
+        if (
+          state.textItems.size > 0 ||
+          state.reasoningIds.size > 0 ||
+          state.toolParamIds.size > 0
+        ) {
+          return yield* effectAiStreamDecodeFailure("stream.finish_with_open_parts");
+        }
+        const usage = yield* normalizeUsage(part.usage).pipe(
+          Effect.mapError((cause) => new UpstreamFailure({ cause })),
+        );
+        const response: LlmResponse = {
+          items: state.items.filter((item) => item.type !== "message" || item.text.length > 0),
+          usage,
+        };
+        const terminal = yield* llmStreamTerminalFrame(state.sequence, response);
+        return withEffectAiFrame(state, terminal, { terminal: true });
+      }
+      case "response-metadata":
+        return [state, []];
+      case "tool-approval-request":
+      case "file":
+      case "source":
+        return yield* effectAiStreamDecodeFailure(`stream.unsupported.${part.type}`);
+    }
+  });
+
 const toolChoiceForRequest = (request: LlmRequest): ToolChoice<string> | undefined =>
   request.tool_choice === undefined
     ? undefined
@@ -677,12 +864,8 @@ const toolChoiceForRequest = (request: LlmRequest): ToolChoice<string> | undefin
       ? "required"
       : { tool: request.tool_choice.function.name };
 
-const withAbortSignal = <A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  signal: AbortSignal | undefined,
-): Effect.Effect<A, E | EffectAiAborted, R> => {
-  if (signal === undefined) return effect;
-  const abort = Effect.callback<never, EffectAiAborted>((resume) => {
+const abortSignalEffect = (signal: AbortSignal): Effect.Effect<never, EffectAiAborted> =>
+  Effect.callback<never, EffectAiAborted>((resume) => {
     if (signal.aborted) {
       resume(Effect.fail(new EffectAiAborted()));
       return;
@@ -691,8 +874,18 @@ const withAbortSignal = <A, E, R>(
     signal.addEventListener("abort", onAbort, { once: true });
     return Effect.sync(() => signal.removeEventListener("abort", onAbort));
   });
-  return Effect.raceFirst(effect, abort);
-};
+
+const withAbortSignal = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  signal: AbortSignal | undefined,
+): Effect.Effect<A, E | EffectAiAborted, R> =>
+  signal === undefined ? effect : Effect.raceFirst(effect, abortSignalEffect(signal));
+
+const withAbortStream = <A, E, R>(
+  stream: Stream.Stream<A, E, R>,
+  signal: AbortSignal | undefined,
+): Stream.Stream<A, E | EffectAiAborted, R> =>
+  signal === undefined ? stream : Stream.interruptWhen(stream, abortSignalEffect(signal));
 
 const openAiToolFromDefinition = (definition: ToolDefinition) => ({
   type: "function" as const,
@@ -803,7 +996,8 @@ const openAiChatBodyFromRequest = (
         ? {}
         : { tools: request.tools.map(openAiToolFromDefinition) }),
       ...(request.tool_choice === undefined ? {} : { tool_choice: request.tool_choice }),
-      stream: false,
+      stream: true,
+      stream_options: { include_usage: true },
     };
   });
 
@@ -816,7 +1010,7 @@ const openAiChatRequest = (
     const body = yield* openAiChatBodyFromRequest(request, resolved.route, store);
     return yield* httpPost(`${withoutTrailingSlash(resolved.endpoint)}/chat/completions`, {
       headers: {
-        Accept: "application/json",
+        Accept: "text/event-stream",
         Authorization: `Bearer ${resolved.credential}`,
         "Content-Type": "application/json",
       },
@@ -845,53 +1039,6 @@ const normalizeOpenAiChatUsage = (
     return { promptTokens, completionTokens, totalTokens };
   });
 
-const firstOpenAiChatMessage = (
-  body: Readonly<Record<string, unknown>>,
-): Effect.Effect<Readonly<Record<string, unknown>>, ProviderOutputDecodeError> =>
-  Effect.gen(function* () {
-    const choices = arrayField(body, "choices");
-    const firstChoice = choices?.[0];
-    if (!isRecord(firstChoice)) return yield* decodeFailure("choices[0]");
-    const message = firstChoice.message;
-    if (!isRecord(message)) return yield* decodeFailure("choices[0].message");
-    return message;
-  });
-
-const openAiChatReasoningPresent = (message: Readonly<Record<string, unknown>>): boolean =>
-  (typeof message.reasoning === "string" && message.reasoning.length > 0) ||
-  (Array.isArray(message.reasoning_details) && message.reasoning_details.length > 0);
-
-const normalizeOpenAiToolCall = (
-  raw: unknown,
-  index: number,
-): Effect.Effect<LlmToolCall, ProviderOutputDecodeError> =>
-  Effect.gen(function* () {
-    if (!isRecord(raw)) return yield* decodeFailure(`choices[0].message.tool_calls[${index}]`);
-    const fn = raw.function;
-    if (!isRecord(fn)) {
-      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].function`);
-    }
-    const id = stringField(raw, "id");
-    const type = stringField(raw, "type");
-    const name = stringField(fn, "name");
-    const args = stringField(fn, "arguments");
-    if (id === undefined) return yield* decodeFailure(`choices[0].message.tool_calls[${index}].id`);
-    if (type !== "function") {
-      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].type`);
-    }
-    if (name === undefined) {
-      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].function.name`);
-    }
-    if (args === undefined) {
-      return yield* decodeFailure(`choices[0].message.tool_calls[${index}].function.arguments`);
-    }
-    return {
-      id,
-      type: "function",
-      function: { name, arguments: args },
-    };
-  });
-
 const decodeOpenAiContinuation = (
   message: Readonly<Record<string, unknown>>,
   request: LlmRequest,
@@ -918,104 +1065,327 @@ const decodeOpenAiContinuation = (
     return { kind: "sealed", binding, ref };
   });
 
-const normalizeOpenAiChatCompatibleResponse = (
-  body: unknown,
+interface OpenAiStreamToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly argumentsJson: string;
+}
+
+interface OpenAiStreamState {
+  readonly sequence: number;
+  readonly items: ReadonlyArray<LlmOutputItem>;
+  readonly textId?: string;
+  readonly textItemIndex?: number;
+  readonly reasoningSeen: boolean;
+  readonly refusalItemIndex?: number;
+  readonly toolCalls: ReadonlyMap<number, OpenAiStreamToolCall>;
+  readonly usage?: LlmUsage;
+  readonly finishSeen: boolean;
+  readonly reasoningContent: string;
+  readonly encryptedContent: string;
+  readonly reasoningContentSeen: boolean;
+  readonly encryptedContentSeen: boolean;
+  readonly terminal: boolean;
+}
+
+const initialOpenAiStreamState = (): OpenAiStreamState => ({
+  sequence: 0,
+  items: [],
+  reasoningSeen: false,
+  toolCalls: new Map(),
+  finishSeen: false,
+  reasoningContent: "",
+  encryptedContent: "",
+  reasoningContentSeen: false,
+  encryptedContentSeen: false,
+  terminal: false,
+});
+
+const parseOpenAiSseData = (
+  data: string,
+): Effect.Effect<Readonly<Record<string, unknown>>, ProviderOutputDecodeError> =>
+  Effect.try({
+    try: () => JSON.parse(data) as unknown,
+    catch: () => decodeFailure("stream.sse_json"),
+  }).pipe(
+    Effect.flatMap((value) =>
+      isRecord(value) ? Effect.succeed(value) : Effect.fail(decodeFailure("stream.sse_event")),
+    ),
+  );
+
+const openAiStreamToolCallChunk = (
+  state: OpenAiStreamState,
+  raw: unknown,
+): Effect.Effect<ReadonlyMap<number, OpenAiStreamToolCall>, ProviderOutputDecodeError> =>
+  Effect.gen(function* () {
+    if (!isRecord(raw)) return yield* decodeFailure("stream.tool_call");
+    const index = numberField(raw, "index");
+    if (index === undefined || !Number.isInteger(index) || index < 0) {
+      return yield* decodeFailure("stream.tool_call.index");
+    }
+    const previous = state.toolCalls.get(index);
+    const fn = raw.function;
+    if (fn !== undefined && !isRecord(fn)) {
+      return yield* decodeFailure(`stream.tool_call.${index}.function`);
+    }
+    const id = stringField(raw, "id") ?? previous?.id;
+    const name = (isRecord(fn) ? stringField(fn, "name") : undefined) ?? previous?.name;
+    const argumentsDelta = isRecord(fn) ? (stringField(fn, "arguments") ?? "") : "";
+    if (id === undefined || name === undefined) {
+      return yield* decodeFailure(`stream.tool_call.${index}.identity`);
+    }
+    return new Map(state.toolCalls).set(index, {
+      id,
+      name,
+      argumentsJson: (previous?.argumentsJson ?? "") + argumentsDelta,
+    });
+  });
+
+const appendOpenAiText = (
+  state: OpenAiStreamState,
+  text: string,
+): readonly [OpenAiStreamState, ReadonlyArray<LlmStreamFrame>] => {
+  const items = [...state.items];
+  const frames: LlmStreamFrame[] = [];
+  let sequence = state.sequence;
+  let textId = state.textId;
+  let textItemIndex = state.textItemIndex;
+  if (textId === undefined || textItemIndex === undefined) {
+    textId = "text-0";
+    textItemIndex = items.length;
+    items.push({ type: "message", text: "" });
+    frames.push(llmStreamDeltaFrame(sequence++, { type: "text_start", id: textId }));
+  }
+  const current = items[textItemIndex];
+  if (current?.type === "message") {
+    items[textItemIndex] = { type: "message", text: current.text + text };
+  }
+  frames.push(llmStreamDeltaFrame(sequence++, { type: "text_delta", id: textId, text }));
+  return [{ ...state, sequence, items, textId, textItemIndex }, frames];
+};
+
+const normalizeOpenAiStreamEvent = (
+  state: OpenAiStreamState,
+  body: Readonly<Record<string, unknown>>,
+): Effect.Effect<
+  readonly [OpenAiStreamState, ReadonlyArray<LlmStreamFrame>],
+  ProviderOutputDecodeError
+> =>
+  Effect.gen(function* () {
+    if (state.terminal) return yield* decodeFailure("stream.event_after_terminal");
+    let next = state;
+    const frames: LlmStreamFrame[] = [];
+    const usageRaw = body.usage;
+    if (usageRaw !== undefined) {
+      next = { ...next, usage: yield* normalizeOpenAiChatUsage(body) };
+    }
+    const choices = arrayField(body, "choices") ?? [];
+    for (let choiceIndex = 0; choiceIndex < choices.length; choiceIndex += 1) {
+      const choice = choices[choiceIndex];
+      if (!isRecord(choice)) return yield* decodeFailure(`stream.choices[${choiceIndex}]`);
+      const delta = choice.delta;
+      if (delta !== undefined && !isRecord(delta)) {
+        return yield* decodeFailure(`stream.choices[${choiceIndex}].delta`);
+      }
+      if (isRecord(delta)) {
+        const content = stringField(delta, "content");
+        const reasoning = stringField(delta, "reasoning_content");
+        const encrypted = stringField(delta, "encrypted_content");
+        const redactedReasoning = stringField(delta, "reasoning");
+        if (reasoning !== undefined || encrypted !== undefined || redactedReasoning !== undefined) {
+          if (!next.reasoningSeen) {
+            const item = { type: "reasoning" as const, redacted: true as const };
+            frames.push(llmStreamDeltaFrame(next.sequence, { type: "reasoning", item }));
+            next = {
+              ...next,
+              sequence: next.sequence + 1,
+              reasoningSeen: true,
+              items: [...next.items, item],
+            };
+          }
+          next = {
+            ...next,
+            reasoningContent: next.reasoningContent + (reasoning ?? ""),
+            encryptedContent: next.encryptedContent + (encrypted ?? ""),
+            reasoningContentSeen: next.reasoningContentSeen || reasoning !== undefined,
+            encryptedContentSeen: next.encryptedContentSeen || encrypted !== undefined,
+          };
+        }
+        if (content !== undefined && content.length > 0) {
+          const [textState, textFrames] = appendOpenAiText(next, content);
+          next = textState;
+          frames.push(...textFrames);
+        }
+        const refusal = stringField(delta, "refusal");
+        if (refusal !== undefined && refusal.length > 0) {
+          const items = [...next.items];
+          const index = next.refusalItemIndex ?? items.length;
+          const current = items[index];
+          items[index] = {
+            type: "refusal",
+            reason: current?.type === "refusal" ? current.reason + refusal : refusal,
+          };
+          next = { ...next, items, refusalItemIndex: index };
+        }
+        for (const toolCall of arrayField(delta, "tool_calls") ?? []) {
+          next = { ...next, toolCalls: yield* openAiStreamToolCallChunk(next, toolCall) };
+        }
+      }
+      if (choice.finish_reason !== null && choice.finish_reason !== undefined) {
+        if (typeof choice.finish_reason !== "string") {
+          return yield* decodeFailure(`stream.choices[${choiceIndex}].finish_reason`);
+        }
+        next = { ...next, finishSeen: true };
+      }
+    }
+    return [next, frames];
+  });
+
+const finishOpenAiStream = (
+  state: OpenAiStreamState,
   request: LlmRequest,
   route: OpenAiChatCompatibleRoute,
   store: LlmProviderContinuationStore,
-): Effect.Effect<LlmResponse, ProviderOutputDecodeError | LlmProviderContinuationFailure> =>
+): Effect.Effect<readonly [OpenAiStreamState, ReadonlyArray<LlmStreamFrame>], UpstreamFailure> =>
   Effect.gen(function* () {
-    if (!isRecord(body)) return yield* decodeFailure("response");
-    const usage = yield* normalizeOpenAiChatUsage(body);
-    const message = yield* firstOpenAiChatMessage(body);
-    const items: LlmOutputItem[] = [];
-    if (openAiChatReasoningPresent(message)) items.push({ type: "reasoning", redacted: true });
-    const content = stringField(message, "content");
-    if (content !== undefined && content.length > 0) items.push({ type: "message", text: content });
-    const refusal = stringField(message, "refusal");
-    if (refusal !== undefined && refusal.length > 0) {
-      items.push({ type: "refusal", reason: refusal });
-    }
-    const toolCalls = arrayField(message, "tool_calls") ?? [];
-    for (let index = 0; index < toolCalls.length; index += 1) {
-      items.push({
-        type: "tool_call",
-        call: yield* normalizeOpenAiToolCall(toolCalls[index], index),
+    if (state.terminal || !state.finishSeen || state.usage === undefined) {
+      return yield* new UpstreamFailure({
+        cause: decodeFailure("stream.done_without_finish_or_usage"),
       });
     }
-    const continuation = yield* decodeOpenAiContinuation(message, request, route, store);
-    return {
-      items,
-      usage,
+    let sequence = state.sequence;
+    const items = [...state.items];
+    const frames: LlmStreamFrame[] = [];
+    if (state.textId !== undefined) {
+      frames.push(llmStreamDeltaFrame(sequence++, { type: "text_end", id: state.textId }));
+    }
+    for (const [, tool] of [...state.toolCalls.entries()].sort(([left], [right]) => left - right)) {
+      yield* Effect.try({
+        try: () => JSON.parse(tool.argumentsJson) as unknown,
+        catch: () => decodeFailure(`stream.tool_call.${tool.id}.arguments`),
+      }).pipe(
+        Effect.filterOrFail(isRecord, () => decodeFailure(`stream.tool_call.${tool.id}.arguments`)),
+        Effect.mapError((cause) => new UpstreamFailure({ cause })),
+      );
+      const item = {
+        type: "tool_call" as const,
+        call: {
+          id: tool.id,
+          type: "function" as const,
+          function: { name: tool.name, arguments: tool.argumentsJson },
+        },
+      };
+      items.push(item);
+      frames.push(llmStreamDeltaFrame(sequence++, { type: "tool_call", item }));
+    }
+    if (state.refusalItemIndex !== undefined) {
+      const item = items[state.refusalItemIndex];
+      if (item?.type === "refusal") {
+        frames.push(llmStreamDeltaFrame(sequence++, { type: "refusal", item }));
+      }
+    }
+    if (state.reasoningContentSeen !== state.encryptedContentSeen) {
+      return yield* new UpstreamFailure({
+        cause: decodeFailure("stream.provider_continuation"),
+      });
+    }
+    const continuationMessage = !state.reasoningContentSeen
+      ? {}
+      : {
+          reasoning_content: state.reasoningContent,
+          encrypted_content: state.encryptedContent,
+        };
+    const continuation = yield* decodeOpenAiContinuation(
+      continuationMessage,
+      request,
+      route,
+      store,
+    ).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause })));
+    const response: LlmResponse = {
+      items: items.filter((item) => item.type !== "message" || item.text.length > 0),
+      usage: state.usage,
       ...(continuation === undefined
         ? {}
-        : {
-            continuation: { kind: "available" as const, value: continuation },
-          }),
+        : { continuation: { kind: "available" as const, value: continuation } }),
     };
+    frames.push(yield* llmStreamTerminalFrame(sequence++, response));
+    return [{ ...state, sequence, items, terminal: true }, frames];
   });
 
-const callOpenAiChatCompatible = (
+const streamOpenAiChatCompatible = (
   httpClient: HttpClientService,
   resolved: EffectAiLiveRoute<OpenAiChatCompatibleRoute>,
   request: LlmRequest,
   store: LlmProviderContinuationStore,
   options: LlmCallOptions = {},
-): Effect.Effect<LlmResponse, UpstreamFailure> =>
-  Effect.gen(function* () {
-    const providerRequest = yield* openAiChatRequest(resolved, request, store);
-    const response = yield* withAbortSignal(httpClient.execute(providerRequest), options.signal);
-    const body = yield* responseJsonOrEmpty(response);
-    if (response.status < 200 || response.status >= 300) {
-      return yield* providerHttpFailure(response.status, body);
-    }
-    return yield* normalizeOpenAiChatCompatibleResponse(body, request, resolved.route, store);
-  }).pipe(
-    Effect.mapError(
-      (
-        cause:
-          | HttpBodyError
-          | HttpClientError
-          | EffectAiAborted
-          | ProviderHttpFailure
-          | ProviderOutputDecodeError
-          | LlmProviderContinuationFailure,
-      ) => new UpstreamFailure({ cause }),
+): Stream.Stream<LlmStreamFrame, UpstreamFailure> =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const providerRequest = yield* openAiChatRequest(resolved, request, store);
+      const response = yield* withAbortSignal(httpClient.execute(providerRequest), options.signal);
+      if (response.status < 200 || response.status >= 300) {
+        return yield* providerHttpFailure(response.status, yield* responseJsonOrEmpty(response));
+      }
+      return withAbortStream(response.stream, options.signal).pipe(
+        Stream.decodeText,
+        Stream.splitLines,
+        Stream.filter((line) => line.startsWith("data:")),
+        Stream.map((line) => line.slice("data:".length).trim()),
+        Stream.mapAccumEffect(initialOpenAiStreamState, (state, data) =>
+          data === "[DONE]"
+            ? finishOpenAiStream(state, request, resolved.route, store)
+            : parseOpenAiSseData(data).pipe(
+                Effect.flatMap((body) => normalizeOpenAiStreamEvent(state, body)),
+                Effect.mapError((cause) => new UpstreamFailure({ cause })),
+              ),
+        ),
+        Stream.mapError((cause) =>
+          cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+        ),
+      );
+    }).pipe(
+      Effect.mapError((cause) =>
+        cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+      ),
     ),
   );
 
-export const callEffectAiLanguageModel = (
+export const streamEffectAiLanguageModel = (
   model: LanguageModelService,
   request: LlmRequest,
   options: LlmCallOptions = {},
-): Effect.Effect<LlmResponse, UpstreamFailure> =>
-  Effect.withSpan("agentos.llm_transport.effect_ai.call_model")(
+): Stream.Stream<LlmStreamFrame, UpstreamFailure> =>
+  Stream.unwrap(
     Effect.gen(function* () {
       const prompt = yield* effectAiPromptFromMessages(request.messages);
       const toolkit =
         request.tools === undefined || request.tools.length === 0
           ? undefined
           : effectAiToolkitFromToolDefinitions(request.tools);
-      const response =
+      const parts =
         toolkit === undefined
-          ? yield* withAbortSignal(
-              model.generateText({
-                prompt,
-                disableToolCallResolution: true,
-              }),
-              options.signal,
-            )
-          : yield* withAbortSignal(
-              model.generateText({
-                prompt,
-                toolkit,
-                disableToolCallResolution: true,
-                toolChoice: toolChoiceForRequest(request),
-              }),
-              options.signal,
-            );
-      return yield* normalizeEffectAiResponse(response);
-    }).pipe(Effect.mapError((cause) => new UpstreamFailure({ cause }))),
+          ? model.streamText({
+              prompt,
+              disableToolCallResolution: true,
+            })
+          : model.streamText({
+              prompt,
+              toolkit,
+              disableToolCallResolution: true,
+              toolChoice: toolChoiceForRequest(request),
+            });
+      return withAbortStream(parts, options.signal).pipe(
+        Stream.mapAccumEffect(initialEffectAiStreamState, normalizeEffectAiStreamPart),
+        Stream.mapError((cause) =>
+          cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+        ),
+      );
+    }).pipe(
+      Effect.mapError((cause) =>
+        cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+      ),
+      Effect.withSpan("agentos.llm_transport.effect_ai.stream_model"),
+    ),
   );
 
 export const resolveEffectAiRoute = (
@@ -1101,43 +1471,41 @@ export const makeEffectAiLlmTransportLayer = <R>(
         return {
           resolveRoute: (route) =>
             resolveEffectAiRouteForTransport(route).pipe(Effect.map(effectAiRouteDescriptor)),
-          call: (request, options) =>
-            Effect.gen(function* () {
-              const resolved = yield* resolveEffectAiRouteForTransport(request.route);
-              return yield* withEffectAiLiveRoute(refs, request, resolved.route, (liveRoute) =>
-                Effect.gen(function* () {
-                  let response: LlmResponse;
-                  if (liveRoute.route.kind === "openai-chat-compatible") {
-                    response = yield* callOpenAiChatCompatible(
-                      httpClient,
-                      {
+          stream: (request, options) =>
+            Stream.unwrap(
+              Effect.gen(function* () {
+                const resolved = yield* resolveEffectAiRouteForTransport(request.route);
+                return yield* withEffectAiLiveRoute(refs, request, resolved.route, (liveRoute) =>
+                  liveRoute.route.kind === "openai-chat-compatible"
+                    ? Effect.succeed(
+                        streamOpenAiChatCompatible(
+                          httpClient,
+                          {
+                            route: liveRoute.route,
+                            endpoint: liveRoute.endpoint,
+                            credential: liveRoute.credential,
+                          },
+                          request,
+                          continuationStore,
+                          options,
+                        ),
+                      )
+                    : modelFactory({
                         route: liveRoute.route,
                         endpoint: liveRoute.endpoint,
                         credential: liveRoute.credential,
-                      },
-                      request,
-                      continuationStore,
-                      options,
-                    );
-                  } else {
-                    const model = yield* modelFactory({
-                      route: liveRoute.route,
-                      endpoint: liveRoute.endpoint,
-                      credential: liveRoute.credential,
-                    }).pipe(
-                      Effect.provide(context),
-                      Effect.mapError((cause) => new UpstreamFailure({ cause })),
-                    );
-                    response = yield* callEffectAiLanguageModel(model, request, options);
-                  }
-                  return response;
-                }),
-              ).pipe(
-                Effect.mapError((cause) =>
-                  cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
-                ),
-              );
-            }),
+                      }).pipe(
+                        Effect.provide(context),
+                        Effect.map((model) => streamEffectAiLanguageModel(model, request, options)),
+                        Effect.mapError((cause) => new UpstreamFailure({ cause })),
+                      ),
+                ).pipe(
+                  Effect.mapError((cause) =>
+                    cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+                  ),
+                );
+              }),
+            ),
         };
       }),
     ),
@@ -1164,23 +1532,27 @@ export const makeOpenAiCompatibleLlmTransportLayer = (
             resolveOpenAiChatCompatibleRouteForTransport(route).pipe(
               Effect.map(effectAiRouteDescriptor),
             ),
-          call: (request, options) =>
-            Effect.gen(function* () {
-              const resolved = yield* resolveOpenAiChatCompatibleRouteForTransport(request.route);
-              return yield* withEffectAiLiveRoute(refs, request, resolved.route, (liveRoute) =>
-                callOpenAiChatCompatible(
-                  httpClient,
-                  liveRoute,
-                  request,
-                  continuationStore,
-                  options,
-                ),
-              ).pipe(
-                Effect.mapError((cause) =>
-                  cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
-                ),
-              );
-            }),
+          stream: (request, options) =>
+            Stream.unwrap(
+              Effect.gen(function* () {
+                const resolved = yield* resolveOpenAiChatCompatibleRouteForTransport(request.route);
+                return yield* withEffectAiLiveRoute(refs, request, resolved.route, (liveRoute) =>
+                  Effect.succeed(
+                    streamOpenAiChatCompatible(
+                      httpClient,
+                      liveRoute,
+                      request,
+                      continuationStore,
+                      options,
+                    ),
+                  ),
+                ).pipe(
+                  Effect.mapError((cause) =>
+                    cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),
+                  ),
+                );
+              }),
+            ),
         };
       }),
     ),

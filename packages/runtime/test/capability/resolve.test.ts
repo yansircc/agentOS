@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { Schema } from "effect";
 import { defineCarrier, event, none } from "@agent-os/core/carrier";
 import { eventNamespace } from "@agent-os/core/extensions";
@@ -545,7 +545,7 @@ describe("resolveRuntime", () => {
       llm: {},
       llmTransport: Layer.succeed(LlmTransport, {
         resolveRoute: () => Effect.die("unused"),
-        call: () => Effect.die("unused"),
+        stream: () => Stream.die("unused"),
       }),
     });
 

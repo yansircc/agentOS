@@ -1,4 +1,4 @@
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { UpstreamFailure } from "@agent-os/core/errors";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import type { RefResolverService } from "@agent-os/core/ref-resolver";
@@ -28,8 +28,8 @@ export const MissingLlmTransportLive: Layer.Layer<LlmTransport, never, RefResolv
       Effect.fail(missingLlmTransport()).pipe(
         Effect.withSpan("agentos.cloudflare_do.llm.missing.resolve_route"),
       ),
-    call: () =>
-      Effect.fail(missingLlmTransport()).pipe(
-        Effect.withSpan("agentos.cloudflare_do.llm.missing.call"),
+    stream: () =>
+      Stream.fail(missingLlmTransport()).pipe(
+        Stream.withSpan("agentos.cloudflare_do.llm.missing.stream"),
       ),
   });

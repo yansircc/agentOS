@@ -57,6 +57,7 @@ import {
   SqlError,
   TriggerFactoryError,
   UnsupportedScopeRef,
+  UpstreamFailure,
 } from "@agent-os/core/errors";
 import type {
   AttachedStreamCancelResult,
@@ -101,6 +102,8 @@ import {
   type TriggerDrainUntilQuietResult,
 } from "@agent-os/runtime";
 import { submitAgentEffect, type SubmitAgentProductLink } from "../submit-agent";
+import { encodeSubmitLiveFrame, recordLlmStreamFrame } from "../submit-live";
+import { createSseHttpWritableResponse } from "../sse-http";
 import type { ScheduleFireDeliveryDispatchResult, ScheduleFireDispatchResult } from "../schedule";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
@@ -262,6 +265,7 @@ export interface AgentRuntimeClient extends AgentRuntimeReaderClient {
   readonly dispatchToScope: (spec: DispatchToScopeSpec) => Promise<DispatchToScopeResult>;
   readonly scheduleEvent: (spec: ScheduledEventSpec) => Promise<{ id: number }>;
   readonly submit: (spec: AgentSubmitSpec) => Promise<SubmitResult>;
+  readonly submitLive: (spec: AgentSubmitSpec) => Promise<Response>;
   readonly resumeInputRequest: (
     spec: WorkspaceAgentResumeInputRequestCommandInput,
   ) => Promise<SubmitResult>;
@@ -620,6 +624,32 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     return this.submitWithBindingsAndProductLink(spec, baseBindings);
   }
 
+  protected submitLiveWithBindings(
+    spec: AgentSubmitSpec,
+    baseBindings: AgentSubmitBindings,
+  ): Promise<Response> {
+    return this.scopedPromise((scope) => {
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
+      }
+      try {
+        return this.submitLiveFullScoped(
+          scope,
+          truthIdentity,
+          lowerAgentSubmitSpec(
+            spec,
+            baseBindings,
+            this._toolIntents,
+            truthIdentity.effectAuthorityRef,
+          ),
+        );
+      } catch (cause) {
+        return Promise.reject(cause);
+      }
+    });
+  }
+
   protected submitWithBindingsAndProductLink(
     spec: AgentSubmitSpec,
     baseBindings: AgentSubmitBindings,
@@ -894,6 +924,72 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
       }
       return this.submitFullScoped(scope, truthIdentity, spec);
     });
+  }
+
+  protected submitLiveFull(spec: SubmitSpec): Promise<Response> {
+    return this.scopedPromise((scope) => {
+      const truthIdentity = this.defaultTruthIdentityForScope(scope);
+      if (truthIdentity instanceof UnsupportedScopeRef) {
+        return Promise.reject(truthIdentity);
+      }
+      return this.submitLiveFullScoped(scope, truthIdentity, spec);
+    });
+  }
+
+  private submitLiveFullScoped(
+    scope: string,
+    truthIdentity: BackendProtocolTruthIdentity,
+    spec: SubmitSpec,
+    productLink?: SubmitAgentProductLink,
+  ): Promise<Response> {
+    const { identity, internalSpec } = scopedInternalSubmitSpec(
+      scope,
+      truthIdentity,
+      spec,
+      this._graphStatus,
+    );
+    const live = createSseHttpWritableResponse();
+    const writeFailure = (cause: unknown): UpstreamFailure =>
+      new UpstreamFailure({ cause: { reason: "submit_live_write_failed", cause } });
+    const writeFrame = (frame: Parameters<typeof encodeSubmitLiveFrame>[0]) =>
+      encodeSubmitLiveFrame(frame).pipe(
+        Effect.mapError(writeFailure),
+        Effect.flatMap((encoded) =>
+          Effect.tryPromise({
+            try: () => live.write(encoded),
+            catch: writeFailure,
+          }),
+        ),
+      );
+    const submit = submitAgentEffect(internalSpec, {
+      ...(productLink === undefined ? {} : { productLink }),
+      onLlmFrame: (turn, frame) =>
+        writeFrame({ kind: "llm", turn, frame: recordLlmStreamFrame(frame) }),
+    }).pipe(
+      Effect.tap((result) => writeFrame({ kind: "result", result })),
+      Effect.andThen(
+        Effect.tryPromise({
+          try: () => live.close(),
+          catch: writeFailure,
+        }),
+      ),
+    );
+    const disconnected = Effect.tryPromise({
+      try: () => live.closed,
+      catch: (cause) =>
+        new UpstreamFailure({ cause: { reason: "submit_live_disconnected", cause } }),
+    }).pipe(Effect.andThen(Effect.never));
+    this.runtimeFor(scope, identity).runFork(
+      Effect.raceFirst(submit, disconnected).pipe(
+        Effect.catchCause((cause) =>
+          Effect.tryPromise({
+            try: () => live.abort(cause),
+            catch: () => undefined,
+          }).pipe(Effect.orElseSucceed(() => undefined)),
+        ),
+      ),
+    );
+    return Promise.resolve(live.response);
   }
 
   private submitFullScoped(
@@ -1474,6 +1570,10 @@ export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
 
     submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
       return this.submitWithBindings(spec, this._mount.driverConfig.bindings);
+    }
+
+    submitLive(spec: AgentSubmitSpec): Promise<Response> {
+      return this.submitLiveWithBindings(spec, this._mount.driverConfig.bindings);
     }
 
     resumeInputRequest(spec: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {

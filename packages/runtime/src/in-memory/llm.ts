@@ -1,7 +1,8 @@
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { UpstreamFailure } from "@agent-os/core/errors";
 import {
   LlmTransport,
+  llmStreamFramesFromResponse,
   type LlmRequest,
   type LlmResponse,
   type LlmRoute,
@@ -63,10 +64,12 @@ export const InMemoryLlmTransportLive = (
         transportAdapterId: `in-memory-llm-transport@${IN_MEMORY_LLM_TRANSPORT_VERSION}`,
         transportAdapterVersion: IN_MEMORY_LLM_TRANSPORT_VERSION,
       }),
-    call: (request) =>
-      Effect.tryPromise({
-        try: () => Promise.resolve(handler(request)),
-        catch: (cause) => new UpstreamFailure({ cause }),
-      }),
+    stream: (request) =>
+      Stream.fromIterableEffect(
+        Effect.tryPromise({
+          try: () => Promise.resolve(handler(request)),
+          catch: (cause) => new UpstreamFailure({ cause }),
+        }).pipe(Effect.flatMap(llmStreamFramesFromResponse)),
+      ),
   });
 };

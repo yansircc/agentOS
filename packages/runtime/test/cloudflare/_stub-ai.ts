@@ -9,6 +9,7 @@
 import { Context, Effect } from "effect";
 import {
   LlmTransport,
+  llmStreamFromResponse,
   type LlmResponse,
   type LlmRoute,
   type LlmWireDescriptor,
@@ -80,22 +81,24 @@ export const stubLlmTransport = (
           transportAdapterVersion: "1.0.0",
         }),
       ),
-    call: () =>
-      Effect.withSpan("agentos.test.stub_llm.call")(
-        Effect.gen(function* () {
-          const next = responses[i];
-          if (next === undefined) {
-            return yield* new UpstreamFailure({
-              cause: {
-                reason: "stub_llm_transport_queue_exhausted",
-                call: i + 1,
-                length: responses.length,
-              },
-            });
-          }
-          i += 1;
-          return next;
-        }),
+    stream: () =>
+      llmStreamFromResponse(
+        Effect.withSpan("agentos.test.stub_llm.stream")(
+          Effect.gen(function* () {
+            const next = responses[i];
+            if (next === undefined) {
+              return yield* new UpstreamFailure({
+                cause: {
+                  reason: "stub_llm_transport_queue_exhausted",
+                  call: i + 1,
+                  length: responses.length,
+                },
+              });
+            }
+            i += 1;
+            return next;
+          }),
+        ),
       ),
   };
 };

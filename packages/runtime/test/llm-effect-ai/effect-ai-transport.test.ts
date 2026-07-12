@@ -6,6 +6,7 @@ import {
 import {
   makePart as makeResponsePart,
   type Part as ResponsePart,
+  type StreamPart as ResponseStreamPart,
   Usage as ResponseUsage,
 } from "effect/unstable/ai/Response";
 import type { Any as AnyTool } from "effect/unstable/ai/Tool";
@@ -16,10 +17,11 @@ import {
 import type { HttpClientRequest } from "effect/unstable/http/HttpClientRequest";
 import type { HttpClientResponse } from "effect/unstable/http/HttpClientResponse";
 import { describe, expect, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
+import { Cause, Context, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { ensureAgentSchema } from "@agent-os/core/agent-schema";
 import {
   LlmProviderContinuationFailure,
+  drainLlmStream,
   llmCallSnapshotFromResponse,
   LlmTransport,
   markerFromProviderContinuation,
@@ -41,7 +43,7 @@ import {
   UpstreamFailure,
 } from "@agent-os/core/errors";
 import {
-  callEffectAiLanguageModel,
+  streamEffectAiLanguageModel,
   effectAiPromptFromMessages,
   effectAiToolkitFromToolDefinitions,
   EffectAiMissingUsage,
@@ -120,18 +122,72 @@ const lookupTool = (): ToolDefinition => ({
   },
 });
 
-const fakeModel = (generateText: LanguageModelService["generateText"]): LanguageModelService => ({
-  generateText,
-  generateObject: () => Effect.die("generateObject is not used by a87 transport"),
-  streamText: () => Stream.die("streamText is not used by a87 transport"),
-});
+const fakeModel = (generateText: LanguageModelService["generateText"]): LanguageModelService => {
+  const callGenerate = generateText as unknown as (
+    options: GenerateTextOptions<Record<string, AnyTool>>,
+  ) => Effect.Effect<GenerateTextResponse<Record<string, AnyTool>>, unknown>;
+  const streamText = (options: GenerateTextOptions<Record<string, AnyTool>>) =>
+    Stream.unwrap(
+      callGenerate(options).pipe(
+        Effect.map((response) => {
+          const parts: Array<ResponseStreamPart<Record<string, AnyTool>>> = [];
+          let textId = 0;
+          for (const part of response.content) {
+            if (part.type === "text") {
+              const id = `text-${textId++}`;
+              parts.push(makeResponsePart("text-start", { id }));
+              parts.push(makeResponsePart("text-delta", { id, delta: part.text }));
+              parts.push(makeResponsePart("text-end", { id }));
+            } else {
+              parts.push(part as ResponseStreamPart<Record<string, AnyTool>>);
+            }
+          }
+          return Stream.fromIterable(parts);
+        }),
+      ),
+    );
+  return {
+    generateText,
+    generateObject: () => Effect.die("generateObject is not used by a87 transport"),
+    streamText: streamText as LanguageModelService["streamText"],
+  };
+};
 
 const httpResponse = (status: number, body: unknown): HttpClientResponse =>
   ({
     status,
     json: Effect.succeed(body),
     text: Effect.succeed(JSON.stringify(body)),
+    stream: Stream.fromIterable([new TextEncoder().encode(JSON.stringify(body))]),
   }) as unknown as HttpClientResponse;
+
+const openAiStreamResponse = (body: unknown): HttpClientResponse => {
+  const record = body as {
+    readonly choices?: ReadonlyArray<{ readonly message?: Readonly<Record<string, unknown>> }>;
+    readonly usage?: unknown;
+  };
+  const message = record.choices?.[0]?.message ?? {};
+  const toolCalls = Array.isArray(message.tool_calls)
+    ? message.tool_calls.map((call, index) => ({ ...(call as object), index }))
+    : undefined;
+  const delta = { ...message, ...(toolCalls === undefined ? {} : { tool_calls: toolCalls }) };
+  const events = [
+    { choices: [{ delta, finish_reason: null }] },
+    { choices: [{ delta: {}, finish_reason: "stop" }] },
+    ...(record.usage === undefined ? [] : [{ choices: [], usage: record.usage }]),
+  ];
+  const text = `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
+  return {
+    ...httpResponse(200, body),
+    stream: Stream.fromIterable([new TextEncoder().encode(text)]),
+  } as unknown as HttpClientResponse;
+};
+
+const callTransport = (
+  transport: Context.Service.Shape<typeof LlmTransport>,
+  requestValue: LlmRequest,
+  options?: { readonly signal?: AbortSignal },
+) => drainLlmStream(transport.stream(requestValue, options));
 
 const fakeHttpClient = (
   execute: (request: HttpClientRequest) => Effect.Effect<HttpClientResponse>,
@@ -203,7 +259,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       const client = fakeHttpClient((providerRequest) => {
         captured = providerRequest;
         return Effect.succeed(
-          httpResponse(200, {
+          openAiStreamResponse({
             choices: [
               {
                 message: {
@@ -226,7 +282,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
 
       const result = yield* Effect.gen(function* () {
         const transport = yield* LlmTransport;
-        return yield* transport.call(
+        return yield* callTransport(
+          transport,
           request({
             messages: [
               { role: "user", content: "hello" },
@@ -256,7 +313,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       const body = decodeRequestBody(captured!);
       expect(body).toMatchObject({
         model: "gpt-test",
-        stream: false,
+        stream: true,
+        stream_options: { include_usage: true },
         messages: [
           { role: "user", content: "hello" },
           {
@@ -325,7 +383,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       const exit = yield* Effect.exit(
         Effect.gen(function* () {
           const transport = yield* LlmTransport;
-          return yield* transport.call(request());
+          return yield* callTransport(transport, request());
         }).pipe(
           Effect.provide(makeEffectAiLlmTransportLayer<never>(() => Effect.die("model unused"))),
           Effect.provide(httpClientLive(client)),
@@ -349,12 +407,13 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       let providerCalls = 0;
       const client = fakeHttpClient(() => {
         providerCalls += 1;
-        return Effect.succeed(httpResponse(200, {}));
+        return Effect.succeed(openAiStreamResponse({}));
       });
       const exit = yield* Effect.exit(
         Effect.gen(function* () {
           const transport = yield* LlmTransport;
-          return yield* transport.call(
+          return yield* callTransport(
+            transport,
             request({
               materialResolution: {
                 truthIdentity: request().materialResolution!.truthIdentity,
@@ -387,7 +446,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
     Effect.gen(function* () {
       const client = fakeHttpClient(() =>
         Effect.succeed(
-          httpResponse(200, {
+          openAiStreamResponse({
             choices: [{ message: { content: "ok" } }],
             usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
           }),
@@ -395,7 +454,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       );
       const normalized = yield* Effect.gen(function* () {
         const transport = yield* LlmTransport;
-        return yield* transport.call(request());
+        return yield* callTransport(transport, request());
       }).pipe(
         Effect.provide(makeEffectAiLlmTransportLayer<never>(() => Effect.die("model unused"))),
         Effect.provide(httpClientLive(client)),
@@ -414,7 +473,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
     const client = fakeHttpClient((providerRequest) => {
       captured = providerRequest;
       return Effect.succeed(
-        httpResponse(200, {
+        openAiStreamResponse({
           choices: [{ message: { content: "ok" } }],
           usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
         }),
@@ -435,7 +494,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       expect(JSON.stringify(descriptor.wireDescriptor)).not.toContain("https://provider.example");
       expect(JSON.stringify(descriptor.wireDescriptor)).not.toContain("sk-secret");
       expect(descriptor.providerOutputAdapterVersion).toBe("openai-chat-completions-output-v1");
-      const result = yield* transport.call(request());
+      const result = yield* callTransport(transport, request());
 
       expect(result.items).toEqual([{ type: "message", text: "ok" }]);
       expect(factoryCalls).toBe(0);
@@ -453,7 +512,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       const client = fakeHttpClient((providerRequest) => {
         captured = providerRequest;
         return Effect.succeed(
-          httpResponse(200, {
+          openAiStreamResponse({
             choices: [{ message: { content: "ok" } }],
             usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
           }),
@@ -462,7 +521,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
 
       const result = yield* Effect.gen(function* () {
         const transport = yield* LlmTransport;
-        return yield* transport.call(request());
+        return yield* callTransport(transport, request());
       }).pipe(
         Effect.provide(makeOpenAiCompatibleLlmTransportLayer()),
         Effect.provide(httpClientLive(client)),
@@ -499,7 +558,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       bodies.push(decodeRequestBody(providerRequest));
       return Effect.succeed(
         bodies.length === 1
-          ? httpResponse(200, {
+          ? openAiStreamResponse({
               choices: [
                 {
                   message: {
@@ -518,7 +577,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
               ],
               usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
             })
-          : httpResponse(200, {
+          : openAiStreamResponse({
               choices: [{ message: { content: "done" } }],
               usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
             }),
@@ -527,7 +586,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
 
     return Effect.gen(function* () {
       const transport = yield* LlmTransport;
-      const first = yield* transport.call(
+      const first = yield* callTransport(
+        transport,
         request({
           continuationContext: {
             truthIdentityFingerprint: "tenant-a|llm-test",
@@ -542,7 +602,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       expect(JSON.stringify(marker)).not.toContain("reasoning-token");
       expect(JSON.stringify(marker)).not.toContain("encrypted-token");
 
-      const second = yield* transport.call(
+      const second = yield* callTransport(
+        transport,
         request({
           continuationContext: {
             truthIdentityFingerprint: "tenant-a|llm-test",
@@ -587,7 +648,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
   it.effect("fails closed on a partial provider continuation shape", () => {
     const client = fakeHttpClient(() =>
       Effect.succeed(
-        httpResponse(200, {
+        openAiStreamResponse({
           choices: [{ message: { content: "", reasoning_content: "reasoning-only" } }],
           usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
         }),
@@ -597,7 +658,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
     return Effect.gen(function* () {
       const transport = yield* LlmTransport;
       const exit = yield* Effect.exit(
-        transport.call(
+        callTransport(
+          transport,
           request({
             continuationContext: {
               truthIdentityFingerprint: "tenant-a|llm-test",
@@ -619,7 +681,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
   it.effect("does not preserve arbitrary provider message fields", () => {
     const client = fakeHttpClient(() =>
       Effect.succeed(
-        httpResponse(200, {
+        openAiStreamResponse({
           choices: [
             {
               message: {
@@ -635,7 +697,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
 
     return Effect.gen(function* () {
       const transport = yield* LlmTransport;
-      const result = yield* transport.call(request());
+      const result = yield* callTransport(transport, request());
       expect(result.continuation).toBeUndefined();
       expect(JSON.stringify(result)).not.toContain("must-not-cross-adapter");
     }).pipe(
@@ -668,7 +730,7 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
     const client = fakeHttpClient((providerRequest) => {
       bodies.push(decodeRequestBody(providerRequest));
       return Effect.succeed(
-        httpResponse(200, {
+        openAiStreamResponse({
           choices: [
             {
               message: {
@@ -686,7 +748,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
 
     return Effect.gen(function* () {
       const transport = yield* LlmTransport;
-      const first = yield* transport.call(
+      const first = yield* callTransport(
+        transport,
         request({
           continuationContext: {
             truthIdentityFingerprint: "tenant-a|llm-test",
@@ -699,7 +762,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       expect(firstContinuation).toMatchObject({ kind: "sealed", ref: "continuation-1" });
       expect(markerFromProviderContinuation(firstContinuation).sealedRef).toBe("continuation-1");
 
-      yield* transport.call(
+      yield* callTransport(
+        transport,
         request({
           continuationContext: {
             truthIdentityFingerprint: "tenant-a|llm-test",
@@ -725,7 +789,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       });
 
       const exit = yield* Effect.exit(
-        transport.call(
+        callTransport(
+          transport,
           request({
             route: { ...openAiRoute(), modelId: "other-model" },
             continuationContext: {
@@ -934,12 +999,14 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
           );
         });
 
-        const result = yield* callEffectAiLanguageModel(
-          model,
-          request({
-            tools: [lookupTool()],
-            tool_choice: { type: "function", function: { name: "lookup" } },
-          }),
+        const result = yield* drainLlmStream(
+          streamEffectAiLanguageModel(
+            model,
+            request({
+              tools: [lookupTool()],
+              tool_choice: { type: "function", function: { name: "lookup" } },
+            }),
+          ),
         );
 
         expect(result.items).toHaveLength(1);
@@ -966,12 +1033,14 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
         );
       });
 
-      const result = yield* callEffectAiLanguageModel(
-        model,
-        request({
-          tools: [lookupTool()],
-          tool_choice: "required",
-        }),
+      const result = yield* drainLlmStream(
+        streamEffectAiLanguageModel(
+          model,
+          request({
+            tools: [lookupTool()],
+            tool_choice: "required",
+          }),
+        ),
       );
 
       expect(result.items).toHaveLength(1);
@@ -1002,7 +1071,8 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
 
       return Effect.gen(function* () {
         const transport = yield* LlmTransport;
-        const result = yield* transport.call(
+        const result = yield* callTransport(
+          transport,
           request({
             route: {
               kind: "anthropic-messages",
@@ -1028,9 +1098,11 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       const controller = new AbortController();
       const model = fakeModel(() => Effect.never);
       const fiber = yield* Effect.forkChild(
-        callEffectAiLanguageModel(model, request(), {
-          signal: controller.signal,
-        }),
+        drainLlmStream(
+          streamEffectAiLanguageModel(model, request(), {
+            signal: controller.signal,
+          }),
+        ),
       );
       controller.abort();
       const exit = yield* Fiber.await(fiber);

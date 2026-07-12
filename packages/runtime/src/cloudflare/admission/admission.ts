@@ -41,7 +41,11 @@ import {
   type InvalidateSpec,
   type Outcome,
 } from "@agent-os/core/runtime-protocol";
-import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/core/llm-protocol";
+import {
+  drainLlmStream,
+  LlmTransport,
+  llmWireDescriptorFingerprint,
+} from "@agent-os/core/llm-protocol";
 import { EventBus } from "../ledger/event-bus";
 import { JsonStringifyError, UpstreamFailure } from "@agent-os/core/errors";
 import { commitLedgerTransaction } from "../ledger/commit";
@@ -117,14 +121,16 @@ export const AdmissionLive = (
           }
 
           const responseEither = yield* Effect.result(
-            llm.call(
-              structuredOutputRequest({
-                route: spec.route,
-                schemaSpec: spec.schemaSpec,
-                stimulus: spec.stimulus,
-                traceContext: spec.traceContext,
-              }),
-              { signal: spec.signal },
+            drainLlmStream(
+              llm.stream(
+                structuredOutputRequest({
+                  route: spec.route,
+                  schemaSpec: spec.schemaSpec,
+                  stimulus: spec.stimulus,
+                  traceContext: spec.traceContext,
+                }),
+                { signal: spec.signal },
+              ),
             ),
           );
 

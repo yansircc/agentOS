@@ -28,11 +28,13 @@ import { ABORT } from "@agent-os/core/abort";
 import { backendProtocolTruthIdentityKey } from "@agent-os/core/backend-protocol";
 import {
   markerFromProviderContinuation,
+  drainLlmStream,
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
   type LlmToolCall,
   type LlmMessage,
   type LlmRoute,
+  type LlmStreamFrame,
 } from "@agent-os/core/llm-protocol";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
@@ -205,6 +207,10 @@ export type SubmitAgentProductLink =
 
 export interface SubmitAgentOptions {
   readonly productLink?: SubmitAgentProductLink;
+  readonly onLlmFrame?: (
+    turn: TurnRef,
+    frame: LlmStreamFrame,
+  ) => Effect.Effect<void, UpstreamFailure>;
 }
 
 const productLinkEventFor = (
@@ -922,35 +928,40 @@ export const submitAgentEffect = (
             });
             const timedResp = yield* Effect.result(
               runTimedLlmAttempt(timeout, budgetTimeMs, (signal) =>
-                llm.call(
-                  {
-                    route: spec.route,
-                    messages,
-                    tools: toolDefs.length > 0 ? toolDefs : undefined,
-                    tool_choice: toolChoice,
-                    traceContext,
-                    continuationContext: {
-                      truthIdentityFingerprint: backendProtocolTruthIdentityKey(identity),
-                      turn: turnRefOf(started.id, turn),
-                    },
-                    materialResolution: {
-                      truthIdentity: identity,
-                      expectedVersions: Object.fromEntries(materialVersions),
-                      onResolved: (receipt) =>
-                        recordMaterialResolutions([receipt]).pipe(
-                          Effect.mapError((failure) =>
-                            failure instanceof RefResolutionFailed
-                              ? failure
-                              : new RefResolutionFailed({
-                                  kind: receipt.materialRef.kind,
-                                  ref: materialRefKey(receipt.materialRef),
-                                  reason: "resolver_failed",
-                                }),
+                drainLlmStream(
+                  llm.stream(
+                    {
+                      route: spec.route,
+                      messages,
+                      tools: toolDefs.length > 0 ? toolDefs : undefined,
+                      tool_choice: toolChoice,
+                      traceContext,
+                      continuationContext: {
+                        truthIdentityFingerprint: backendProtocolTruthIdentityKey(identity),
+                        turn: turnRefOf(started.id, turn),
+                      },
+                      materialResolution: {
+                        truthIdentity: identity,
+                        expectedVersions: Object.fromEntries(materialVersions),
+                        onResolved: (receipt) =>
+                          recordMaterialResolutions([receipt]).pipe(
+                            Effect.mapError((failure) =>
+                              failure instanceof RefResolutionFailed
+                                ? failure
+                                : new RefResolutionFailed({
+                                    kind: receipt.materialRef.kind,
+                                    ref: materialRefKey(receipt.materialRef),
+                                    reason: "resolver_failed",
+                                  }),
+                            ),
                           ),
-                        ),
+                      },
                     },
-                  },
-                  { signal },
+                    { signal },
+                  ),
+                  options.onLlmFrame === undefined
+                    ? undefined
+                    : (frame) => options.onLlmFrame!(turnRefOf(started.id, turn), frame),
                 ),
               ),
             );

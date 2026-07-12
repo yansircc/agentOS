@@ -1,4 +1,4 @@
-import { Deferred, Effect, Fiber, Schema } from "effect";
+import { Deferred, Effect, Fiber, Schema, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { describe, expect, it } from "@effect/vitest";
 
@@ -177,7 +177,7 @@ const runWithHungLlm = (
           transportAdapterId: "test-runtime@1.0.0",
           transportAdapterVersion: "1.0.0",
         }),
-      call: (_request: unknown, options?: { readonly signal?: AbortSignal }) => {
+      stream: (_request: unknown, options?: { readonly signal?: AbortSignal }) => {
         if (providerObservesAbort) {
           options?.signal?.addEventListener("abort", () => {
             aborted = true;
@@ -198,7 +198,7 @@ const runWithHungLlm = (
           : providerObservesAbort
             ? Effect.never
             : Effect.promise(() => new Promise<never>(() => {}));
-        return markProviderAttemptStarted.pipe(Effect.andThen(providerWait));
+        return Stream.fromEffect(markProviderAttemptStarted.pipe(Effect.andThen(providerWait)));
       },
     };
     const quota = {

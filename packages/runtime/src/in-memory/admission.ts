@@ -23,7 +23,11 @@ import {
   type InvalidateSpec,
   type Outcome,
 } from "@agent-os/core/runtime-protocol";
-import { LlmTransport, llmWireDescriptorFingerprint } from "@agent-os/core/llm-protocol";
+import {
+  drainLlmStream,
+  LlmTransport,
+  llmWireDescriptorFingerprint,
+} from "@agent-os/core/llm-protocol";
 import type { InMemoryBackendState } from "./state";
 import { inMemoryConversationTruthIdentity, inMemoryRuntimeEventIdentity } from "./state";
 import { decodeOk, recordOf } from "./decode";
@@ -124,13 +128,15 @@ export const InMemoryAdmissionLive = (
           }
 
           const response = yield* Effect.result(
-            llm.call(
-              structuredOutputRequest({
-                route: spec.route,
-                schemaSpec: spec.schemaSpec,
-                stimulus: spec.stimulus,
-              }),
-              { signal: spec.signal },
+            drainLlmStream(
+              llm.stream(
+                structuredOutputRequest({
+                  route: spec.route,
+                  schemaSpec: spec.schemaSpec,
+                  stimulus: spec.stimulus,
+                }),
+                { signal: spec.signal },
+              ),
             ),
           );
 

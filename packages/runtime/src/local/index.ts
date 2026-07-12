@@ -26,6 +26,7 @@ import type {
   WorkspaceAgentResumeInputRequestCommandInput,
 } from "@agent-os/core/workspace-agent";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
+import { UpstreamFailure } from "@agent-os/core/errors";
 import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 import {
   WORKSPACE_OPERATION_HOST_FACT,
@@ -44,7 +45,9 @@ import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "../i
 import { internalSubmitSpec } from "../internal-submit";
 import type { ScheduleFireDeliveryDispatchResult, ScheduleFireDispatchResult } from "../schedule";
 import { submitAgentEffect } from "../submit-agent";
-import type { SubmitAgentProductLink } from "../submit-agent";
+import type { SubmitAgentOptions, SubmitAgentProductLink } from "../submit-agent";
+import { encodeSubmitLiveFrame, recordLlmStreamFrame } from "../submit-live";
+import { createSseHttpWritableResponse } from "../sse-http";
 import { BoundaryEvents } from "../boundary-events";
 import {
   DECISION_GATE_KIND,
@@ -159,6 +162,7 @@ export type LocalAgentSubmitInput = Omit<
 
 export interface LocalAgentRuntime {
   readonly submit: (input: LocalAgentSubmitInput) => Promise<SubmitResult>;
+  readonly submitLive: (input: LocalAgentSubmitInput) => Promise<Response>;
   readonly resumeInputRequest: (
     input: WorkspaceAgentResumeInputRequestCommandInput,
   ) => Promise<SubmitResult>;
@@ -660,24 +664,85 @@ const submitLocalAgent = (
   if (diagnostics.length > 0) {
     return Promise.reject(new LocalAgentRuntimeResolveError(diagnostics));
   }
-  return Effect.runPromise(
-    submitAgentEffect(
-      internalSubmitSpec(
-        submitSpecWithBindings(
-          submitInput,
-          input.resolved.bindings,
-          input.truthIdentity.effectAuthorityRef,
-          input.defaultRoute,
-        ),
-        {
-          scope: input.identity,
-          scopeRef: input.truthIdentity.scopeRef,
-        },
-        { runtimeGraphStatus: input.resolved.installGraph.graphStatus },
+  return Effect.runPromise(localSubmitEffect(input, submitInput, { productLink }));
+};
+
+const localSubmitEffect = (
+  input: LocalAgentRuntimeFacadeInput,
+  submitInput: LocalAgentSubmitInput,
+  options: SubmitAgentOptions,
+) =>
+  submitAgentEffect(
+    internalSubmitSpec(
+      submitSpecWithBindings(
+        submitInput,
+        input.resolved.bindings,
+        input.truthIdentity.effectAuthorityRef,
+        input.defaultRoute,
       ),
-      productLink === undefined ? {} : { productLink },
-    ).pipe(Effect.provide(input.resolved.layer)),
+      {
+        scope: input.identity,
+        scopeRef: input.truthIdentity.scopeRef,
+      },
+      { runtimeGraphStatus: input.resolved.installGraph.graphStatus },
+    ),
+    options,
+  ).pipe(Effect.provide(input.resolved.layer));
+
+const submitLiveWriteFailure = (cause: unknown): UpstreamFailure =>
+  new UpstreamFailure({ cause: { reason: "submit_live_write_failed", cause } });
+
+const submitLocalAgentLive = (
+  input: LocalAgentRuntimeFacadeInput,
+  submitInput: LocalAgentSubmitInput,
+): Promise<Response> => {
+  const diagnostics = localLlmPreflightDiagnostics(
+    input.llm,
+    submitInput.route ?? input.defaultRoute,
+    "submitLive",
+    input.materialResolver,
   );
+  if (diagnostics.length > 0) {
+    return Promise.reject(new LocalAgentRuntimeResolveError(diagnostics));
+  }
+  const live = createSseHttpWritableResponse();
+  const writeFrame = (frame: Parameters<typeof encodeSubmitLiveFrame>[0]) =>
+    encodeSubmitLiveFrame(frame).pipe(
+      Effect.mapError(submitLiveWriteFailure),
+      Effect.flatMap((encoded) =>
+        Effect.tryPromise({
+          try: () => live.write(encoded),
+          catch: submitLiveWriteFailure,
+        }),
+      ),
+    );
+  const submit = localSubmitEffect(input, submitInput, {
+    onLlmFrame: (turn, frame) =>
+      writeFrame({ kind: "llm", turn, frame: recordLlmStreamFrame(frame) }),
+  }).pipe(
+    Effect.tap((result) => writeFrame({ kind: "result", result })),
+    Effect.andThen(
+      Effect.tryPromise({
+        try: () => live.close(),
+        catch: submitLiveWriteFailure,
+      }),
+    ),
+  );
+  const disconnected = Effect.tryPromise({
+    try: () => live.closed,
+    catch: (cause) => new UpstreamFailure({ cause: { reason: "submit_live_disconnected", cause } }),
+  }).pipe(Effect.andThen(Effect.never));
+  Effect.runFork(
+    Effect.raceFirst(submit, disconnected).pipe(
+      Effect.catchCause((cause) =>
+        Effect.tryPromise({
+          try: () => live.abort(cause),
+          catch: () => undefined,
+        }).pipe(Effect.orElseSucceed(() => undefined)),
+      ),
+    ),
+  );
+  return Promise.resolve(live.response);
 };
 
 const commitLocalScheduleFireDispatch = (
@@ -970,6 +1035,7 @@ const decideLocalInputRequest = (
 
 const localAgentRuntimeFacade = (input: LocalAgentRuntimeFacadeInput): LocalAgentRuntime => ({
   submit: (submitInput) => submitLocalAgent(input, submitInput),
+  submitLive: (submitInput) => submitLocalAgentLive(input, submitInput),
   resumeInputRequest: (spec) => resumeLocalInputRequest(input, spec),
   decideInputRequest: (spec) => decideLocalInputRequest(input, spec),
   inspectInputRequest: (spec) => inspectLocalInputRequest(input, spec),

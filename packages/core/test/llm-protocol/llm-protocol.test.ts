@@ -1,15 +1,18 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Schema } from "effect";
+import { Effect, Schema, Stream } from "effect";
 import { ensureAgentSchema } from "@agent-os/core/agent-schema";
 import { captureLive } from "@agent-os/core/live-edge";
 
 import {
   canonicalLlmWireDescriptorJson,
+  drainLlmStream,
   llmCallSnapshotFromResponse,
   LlmProviderContinuationMarkerSchema,
   llmSnapshotRequestFingerprint,
   llmWireDescriptorFingerprint,
   llmRouteMaterialRefs,
+  llmStreamDeltaFrame,
+  llmStreamTerminalFrame,
   markerFromProviderContinuation,
   replayLlmResponseFromSnapshot,
   textFromLlmOutputItems,
@@ -283,4 +286,50 @@ describe("@agent-os/llm-protocol", () => {
       ]),
     ).toBe("ab");
   });
+
+  it.effect("drains one ordered stream to its sole terminal response", () =>
+    Effect.gen(function* () {
+      const response: LlmResponse = {
+        items: [{ type: "message", text: "done" }],
+        usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
+      };
+      const terminal = yield* llmStreamTerminalFrame(3, response);
+      const drained = yield* drainLlmStream(
+        Stream.fromIterable([
+          llmStreamDeltaFrame(0, { type: "text_start", id: "text-1" }),
+          llmStreamDeltaFrame(1, { type: "text_delta", id: "text-1", text: "done" }),
+          llmStreamDeltaFrame(2, { type: "text_end", id: "text-1" }),
+          terminal,
+        ]),
+      );
+      expect(drained).toEqual(response);
+    }),
+  );
+
+  it.effect("rejects sequence gaps and close-before-terminal", () =>
+    Effect.gen(function* () {
+      let observed = 0;
+      const gap = yield* Effect.result(
+        drainLlmStream(
+          Stream.fromIterable([
+            llmStreamDeltaFrame(1, { type: "text_delta", id: "text-1", text: "x" }),
+          ]),
+          () =>
+            Effect.sync(() => {
+              observed += 1;
+            }),
+        ),
+      );
+      const incomplete = yield* Effect.result(
+        drainLlmStream(
+          Stream.fromIterable([
+            llmStreamDeltaFrame(0, { type: "text_delta", id: "text-1", text: "x" }),
+          ]),
+        ),
+      );
+      expect(gap._tag).toBe("Failure");
+      expect(observed).toBe(0);
+      expect(incomplete._tag).toBe("Failure");
+    }),
+  );
 });

@@ -4,6 +4,7 @@ import { expect, it } from "@effect/vitest";
 import {
   llmCallSnapshotFromResponse,
   LlmTransport,
+  llmStreamFromResponse,
   replayLlmResponseFromSnapshot,
   type LlmRequest,
   type LlmResponse,
@@ -42,6 +43,7 @@ import {
 } from "../src/projection";
 import { Quota } from "../src/quota-service";
 import { submitAgentEffect } from "../src/submit-agent";
+import type { SubmitAgentOptions } from "../src/submit-agent";
 import {
   projectContinuation,
   submitResumeDecisionFromContinuationProjection,
@@ -352,18 +354,20 @@ const makeServices = (
         transportAdapterId: "test-runtime@1.0.0",
         transportAdapterVersion: "1.0.0",
       }),
-    call: (request: LlmRequest) =>
-      Effect.gen(function* () {
-        llmRequests.push(request);
-        const next = responses[callIndex] ?? response();
-        callIndex += 1;
-        for (const receipt of next.testMaterialResolutions ?? []) {
-          yield* (request.materialResolution?.onResolved?.(receipt) ?? Effect.void).pipe(
-            Effect.orDie,
-          );
-        }
-        return next;
-      }),
+    stream: (request: LlmRequest) =>
+      llmStreamFromResponse(
+        Effect.gen(function* () {
+          llmRequests.push(request);
+          const next = responses[callIndex] ?? response();
+          callIndex += 1;
+          for (const receipt of next.testMaterialResolutions ?? []) {
+            yield* (request.materialResolution?.onResolved?.(receipt) ?? Effect.void).pipe(
+              Effect.orDie,
+            );
+          }
+          return next;
+        }),
+      ),
   };
   const quota = {
     tryGrant: () => Effect.succeed({ granted: true, consumed: 0, limit: 1 }),
@@ -436,16 +440,21 @@ const makeServices = (
   };
 };
 
-const runSubmit = (spec: InternalSubmitSpec, responses?: ReadonlyArray<LlmResponse>) => {
+const runSubmit = (
+  spec: InternalSubmitSpec,
+  responses?: ReadonlyArray<LlmResponse>,
+  options?: SubmitAgentOptions,
+) => {
   const services = makeServices(responses);
-  return runSubmitWithServices(spec, services);
+  return runSubmitWithServices(spec, services, options);
 };
 
 const runSubmitWithServices = (
   spec: InternalSubmitSpec,
   services: ReturnType<typeof makeServices>,
+  options: SubmitAgentOptions = {},
 ) => {
-  const effect = submitAgentEffect(spec).pipe(
+  const effect = submitAgentEffect(spec, options).pipe(
     Effect.provideService(Ledger, services.ledger),
     Effect.provideService(BoundaryEvents, services.boundaryEvents),
     Effect.provideService(MaterializedProjections, services.projections),
