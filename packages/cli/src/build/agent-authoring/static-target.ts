@@ -849,7 +849,7 @@ const generatedDynamicSubmitBindingsFor = async (
     event,
     catalog: generatedDynamicCapabilityCatalog,
     resolvers: generatedDynamicCapabilityResolvers,
-    input,
+    ...(input === undefined ? {} : { input }),
     materials: semanticManifest.materials ?? {},
   });
   if (!projection.ok) {

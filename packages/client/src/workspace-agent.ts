@@ -71,6 +71,7 @@ export type WorkspaceAgentProductCommandName =
 export interface WorkspaceAgentSessionSubmitTurnInput extends SubmitRunInput {
   readonly sessionRef: string;
   readonly turnRef: string;
+  readonly idempotencyKey?: string;
 }
 
 export interface WorkspaceAgentSessionInspectInput {

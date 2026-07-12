@@ -471,6 +471,7 @@ describe("@agent-os/client", () => {
     await bridge.sessions.submitTurn({
       sessionRef: "support:42",
       turnRef: "turn:support:42:1",
+      idempotencyKey: "turn:support:42:1",
       intent: "reply to support",
       context: {},
     });
@@ -499,6 +500,7 @@ describe("@agent-os/client", () => {
         input: {
           sessionRef: "support:42",
           turnRef: "turn:support:42:1",
+          idempotencyKey: "turn:support:42:1",
           intent: "reply to support",
           context: {},
         },

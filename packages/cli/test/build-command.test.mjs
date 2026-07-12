@@ -2618,6 +2618,8 @@ void test("workspace submit_scope generation binds every workspace path to authe
   assert.doesNotMatch(output.target, /const generatedWorkspaceSandboxId/);
   assert.doesNotMatch(output.target, /scopeId: string =/);
   assert.doesNotMatch(output.target, /input\.(?:tenant|installation|sandboxId)/);
+  assert.match(output.target, /\.\.\.\(input === undefined \? \{\} : \{ input \}\)/);
+  assert.doesNotMatch(output.target, /resolvers: generatedDynamicCapabilityResolvers,\s+input,/);
   const submitFields = output.target.match(
     /const submitRunInputFields = \(input: SubmitRunInput\): SubmitRunInput => \(\{[\s\S]*?\n\}\);/,
   );
