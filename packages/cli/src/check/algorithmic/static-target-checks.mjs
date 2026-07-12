@@ -24,6 +24,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const renderStaticRuntimeBootstrapImportsSource = sliceBetweenMarkers(
       source,
       "const renderStaticRuntimeBootstrapImports =",
+      "const renderSemanticTruthIdentity =",
+    );
+    const renderSemanticTruthIdentitySource = sliceBetweenMarkers(
+      source,
+      "const renderSemanticTruthIdentity =",
       "const renderStaticRuntimeBootstrap =",
     );
     const renderStaticRuntimeBootstrapSource = sliceBetweenMarkers(
@@ -54,6 +59,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const renderStaticTargetSource = [
       staticRuntimeBootstrapModelSource,
       renderStaticRuntimeBootstrapImportsSource,
+      renderSemanticTruthIdentitySource,
       renderStaticRuntimeBootstrapSource,
       renderWorkspaceStaticTargetSource,
       renderChatStaticTargetSource,
@@ -126,6 +132,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     for (const [name, targetSource] of [
       ["StaticRuntimeBootstrapModel", staticRuntimeBootstrapModelSource],
       ["renderStaticRuntimeBootstrapImports", renderStaticRuntimeBootstrapImportsSource],
+      ["renderSemanticTruthIdentity", renderSemanticTruthIdentitySource],
       ["renderStaticRuntimeBootstrap", renderStaticRuntimeBootstrapSource],
       ["renderWorkspaceStaticTarget", renderWorkspaceStaticTargetSource],
       ["renderChatStaticTarget", renderChatStaticTargetSource],
@@ -214,7 +221,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "OpenAiCompatibleLlmTransportLive",
       "preflightOpenAiCompatibleProviderMaterial",
       "defineWorkspaceAgentMount",
-      "makeCloudflareWorkspaceEnv",
+      "createCloudflareSandboxWorkspaceEnvResolver",
       "getSandbox",
       "generatedCustomTools",
       "llmTransport: () => OpenAiCompatibleLlmTransportLive",
@@ -283,12 +290,24 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
         ],
       },
       {
+        name: "renderSemanticTruthIdentity",
+        targetSource: renderSemanticTruthIdentitySource,
+        markers: [
+          "const renderSemanticTruthIdentity =",
+          'scope.idSource === "submit_scope"',
+          "const semanticTruthIdentityFor = (scopeId: string): LedgerTruthIdentity =>",
+          'if (scopeId.length === 0) throw Error("authenticated routing scope is missing")',
+          "const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);",
+          "scopeId !== semanticTruthIdentity.scopeRef.scopeId",
+        ],
+      },
+      {
         name: "renderStaticRuntimeBootstrap",
         targetSource: renderStaticRuntimeBootstrapSource,
         markers: [
           "const renderStaticRuntimeBootstrap =",
           "const semanticManifest =",
-          "const semanticTruthIdentity =",
+          "${renderSemanticTruthIdentity(scope)}",
           "const generatedCustomTools =",
           "renderDynamicCapabilitySupport(model)",
           "renderSkillSupport(model.skills)",
@@ -317,7 +336,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);",
       "const hasSkills = bootstrap.skills.length > 0;",
       "renderStaticRuntimeBootstrapImports(bootstrap, modules)",
-      "${renderStaticRuntimeBootstrap(bootstrap)}",
+      "${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}",
     ];
     const forbiddenTargetLocalBootstrapMarkers = [
       "const semanticManifest =",
