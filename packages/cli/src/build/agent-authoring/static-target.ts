@@ -157,6 +157,45 @@ export type StaticTargetLinkResult =
   | { readonly ok: true; readonly value: StaticTargetLink }
   | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> };
 
+interface StaticTargetSharedModuleInventory {
+  readonly semanticCore: ReadonlyArray<StaticTargetModuleImport>;
+  readonly skillResources: ReadonlyArray<StaticTargetModuleImport>;
+  readonly authoredTools: ReadonlyArray<StaticTargetModuleImport>;
+  readonly dynamicResolvers: ReadonlyArray<StaticTargetModuleImport>;
+  readonly channels: ReadonlyArray<StaticTargetModuleImport>;
+  readonly schedules: ReadonlyArray<StaticTargetModuleImport>;
+}
+
+interface StaticTargetSharedFiles {
+  readonly manifest: StaticTargetGeneratedFile;
+  readonly provenance: StaticTargetGeneratedFile;
+  readonly skillResources?: StaticTargetGeneratedFile;
+  readonly channels?: StaticTargetGeneratedFile;
+  readonly schedules?: StaticTargetGeneratedFile;
+}
+
+interface StaticTargetPlanShared {
+  readonly deployment: {
+    readonly deploymentId: string;
+    readonly codec: string;
+    readonly providerStrategy?: string;
+  };
+  readonly manifest: AuthoredAgentManifest;
+  readonly provenance: NormalizedAgentOsConfig<AuthoredAgentManifest>["provenance"];
+  readonly toolNames: ReadonlyArray<string>;
+  readonly authoredManifestToolNames: ReadonlyArray<string>;
+  readonly skillResourceBundle: string;
+  readonly moduleInventory: StaticTargetSharedModuleInventory;
+  readonly files: StaticTargetSharedFiles;
+}
+
+interface StaticTargetPlan {
+  readonly shared: StaticTargetPlanShared;
+  readonly profile: { readonly kind: AgentOsConfigProfile };
+  readonly host: { readonly kind: AgentOsConfigTargetKind };
+  readonly client: { readonly kind: AgentOsConfigClientKind };
+}
+
 const generatedPath = <Path extends StaticTargetGeneratedFilePath>(path: Path, text: string) => ({
   path,
   text,
@@ -3663,6 +3702,150 @@ const renderStaticClientTypes = (): string => `export type {
 export { createAgentOSClient } from "./client";
 `;
 
+const staticTargetPlanFor = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  modules: ReturnType<typeof staticTargetModules>,
+): StaticTargetPlan => {
+  const manifest = normalized.deployment.manifest;
+  const toolNames = Object.keys(manifest.tools ?? {}).sort();
+  const authoredToolNames = new Set(normalized.authoredToolNames);
+  const authoredManifestToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
+  const skillResourceBundle = renderSkillResourceBundle(normalized.skills);
+  const semanticCore: ReadonlyArray<StaticTargetModuleImport> = [
+    { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
+    { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+  ];
+  const skillResources: ReadonlyArray<StaticTargetModuleImport> =
+    normalized.skills.length > 0
+      ? [
+          {
+            kind: "semantic-json" as const,
+            source: "./skill-resources.json",
+            imports: ["default as skillResourcePayloads"],
+          },
+        ]
+      : [];
+  const channels: ReadonlyArray<StaticTargetModuleImport> =
+    normalized.channels.length === 0
+      ? []
+      : [
+          {
+            kind: "channel-runtime",
+            source: modules.runtimeChannel,
+            imports: ["DefinedChannel"],
+          },
+          ...generatedChannelImports(normalized.channels),
+          {
+            kind: "channel-registry",
+            source: "./channels",
+            imports: ["dispatchGeneratedChannelRequest", "generatedChannels"],
+          },
+        ];
+  const schedules: ReadonlyArray<StaticTargetModuleImport> =
+    normalized.schedules.length === 0
+      ? []
+      : [
+          {
+            kind: "schedule-runtime",
+            source: modules.runtimeSchedule,
+            imports: ["DefinedSchedule"],
+          },
+          ...generatedScheduleImports(normalized.schedules),
+          {
+            kind: "schedule-registry",
+            source: "./schedules",
+            imports: [
+              "dispatchGeneratedSchedule",
+              "dispatchGeneratedScheduleDelivery",
+              "generatedScheduleDefinitions",
+              "generatedSchedules",
+            ],
+          },
+        ];
+  return {
+    shared: {
+      deployment: {
+        deploymentId: normalized.deployment.deploymentId,
+        codec: normalized.deployment.codec,
+        ...(normalized.deployment.providerStrategy === undefined
+          ? {}
+          : { providerStrategy: normalized.deployment.providerStrategy }),
+      },
+      manifest,
+      provenance: normalized.provenance,
+      toolNames,
+      authoredManifestToolNames,
+      skillResourceBundle,
+      moduleInventory: {
+        semanticCore,
+        skillResources,
+        authoredTools: generatedToolImports(authoredManifestToolNames),
+        dynamicResolvers: generatedDynamicResolverImports(normalized.dynamicResolvers),
+        channels,
+        schedules,
+      },
+      files: {
+        manifest: generatedPath(".agentos/generated/manifest.json", stableJson(manifest)),
+        provenance: generatedPath(
+          ".agentos/generated/provenance.json",
+          stableJson(normalized.provenance),
+        ),
+        ...(normalized.skills.length === 0
+          ? {}
+          : {
+              skillResources: generatedPath(
+                ".agentos/generated/skill-resources.json",
+                skillResourceBundle,
+              ),
+            }),
+        ...(normalized.channels.length === 0
+          ? {}
+          : {
+              channels: generatedPath(
+                ".agentos/generated/channels.ts",
+                renderChannelRegistry(normalized.channels, modules),
+              ),
+            }),
+        ...(normalized.schedules.length === 0
+          ? {}
+          : {
+              schedules: generatedPath(
+                ".agentos/generated/schedules.ts",
+                renderScheduleRegistry(normalized.schedules, modules),
+              ),
+            }),
+      },
+    },
+    profile: { kind: normalized.profile },
+    host: { kind: normalized.target.kind },
+    client: { kind: normalized.client.kind },
+  };
+};
+
+const sharedGeneratedFilesFor = (
+  shared: StaticTargetPlanShared,
+  deployment: Readonly<Record<string, unknown>>,
+  moduleGraph: ReadonlyArray<StaticTargetModuleImport>,
+): ReadonlyArray<StaticTargetGeneratedFile> => [
+  shared.files.manifest,
+  generatedPath(".agentos/generated/deployment.json", stableJson(deployment)),
+  shared.files.provenance,
+  ...(shared.files.skillResources === undefined ? [] : [shared.files.skillResources]),
+  generatedPath(
+    ".agentos/generated/fingerprints.json",
+    stableJson({
+      deployment: digestText(stableJson(deployment)),
+      manifest: digestText(stableJson(shared.manifest)),
+      ...(shared.files.skillResources === undefined
+        ? {}
+        : { skillResources: digestText(shared.skillResourceBundle) }),
+      targetModuleGraph: digestText(stableJson(moduleGraph)),
+    }),
+  ),
+  ...(shared.files.channels === undefined ? [] : [shared.files.channels]),
+  ...(shared.files.schedules === undefined ? [] : [shared.files.schedules]),
+];
+
 /**
  * Link normalized workspace authoring intent to a closed-target residual
  * program. Implementation wiring is static imports and factory composition;
@@ -3691,11 +3874,12 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       issues: [{ kind: "unsupported_static_llm_route", route: normalized.llm.route }],
     };
   }
-  const toolNames = Object.keys(normalized.deployment.manifest.tools ?? {}).sort();
-  const hasChannels = normalized.channels.length > 0;
-  const hasSchedules = normalized.schedules.length > 0;
-  const hasSkills = normalized.skills.length > 0;
-  const skillResourceBundle = renderSkillResourceBundle(normalized.skills);
+  const plan = staticTargetPlanFor(
+    normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
+    modules,
+  );
+  const { shared } = plan;
+  const { toolNames } = shared;
   if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
     if (normalized.profile !== AGENTOS_CONFIG_PROFILE.WORKSPACE_V1) {
       return {
@@ -3710,17 +3894,10 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       };
     }
     const nodeWorkspace = normalized.workspace;
-    const authoredManifestToolNames = toolNames.filter((toolName) =>
-      normalized.authoredToolNames.includes(toolName),
-    );
     const deploymentJson = {
-      deploymentId: normalized.deployment.deploymentId,
+      ...shared.deployment,
       backend: normalized.deployment.backend,
       adapter: normalized.deployment.adapter,
-      codec: normalized.deployment.codec,
-      ...(normalized.deployment.providerStrategy === undefined
-        ? {}
-        : { providerStrategy: normalized.deployment.providerStrategy }),
       workspace: {
         binding: nodeWorkspace.binding,
         bindingRef: nodeWorkspace.bindingRef,
@@ -3730,17 +3907,8 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       },
     };
     const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
-      { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
-      { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
-      ...(hasSkills
-        ? [
-            {
-              kind: "semantic-json" as const,
-              source: "./skill-resources.json",
-              imports: ["default as skillResourcePayloads"],
-            },
-          ]
-        : []),
+      ...shared.moduleInventory.semanticCore,
+      ...shared.moduleInventory.skillResources,
       {
         kind: "local-runtime",
         source: modules.localRuntime,
@@ -3767,82 +3935,16 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           "projectWorkflowRuns",
         ],
       },
-      ...generatedToolImports(authoredManifestToolNames),
-      ...generatedDynamicResolverImports(normalized.dynamicResolvers),
-      ...(hasChannels
-        ? [
-            {
-              kind: "channel-runtime" as const,
-              source: modules.runtimeChannel,
-              imports: ["DefinedChannel"],
-            },
-            ...generatedChannelImports(normalized.channels),
-            {
-              kind: "channel-registry" as const,
-              source: "./channels",
-              imports: ["dispatchGeneratedChannelRequest", "generatedChannels"],
-            },
-          ]
-        : []),
-      ...(hasSchedules
-        ? [
-            {
-              kind: "schedule-runtime" as const,
-              source: modules.runtimeSchedule,
-              imports: ["DefinedSchedule"],
-            },
-            ...generatedScheduleImports(normalized.schedules),
-            {
-              kind: "schedule-registry" as const,
-              source: "./schedules",
-              imports: [
-                "dispatchGeneratedSchedule",
-                "dispatchGeneratedScheduleDelivery",
-                "generatedScheduleDefinitions",
-                "generatedSchedules",
-              ],
-            },
-          ]
-        : []),
+      ...shared.moduleInventory.authoredTools,
+      ...shared.moduleInventory.dynamicResolvers,
+      ...shared.moduleInventory.channels,
+      ...shared.moduleInventory.schedules,
     ];
     return {
       ok: true,
       value: {
         files: [
-          generatedPath(
-            ".agentos/generated/manifest.json",
-            stableJson(normalized.deployment.manifest),
-          ),
-          generatedPath(".agentos/generated/deployment.json", stableJson(deploymentJson)),
-          generatedPath(".agentos/generated/provenance.json", stableJson(normalized.provenance)),
-          ...(hasSkills
-            ? [generatedPath(".agentos/generated/skill-resources.json", skillResourceBundle)]
-            : []),
-          generatedPath(
-            ".agentos/generated/fingerprints.json",
-            stableJson({
-              deployment: digestText(stableJson(deploymentJson)),
-              manifest: digestText(stableJson(normalized.deployment.manifest)),
-              ...(hasSkills ? { skillResources: digestText(skillResourceBundle) } : {}),
-              targetModuleGraph: digestText(stableJson(moduleGraph)),
-            }),
-          ),
-          ...(hasChannels
-            ? [
-                generatedPath(
-                  ".agentos/generated/channels.ts",
-                  renderChannelRegistry(normalized.channels, modules),
-                ),
-              ]
-            : []),
-          ...(hasSchedules
-            ? [
-                generatedPath(
-                  ".agentos/generated/schedules.ts",
-                  renderScheduleRegistry(normalized.schedules, modules),
-                ),
-              ]
-            : []),
+          ...sharedGeneratedFilesFor(shared, deploymentJson, moduleGraph),
           generatedPath(
             ".agentos/generated/local.ts",
             renderLocalAgentApp(
@@ -3879,16 +3981,10 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     };
   }
   const target = cloudflareTargetFor(normalized.target);
-  const authoredToolNames = new Set(normalized.authoredToolNames);
-  const authoredManifestToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
   const deploymentJson = {
-    deploymentId: normalized.deployment.deploymentId,
+    ...shared.deployment,
     backend: normalized.deployment.backend,
     adapter: normalized.deployment.adapter,
-    codec: normalized.deployment.codec,
-    ...(normalized.deployment.providerStrategy === undefined
-      ? {}
-      : { providerStrategy: normalized.deployment.providerStrategy }),
     ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? {
           workspace: {
@@ -3907,62 +4003,20 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       : {}),
   };
   const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
-    { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
-    { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+    ...shared.moduleInventory.semanticCore,
     {
       kind: "authored-material-resolver",
       source: importMaterialResolverPath(target.materialResolver.path),
       imports: ["default as generatedMaterialResolverFactory"],
     },
-    ...(hasSkills
-      ? [
-          {
-            kind: "semantic-json" as const,
-            source: "./skill-resources.json",
-            imports: ["default as skillResourcePayloads"],
-          },
-        ]
-      : []),
+    ...shared.moduleInventory.skillResources,
     {
       kind: "target-runtime",
       source: modules.cloudflareDoRuntime,
       imports: ["createAgentDurableObject"],
     },
-    ...(hasChannels
-      ? [
-          {
-            kind: "channel-runtime" as const,
-            source: modules.runtimeChannel,
-            imports: ["DefinedChannel"],
-          },
-          ...generatedChannelImports(normalized.channels),
-          {
-            kind: "channel-registry" as const,
-            source: "./channels",
-            imports: ["dispatchGeneratedChannelRequest", "generatedChannels"],
-          },
-        ]
-      : []),
-    ...(hasSchedules
-      ? [
-          {
-            kind: "schedule-runtime" as const,
-            source: modules.runtimeSchedule,
-            imports: ["DefinedSchedule"],
-          },
-          ...generatedScheduleImports(normalized.schedules),
-          {
-            kind: "schedule-registry" as const,
-            source: "./schedules",
-            imports: [
-              "dispatchGeneratedSchedule",
-              "dispatchGeneratedScheduleDelivery",
-              "generatedScheduleDefinitions",
-              "generatedSchedules",
-            ],
-          },
-        ]
-      : []),
+    ...shared.moduleInventory.channels,
+    ...shared.moduleInventory.schedules,
     ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? [
           {
@@ -3997,8 +4051,8 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           ? ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"]
           : ["WORKSPACE_AGENT_COMMAND"],
     },
-    ...generatedToolImports(authoredManifestToolNames),
-    ...generatedDynamicResolverImports(normalized.dynamicResolvers),
+    ...shared.moduleInventory.authoredTools,
+    ...shared.moduleInventory.dynamicResolvers,
     ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? [
           {
@@ -4050,40 +4104,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     ok: true,
     value: {
       files: [
-        generatedPath(
-          ".agentos/generated/manifest.json",
-          stableJson(normalized.deployment.manifest),
-        ),
-        generatedPath(".agentos/generated/deployment.json", stableJson(deploymentJson)),
-        generatedPath(".agentos/generated/provenance.json", stableJson(normalized.provenance)),
-        ...(hasSkills
-          ? [generatedPath(".agentos/generated/skill-resources.json", skillResourceBundle)]
-          : []),
-        generatedPath(
-          ".agentos/generated/fingerprints.json",
-          stableJson({
-            deployment: digestText(stableJson(deploymentJson)),
-            manifest: digestText(stableJson(normalized.deployment.manifest)),
-            ...(hasSkills ? { skillResources: digestText(skillResourceBundle) } : {}),
-            targetModuleGraph: digestText(stableJson(moduleGraph)),
-          }),
-        ),
-        ...(hasChannels
-          ? [
-              generatedPath(
-                ".agentos/generated/channels.ts",
-                renderChannelRegistry(normalized.channels, modules),
-              ),
-            ]
-          : []),
-        ...(hasSchedules
-          ? [
-              generatedPath(
-                ".agentos/generated/schedules.ts",
-                renderScheduleRegistry(normalized.schedules, modules),
-              ),
-            ]
-          : []),
+        ...sharedGeneratedFilesFor(shared, deploymentJson, moduleGraph),
         generatedPath(
           ".agentos/generated/target.ts",
           renderStaticTarget(
