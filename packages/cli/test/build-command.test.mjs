@@ -4424,6 +4424,27 @@ void test("static target plan owns the profile axis decision", () => {
   assert.doesNotMatch(source.slice(0, projectionStart), /normalized\.profile/);
 });
 
+void test("static target plan positively proves the host axis", () => {
+  const source = readFileSync(
+    path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
+    "utf8",
+  );
+  const hostProjectionStart = source.indexOf("const staticTargetHostProjectionFor =");
+  const planStart = source.indexOf("const staticTargetPlanFor =");
+  const linkStart = source.indexOf("export const linkWorkspaceStaticTarget =");
+  assert.notEqual(hostProjectionStart, -1);
+  assert.notEqual(planStart, -1);
+  assert.notEqual(linkStart, -1);
+  const hostProjection = source.slice(hostProjectionStart, planStart);
+  assert.equal(source.match(/normalized\.target\.kind/gu)?.length, 1);
+  assert.match(hostProjection, /normalized\.target\.kind/);
+  assert.match(hostProjection, /nodeWorkspace === null/);
+  assert.match(hostProjection, /unsupported_static_target/);
+  assert.match(hostProjection, /canonicalDeployment:/);
+  assert.match(hostProjection, /moduleGraph/);
+  assert.doesNotMatch(source.slice(linkStart), /normalized\.target/);
+});
+
 void test("static target injects skill advert and load_skill for workspace and chat profiles", () => {
   const result = runTypeScript(
     [

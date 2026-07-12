@@ -195,8 +195,7 @@ interface StaticTargetClientProjection {
   readonly files: ReadonlyArray<StaticTargetGeneratedFile>;
 }
 
-interface StaticTargetProfileProjection {
-  readonly kind: AgentOsConfigProfile;
+interface StaticTargetProfileProjectionBase {
   readonly deployment: Readonly<Record<string, unknown>>;
   readonly moduleImports: {
     readonly capability: ReadonlyArray<StaticTargetModuleImport>;
@@ -210,25 +209,44 @@ interface StaticTargetProfileProjection {
     readonly svelteKitRemote: string;
     readonly baseModuleImports: ReadonlyArray<StaticTargetModuleImport>;
   };
-  readonly cloudflareFiles: {
-    readonly target: StaticTargetGeneratedFile;
-    readonly worker: StaticTargetGeneratedFile;
-    readonly wrangler: StaticTargetGeneratedFile;
-  } | null;
   readonly canonicalDeployment: {
     readonly profile: AgentOsConfigProfile;
     readonly workspaceTopology?: AgentOsConfigWorkspaceTopology;
   };
   readonly mount: Pick<MountIR, "projectionSinks" | "providerResourceId">;
-  readonly nodeWorkspace: ManifestNormalizedWorkspace | null;
+}
+
+type StaticTargetProfileProjection =
+  | (StaticTargetProfileProjectionBase & {
+      readonly kind: typeof AGENTOS_CONFIG_PROFILE.WORKSPACE_V1;
+      readonly normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>;
+      readonly nodeWorkspace: ManifestNormalizedWorkspace | null;
+    })
+  | (StaticTargetProfileProjectionBase & {
+      readonly kind: typeof AGENTOS_CONFIG_PROFILE.CHAT_V1;
+      readonly normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>;
+      readonly nodeWorkspace: null;
+    });
+
+interface StaticTargetHostProjection {
+  readonly kind: AgentOsConfigTargetKind;
+  readonly deployment: Readonly<Record<string, unknown>>;
+  readonly files: ReadonlyArray<StaticTargetGeneratedFile>;
+  readonly moduleGraph: ReadonlyArray<StaticTargetModuleImport>;
+  readonly canonicalDeployment: Pick<CanonicalDeploymentIR, "target">;
+  readonly mount: Pick<MountIR, "driver">;
 }
 
 interface StaticTargetPlan {
   readonly shared: StaticTargetPlanShared;
   readonly profile: StaticTargetProfileProjection;
-  readonly host: { readonly kind: AgentOsConfigTargetKind };
+  readonly host: StaticTargetHostProjection;
   readonly client: StaticTargetClientProjection;
 }
+
+type StaticTargetPlanResult =
+  | { readonly ok: true; readonly value: StaticTargetPlan }
+  | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> };
 
 const generatedPath = <Path extends StaticTargetGeneratedFilePath>(path: Path, text: string) => ({
   path,
@@ -1435,10 +1453,10 @@ const generatedMaterialResolverFor = (env: AgentOSTargetEnv): RefResolver => {
 
 const renderWorkspaceStaticTarget = (
   normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
+  target: NormalizedCloudflareTarget,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
-  const target = cloudflareTargetFor(normalized.target);
   const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);
   const hasSkills = bootstrap.skills.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
@@ -1932,10 +1950,10 @@ ${hasSchedules ? renderScheduleDurableObjectMethod("this.targetTruthIdentity") :
 
 const renderChatStaticTarget = (
   normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>,
+  target: NormalizedCloudflareTarget,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
-  const target = cloudflareTargetFor(normalized.target);
   const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);
   const hasSkills = bootstrap.skills.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
@@ -2131,9 +2149,6 @@ const renderLocalAgentApp = (
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
-  if (normalized.target.kind !== AGENTOS_CONFIG_TARGET.NODE_V1) {
-    throw new TypeError(`local agent app renderer received ${normalized.target.kind}`);
-  }
   const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);
   const hasChannels = normalized.channels.length > 0;
   const hasSkills = bootstrap.skills.length > 0;
@@ -2486,9 +2501,9 @@ export const createLocalAgentApp = async (
 
 const renderCloudflareScopeHelper = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  target: NormalizedCloudflareTarget,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
-  const target = cloudflareTargetFor(normalized.target);
   const submitScope = normalized.deployment.manifest.scope.idSource === "submit_scope";
   const identityProjection = submitScope
     ? `export const agentOSTruthIdentityFor = (scopeId: string): LedgerTruthIdentity => {
@@ -2538,13 +2553,13 @@ export const agentOSRpcClient = <
 
 const renderCloudflareWorkerEntry = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  target: NormalizedCloudflareTarget,
   modules: ReturnType<typeof staticTargetModules>,
   profile: {
     readonly sandboxImport: string;
     readonly sandboxExport: string;
   },
 ): string => {
-  const target = cloudflareTargetFor(normalized.target);
   const hasChannels = normalized.channels.length > 0;
   const hasSchedules = normalized.schedules.length > 0;
   const cloudflareScopeImports = [
@@ -3674,12 +3689,12 @@ export { createAgentOSClient } from "./client";
 const staticTargetProfileProjectionFor = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
-  toolNames: ReadonlyArray<string>,
 ): StaticTargetProfileProjection => {
   const selected =
     normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? {
           kind: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+          normalized,
           deployment: {
             workspace: {
               binding: normalized.workspace.binding,
@@ -3739,37 +3754,6 @@ const staticTargetProfileProjectionFor = (
               modules,
             ),
           },
-          renderTarget: () => renderWorkspaceStaticTarget(normalized, toolNames, modules),
-          workerProfile: {
-            sandboxImport: `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n`,
-            sandboxExport: ", Sandbox",
-          },
-          wranglerProfileFor: (target: NormalizedCloudflareTarget) => ({
-            vars: { SANDBOX_TRANSPORT: "rpc" },
-            containers: [
-              {
-                class_name: "Sandbox",
-                image: "../../Dockerfile",
-                instance_type: "lite",
-                max_instances: 2,
-              },
-            ],
-            durable_objects: {
-              bindings: [
-                { class_name: "Sandbox", name: normalized.workspace.binding },
-                {
-                  class_name: target.durableObject.className,
-                  name: target.durableObject.binding,
-                },
-              ],
-            },
-            migrations: [
-              {
-                tag: "v1",
-                new_sqlite_classes: ["Sandbox", target.durableObject.className],
-              },
-            ],
-          }),
           canonicalDeployment: {
             profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
             workspaceTopology: normalized.workspace.topology,
@@ -3792,6 +3776,7 @@ const staticTargetProfileProjectionFor = (
         }
       : {
           kind: AGENTOS_CONFIG_PROFILE.CHAT_V1,
+          normalized,
           deployment: {},
           capabilityImports: [
             {
@@ -3818,44 +3803,13 @@ const staticTargetProfileProjectionFor = (
               modules,
             ),
           },
-          renderTarget: () => renderChatStaticTarget(normalized, toolNames, modules),
-          workerProfile: { sandboxImport: "", sandboxExport: "" },
-          wranglerProfileFor: (target: NormalizedCloudflareTarget) => ({
-            durable_objects: {
-              bindings: [
-                {
-                  class_name: target.durableObject.className,
-                  name: target.durableObject.binding,
-                },
-              ],
-            },
-            migrations: [{ tag: "v1", new_sqlite_classes: [target.durableObject.className] }],
-          }),
           canonicalDeployment: { profile: AGENTOS_CONFIG_PROFILE.CHAT_V1 },
           mount: {
             projectionSinks: ["agent.info", "runtime.events", "runtime.input_requests"] as const,
           },
           nodeWorkspace: null,
         };
-  const cloudflareFiles =
-    normalized.target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1
-      ? {
-          target: generatedPath(".agentos/generated/target.ts", selected.renderTarget()),
-          worker: generatedPath(
-            ".agentos/generated/worker.ts",
-            renderCloudflareWorkerEntry(normalized, modules, selected.workerProfile),
-          ),
-          wrangler: generatedPath(
-            ".agentos/generated/wrangler.jsonc",
-            renderCloudflareWranglerConfig(
-              normalized,
-              selected.wranglerProfileFor(normalized.target),
-            ),
-          ),
-        }
-      : null;
-  return {
-    kind: selected.kind,
+  const common = {
     deployment: selected.deployment,
     moduleImports: {
       capability: selected.capabilityImports,
@@ -3864,11 +3818,22 @@ const staticTargetProfileProjectionFor = (
       worker: selected.workerImports,
     },
     clientCandidates: selected.clientCandidates,
-    cloudflareFiles,
     canonicalDeployment: selected.canonicalDeployment,
     mount: selected.mount,
-    nodeWorkspace: selected.nodeWorkspace,
   };
+  return selected.kind === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+    ? {
+        ...common,
+        kind: selected.kind,
+        normalized: selected.normalized,
+        nodeWorkspace: selected.nodeWorkspace,
+      }
+    : {
+        ...common,
+        kind: selected.kind,
+        normalized: selected.normalized,
+        nodeWorkspace: null,
+      };
 };
 
 const staticTargetClientProjectionFor = (
@@ -3901,10 +3866,224 @@ const staticTargetClientProjectionFor = (
   };
 };
 
+const staticTargetHostProjectionFor = (
+  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  shared: StaticTargetPlanShared,
+  profile: StaticTargetProfileProjection,
+  client: StaticTargetClientProjection,
+  modules: ReturnType<typeof staticTargetModules>,
+):
+  | { readonly ok: true; readonly value: StaticTargetHostProjection }
+  | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> } => {
+  if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
+    const nodeWorkspace = profile.nodeWorkspace;
+    if (nodeWorkspace === null) {
+      return {
+        ok: false,
+        issues: [{ kind: "unsupported_static_target", target: AGENTOS_CONFIG_TARGET.NODE_V1 }],
+      };
+    }
+    const deployment = {
+      ...shared.deployment,
+      backend: normalized.deployment.backend,
+      adapter: normalized.deployment.adapter,
+      workspace: {
+        binding: nodeWorkspace.binding,
+        bindingRef: nodeWorkspace.bindingRef,
+        root: nodeWorkspace.root,
+        topology: nodeWorkspace.topology,
+        providerResourceId: nodeWorkspace.providerResourceId,
+      },
+    };
+    const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
+      ...shared.moduleInventory.semanticCore,
+      ...shared.moduleInventory.skillResources,
+      { kind: "local-runtime", source: modules.localRuntime, imports: ["lowerLocalAgentRuntime"] },
+      {
+        kind: "capability-runtime",
+        source: modules.runtimeCapability,
+        imports: ["runDynamicCapabilityResolvers"],
+      },
+      {
+        kind: "workspace-host",
+        source: modules.workspaceAgentHost,
+        imports: ["WorkspaceAgentCustomCommandInput"],
+      },
+      {
+        kind: "target-runtime",
+        source: modules.runtimeRunProjector,
+        imports: [
+          "projectAgentSession",
+          "projectAgentSessions",
+          "projectRunInspection",
+          "projectWorkflowRun",
+          "projectWorkflowRuns",
+        ],
+      },
+      ...shared.moduleInventory.authoredTools,
+      ...shared.moduleInventory.dynamicResolvers,
+      ...shared.moduleInventory.channels,
+      ...shared.moduleInventory.schedules,
+    ];
+    return {
+      ok: true,
+      value: {
+        kind: AGENTOS_CONFIG_TARGET.NODE_V1,
+        deployment,
+        files: [
+          ...sharedGeneratedFilesFor(shared, deployment, moduleGraph),
+          generatedPath(
+            ".agentos/generated/local.ts",
+            renderLocalAgentApp(profile.normalized, shared.toolNames, modules),
+          ),
+        ],
+        moduleGraph,
+        canonicalDeployment: { target: AGENTOS_CONFIG_TARGET.NODE_V1 },
+        mount: { driver: { kind: "local-node", target: AGENTOS_CONFIG_TARGET.NODE_V1 } },
+      },
+    };
+  }
+
+  const target = normalized.target;
+  const selected =
+    profile.kind === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      ? {
+          targetText: renderWorkspaceStaticTarget(
+            profile.normalized,
+            target,
+            shared.toolNames,
+            modules,
+          ),
+          workerProfile: {
+            sandboxImport: `${renderNamedImport(["Sandbox"], modules.cloudflareSandbox)}\n`,
+            sandboxExport: ", Sandbox",
+          },
+          wranglerProfile: {
+            vars: { SANDBOX_TRANSPORT: "rpc" },
+            containers: [
+              {
+                class_name: "Sandbox",
+                image: "../../Dockerfile",
+                instance_type: "lite",
+                max_instances: 2,
+              },
+            ],
+            durable_objects: {
+              bindings: [
+                { class_name: "Sandbox", name: profile.normalized.workspace.binding },
+                {
+                  class_name: target.durableObject.className,
+                  name: target.durableObject.binding,
+                },
+              ],
+            },
+            migrations: [
+              {
+                tag: "v1",
+                new_sqlite_classes: ["Sandbox", target.durableObject.className],
+              },
+            ],
+          },
+        }
+      : {
+          targetText: renderChatStaticTarget(profile.normalized, target, shared.toolNames, modules),
+          workerProfile: { sandboxImport: "", sandboxExport: "" },
+          wranglerProfile: {
+            durable_objects: {
+              bindings: [
+                {
+                  class_name: target.durableObject.className,
+                  name: target.durableObject.binding,
+                },
+              ],
+            },
+            migrations: [{ tag: "v1", new_sqlite_classes: [target.durableObject.className] }],
+          },
+        };
+  const deployment = {
+    ...shared.deployment,
+    backend: normalized.deployment.backend,
+    adapter: normalized.deployment.adapter,
+    ...profile.deployment,
+  };
+  const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
+    ...shared.moduleInventory.semanticCore,
+    {
+      kind: "authored-material-resolver",
+      source: importMaterialResolverPath(target.materialResolver.path),
+      imports: ["default as generatedMaterialResolverFactory"],
+    },
+    ...shared.moduleInventory.skillResources,
+    {
+      kind: "target-runtime",
+      source: modules.cloudflareDoRuntime,
+      imports: ["createAgentDurableObject"],
+    },
+    ...shared.moduleInventory.channels,
+    ...shared.moduleInventory.schedules,
+    ...profile.moduleImports.capability,
+    {
+      kind: "provider-runtime",
+      source: modules.openAiCompatibleTransport,
+      imports: ["OpenAiCompatibleLlmTransportLive"],
+    },
+    ...profile.moduleImports.workspaceHost,
+    ...shared.moduleInventory.authoredTools,
+    ...shared.moduleInventory.dynamicResolvers,
+    ...profile.moduleImports.executionDomain,
+    { kind: "effect-runtime", source: modules.effect, imports: ["Effect"] },
+    {
+      kind: "target-scope-helper",
+      source: "./cloudflare-scope",
+      imports: ["agentOSRpcClient", "AgentOSTargetEnv"],
+    },
+    {
+      kind: "target-worker",
+      source: "./worker",
+      imports: [target.durableObject.className, ...profile.moduleImports.worker],
+    },
+    { kind: "target-config", source: "./wrangler.jsonc", imports: [] },
+    ...client.moduleImports,
+  ];
+  return {
+    ok: true,
+    value: {
+      kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+      deployment,
+      files: [
+        ...sharedGeneratedFilesFor(shared, deployment, moduleGraph),
+        generatedPath(".agentos/generated/target.ts", selected.targetText),
+        generatedPath(
+          ".agentos/generated/cloudflare-scope.ts",
+          renderCloudflareScopeHelper(normalized, target, modules),
+        ),
+        generatedPath(
+          ".agentos/generated/worker.ts",
+          renderCloudflareWorkerEntry(normalized, target, modules, selected.workerProfile),
+        ),
+        generatedPath(
+          ".agentos/generated/wrangler.jsonc",
+          renderCloudflareWranglerConfig(normalized, selected.wranglerProfile),
+        ),
+        ...client.files,
+      ],
+      moduleGraph,
+      canonicalDeployment: { target: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1 },
+      mount: {
+        driver: {
+          kind: "cloudflare-do",
+          className: target.durableObject.className,
+          binding: target.durableObject.binding,
+        },
+      },
+    },
+  };
+};
+
 const staticTargetPlanFor = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
-): StaticTargetPlan => {
+): StaticTargetPlanResult => {
   const manifest = normalized.deployment.manifest;
   const toolNames = Object.keys(manifest.tools ?? {}).sort();
   const authoredToolNames = new Set(normalized.authoredToolNames);
@@ -3961,90 +4140,94 @@ const staticTargetPlanFor = (
             ],
           },
         ];
-  const profile = staticTargetProfileProjectionFor(normalized, modules, toolNames);
-  return {
-    shared: {
-      deployment: {
-        deploymentId: normalized.deployment.deploymentId,
-        codec: normalized.deployment.codec,
-        ...(normalized.deployment.providerStrategy === undefined
-          ? {}
-          : { providerStrategy: normalized.deployment.providerStrategy }),
-      },
-      manifest,
-      provenance: normalized.provenance,
-      toolNames,
-      authoredManifestToolNames,
-      skillResourceBundle,
-      moduleInventory: {
-        semanticCore,
-        skillResources,
-        authoredTools: generatedToolImports(authoredManifestToolNames),
-        dynamicResolvers: generatedDynamicResolverImports(normalized.dynamicResolvers),
-        channels,
-        schedules,
-      },
-      files: {
-        manifest: generatedPath(".agentos/generated/manifest.json", stableJson(manifest)),
-        provenance: generatedPath(
-          ".agentos/generated/provenance.json",
-          stableJson(normalized.provenance),
-        ),
-        ...(normalized.skills.length === 0
-          ? {}
-          : {
-              skillResources: generatedPath(
-                ".agentos/generated/skill-resources.json",
-                skillResourceBundle,
-              ),
-            }),
-        ...(normalized.channels.length === 0
-          ? {}
-          : {
-              channels: generatedPath(
-                ".agentos/generated/channels.ts",
-                renderChannelRegistry(normalized.channels, modules),
-              ),
-            }),
-        ...(normalized.schedules.length === 0
-          ? {}
-          : {
-              schedules: generatedPath(
-                ".agentos/generated/schedules.ts",
-                renderScheduleRegistry(normalized.schedules, modules),
-              ),
-            }),
-      },
+  const shared: StaticTargetPlanShared = {
+    deployment: {
+      deploymentId: normalized.deployment.deploymentId,
+      codec: normalized.deployment.codec,
+      ...(normalized.deployment.providerStrategy === undefined
+        ? {}
+        : { providerStrategy: normalized.deployment.providerStrategy }),
     },
-    profile,
-    host: { kind: normalized.target.kind },
-    client: staticTargetClientProjectionFor(normalized.client.kind, profile, modules),
+    manifest,
+    provenance: normalized.provenance,
+    toolNames,
+    authoredManifestToolNames,
+    skillResourceBundle,
+    moduleInventory: {
+      semanticCore,
+      skillResources,
+      authoredTools: generatedToolImports(authoredManifestToolNames),
+      dynamicResolvers: generatedDynamicResolverImports(normalized.dynamicResolvers),
+      channels,
+      schedules,
+    },
+    files: {
+      manifest: generatedPath(".agentos/generated/manifest.json", stableJson(manifest)),
+      provenance: generatedPath(
+        ".agentos/generated/provenance.json",
+        stableJson(normalized.provenance),
+      ),
+      ...(normalized.skills.length === 0
+        ? {}
+        : {
+            skillResources: generatedPath(
+              ".agentos/generated/skill-resources.json",
+              skillResourceBundle,
+            ),
+          }),
+      ...(normalized.channels.length === 0
+        ? {}
+        : {
+            channels: generatedPath(
+              ".agentos/generated/channels.ts",
+              renderChannelRegistry(normalized.channels, modules),
+            ),
+          }),
+      ...(normalized.schedules.length === 0
+        ? {}
+        : {
+            schedules: generatedPath(
+              ".agentos/generated/schedules.ts",
+              renderScheduleRegistry(normalized.schedules, modules),
+            ),
+          }),
+    },
+  };
+  const profile = staticTargetProfileProjectionFor(normalized, modules);
+  const client = staticTargetClientProjectionFor(normalized.client.kind, profile, modules);
+  const host = staticTargetHostProjectionFor(normalized, shared, profile, client, modules);
+  if (!host.ok) return host;
+  return {
+    ok: true,
+    value: { shared, profile, host: host.value, client },
   };
 };
 
-const sharedGeneratedFilesFor = (
+function sharedGeneratedFilesFor(
   shared: StaticTargetPlanShared,
   deployment: Readonly<Record<string, unknown>>,
   moduleGraph: ReadonlyArray<StaticTargetModuleImport>,
-): ReadonlyArray<StaticTargetGeneratedFile> => [
-  shared.files.manifest,
-  generatedPath(".agentos/generated/deployment.json", stableJson(deployment)),
-  shared.files.provenance,
-  ...(shared.files.skillResources === undefined ? [] : [shared.files.skillResources]),
-  generatedPath(
-    ".agentos/generated/fingerprints.json",
-    stableJson({
-      deployment: digestText(stableJson(deployment)),
-      manifest: digestText(stableJson(shared.manifest)),
-      ...(shared.files.skillResources === undefined
-        ? {}
-        : { skillResources: digestText(shared.skillResourceBundle) }),
-      targetModuleGraph: digestText(stableJson(moduleGraph)),
-    }),
-  ),
-  ...(shared.files.channels === undefined ? [] : [shared.files.channels]),
-  ...(shared.files.schedules === undefined ? [] : [shared.files.schedules]),
-];
+): ReadonlyArray<StaticTargetGeneratedFile> {
+  return [
+    shared.files.manifest,
+    generatedPath(".agentos/generated/deployment.json", stableJson(deployment)),
+    shared.files.provenance,
+    ...(shared.files.skillResources === undefined ? [] : [shared.files.skillResources]),
+    generatedPath(
+      ".agentos/generated/fingerprints.json",
+      stableJson({
+        deployment: digestText(stableJson(deployment)),
+        manifest: digestText(stableJson(shared.manifest)),
+        ...(shared.files.skillResources === undefined
+          ? {}
+          : { skillResources: digestText(shared.skillResourceBundle) }),
+        targetModuleGraph: digestText(stableJson(moduleGraph)),
+      }),
+    ),
+    ...(shared.files.channels === undefined ? [] : [shared.files.channels]),
+    ...(shared.files.schedules === undefined ? [] : [shared.files.schedules]),
+  ];
+}
 
 /**
  * Link normalized workspace authoring intent to a closed-target residual
@@ -4074,183 +4257,26 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
       issues: [{ kind: "unsupported_static_llm_route", route: normalized.llm.route }],
     };
   }
-  const plan = staticTargetPlanFor(
+  const planned = staticTargetPlanFor(
     normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
     modules,
   );
-  const { shared } = plan;
-  const { toolNames } = shared;
-  if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
-    const nodeWorkspace = plan.profile.nodeWorkspace;
-    if (nodeWorkspace === null) {
-      return {
-        ok: false,
-        issues: [{ kind: "unsupported_static_target", target: normalized.target.kind }],
-      };
-    }
-    const deploymentJson = {
-      ...shared.deployment,
-      backend: normalized.deployment.backend,
-      adapter: normalized.deployment.adapter,
-      workspace: {
-        binding: nodeWorkspace.binding,
-        bindingRef: nodeWorkspace.bindingRef,
-        root: nodeWorkspace.root,
-        topology: nodeWorkspace.topology,
-        providerResourceId: nodeWorkspace.providerResourceId,
-      },
-    };
-    const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
-      ...shared.moduleInventory.semanticCore,
-      ...shared.moduleInventory.skillResources,
-      {
-        kind: "local-runtime",
-        source: modules.localRuntime,
-        imports: ["lowerLocalAgentRuntime"],
-      },
-      {
-        kind: "capability-runtime",
-        source: modules.runtimeCapability,
-        imports: ["runDynamicCapabilityResolvers"],
-      },
-      {
-        kind: "workspace-host",
-        source: modules.workspaceAgentHost,
-        imports: ["WorkspaceAgentCustomCommandInput"],
-      },
-      {
-        kind: "target-runtime",
-        source: modules.runtimeRunProjector,
-        imports: [
-          "projectAgentSession",
-          "projectAgentSessions",
-          "projectRunInspection",
-          "projectWorkflowRun",
-          "projectWorkflowRuns",
-        ],
-      },
-      ...shared.moduleInventory.authoredTools,
-      ...shared.moduleInventory.dynamicResolvers,
-      ...shared.moduleInventory.channels,
-      ...shared.moduleInventory.schedules,
-    ];
-    return {
-      ok: true,
-      value: {
-        files: [
-          ...sharedGeneratedFilesFor(shared, deploymentJson, moduleGraph),
-          generatedPath(
-            ".agentos/generated/local.ts",
-            renderLocalAgentApp(
-              normalized as NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
-              toolNames,
-              modules,
-            ),
-          ),
-        ],
-        moduleGraph,
-        canonicalDeployment: {
-          ...plan.profile.canonicalDeployment,
-          target: normalized.target.kind,
-          llmRoute: normalized.llm.route,
-          client: plan.client.kind,
-          toolNames,
-        },
-        mount: {
-          driver: {
-            kind: "local-node",
-            target: AGENTOS_CONFIG_TARGET.NODE_V1,
-          },
-          ...plan.profile.mount,
-        },
-      },
-    };
-  }
-  const target = cloudflareTargetFor(normalized.target);
-  const deploymentJson = {
-    ...shared.deployment,
-    backend: normalized.deployment.backend,
-    adapter: normalized.deployment.adapter,
-    ...plan.profile.deployment,
-  };
-  const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
-    ...shared.moduleInventory.semanticCore,
-    {
-      kind: "authored-material-resolver",
-      source: importMaterialResolverPath(target.materialResolver.path),
-      imports: ["default as generatedMaterialResolverFactory"],
-    },
-    ...shared.moduleInventory.skillResources,
-    {
-      kind: "target-runtime",
-      source: modules.cloudflareDoRuntime,
-      imports: ["createAgentDurableObject"],
-    },
-    ...shared.moduleInventory.channels,
-    ...shared.moduleInventory.schedules,
-    ...plan.profile.moduleImports.capability,
-    {
-      kind: "provider-runtime",
-      source: modules.openAiCompatibleTransport,
-      imports: ["OpenAiCompatibleLlmTransportLive"],
-    },
-    ...plan.profile.moduleImports.workspaceHost,
-    ...shared.moduleInventory.authoredTools,
-    ...shared.moduleInventory.dynamicResolvers,
-    ...plan.profile.moduleImports.executionDomain,
-    {
-      kind: "effect-runtime",
-      source: modules.effect,
-      imports: ["Effect"],
-    },
-    {
-      kind: "target-scope-helper",
-      source: "./cloudflare-scope",
-      imports: ["agentOSRpcClient", "AgentOSTargetEnv"],
-    },
-    {
-      kind: "target-worker",
-      source: "./worker",
-      imports: [target.durableObject.className, ...plan.profile.moduleImports.worker],
-    },
-    {
-      kind: "target-config",
-      source: "./wrangler.jsonc",
-      imports: [],
-    },
-    ...plan.client.moduleImports,
-  ];
+  if (!planned.ok) return planned;
+  const plan = planned.value;
   return {
     ok: true,
     value: {
-      files: [
-        ...sharedGeneratedFilesFor(shared, deploymentJson, moduleGraph),
-        plan.profile.cloudflareFiles!.target,
-        generatedPath(
-          ".agentos/generated/cloudflare-scope.ts",
-          renderCloudflareScopeHelper(
-            normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
-            modules,
-          ),
-        ),
-        plan.profile.cloudflareFiles!.worker,
-        plan.profile.cloudflareFiles!.wrangler,
-        ...plan.client.files,
-      ],
-      moduleGraph,
+      files: plan.host.files,
+      moduleGraph: plan.host.moduleGraph,
       canonicalDeployment: {
         ...plan.profile.canonicalDeployment,
-        target: normalized.target.kind,
+        ...plan.host.canonicalDeployment,
         llmRoute: normalized.llm.route,
         client: plan.client.kind,
-        toolNames,
+        toolNames: plan.shared.toolNames,
       },
       mount: {
-        driver: {
-          kind: "cloudflare-do",
-          className: target.durableObject.className,
-          binding: target.durableObject.binding,
-        },
+        ...plan.host.mount,
         ...plan.profile.mount,
       },
     },
