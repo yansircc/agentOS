@@ -109,6 +109,40 @@
       }
     },
     {
+      "id": "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": ["./cloudflare"],
+      "symbol": "createCloudflareSandboxWorkspaceEnvResolver",
+      "exportKey": "./cloudflare:createCloudflareSandboxWorkspaceEnvResolver",
+      "sourceFile": "packages/runtime/src/cloudflare/workspace-env.ts",
+      "summary": "Resolves a scope-owned Cloudflare Sandbox binding into a run lease. This high-level host helper owns the Sandbox binding composition: products choose the Durable Object namespace, while agentOS fixes `scope -> sandbox resource`, validates the binding/client shape, disables implicit default sessions, and pins one transport per workspace. The lower-level resolver remains available for tests or non-Sandbox hosts.",
+      "aliases": [],
+      "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
+      "docs": "docs/packages/runtime.md",
+      "capabilityKind": "runtime",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+      }
+    },
+    {
+      "id": "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": ["./cloudflare"],
+      "symbol": "createCloudflareWorkspaceEnvResolver",
+      "exportKey": "./cloudflare:createCloudflareWorkspaceEnvResolver",
+      "sourceFile": "packages/runtime/src/cloudflare/workspace-env.ts",
+      "summary": "Resolves a scope-owned Cloudflare Sandbox workspace into a run lease. Authenticated scope is the sole persistent workspace identity. Runtime-owned run id selects only a transient lease over that shared WorkspaceEnv.",
+      "aliases": [],
+      "invariants": ["invariant.workspace-job.host-workspace-lifecycle"],
+      "docs": "docs/packages/runtime.md",
+      "capabilityKind": "runtime",
+      "testEvidence": {
+        "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+      }
+    },
+    {
       "id": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
       "package": "@agent-os/runtime",
       "packagePath": "packages/runtime",

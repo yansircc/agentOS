@@ -246,6 +246,14 @@
       "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     },
     {
+      "primitive": "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver",
+      "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+    },
+    {
       "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
       "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
     }

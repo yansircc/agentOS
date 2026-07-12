@@ -130,6 +130,15 @@ the internally recorded submit run correlation. The returned projection is
 sanitized: failed state exposes request summary and `failureExplanation`, but
 never exposes the runtime numeric run id or raw `submitRunId` join key.
 
+Cloudflare workspace identity has two independent axes. The authenticated
+ledger routing scope owns the persistent Sandbox id and workspace ref; a
+runtime-owned run id owns only the transient lease/session lifecycle. The
+public `./cloudflare` workspace resolvers enforce that split for hosts and
+generated targets. Cleanup releases a run lease without destroying the shared
+scope workspace. Generated `submit_scope` targets use the named Durable Object
+routing identity at submit, provider-operation, read, reset, and destroy
+entrypoints; submit/browser/model input cannot select workspace state.
+
 Runtime diagnostic facts are active only when a production runtime path can
 prove them from a positive contract. `handler_failed` is emitted by resolved
 capability handler wrappers. `projection_timeout` is emitted by tool projection

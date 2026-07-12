@@ -304,7 +304,10 @@
     {
       "invariant": "invariant.workspace-job.host-workspace-lifecycle",
       "statement": "Cloudflare hosts resolve one provider-neutral WorkspaceEnv lease per scope/runId and keep Sandbox binding validation and cleanup outside product modules.",
-      "primitives": [],
+      "primitives": [
+        "primitive.cloudflare-do.createCloudflareSandboxWorkspaceEnvResolver",
+        "primitive.cloudflare-do.createCloudflareWorkspaceEnvResolver"
+      ],
       "errors": [],
       "docs": ["docs/packages/runtime.md"],
       "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
