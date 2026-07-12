@@ -83,8 +83,10 @@ surface owns target wiring and the typed client; product code should not
 hand-write backend `SubmitSpec`, Durable Object wiring, identity glue, or stream
 glue.
 
-Start at
-[Build a natural-language workspace agent](docs/guides/build-natural-language-workspace-agent.md).
+Start at the executable
+[local Node quickstart](docs/guides/quickstart-node.md). The full
+[generated-target authoring reference](docs/guides/build-natural-language-workspace-agent.md)
+covers skills, channels, schedules, workflows, and deployment boundaries.
 
 ## Documents
 
@@ -97,9 +99,9 @@ Start at
 ## Verification
 
 ```sh
-bun run check
-bun run typecheck
-bun run test
+pnpm run check
+pnpm run typecheck
+pnpm run test
 rm -rf /tmp/agentos-effect-scan && mkdir -p /tmp/agentos-effect-scan
 effect-skill-scan /Users/yansir/code/52/agentOS --strict --output gate-json --evidence /tmp/agentos-effect-scan
 git diff --check

@@ -1,4 +1,8 @@
-# Build A Natural-Language Workspace Agent
+# Generated-Target Authoring Reference
+
+For the shortest executable path, start with [Run a workspace agent
+locally](quickstart-node.md). This page is the detailed reference for optional
+authoring slots, generated targets, clients, and ownership boundaries.
 
 ## Outcome
 

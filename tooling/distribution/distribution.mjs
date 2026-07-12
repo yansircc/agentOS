@@ -9,6 +9,7 @@ import {
   restoreConsumer,
   testInternalConsumer,
 } from "./consumer.mjs";
+import { assertQuickstartContract } from "./quickstart-contract.mjs";
 import { localRegistry, publishInternal, publishLocal } from "./publish-registry.mjs";
 
 const command = process.argv[2] ?? "check";
@@ -25,6 +26,7 @@ switch (command) {
     checkDistribution();
     break;
   case "test-consumer":
+    assertQuickstartContract();
     testInternalConsumer();
     break;
   case "publish":

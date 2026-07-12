@@ -9,15 +9,16 @@
         "compile an authored workspace agent into a static target",
         "generate a typed client from agentos.config.jsonc"
       ],
-      "tutorial": "docs/guides/build-natural-language-workspace-agent.md",
+      "tutorial": "docs/guides/quickstart-node.md",
       "primitives": [
         "primitive.agent-authoring.compileAgentTree",
         "primitive.agent-authoring.linkWorkspaceStaticTarget"
       ],
-      "commands": ["pnpm --filter @agent-os/cli test", "pnpm run check:distribution"],
+      "commands": ["pnpm --filter @agent-os/cli test", "pnpm run test:internal-consumer"],
       "evidence": [
         "packages/cli/test/build-command.test.mjs",
-        "packages/cli/src/check/algorithmic-checks.mjs"
+        "tooling/distribution/quickstart-contract.mjs",
+        "tooling/distribution/consumer.mjs"
       ],
       "next": ["recipe.tool-schema-authority", "recipe.projection-reader"]
     },

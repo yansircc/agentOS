@@ -75,13 +75,13 @@
     },
     {
       "path": "docs/agent/recipes.json",
-      "sha256": "812353cc57f3b0b771cd451364ca48415b1575870e7dfa31495f06f8f3a8ef7c",
-      "byteSize": 5356
+      "sha256": "bb31c79a3c404d53f0193e905ccf39cf504391cf0b32e6f241e6d7c0cbd8af2c",
+      "byteSize": 5381
     },
     {
       "path": "docs/agent/recipes.source.json",
-      "sha256": "08f6f28add6881078503beb5142d3dde024266d0bc797a2a0f926a7c9991e290",
-      "byteSize": 5262
+      "sha256": "737efda125212f3bd74f3206439eae9564c3394be548084dea9066323c7ae540",
+      "byteSize": 5287
     },
     {
       "path": "docs/agent/schemas/capability-rules.source.schema.json",
@@ -135,7 +135,7 @@
     },
     {
       "path": "docs/start-here.md",
-      "sha256": "5147915a978d8e0e8b41b077c4a1b2e3a74d43ece0120afd0f7edaa52b5a8b96",
+      "sha256": "38330dab691107569dfb6b46bfa229a97c2e76e2932ac858043befbc06abdbbe",
       "byteSize": 3172
     },
     {
@@ -212,13 +212,13 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/start-here.md",
-      "sha256": "f17f95fe8df9d43a867c417db8c1013db7ea75d0494642e58723534ba294f1ac",
+      "sha256": "4af48f094693bab9690ca50ffa02bfd4bbcd15f69a181c329ccb8cc7a82d77ac",
       "byteSize": 3067
     },
     {
       "path": "agent-catalog/agentOS/references/agent/recipes.json",
-      "sha256": "812353cc57f3b0b771cd451364ca48415b1575870e7dfa31495f06f8f3a8ef7c",
-      "byteSize": 5356
+      "sha256": "bb31c79a3c404d53f0193e905ccf39cf504391cf0b32e6f241e6d7c0cbd8af2c",
+      "byteSize": 5381
     },
     {
       "path": "agent-catalog/agentOS/references/agent/primitives.json",
