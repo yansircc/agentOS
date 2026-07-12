@@ -14,6 +14,7 @@ import {
   validateSourceTsdocRecords,
 } from "../lib/public-api-model.mjs";
 import { workspacePackagePaths } from "../lib/workspace-manifest.mjs";
+import { capabilityHoldRows, validateCapabilityHolds } from "./capability-holds.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
@@ -186,6 +187,8 @@ for (const pkg of packages) {
 if (audienceKinds.size === 0) {
   failures.push("docs/surface.json: audienceKinds must declare at least one audience kind");
 }
+
+failures.push(...validateCapabilityHolds(surface.holds));
 
 const entrypointRowsForPackage = (pkg) => {
   const entrypoints = Array.isArray(pkg.entrypoints) ? pkg.entrypoints : [];
@@ -364,7 +367,10 @@ await replaceBlock("docs/runtime-packages.md", "entrypoint-audience-map", entryp
 await replaceBlock(
   "docs/runtime-packages.md",
   "holds",
-  surface.holds.map((hold) => hold.text).join("\n\n"),
+  table(
+    ["Hold", "Capability", "Status", "Missing positive contracts", "Required proofs", "Summary"],
+    capabilityHoldRows(surface.holds),
+  ),
 );
 
 const skillPackageMap = table(

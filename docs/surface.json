@@ -24,7 +24,40 @@
   "holds": [
     {
       "id": "mcp-registry",
-      "text": "MCP registry support is not part of the {releaseLine} surface; it remains a hold until discovery, install, authority, and material contracts converge across products."
+      "capability": "generic MCP registry",
+      "status": "held",
+      "summary": "MCP registry support is not part of the {releaseLine} surface; product-specific adapters remain the boundary until every promotion requirement is proven.",
+      "promotion": {
+        "missingContractRefs": [
+          "contract:mcp/discovery@1",
+          "contract:mcp/install@1",
+          "contract:mcp/authority@1",
+          "contract:mcp/material@1"
+        ],
+        "requiredProofRefs": [
+          "proof:mcp/cross-product-convergence",
+          "proof:mcp/authority-material-isolation"
+        ]
+      }
+    },
+    {
+      "id": "live-llm-streaming",
+      "capability": "live LLM response streaming",
+      "status": "held",
+      "summary": "Live provider deltas are not part of the {releaseLine} surface; exactly one complete LlmResponse remains terminal authority while the feasibility contract is unproven.",
+      "promotion": {
+        "missingContractRefs": [
+          "contract:llm-live-stream/ordered-deltas@1",
+          "contract:llm-live-stream/terminal-response@1",
+          "contract:llm-live-stream/disconnect@1",
+          "contract:llm-live-stream/bounded-buffer@1"
+        ],
+        "requiredProofRefs": [
+          "proof:llm-live-stream/terminal-parity",
+          "proof:llm-live-stream/non-ledger-deltas",
+          "proof:llm-live-stream/node-cloudflare-parity"
+        ]
+      }
     }
   ],
   "packages": [
