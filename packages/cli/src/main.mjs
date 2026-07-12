@@ -12,7 +12,7 @@ import {
   restoreConsumer,
 } from "./consumer-overlay.mjs";
 import { consumerDoctor } from "./consumer-doctor.mjs";
-import { releaseStatus } from "./release-status.mjs";
+import { releaseStatus, releaseTag } from "./release-status.mjs";
 
 const packageRootFromMain = () => path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -45,6 +45,7 @@ Usage:
   agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
   agentos preflight llm [--cwd <path>] [--config <path>] [--route <binding-ref>] [--json]
   agentos release status [path/to/consumer] [--json] [--check-npm] [--registry <url>] [--install-manifest <path>]
+  agentos release tag [--json] [--registry <url>] [--install-manifest <path>]
   agentos consumer install /path/to/consumer [--from-manifest <path>] [--no-install] [--skip-pack] [--json]
   agentos consumer status /path/to/consumer [--json] [--check-npm] [--registry <url>]
   agentos consumer check /path/to/consumer [--json] [--check-npm] [--registry <url>]
@@ -222,8 +223,11 @@ const runRelease = async (args) => {
     case "status":
       releaseStatus(commandArgs, context);
       return;
+    case "tag":
+      releaseTag(commandArgs, context);
+      return;
     default:
-      throw new Error("agentos release: choose status");
+      throw new Error("agentos release: choose status or tag");
   }
 };
 

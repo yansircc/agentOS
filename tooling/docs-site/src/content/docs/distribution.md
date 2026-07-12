@@ -165,6 +165,27 @@ state. The command reports these axes together and exposes a derived `gate`, but
 it does not install, restore, publish, update lockfiles, or write a new
 release-truth record.
 
+After the complete npm train is published, create the immutable release receipt
+with:
+
+```sh
+pnpm run agentos release tag
+```
+
+The command runs `pnpm run check:full`, then requires a clean source checkout,
+verified packed artifacts, source/packed export equivalence, exact equality
+between the published package set and both the npm and tarball package sets,
+and npm plus tarball versions equal to
+`package.json#agentOsRelease.version`. It fails if `v<version>` already exists.
+Only after those positive checks does it create an annotated `v<version>` tag.
+
+The tag annotation is canonical `agentos-release-receipt@1` JSON containing the
+owner version, source commit, full-gate command, install-manifest digest, and
+sorted npm/tarball version and digest facts. `release status` reads the tag only
+as evidence and reports `receipt.status`; it always derives the expected tag
+name and receipt version from `agentOsRelease.version`, never in the opposite
+direction. There is no release sidecar or second version writer.
+
 The projection separates three release-truth modes:
 
 - `npm_release`: no local overlay marker is present; the consumer is using its

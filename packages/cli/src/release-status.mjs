@@ -8,6 +8,12 @@ import {
   exportEquivalenceForInstallManifest,
   resolveConsumerRoot,
 } from "./consumer-overlay.mjs";
+import {
+  createAnnotatedReleaseTag,
+  releaseReceiptProjection,
+  releaseTagProjection,
+  runReleaseFullGate,
+} from "./release-receipt.mjs";
 
 const releaseStatusSchemaVersion = 1;
 
@@ -165,6 +171,23 @@ const fileSpecPath = (spec) => {
   return spec.slice("file:".length);
 };
 
+const tarballPackageIdentity = (tarball) => {
+  if (typeof tarball !== "string" || !fs.existsSync(tarball)) return undefined;
+  const result = spawnSync("tar", ["-xOf", tarball, "package/package.json"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status !== 0) return undefined;
+  try {
+    const manifest = JSON.parse(result.stdout);
+    return typeof manifest.name === "string" && typeof manifest.version === "string"
+      ? { name: manifest.name, version: manifest.version }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const artifactProjection = (manifestPath) => {
   const base = {
     owner: "dist/internal-npm/install-manifest.json",
@@ -184,6 +207,7 @@ const artifactProjection = (manifestPath) => {
         const expectedSha = typeof entry?.sha256 === "string" ? entry.sha256 : undefined;
         const exists = typeof tarball === "string" && fs.existsSync(tarball);
         const actualSha = exists ? sha256File(tarball) : undefined;
+        const packageIdentity = tarballPackageIdentity(tarball);
         const status =
           tarball === undefined || expectedSha === undefined
             ? "invalid"
@@ -197,6 +221,8 @@ const artifactProjection = (manifestPath) => {
           tarball,
           expectedSha256: expectedSha,
           actualSha256: actualSha,
+          packageNameReadback: packageIdentity?.name,
+          packageVersion: packageIdentity?.version,
           status,
         };
       })
@@ -309,6 +335,17 @@ const issue = (code, severity, dimension, message, detail = {}) => ({
 const releaseGate = (projection) => {
   const hardFailures = [];
   const signals = [];
+  if (projection.receipt?.status === "failed") {
+    hardFailures.push(
+      issue(
+        "release_receipt_failed",
+        "hard",
+        "release_receipt",
+        "annotated release receipt disagrees with current owner facts",
+        { receiptFailures: projection.receipt.failures },
+      ),
+    );
+  }
   if (projection.artifacts.status === "failed") {
     hardFailures.push(
       issue(
@@ -432,7 +469,7 @@ export const releaseStatusData = (input = {}) => {
   const release = releaseIdentityProjection(context);
   const packages = publishedPackagesProjection(context, release);
   const manifestPath = input.installManifestPath ?? context.defaultInstallManifestPath;
-  const projection = {
+  const facts = {
     schemaVersion: releaseStatusSchemaVersion,
     release: {
       ...release,
@@ -456,9 +493,15 @@ export const releaseStatusData = (input = {}) => {
           }),
         }),
   };
+  const projection = {
+    ...facts,
+    tag: releaseTagProjection(context.sourceRoot, release.version),
+  };
+  const receipt = releaseReceiptProjection(projection);
   return {
     ...projection,
-    gate: releaseGate(projection),
+    receipt,
+    gate: releaseGate({ ...projection, receipt }),
   };
 };
 
@@ -479,6 +522,8 @@ const printReleaseStatus = (status) => {
   console.log(`artifacts: ${status.artifacts.status}`);
   console.log(`export equivalence: ${status.exportEquivalence.status}`);
   console.log(`npm: ${status.npm.status}`);
+  console.log(`tag: ${status.tag.status}`);
+  console.log(`receipt: ${status.receipt.status}`);
   console.log(`consumer: ${status.consumer?.truthMode ?? "not_checked"}`);
   console.log(`gate: ${status.gate.status}`);
   for (const failure of status.gate.hardFailures) {
@@ -511,5 +556,31 @@ export const releaseStatus = (rawArgs, context = {}) => {
     console.log(JSON.stringify(status, null, 2));
   } else {
     printReleaseStatus(status);
+  }
+};
+
+export const releaseTag = (rawArgs, context = {}) => {
+  const args = parseArgs(rawArgs);
+  const positional = args._ ?? [];
+  if (positional.length > 0) throw new Error("agentos release tag: expected no positional paths");
+  if (typeof context.sourceRoot !== "string") {
+    throw new Error("agentos release tag: source checkout identity is unavailable");
+  }
+  const installManifestPath =
+    typeof args["install-manifest"] === "string"
+      ? path.resolve(process.cwd(), args["install-manifest"])
+      : undefined;
+  runReleaseFullGate(context.sourceRoot);
+  const status = releaseStatusData({
+    context,
+    installManifestPath,
+    checkNpm: true,
+    registry: typeof args.registry === "string" ? args.registry : undefined,
+  });
+  const created = createAnnotatedReleaseTag(context.sourceRoot, status);
+  if (boolArg(args, "json")) {
+    console.log(JSON.stringify(created, null, 2));
+  } else {
+    console.log(`created annotated release tag ${created.tag.name}@${created.tag.commit}`);
   }
 };

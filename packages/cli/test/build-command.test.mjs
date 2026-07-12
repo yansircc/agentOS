@@ -992,8 +992,13 @@ void test("agentos release status reports source, artifacts, and npm without wri
     assert.equal(status.artifacts.owner, "dist/internal-npm/install-manifest.json");
     assert.equal(status.artifacts.status, "verified");
     assert.equal(status.artifacts.packages[0]?.status, "verified");
+    assert.equal(status.artifacts.packages[0]?.packageNameReadback, "@yansirplus/core");
+    assert.equal(status.artifacts.packages[0]?.packageVersion, agentOsReleaseVersion());
     assert.equal(status.npm.owner, "npm registry");
     assert.equal(status.npm.status, "checked");
+    assert.equal(status.tag.name, `v${agentOsReleaseVersion()}`);
+    assert.equal(status.tag.status, "missing");
+    assert.equal(status.receipt.status, "not_issued");
     assert.equal(status.consumer, undefined);
     assert.equal(readFileSync(manifestPath, "utf8"), before);
     assert.equal(existsSync(path.join(root, ".agentos-release-truth.json")), false);
