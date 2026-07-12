@@ -846,7 +846,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
       "const resolvedScopes: string[] = [];",
       "const disposedRefs: string[] = [];",
       "const resolver = materialResolverFactory.create({",
-      '  MATERIALS: { "tenant-a:credential:openrouter-key": "consumer-secret" },',
+      '  MATERIALS: { "tenant-a:credential:_:openrouter-key": "consumer-secret" },',
       "  onResolve: (scopeId: string) => resolvedScopes.push(scopeId),",
       "  onDispose: (ref: string) => disposedRefs.push(ref),",
       "});",
@@ -857,9 +857,13 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
       'if (openLive(handle.value) !== "consumer-secret" || handle.version !== "consumer-v1") throw new Error("material resolution mismatch");',
       "await Effect.runPromise(handle.dispose());",
       'if (JSON.stringify(resolvedScopes) !== JSON.stringify(["tenant-a"])) throw new Error("resolver lost authenticated scope");',
-      'if (JSON.stringify(disposedRefs) !== JSON.stringify(["credential:openrouter-key"])) throw new Error("resolver did not dispose material");',
+      'if (JSON.stringify(disposedRefs) !== JSON.stringify(["credential:_:openrouter-key"])) throw new Error("resolver did not dispose material");',
       "",
     ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(dir, "cloudflare-workers-stub.mjs"),
+    "export class DurableObject {}\nexport const env = {};\n",
   );
 };
 
@@ -1586,13 +1590,14 @@ export const assertGeneratedTargetConsumer = () => {
       "--",
       "material-resolver-smoke.ts",
       "--bundle",
-      "--platform=browser",
+      "--platform=node",
       "--format=esm",
-      "--external:cloudflare:workers",
+      "--alias:cloudflare:workers=./cloudflare-workers-stub.mjs",
       "--outfile=material-resolver-smoke.mjs",
     ],
     { cwd: dir, capture: true },
   );
+  run("node", ["material-resolver-smoke.mjs"], { cwd: dir, capture: true });
   console.log(
     "verified generated target consumer composes a public Cloudflare material resolver factory without symlinks",
   );
