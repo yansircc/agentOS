@@ -33,6 +33,10 @@ import {
   type ProviderMaterialPreflightDiagnostic,
 } from "@agent-os/runtime/llm-effect-ai/openai-compatible";
 import {
+  createLocalRuntimeLedgerSnapshotSseResponse,
+  type LocalAgentRuntime,
+} from "@agent-os/runtime/local";
+import {
   parseEvalConfig,
   parseEvalDefinition,
   type EvalAssertion,
@@ -1206,7 +1210,7 @@ const printPreflightLlm = (
 interface LocalAgentApp {
   readonly runtime: {
     readonly submit: (input: unknown) => Promise<unknown>;
-    readonly events: (opts?: { readonly afterId?: number }) => ReadonlyArray<unknown>;
+    readonly events: LocalAgentRuntime["events"];
     readonly diagnostics: () => ReadonlyArray<unknown>;
     readonly inspect: () => unknown;
     readonly inspectRun?: (runId: number | string) => unknown;
@@ -1526,18 +1530,6 @@ const parseAfterId = (url: URL): number | undefined => {
   return parsed;
 };
 
-const writeSseEvents = (response: http.ServerResponse, events: ReadonlyArray<unknown>): void => {
-  response.writeHead(200, {
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-cache",
-    connection: "keep-alive",
-  });
-  for (const event of events) {
-    response.write(`event: ledger\ndata: ${JSON.stringify(event)}\n\n`);
-  }
-  response.end();
-};
-
 interface StartedGeneratedAppServer {
   readonly payload: Readonly<{
     status: "listening";
@@ -1582,7 +1574,13 @@ const startGeneratedAppServer = async (
         return;
       }
       if (request.method === "GET" && url.pathname === "/agentos/events") {
-        writeSseEvents(response, app.runtime.events({ afterId: parseAfterId(url) }));
+        const afterId = parseAfterId(url);
+        await writeWebResponse(
+          response,
+          createLocalRuntimeLedgerSnapshotSseResponse(app.runtime.events, {
+            query: afterId === undefined ? {} : { afterId },
+          }),
+        );
         return;
       }
       if (url.pathname.startsWith("/channels/")) {

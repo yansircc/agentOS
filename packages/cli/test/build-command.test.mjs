@@ -2761,8 +2761,10 @@ void test("agentos serve exposes generated node app through public command and e
     assert.equal(submitted.value.final, "scripted done");
 
     const events = await fetch(ready.endpoints.events).then((response) => response.text());
+    assert.match(events, /^id: \d+\nevent: ledger\n/u);
     assert.match(events, /event: ledger/);
     assert.match(events, /agent\.run\.completed|runtime\.completed_after_tools/);
+    assert.doesNotMatch(events, /keepalive|connected/u);
   } finally {
     if (child !== undefined) {
       stopProcessGroup(child);

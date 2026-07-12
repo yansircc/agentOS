@@ -66,6 +66,11 @@ and input-request settlement from ledger facts without constructing a second
 product store. Runtime events own run lifecycle and interruption state;
 decision-gate events own generic input-request settlement.
 
+`./local:createLocalRuntimeLedgerSnapshotSseResponse` and
+`./local:encodeLocalRuntimeLedgerSnapshotSse` project that source as a finite
+SSE response. They emit the current ledger snapshot and close; they do not
+simulate live append notifications or polling semantics.
+
 Product links are runtime evidence links only. agentOS owns runtime run ids,
 terminal runtime status, tool events, diagnostics, and evidence correlation.
 Product applications own product control-plane facts such as Change, Candidate,
@@ -835,6 +840,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./llm-effect-ai/openai-compatible:ProviderMaterialPreflightDiagnostic`
 - `./local:CreateLocalAgentRuntimeOptions`
 - `./local:createLocalAgentRuntime`
+- `./local:createLocalRuntimeLedgerSnapshotSseResponse`
 - `./local:createLocalRuntimeLedgerSource`
 - `./local:CreateLocalWorkspaceEnvOptions`
 - `./local:createLocalWorkspaceEnv`
@@ -844,6 +850,8 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./local:LocalAgentRuntimeLlmPreflightInput`
 - `./local:LocalAgentRuntimeResolveError`
 - `./local:LocalRuntimeLedgerHydrationError`
+- `./local:LocalRuntimeLedgerSnapshotSource`
+- `./local:LocalRuntimeLedgerSnapshotSseOptions`
 - `./local:LocalRuntimeLedgerSource`
 - `./local:LocalRuntimeLedgerSourceOptions`
 - `./local:LocalAgentRuntimeTarget`
@@ -851,6 +859,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./local:LocalAgentRuntimeTestLlm`
 - `./local:LocalAgentRuntimeTransportLlm`
 - `./local:LocalWorkspaceEnvError`
+- `./local:encodeLocalRuntimeLedgerSnapshotSse`
 - `./local:validateLocalRuntimeLedgerHydrationEvents`
 - `./local:LoweredLocalAgentRuntime`
 - `./local:LowerLocalAgentRuntimeOptions`

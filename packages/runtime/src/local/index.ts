@@ -82,6 +82,14 @@ import {
 } from "./runtime-ledger-source";
 
 export {
+  createLocalRuntimeLedgerSnapshotSseResponse,
+  encodeLocalRuntimeLedgerSnapshotSse,
+} from "./ledger-sse";
+export type {
+  LocalRuntimeLedgerSnapshotSource,
+  LocalRuntimeLedgerSnapshotSseOptions,
+} from "./ledger-sse";
+export {
   createLocalRuntimeLedgerSource,
   LocalRuntimeLedgerHydrationError,
   validateLocalRuntimeLedgerHydrationEvents,
