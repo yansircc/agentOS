@@ -175,7 +175,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { LlmTransport, type LlmTransportRouteDescriptor } from "${publicSpecifier("@agent-os/core/llm-protocol")}";`,
       `import type { SubmitRunInput } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
-      `import { createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
+      `import { createCloudflareSandboxWorkspaceEnvResolver, createCloudflareWorkspaceEnvResolver, createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv, type CloudflareSandboxWorkspaceEnvResolverOptions, type CloudflareWorkspaceEnvResolver, type CloudflareWorkspaceEnvResolverOptions } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
       "void defineExternalEffectAttempt;",
@@ -196,6 +196,10 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "type _DefinedExternalEffect = DefinedExternalEffectAttempt<{ readonly input: string }, never, { readonly status: 'ok' }, { readonly requestId: string }, string>;",
       "void createCloudflareWorkspaceJobResponse;",
       "void makeCloudflareWorkspaceEnv;",
+      "const _workspaceResolver: CloudflareWorkspaceEnvResolver = createCloudflareWorkspaceEnvResolver({} as CloudflareWorkspaceEnvResolverOptions);",
+      "const _sandboxWorkspaceResolver: CloudflareWorkspaceEnvResolver = createCloudflareSandboxWorkspaceEnvResolver({} as CloudflareSandboxWorkspaceEnvResolverOptions);",
+      "void _workspaceResolver;",
+      "void _sandboxWorkspaceResolver;",
       "void mountOpsApi;",
       "const llmTransportConsumerProgram = Effect.gen(function* () {",
       "  const transport = yield* LlmTransport;",
@@ -375,11 +379,13 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     path.join(dir, "cf-entry.ts"),
     [
       `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
-      `import { createAgentDurableObject, createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
+      `import { createAgentDurableObject, createCloudflareSandboxWorkspaceEnvResolver, createCloudflareWorkspaceEnvResolver, createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai/openai-compatible")}";`,
       `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core")}";`,
       "void createCloudflareWorkspaceJobResponse;",
       "void makeCloudflareWorkspaceEnv;",
+      "void createCloudflareWorkspaceEnvResolver;",
+      "void createCloudflareSandboxWorkspaceEnvResolver;",
       "const compiled = compileAgentTree({",
       "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
       "});",
@@ -1021,9 +1027,14 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "  const providerApp = await createLocalAgentApp({",
       "    cwd: root,",
       "    env: {",
-      "      AGENTOS_ENDPOINT_OPENROUTER: 'https://openrouter.example/v1',",
-      "      AGENTOS_CREDENTIAL_OPENROUTER_KEY: 'smoke-secret',",
       "      AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL: 'openai/gpt-test',",
+      "    },",
+      "    materialResolver: {",
+      "      material: (ref) => {",
+      "        if (ref.kind === 'endpoint' && ref.ref === 'openrouter') return 'https://openrouter.example/v1';",
+      "        if (ref.kind === 'credential' && ref.ref === 'openrouter-key') return 'smoke-secret';",
+      "        return null;",
+      "      },",
       "    },",
       "  });",
       "  const providerInspection = providerApp.runtime.inspect();",
@@ -1320,15 +1331,11 @@ export const assertPackageNotInstalled = (dir, packageName) => {
 };
 
 const removedCloudflareLifecycleValueExports = [
-  "createCloudflareWorkspaceEnvResolver",
-  "createCloudflareSandboxWorkspaceEnvResolver",
   "installCloudflareWorkspaceOperationProvider",
   "installCloudflareWorkspaceJobProfile",
 ];
 
 const removedCloudflareLifecyclePackedFiles = [
-  "dist/cloudflare/workspace-env.d.ts",
-  "dist/cloudflare/workspace-env.js",
   "dist/cloudflare/workspace-op.d.ts",
   "dist/cloudflare/workspace-op.js",
   "dist/cloudflare/workspace-job-profile.d.ts",
@@ -1336,7 +1343,6 @@ const removedCloudflareLifecyclePackedFiles = [
 ];
 
 const removedCloudflareLifecycleImportSpecifiers = [
-  `${publishScope()}/runtime/cloudflare/workspace-env`,
   `${publishScope()}/runtime/cloudflare/workspace-op`,
   `${publishScope()}/runtime/cloudflare/workspace-job-profile`,
 ];
@@ -1694,7 +1700,7 @@ export const assertPackedRootInternalSymbolsAbsent = (dir) => {
   console.log("verified packed runtime root hides internal submit symbols");
 };
 
-export const assertPackedCloudflareLifecycleHelpersAbsent = (dir) => {
+export const assertPackedCloudflareLifecycleBoundary = (dir) => {
   const cloudflareSpecifier = publicSpecifier("@agent-os/runtime/cloudflare");
   fs.writeFileSync(
     path.join(dir, "negative-cloudflare-lifecycle.ts"),
@@ -1766,7 +1772,7 @@ export const assertPackedCloudflareLifecycleHelpersAbsent = (dir) => {
       }
     }
   }
-  console.log("verified packed cloudflare lifecycle helpers are absent");
+  console.log("verified packed cloudflare resolver surface and private lifecycle boundary");
 };
 
 export const assertPackedPublicAssemblyEscapesAbsent = (dir) => {
@@ -2151,7 +2157,7 @@ export const testInternalConsumer = () => {
   assertInstalledAgentCatalog(dir);
   assertPackedRootInternalSymbolsAbsent(dir);
   assertPackedPublicAssemblyEscapesAbsent(dir);
-  assertPackedCloudflareLifecycleHelpersAbsent(dir);
+  assertPackedCloudflareLifecycleBoundary(dir);
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.nodenext.json"], { cwd: dir, capture: true });
   run("npm", ["exec", "tsc", "--", "-p", "tsconfig.bundler.json"], { cwd: dir, capture: true });
   run("node", ["smoke.mjs"], { cwd: dir, capture: true });
