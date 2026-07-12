@@ -77,6 +77,7 @@ export type StaticTargetModuleImportKind =
   | "channel-runtime"
   | "schedule-runtime"
   | "authored-channel"
+  | "authored-material-resolver"
   | "authored-schedule"
   | "authored-dynamic-resolver"
   | "channel-registry"
@@ -291,6 +292,9 @@ ${entries}
 
 const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
 
+const importMaterialResolverPath = (path: string): string =>
+  `../../agent/${path.replace(/\.ts$/u, "")}`;
+
 const importChannelPath = (path: string): string => `../../${path.replace(/\.ts$/u, "")}`;
 
 const importSchedulePath = (path: string): string => `../../${path.replace(/\.ts$/u, "")}`;
@@ -312,7 +316,14 @@ const DEFAULT_STATIC_TARGET_PACKAGE_SCOPE = packageScopePattern.test(INJECTED_PU
 
 const publicPackageSpecifier = (scope: string, name: string): string => `${scope}/${name}`;
 
-const cloudflareTargetFor = (target: AgentOsConfigTarget): AgentOsConfigCloudflareDoTarget => {
+type NormalizedCloudflareTarget = Extract<
+  NormalizedAgentOsConfig["target"],
+  { readonly kind: typeof AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1 }
+>;
+
+const cloudflareTargetFor = (
+  target: NormalizedAgentOsConfig["target"],
+): NormalizedCloudflareTarget => {
   if (target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) return target;
   throw new TypeError(`cloudflare target renderer received ${target.kind}`);
 };
@@ -1330,6 +1341,19 @@ const generatedWorkspaceOperations = {
   toolInteractions: generatedWorkspaceToolInteractions,
 } as const;`;
 
+const renderCloudflareMaterialResolverFactory = (): string => `
+const generatedMaterialResolverFactoryContract =
+  generatedMaterialResolverFactory satisfies CloudflareMaterialResolverFactory;
+const generatedMaterialResolverCache = new WeakMap<object, RefResolver>();
+
+const generatedMaterialResolverFor = (env: AgentOSTargetEnv): RefResolver => {
+  const existing = generatedMaterialResolverCache.get(env);
+  if (existing !== undefined) return existing;
+  const created = generatedMaterialResolverFactoryContract.create(env);
+  generatedMaterialResolverCache.set(env, created);
+  return created;
+};`;
+
 const renderWorkspaceStaticTarget = (
   normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
   toolNames: ReadonlyArray<string>,
@@ -1362,6 +1386,9 @@ const renderWorkspaceStaticTarget = (
     .join("\n");
   const imports = [
     renderStaticRuntimeBootstrapImports(bootstrap, modules),
+    `import generatedMaterialResolverFactory from ${jsString(
+      importMaterialResolverPath(target.materialResolver.path),
+    )};`,
     `import deploymentProvenance from "./deployment.json";`,
     ...(hasSchedules
       ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")]
@@ -1407,7 +1434,7 @@ const renderWorkspaceStaticTarget = (
       modules.runtimeRunProjector,
     ),
     renderTypeImport(
-      ["AgentSubmitSpec", "CloudflareWorkspaceEnvResolver"],
+      ["AgentSubmitSpec", "CloudflareMaterialResolverFactory", "CloudflareWorkspaceEnvResolver"],
       modules.cloudflareDoRuntime,
     ),
     renderTypeImport(["WorkspaceOperationEnvResolver"], modules.runtimeCapability),
@@ -1439,11 +1466,11 @@ const generatedHandler = () => undefined;
 type AgentOSTargetEnv = {
   readonly [binding: string]: unknown;
   readonly SANDBOX_TRANSPORT?: SandboxTransport;
-  readonly AGENTOS_MATERIAL_RESOLVER: RefResolver;
 ${generatedLlmEnvFields}
 };
 
 ${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}
+${renderCloudflareMaterialResolverFactory()}
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
 const generatedWorkspaceScopeKind = ${jsString(normalized.deployment.manifest.scope.kind)};
@@ -1619,7 +1646,7 @@ const generatedSubmitBindingsFor = async (
 ): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
   const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(
     env,
-    env.AGENTOS_MATERIAL_RESOLVER,
+    generatedMaterialResolverFor(env),
   );
   if (preflightDiagnostics.length > 0) {
     return targetFailure(
@@ -1679,7 +1706,7 @@ const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTa
     handlers: ${handlerRecord},
     ...generatedCapabilityInstallGraphFor(env).agentBindings,
   }),
-  refResolver: (env) => env.AGENTOS_MATERIAL_RESOLVER,
+  refResolver: generatedMaterialResolverFor,
   llmTransport: () => OpenAiCompatibleLlmTransportLive,
   extensions: (env) => generatedCapabilityInstallGraphFor(env).extensions,
   declaredIntents: (env) => generatedCapabilityInstallGraphFor(env).declaredIntents,
@@ -1844,6 +1871,9 @@ const renderChatStaticTarget = (
     .join("\n");
   const imports = [
     renderStaticRuntimeBootstrapImports(bootstrap, modules),
+    `import generatedMaterialResolverFactory from ${jsString(
+      importMaterialResolverPath(target.materialResolver.path),
+    )};`,
     `import deploymentProvenance from "./deployment.json";`,
     ...(hasSchedules
       ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")]
@@ -1866,7 +1896,10 @@ const renderChatStaticTarget = (
       ],
       modules.runtimeRunProjector,
     ),
-    renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
+    renderTypeImport(
+      ["AgentSubmitSpec", "CloudflareMaterialResolverFactory"],
+      modules.cloudflareDoRuntime,
+    ),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderTypeImport(
       [
@@ -1887,11 +1920,11 @@ const generatedHandler = () => undefined;
 
 type AgentOSTargetEnv = {
   readonly [binding: string]: unknown;
-  readonly AGENTOS_MATERIAL_RESOLVER: RefResolver;
 ${generatedLlmEnvFields}
 };
 
 ${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}
+${renderCloudflareMaterialResolverFactory()}
 
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
@@ -1900,7 +1933,7 @@ const generatedSubmitBindingsFor = async (
 ): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
   const preflightDiagnostics = generatedProviderPreflightDiagnosticsFor(
     env,
-    env.AGENTOS_MATERIAL_RESOLVER,
+    generatedMaterialResolverFor(env),
   );
   if (preflightDiagnostics.length > 0) {
     return targetFailure(
@@ -1940,7 +1973,7 @@ const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTa
   agentBindings: {
     handlers: ${handlerRecord},
   },
-  refResolver: (env) => env.AGENTOS_MATERIAL_RESOLVER,
+  refResolver: generatedMaterialResolverFor,
   llmTransport: () => OpenAiCompatibleLlmTransportLive,
 });
 
@@ -3863,6 +3896,11 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
   const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
     { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
     { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
+    {
+      kind: "authored-material-resolver",
+      source: importMaterialResolverPath(target.materialResolver.path),
+      imports: ["default as generatedMaterialResolverFactory"],
+    },
     ...(hasSkills
       ? [
           {

@@ -175,7 +175,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       `import { deterministicToolExecution } from "${publicSpecifier("@agent-os/core/tools")}";`,
       `import { LlmTransport, type LlmTransportRouteDescriptor } from "${publicSpecifier("@agent-os/core/llm-protocol")}";`,
       `import type { SubmitRunInput } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
-      `import { createCloudflareSandboxWorkspaceEnvResolver, createCloudflareWorkspaceEnvResolver, createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv, type CloudflareSandboxWorkspaceEnvResolverOptions, type CloudflareWorkspaceEnvResolver, type CloudflareWorkspaceEnvResolverOptions } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
+      `import { createCloudflareSandboxWorkspaceEnvResolver, createCloudflareWorkspaceEnvResolver, createCloudflareWorkspaceJobResponse, defineCloudflareMaterialResolverFactory, makeCloudflareWorkspaceEnv, type CloudflareMaterialResolverFactory, type CloudflareSandboxWorkspaceEnvResolverOptions, type CloudflareWorkspaceEnvResolver, type CloudflareWorkspaceEnvResolverOptions } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { mountOpsApi } from "${publicSpecifier("@agent-os/runtime/cloudflare/ops-api")}";`,
       "void triggerParseOk;",
       "void defineExternalEffectAttempt;",
@@ -200,6 +200,8 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "const _sandboxWorkspaceResolver: CloudflareWorkspaceEnvResolver = createCloudflareSandboxWorkspaceEnvResolver({} as CloudflareSandboxWorkspaceEnvResolverOptions);",
       "void _workspaceResolver;",
       "void _sandboxWorkspaceResolver;",
+      "const _materialResolverFactory: CloudflareMaterialResolverFactory = defineCloudflareMaterialResolverFactory<Record<string, unknown>>(() => ({ material: () => Effect.die('consumer fixture') }));",
+      "void _materialResolverFactory;",
       "void mountOpsApi;",
       "const llmTransportConsumerProgram = Effect.gen(function* () {",
       "  const transport = yield* LlmTransport;",
@@ -569,6 +571,38 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   });
   fs.writeFileSync(path.join(dir, "Dockerfile"), 'FROM alpine:3.20\nCMD ["sleep", "infinity"]\n');
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the workspace.\n");
+  fs.writeFileSync(
+    path.join(dir, "agent", "material-resolver.ts"),
+    [
+      `import { defineCloudflareMaterialResolverFactory } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
+      `import { materialRefKey } from "${publicSpecifier("@agent-os/core/material-ref")}";`,
+      `import { liveResolvedMaterial, RefResolutionFailed } from "${publicSpecifier("@agent-os/core/ref-resolver")}";`,
+      'import { Effect } from "effect";',
+      "",
+      "export interface GeneratedTargetMaterialBindings {",
+      "  readonly MATERIALS: Readonly<Record<string, string>>;",
+      "  readonly onResolve?: (scopeId: string) => void;",
+      "  readonly onDispose?: (ref: string) => void;",
+      "}",
+      "",
+      "export default defineCloudflareMaterialResolverFactory<GeneratedTargetMaterialBindings>((env) => ({",
+      "  material: (request) => {",
+      "    env.onResolve?.(request.truthIdentity.scopeRef.scopeId);",
+      "    const ref = materialRefKey(request.materialRef);",
+      "    const value = env.MATERIALS[`${request.truthIdentity.scopeRef.scopeId}:${ref}`];",
+      "    return value === undefined",
+      '      ? Effect.fail(new RefResolutionFailed({ kind: request.materialRef.kind, ref, reason: "material_missing" }))',
+      "      : Effect.succeed(liveResolvedMaterial({",
+      "          ref: request.materialRef,",
+      '          version: "consumer-v1",',
+      "          value,",
+      "          dispose: () => Effect.sync(() => env.onDispose?.(ref)),",
+      "        }));",
+      "  },",
+      "}));",
+      "",
+    ].join("\n"),
+  );
   writeChannelConsumerFixture(dir, "generated-target-consumer");
   writeScheduleConsumerFixture(dir);
   fs.writeFileSync(
@@ -711,12 +745,22 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     }
   }
   for (const fragment of [
+    "../../agent/material-resolver",
+    "generatedMaterialResolverFactory",
+    "generatedMaterialResolverFor",
+    "generatedMaterialResolverFactoryContract.create(env)",
+    "refResolver: generatedMaterialResolverFor",
     "../../agent/channels/intake",
     "dispatchGeneratedChannelRequest",
     "generatedChannelRuntimeFor(env)",
   ]) {
     if (!generatedText.includes(fragment)) {
       fail(`generated target consumer missing channel fragment ${fragment}`);
+    }
+  }
+  for (const forbiddenMaterialFragment of ["AGENTOS_MATERIAL_RESOLVER", "AGENTOS_CREDENTIAL_"]) {
+    if (generatedText.includes(forbiddenMaterialFragment)) {
+      fail(`generated target consumer leaked material host field ${forbiddenMaterialFragment}`);
     }
   }
   for (const fragment of [
@@ -792,6 +836,30 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
       dispatchExpression: "dispatchGeneratedChannelRequest(request, runtime)",
       scopeId: "generated-target-consumer",
     }),
+  );
+  fs.writeFileSync(
+    path.join(dir, "material-resolver-smoke.ts"),
+    [
+      'import { Effect } from "effect";',
+      `import { openLive } from "${publicSpecifier("@agent-os/core/live-edge")}";`,
+      'import materialResolverFactory from "./agent/material-resolver";',
+      "const resolvedScopes: string[] = [];",
+      "const disposedRefs: string[] = [];",
+      "const resolver = materialResolverFactory.create({",
+      '  MATERIALS: { "tenant-a:credential:openrouter-key": "consumer-secret" },',
+      "  onResolve: (scopeId: string) => resolvedScopes.push(scopeId),",
+      "  onDispose: (ref: string) => disposedRefs.push(ref),",
+      "});",
+      "const handle = await Effect.runPromise(resolver.material({",
+      '  truthIdentity: { scopeRef: { kind: "session", scopeId: "tenant-a" }, effectAuthorityRef: { authorityClass: "agent", authorityId: "consumer" } },',
+      '  materialRef: { kind: "credential", ref: "openrouter-key" },',
+      "}));",
+      'if (openLive(handle.value) !== "consumer-secret" || handle.version !== "consumer-v1") throw new Error("material resolution mismatch");',
+      "await Effect.runPromise(handle.dispose());",
+      'if (JSON.stringify(resolvedScopes) !== JSON.stringify(["tenant-a"])) throw new Error("resolver lost authenticated scope");',
+      'if (JSON.stringify(disposedRefs) !== JSON.stringify(["credential:openrouter-key"])) throw new Error("resolver did not dispose material");',
+      "",
+    ].join("\n"),
   );
 };
 
@@ -1510,8 +1578,23 @@ export const assertGeneratedTargetConsumer = () => {
     { cwd: dir, capture: true },
   );
   run("node", ["channel-dispatch-smoke.mjs"], { cwd: dir, capture: true });
+  run(
+    "npm",
+    [
+      "exec",
+      "esbuild",
+      "--",
+      "material-resolver-smoke.ts",
+      "--bundle",
+      "--platform=browser",
+      "--format=esm",
+      "--external:cloudflare:workers",
+      "--outfile=material-resolver-smoke.mjs",
+    ],
+    { cwd: dir, capture: true },
+  );
   console.log(
-    "verified generated target consumer uses public package imports and channel dispatch without symlinks",
+    "verified generated target consumer composes a public Cloudflare material resolver factory without symlinks",
   );
 };
 

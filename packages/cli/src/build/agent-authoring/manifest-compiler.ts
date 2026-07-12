@@ -54,6 +54,7 @@ export type AuthoredAgentTreeFile =
   | AuthoredMarkdownFile
   | AuthoredResourceFile
   | AuthoredJsonFile
+  | AuthoredMaterialResolverFile
   | AuthoredToolFile
   | AuthoredDynamicResolverFile
   | AuthoredChannelFile
@@ -80,6 +81,12 @@ export interface AuthoredJsonFile {
   readonly path: string;
   readonly kind: "json";
   readonly value: unknown;
+}
+
+export interface AuthoredMaterialResolverFile {
+  readonly path: string;
+  readonly kind: "material-resolver";
+  readonly sourceKind?: AuthoredFileSourceKind;
 }
 
 export type AuthoredToolEffect =
@@ -149,6 +156,11 @@ export interface AuthoredScheduleFile {
 
 export interface CompiledAgentChannel {
   readonly name: string;
+  readonly path: string;
+  readonly origin: AgentManifestOrigin;
+}
+
+export interface CompiledAgentMaterialResolver {
   readonly path: string;
   readonly origin: AgentManifestOrigin;
 }
@@ -229,6 +241,7 @@ export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
     Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>>
   >;
   readonly toolFilePaths: Readonly<Record<string, string>>;
+  readonly materialResolver?: CompiledAgentMaterialResolver;
   readonly channels: ReadonlyArray<CompiledAgentChannel>;
   readonly workflows: ReadonlyArray<CompiledAgentWorkflow>;
   readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
@@ -352,6 +365,7 @@ interface CompilerState {
   readonly pathKeys: Map<string, string>;
   readonly toolIds: Set<string>;
   readonly toolFilePaths: Map<string, string>;
+  readonly materialResolver: { value?: CompiledAgentMaterialResolver };
   readonly channels: Map<string, CompiledAgentChannel>;
   readonly workflows: Map<string, CompiledAgentWorkflow>;
   readonly schedules: Map<string, CompiledAgentSchedule>;
@@ -686,6 +700,7 @@ const agentGrammarRoots = new Set([
   "instructions",
   "instructions.md",
   "interactions",
+  "material-resolver.ts",
   "materials",
   "skills",
   "schedules",
@@ -1532,6 +1547,23 @@ const recordResourceFile = (
   recordSkillSupportFile(state, path, supportPath, bytes, sourceKind);
 };
 
+const recordMaterialResolverFile = (
+  state: CompilerState,
+  path: string,
+  sourceKind?: AuthoredFileSourceKind,
+): void => {
+  if (path !== "material-resolver.ts") {
+    state.issues.push({
+      kind: "unsupported_path",
+      path,
+      reason: "material_resolver_path_not_in_grammar",
+    });
+    return;
+  }
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
+  state.materialResolver.value = { path, origin: pathOrigin(path) };
+};
+
 const recordToolFile = (
   state: CompilerState,
   path: string,
@@ -2063,6 +2095,7 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     pathKeys: new Map(),
     toolIds: new Set(),
     toolFilePaths: new Map(),
+    materialResolver: {},
     channels: new Map(),
     workflows: new Map(),
     schedules: new Map(),
@@ -2086,6 +2119,9 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
         break;
       case "json":
         recordJsonFile(state, path, file.value);
+        break;
+      case "material-resolver":
+        recordMaterialResolverFile(state, path, file.sourceKind);
         break;
       case "tool":
         recordToolFile(state, path, file.declaration);
@@ -2127,6 +2163,9 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
       provenance: buildProvenance(state),
       workspaceToolControls: buildWorkspaceToolControls(state),
       toolFilePaths: buildToolFilePaths(state),
+      ...(state.materialResolver.value === undefined
+        ? {}
+        : { materialResolver: state.materialResolver.value }),
       channels: buildChannels(state),
       workflows: buildWorkflows(state),
       schedules: buildSchedules(state),

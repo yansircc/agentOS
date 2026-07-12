@@ -220,6 +220,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "workspaceOperations",
       "OpenAiCompatibleLlmTransportLive",
       "preflightOpenAiCompatibleProviderMaterial",
+      "generatedMaterialResolverFactory",
+      "CloudflareMaterialResolverFactory",
+      "generatedMaterialResolverFor",
+      "generatedMaterialResolverFactoryContract.create(env)",
+      "refResolver: generatedMaterialResolverFor",
       "defineWorkspaceAgentMount",
       "createCloudflareSandboxWorkspaceEnvResolver",
       "getSandbox",
@@ -365,6 +370,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
 
     const requiredModuleKinds = [
       '"semantic-json"',
+      '"authored-material-resolver"',
       '"target-runtime"',
       '"target-scope-helper"',
       '"target-worker"',
@@ -447,6 +453,8 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "dynamic import",
       "await import(",
       "import(",
+      "AGENTOS_MATERIAL_RESOLVER",
+      "AGENTOS_CREDENTIAL_",
     ]) {
       if (renderStaticTargetSource.includes(forbidden)) {
         failures.push(

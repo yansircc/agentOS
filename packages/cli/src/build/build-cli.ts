@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -591,6 +591,26 @@ const collectFiles = async (dir: string): Promise<ReadonlyArray<CollectedFile>> 
   return files;
 };
 
+const sourceKindForFile = async (file: string): Promise<CollectedSourceKind> => {
+  const entry = await lstat(file);
+  if (entry.isFile()) return "regular";
+  if (entry.isSymbolicLink()) return "symlink";
+  return "non_regular";
+};
+
+const optionalSourceKindForFile = async (
+  file: string,
+): Promise<CollectedSourceKind | undefined> => {
+  try {
+    return await sourceKindForFile(file);
+  } catch (cause) {
+    if (cause !== null && typeof cause === "object" && "code" in cause && cause.code === "ENOENT") {
+      return undefined;
+    }
+    throw cause;
+  }
+};
+
 const isMainSkillRelativePath = (relativePath: string): boolean => {
   const parts = relativePath.split(path.sep);
   return (
@@ -622,6 +642,16 @@ const loadAuthoredTree = async (cwd: string, agentDir: string): Promise<Authored
       path: toAuthoredPath(cwd, agentJsonPath),
       kind: "json",
       value: await readJson(agentJsonPath),
+    });
+  }
+
+  const materialResolverPath = path.join(agentDir, "material-resolver.ts");
+  const materialResolverSourceKind = await optionalSourceKindForFile(materialResolverPath);
+  if (materialResolverSourceKind !== undefined) {
+    files.push({
+      path: toAuthoredPath(cwd, materialResolverPath),
+      kind: "material-resolver",
+      sourceKind: materialResolverSourceKind,
     });
   }
 

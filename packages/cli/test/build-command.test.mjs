@@ -35,6 +35,43 @@ const agentOsReleaseVersion = () => {
 const sha256Text = (text) => crypto.createHash("sha256").update(text).digest("hex");
 const sha256File = (file) => crypto.createHash("sha256").update(readFileSync(file)).digest("hex");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
+const compiledCloudflareMaterialResolverFile = Object.freeze({
+  path: "agent/material-resolver.ts",
+  kind: "material-resolver",
+  sourceKind: "regular",
+});
+const writeCloudflareMaterialResolverFixture = (root) => {
+  mkdirSync(path.join(root, "agent"), { recursive: true });
+  writeFileSync(
+    path.join(root, "agent/material-resolver.ts"),
+    [
+      'import { defineCloudflareMaterialResolverFactory } from "@agent-os/runtime/cloudflare";',
+      'import { liveResolvedMaterial, RefResolutionFailed } from "@agent-os/core/ref-resolver";',
+      'import { materialRefKey } from "@agent-os/core/material-ref";',
+      'import { Effect } from "effect";',
+      "",
+      "export default defineCloudflareMaterialResolverFactory<{",
+      "  readonly MATERIALS: Readonly<Record<string, string>>;",
+      "}>((env) => ({",
+      "  material: (request) => {",
+      "    const value = env.MATERIALS[materialRefKey(request.materialRef)];",
+      "    return value === undefined",
+      "      ? Effect.fail(new RefResolutionFailed({",
+      "          kind: request.materialRef.kind,",
+      "          ref: materialRefKey(request.materialRef),",
+      '          reason: "material_missing",',
+      "        }))",
+      "      : Effect.succeed(liveResolvedMaterial({",
+      "          ref: request.materialRef,",
+      '          version: "fixture-v1",',
+      "          value,",
+      "        }));",
+      "  },",
+      "}));",
+      "",
+    ].join("\n"),
+  );
+};
 const forbiddenCloudflareLifecycleTargetFragments = [
   /installCloudflareWorkspaceOperationProvider/,
   /installCloudflareWorkspaceJobProfile/,
@@ -1274,6 +1311,7 @@ void test("compileAgentTree keeps skills as authoring-only output", () => {
       "  files: [",
       '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
+      '    { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
       '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace facts\\n---\\nUse echo." },',
       '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review output carefully\\n---\\nReview carefully." },',
       '    { path: "agent/skills/review/references/checklist.md", kind: "resource", bytes: utf8("Check every claim.") },',
@@ -1590,6 +1628,88 @@ void test("agentos.config normalizes node@1 as the local convention target", () 
       reason: "target_kind_invalid",
     },
   ]);
+});
+
+void test("cloudflare material resolver authoring contract fails closed by target", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
+      'const agent = { path: "agent/agent.json", kind: "json", value: { agentId: "material-contract", scope: { kind: "session", idSource: "manifest", stableScopeId: "material-contract" } } };',
+      'const resolver = { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" };',
+      'const baseConfig = { profile: "chat@1", agent: "./agent", deployment: { id: "material-contract" }, client: { kind: "browser-direct@1" }, llm: { route: "openai-chat-compatible", endpointRef: "endpoint", credentialRef: "credential", modelRef: "model" } };',
+      "const withoutResolver = compileAgentTree({ files: [instructions, agent] });",
+      "const withResolver = compileAgentTree({ files: [instructions, agent, resolver] });",
+      'const symlink = compileAgentTree({ files: [instructions, agent, { ...resolver, sourceKind: "symlink" }] });',
+      "if (!withoutResolver.ok || !withResolver.ok) process.exit(2);",
+      'const cloudflareTarget = { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } };',
+      "const missing = normalizeAgentOsConfig({ ...baseConfig, target: cloudflareTarget }, withoutResolver.value);",
+      "const cloudflare = normalizeAgentOsConfig({ ...baseConfig, target: cloudflareTarget }, withResolver.value);",
+      'const node = normalizeAgentOsConfig({ ...baseConfig, target: { kind: "node@1" } }, withResolver.value);',
+      "console.log(JSON.stringify({ missing, cloudflare, node, symlink }));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.missing, {
+    ok: false,
+    issues: [{ kind: "cloudflare_material_resolver_missing", path: "agent/material-resolver.ts" }],
+  });
+  assert.equal(output.cloudflare.ok, true);
+  assert.deepEqual(output.cloudflare.value.target.materialResolver, {
+    path: "material-resolver.ts",
+    origin: "path:agent/material-resolver.ts",
+  });
+  assert.deepEqual(output.node, {
+    ok: false,
+    issues: [
+      {
+        kind: "material_resolver_target_unsupported",
+        path: "agent/material-resolver.ts",
+        target: "node@1",
+      },
+    ],
+  });
+  assert.deepEqual(output.symlink, {
+    ok: false,
+    issues: [
+      { kind: "unsupported_path", path: "material-resolver.ts", reason: "symlink_forbidden" },
+    ],
+  });
+
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-material-symlink-"));
+  try {
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    writeFileSync(path.join(root, "agent/instructions.md"), "Operate.");
+    symlinkSync("missing-material-resolver.ts", path.join(root, "agent/material-resolver.ts"));
+    writeFileSync(
+      path.join(root, "agentos.config.jsonc"),
+      JSON.stringify({
+        profile: "chat@1",
+        agent: "./agent",
+        deployment: { id: "material-symlink" },
+        target: {
+          kind: "cloudflare-do@1",
+          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
+        },
+        client: { kind: "browser-direct@1" },
+        llm: {
+          route: "openai-chat-compatible",
+          endpointRef: "endpoint",
+          credentialRef: "credential",
+          modelRef: "model",
+        },
+      }),
+    );
+    const build = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
+      encoding: "utf8",
+    });
+    assert.notEqual(build.status, 0);
+    assert.match(build.stderr, /symlink_forbidden/u);
+    assert.match(build.stderr, /material-resolver\.ts/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 void test("compileAgentTree enforces skill identity and opaque resource package invariants", () => {
@@ -1922,6 +2042,7 @@ void test("compileAgentTree splits workflow lifecycle identity from agent profil
       "const valid = compileAgentTree({ files: [",
       "  instructions,",
       "  agentJson,",
+      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
       '  { path: "workflows/deploy.ts", kind: "workflow" },',
       '  { path: "workflows/reconcile_workspace.ts", kind: "workflow" },',
       "] });",
@@ -2045,6 +2166,7 @@ void test("compileAgentTree keeps schedules as authoring-only nested path facts"
       "const valid = compileAgentTree({ files: [",
       "  instructions,",
       "  agentJson,",
+      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
       '  schedule("agent/schedules/daily.ts", "0   9 * * 1-5"),',
       '  schedule("agent/schedules/reports/weekly.ts", "30 8 * * 1"),',
       "] });",
@@ -2202,6 +2324,7 @@ void test("compileAgentTree keeps schedules as authoring-only nested path facts"
 void test("agentos build compiles an authored workspace tree into generated files", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-build-"));
   try {
+    writeCloudflareMaterialResolverFixture(root);
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     mkdirSync(path.join(root, "agent"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Operate on the workspace.");
@@ -2312,12 +2435,18 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(target, /createCloudflareSandboxWorkspaceEnvResolver/);
     assert.match(target, /generatedWorkspaceToolInteractions/);
     assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
-    assert.match(target, /readonly AGENTOS_MATERIAL_RESOLVER: RefResolver;/);
+    assert.match(
+      target,
+      /import generatedMaterialResolverFactory from "\.\.\/\.\.\/agent\/material-resolver";/,
+    );
+    assert.match(target, /const generatedMaterialResolverFor = \(env: AgentOSTargetEnv\)/);
+    assert.match(target, /generatedMaterialResolverFactoryContract\.create\(env\)/);
+    assert.doesNotMatch(target, /AGENTOS_MATERIAL_RESOLVER/);
     assert.doesNotMatch(target, /readonly AGENTOS_ENDPOINT_OPENROUTER\?: string;/);
     assert.doesNotMatch(target, /readonly AGENTOS_CREDENTIAL_OPENROUTER_KEY\?: string;/);
     assert.match(target, /readonly AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL\?: string;/);
     assert.doesNotMatch(target, /materialEnvValue\(env, "AGENTOS_ENDPOINT_OPENROUTER"\)/);
-    assert.match(target, /refResolver: \(env\) => env\.AGENTOS_MATERIAL_RESOLVER/);
+    assert.match(target, /refResolver: generatedMaterialResolverFor/);
     assert.match(target, /preflightOpenAiCompatibleProviderMaterial/);
     assert.doesNotMatch(target, /readonly OPENROUTER_KEY\?: string;/);
     assert.doesNotMatch(target, /readonly OPENROUTER_ENDPOINT\?: string;/);
@@ -2400,6 +2529,7 @@ void test("workspace submit_scope generation binds every workspace path to authe
       "const compiled = compileAgentTree({ files: [",
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '  { path: "agent/agent.json", kind: "json", value: { agentId: "dynamic-workspace", scope: { kind: "session", idSource: "submit_scope" }, effectAuthorityRef: { authorityClass: "effect", authorityId: "dynamic-workspace" } } },',
+      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
       "] });",
       "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
       "const base = {",
@@ -2411,7 +2541,7 @@ void test("workspace submit_scope generation binds every workspace path to authe
       '  workspace: { binding: "Sandbox", root: "/workspace" },',
       "};",
       'const cloudflare = normalizeAgentOsConfig({ ...base, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, compiled.value);',
-      'const node = normalizeAgentOsConfig({ ...base, target: { kind: "node@1" } }, compiled.value);',
+      'const node = normalizeAgentOsConfig({ ...base, target: { kind: "node@1" } }, { ...compiled.value, materialResolver: undefined });',
       'const remote = normalizeAgentOsConfig({ ...base, client: { kind: "svelte-kit-remote@1" }, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, compiled.value);',
       'const hostPaths = normalizeAgentOsConfig({ ...base, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, { ...compiled.value, channels: [{ name: "github" }], schedules: [{ scheduleId: "daily" }] });',
       "if (!cloudflare.ok) { console.error(JSON.stringify(cloudflare.issues)); process.exit(1); }",
@@ -3283,6 +3413,7 @@ void test("agentos build emits one channel registry for cloudflare and node targ
       '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
       "  },",
     ]);
+    writeCloudflareMaterialResolverFixture(cloudflareRoot);
     const cloudflareResult = spawnSync(process.execPath, [cli, "build", "--cwd", cloudflareRoot], {
       encoding: "utf8",
     });
@@ -3416,6 +3547,7 @@ void test("agentos build emits one schedule registry for cloudflare and node tar
       '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
       "  },",
     ]);
+    writeCloudflareMaterialResolverFixture(cloudflareRoot);
     const cloudflareResult = spawnSync(process.execPath, [cli, "build", "--cwd", cloudflareRoot], {
       encoding: "utf8",
     });
@@ -4096,6 +4228,7 @@ void test("agentos info emits compile-only inspection without generated writes",
 void test("agentos build compiles chat profile without workspace surface", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-chat-build-"));
   try {
+    writeCloudflareMaterialResolverFixture(root);
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     mkdirSync(path.join(root, "agent/tools"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Answer in chat.");
@@ -4243,6 +4376,7 @@ void test("static target injects skill advert and load_skill for workspace and c
       "const compiled = compileAgentTree({ files: [",
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
+      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
       '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace routing\\n---\\nUse workspace echo skill." },',
       '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review chat routing\\n---\\nUse chat review skill." },',
       '  { path: "agent/skills/review/references/checklist.md", kind: "resource", bytes: utf8("Check output.") },',
@@ -4314,6 +4448,7 @@ void test("static target wires one dynamic capability registry for cloudflare an
       "const compiled = compileAgentTree({ files: [",
       '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
       '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-dynamic", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-dynamic" } } },',
+      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
       '  { path: "agent/instructions/tone.md", kind: "markdown", text: "Use a terse tone." },',
       '  { path: "agent/tools/echo.ts", kind: "tool", declaration: {} },',
       '  { path: "agent/skills/review.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview carefully." },',
@@ -4329,7 +4464,7 @@ void test("static target wires one dynamic capability registry for cloudflare an
       '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
       "};",
       "const linkedFor = (config, generatedPath) => {",
-      "  const normalized = normalizeAgentOsConfig(config, compiled.value);",
+      "  const normalized = normalizeAgentOsConfig(config, config.target.kind === 'node@1' ? { ...compiled.value, materialResolver: undefined } : compiled.value);",
       "  if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
       "  const linked = linkWorkspaceStaticTarget(normalized.value);",
       "  if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
@@ -4438,6 +4573,7 @@ void test("static target wires one dynamic capability registry for cloudflare an
 void test("agentos build emits skill artifact and load_skill executes deterministically", () => {
   const root = mkdtempSync(path.join(repoRoot, ".agentos-skill-smoke-"));
   try {
+    writeCloudflareMaterialResolverFixture(root);
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     linkGeneratedTargetSmokeDependencies(root);
     mkdirSync(path.join(root, "agent/skills/echo/references"), { recursive: true });
@@ -4524,6 +4660,10 @@ void test("agentos build emits skill artifact and load_skill executes determinis
     let smokeSource = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
     smokeSource = smokeSource
       .replace(
+        'import generatedMaterialResolverFactory from "../../agent/material-resolver";',
+        'const generatedMaterialResolverFactory = { create: () => ({ material: () => Effect.die("unused") }) };',
+      )
+      .replace(
         'import { createAgentDurableObject } from "@agent-os/runtime/cloudflare";',
         "const createAgentDurableObject = () => class {};",
       )
@@ -4535,7 +4675,7 @@ void test("agentos build emits skill artifact and load_skill executes determinis
 export const __agentosSkillSmoke = async () => {
   const agent = Object.create(AgentOS.prototype);
   agent.targetEnv = {
-    AGENTOS_MATERIAL_RESOLVER: { material: () => Effect.die("unused") },
+    MATERIALS: {},
     AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model",
   };
   agent.submitWithBindings = async (spec, bindings) => {
@@ -4779,6 +4919,7 @@ void test("agentos build rejects unsafe packaged skill supporting files from the
 void test("agentos build omits load_skill support when no skills are authored", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-no-skills-build-"));
   try {
+    writeCloudflareMaterialResolverFixture(root);
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
     mkdirSync(path.join(root, "agent"), { recursive: true });
     writeFileSync(path.join(root, "agent/instructions.md"), "Answer without skills.");

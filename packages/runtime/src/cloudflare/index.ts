@@ -15,6 +15,7 @@ export {
 } from "./ag-ui-sse";
 export { createCloudflareWorkspaceJobResponse } from "./workspace-job-facade";
 export { makeCloudflareWorkspaceEnv } from "./workspace-env-adapter";
+export { defineCloudflareMaterialResolverFactory } from "./material-resolver-factory";
 export {
   CloudflareWorkspaceEnvResolverError,
   createCloudflareSandboxWorkspaceEnvResolver,
@@ -48,6 +49,10 @@ export type {
   CloudflareAgentProjectionSinks,
 } from "./mount";
 export type { CloudflareLedgerSseSource } from "./ag-ui-sse";
+export type {
+  CloudflareMaterialResolverBindings,
+  CloudflareMaterialResolverFactory,
+} from "./material-resolver-factory";
 export type {
   CloudflareWorkspaceJobProjectionReader,
   CloudflareWorkspaceJobResponseOptions,

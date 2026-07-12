@@ -31,6 +31,7 @@ import type {
   AgentManifestOrigin,
   AuthoredAgentManifest,
   CompiledAgentChannel,
+  CompiledAgentMaterialResolver,
   CompiledAgentSchedule,
   CompiledAgentSkill,
   CompiledAgentWorkflow,
@@ -87,6 +88,12 @@ export interface AgentOsConfigNodeTarget {
 }
 
 export type AgentOsConfigTarget = AgentOsConfigCloudflareDoTarget | AgentOsConfigNodeTarget;
+
+export type NormalizedAgentOsConfigTarget =
+  | AgentOsConfigNodeTarget
+  | (AgentOsConfigCloudflareDoTarget & {
+      readonly materialResolver: CompiledAgentMaterialResolver;
+    });
 
 export interface AgentOsConfigClient {
   readonly kind: AgentOsConfigClientKind;
@@ -174,6 +181,15 @@ export type AgentOsConfigIssue =
       readonly refs: readonly [string, string];
     }
   | {
+      readonly kind: "cloudflare_material_resolver_missing";
+      readonly path: "agent/material-resolver.ts";
+    }
+  | {
+      readonly kind: "material_resolver_target_unsupported";
+      readonly path: "agent/material-resolver.ts";
+      readonly target: typeof AGENTOS_CONFIG_TARGET.NODE_V1;
+    }
+  | {
       readonly kind: "workspace_default_tool_shadowed";
       readonly path: string;
       readonly toolId: WorkspaceToolName;
@@ -216,7 +232,7 @@ export interface NormalizedAgentOsConfigBase<M extends AgentManifest = AgentMani
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
   readonly instructionFragments: CompiledAgentManifest["instructionFragments"];
   readonly dynamicResolvers: CompiledAgentManifest["dynamicResolvers"];
-  readonly target: AgentOsConfigTarget;
+  readonly target: NormalizedAgentOsConfigTarget;
   readonly client: AgentOsConfigClient;
   readonly llm: AgentOsConfigLlmRouteBinding;
   readonly llmRoutes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
@@ -290,6 +306,39 @@ const targetDeploymentBackend = (target: AgentOsConfigTarget): string =>
 
 const targetDeploymentAdapter = (target: AgentOsConfigTarget): AgentOsConfigTargetKind =>
   target.kind;
+
+const normalizeTargetMaterialResolver = (
+  target: AgentOsConfigTarget,
+  materialResolver: CompiledAgentMaterialResolver | undefined,
+):
+  | { readonly ok: true; readonly value: NormalizedAgentOsConfigTarget }
+  | { readonly ok: false; readonly issues: ReadonlyArray<AgentOsConfigIssue> } => {
+  if (target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) {
+    return materialResolver === undefined
+      ? {
+          ok: false,
+          issues: [
+            {
+              kind: "cloudflare_material_resolver_missing",
+              path: "agent/material-resolver.ts",
+            },
+          ],
+        }
+      : { ok: true, value: { ...target, materialResolver } };
+  }
+  return materialResolver === undefined
+    ? { ok: true, value: target }
+    : {
+        ok: false,
+        issues: [
+          {
+            kind: "material_resolver_target_unsupported",
+            path: "agent/material-resolver.ts",
+            target: AGENTOS_CONFIG_TARGET.NODE_V1,
+          },
+        ],
+      };
+};
 
 export type LlmMaterialEnvKind = "endpoint" | "credential" | "model";
 
@@ -1017,6 +1066,8 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   const decoded = decodeAgentOsConfig(config);
   if (!decoded.ok) return decoded;
   const value = decoded.value;
+  const target = normalizeTargetMaterialResolver(value.target, compiled.materialResolver);
+  if (!target.ok) return target;
   const llmRoutes = normalizedLlmRoutes(value.llm);
   const llmEnvIssues = llmMaterialEnvNameCollisionIssues(
     llmMaterialEnvBindingsForRoutes(llmRoutes),
@@ -1092,7 +1143,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         skills: compiled.skills,
         instructionFragments: compiled.instructionFragments,
         dynamicResolvers: compiled.dynamicResolvers,
-        target: value.target,
+        target: target.value,
         client: value.client,
         llm: llmRoutes.default,
         llmRoutes,
@@ -1271,7 +1322,7 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
       skills: compiled.skills,
       instructionFragments: compiled.instructionFragments,
       dynamicResolvers: compiled.dynamicResolvers,
-      target: value.target,
+      target: target.value,
       client: value.client,
       llm: llmRoutes.default,
       llmRoutes,
