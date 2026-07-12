@@ -218,6 +218,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `.:createAttachedStreamSseResponse`
 - `.:createSseHttpResponse`
 - `.:createSseHttpTextResponse`
+- `.:createSseHttpWritableResponse`
 - `.:createWorkspaceEnv`
 - `.:CreateWorkspaceEnvOptions`
 - `.:createWorkspaceTools`
@@ -246,6 +247,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `.:decisionGateSettlementRef`
 - `.:decodeSseHttpEvents`
 - `.:decodeStructuredOutputFromItems`
+- `.:decodeSubmitLiveFrame`
 - `.:DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS`
 - `.:DEFAULT_TRIGGER_DRAIN_MAX_ITERATIONS`
 - `.:defineCapability`
@@ -265,6 +267,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `.:encodeSseHttpData`
 - `.:encodeSseHttpEvent`
 - `.:encodeSseHttpJsonEvent`
+- `.:encodeSubmitLiveFrame`
 - `.:fingerprintFailureDiagnostic`
 - `.:getAttachedStreamHandler`
 - `.:getDurableTrigger`
@@ -374,8 +377,10 @@ receipt, checksum, chain, or hot-row mismatch.
 - `.:projectWorkflowRunLinks`
 - `.:projectWorkspaceJobObservability`
 - `.:Quota`
+- `.:RecordedLlmStreamFrame`
 - `.:recordLedgerPortEvent`
 - `.:recordLedgerPortEvents`
+- `.:recordLlmStreamFrame`
 - `.:ResolvedCapabilityEventHandlerFactory`
 - `.:ResolvedCapabilityInstallGraph`
 - `.:ResolvedHostFacts`
@@ -419,7 +424,11 @@ receipt, checksum, chain, or hot-row mismatch.
 - `.:SseHttpEvent`
 - `.:SseHttpResponseOptions`
 - `.:SseHttpSource`
+- `.:SseHttpWritableResponse`
 - `.:StructuredDecodeResult`
+- `.:SUBMIT_LIVE_MAX_FRAME_BYTES`
+- `.:SubmitLiveFrame`
+- `.:SubmitLiveFrameError`
 - `.:submitResumeDecisionFromContinuationProjection`
 - `.:submitResumeDecisionFromInputRequestProjection`
 - `.:Tool`
@@ -908,6 +917,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./sse-http:createAttachedStreamSseResponse`
 - `./sse-http:createSseHttpResponse`
 - `./sse-http:createSseHttpTextResponse`
+- `./sse-http:createSseHttpWritableResponse`
 - `./sse-http:decodeSseHttpEvents`
 - `./sse-http:encodeSseHttpData`
 - `./sse-http:encodeSseHttpEvent`
@@ -919,6 +929,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./sse-http:SseHttpEvent`
 - `./sse-http:SseHttpResponseOptions`
 - `./sse-http:SseHttpSource`
+- `./sse-http:SseHttpWritableResponse`
 - `./telemetry-otlp:OTLP_GENAI_SEMCONV_MAPPING_VERSION`
 - `./telemetry-otlp:OtlpAttributeValue`
 - `./telemetry-otlp:OtlpProjection`
@@ -1020,7 +1031,6 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./llm-effect-ai:EffectAiUnsupportedOutputPart`
 - `./llm-effect-ai:EffectAiUnsupportedRoute`
 - `./llm-effect-ai:OpenAiCompatibleLlmTransportLive`
-- `./llm-effect-ai:callEffectAiLanguageModel`
 - `./llm-effect-ai:effectAiPromptFromMessages`
 - `./llm-effect-ai:effectAiToolFromDefinition`
 - `./llm-effect-ai:effectAiToolkitFromToolDefinitions`
@@ -1031,6 +1041,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./llm-effect-ai:preflightOpenAiCompatibleProviderMaterial`
 - `./llm-effect-ai:ProviderMaterialPreflightDiagnostic`
 - `./llm-effect-ai:resolveEffectAiRoute`
+- `./llm-effect-ai:streamEffectAiLanguageModel`
 
 ## Internal-only exports
 

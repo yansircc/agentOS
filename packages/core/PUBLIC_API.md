@@ -297,6 +297,7 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `.:DispatchTargetSpec`
 - `.:DispatchToScopeResult`
 - `.:DispatchToScopeSpec`
+- `.:drainLlmStream`
 - `.:DURABLE_TRIGGER_SCHEDULED_CANCELLED`
 - `.:DURABLE_TRIGGER_SCHEDULED_REQUESTED`
 - `.:DurableProcessCancellationState`
@@ -508,6 +509,12 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `.:llmSnapshotRequestFromRequest`
 - `.:LlmSnapshotToolDefinition`
 - `.:llmSnapshotToolDefinitionFromToolDefinition`
+- `.:LlmStreamDelta`
+- `.:llmStreamDeltaFrame`
+- `.:LlmStreamFrame`
+- `.:llmStreamFramesFromResponse`
+- `.:llmStreamFromResponse`
+- `.:llmStreamTerminalFrame`
 - `.:LlmToolCall`
 - `.:LlmToolCallSchema`
 - `.:LlmToolChoice`
@@ -1247,6 +1254,7 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `./live-edge:openLive`
 - `./llm-protocol:canonicalLlmSnapshotRequestJson`
 - `./llm-protocol:canonicalLlmWireDescriptorJson`
+- `./llm-protocol:drainLlmStream`
 - `./llm-protocol:LLM_CALL_SNAPSHOT_VERSION`
 - `./llm-protocol:LLM_WIRE_DESCRIPTOR_VERSION`
 - `./llm-protocol:LlmCallOptions`
@@ -1280,6 +1288,12 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `./llm-protocol:llmSnapshotRequestFromRequest`
 - `./llm-protocol:LlmSnapshotToolDefinition`
 - `./llm-protocol:llmSnapshotToolDefinitionFromToolDefinition`
+- `./llm-protocol:LlmStreamDelta`
+- `./llm-protocol:llmStreamDeltaFrame`
+- `./llm-protocol:LlmStreamFrame`
+- `./llm-protocol:llmStreamFramesFromResponse`
+- `./llm-protocol:llmStreamFromResponse`
+- `./llm-protocol:llmStreamTerminalFrame`
 - `./llm-protocol:LlmToolCall`
 - `./llm-protocol:LlmToolCallSchema`
 - `./llm-protocol:LlmToolChoice`
