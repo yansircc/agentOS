@@ -260,6 +260,13 @@
       "sourceFiles": ["packages/core/src/llm-protocol/provider-continuation.ts"]
     },
     {
+      "tag": "agent_os.llm_stream_failed",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Reject and abort malformed, gapped, incomplete, or post-terminal provider streams before observer delivery or a terminal ledger append.",
+      "sourceFiles": ["packages/runtime/src/submit-agent/llm-timeout.ts"]
+    },
+    {
       "tag": "agent_os.missing_submit_run_binding",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/packages/core.md",
@@ -447,6 +454,13 @@
       "docs": "docs/packages/runtime.md",
       "fix": "Stream only with an exact scopeRef and effectAuthorityRef identity and reject malformed stream identity input.",
       "sourceFiles": ["packages/runtime/src/cloudflare/agent-do.ts"]
+    },
+    {
+      "tag": "agent_os.submit_live_frame_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Encode and decode live submit frames through the runtime codec and reject oversized or malformed frames before delivery.",
+      "sourceFiles": ["packages/runtime/src/submit-live.ts"]
     },
     {
       "tag": "agent_os.trigger_factory_error",

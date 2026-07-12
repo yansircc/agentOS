@@ -117,11 +117,13 @@
         "agent_os.llm_call_timed_out",
         "agent_os.llm_call_timeout",
         "agent_os.llm_provider_continuation_failure",
+        "agent_os.llm_stream_failed",
         "agent_os.postgres_harness_error",
         "agent_os.provider_http_failure",
         "agent_os.ref_resolution_failed",
         "agent_os.rpc_method_missing",
         "agent_os.rpc_untyped_error",
+        "agent_os.submit_live_frame_error",
         "agent_os.witness_port_rejected"
       ],
       "docs": [

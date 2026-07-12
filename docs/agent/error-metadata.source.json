@@ -362,6 +362,12 @@
       "fix": "Use the timeout marker only as abort metadata and let runtime terminal events expose the durable failure."
     },
     {
+      "tag": "agent_os.llm_stream_failed",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Reject and abort malformed, gapped, incomplete, or post-terminal provider streams before observer delivery or a terminal ledger append."
+    },
+    {
       "tag": "agent_os.projection_registry_error",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/concepts/materialized-projections.md",
@@ -414,6 +420,12 @@
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/packages/runtime.md",
       "fix": "Stream only with an exact scopeRef and effectAuthorityRef identity and reject malformed stream identity input."
+    },
+    {
+      "tag": "agent_os.submit_live_frame_error",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/packages/runtime.md",
+      "fix": "Encode and decode live submit frames through the runtime codec and reject oversized or malformed frames before delivery."
     },
     {
       "tag": "agent_os.tenant_credential_resolver_configuration_error",

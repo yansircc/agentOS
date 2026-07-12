@@ -35,13 +35,13 @@
     },
     {
       "path": "docs/agent/error-metadata.source.json",
-      "sha256": "83d07719a1a981a35cce46970462f72a5fc513b7febe93e42f8d306b9d966692",
-      "byteSize": 23257
+      "sha256": "18e6e86d507f599439d08d279dd21705274ca9ce0a54344c4e48470da7c757f5",
+      "byteSize": 23900
     },
     {
       "path": "docs/agent/errors.json",
-      "sha256": "a0a3cb542f09429dad0d51d4e8de6d7b88df6f910052f0e614a864ad51b20b14",
-      "byteSize": 27024
+      "sha256": "449b5f96aac529fb58bceb2911c824057b264e2764a7829096cdba47aebdcd5d",
+      "byteSize": 27804
     },
     {
       "path": "docs/agent/external-vocabulary.source.json",
@@ -55,8 +55,8 @@
     },
     {
       "path": "docs/agent/invariant-matrix.json",
-      "sha256": "c2d0d2fcd20c5b68aca85c420ca4d3bf270b00929a661fdaafad912b9fca077b",
-      "byteSize": 15699
+      "sha256": "f7a9af9d34ae01a9cecad592b247478e8e2d1446e4e274b21821ccad50f638dc",
+      "byteSize": 15781
     },
     {
       "path": "docs/agent/invariants.source.json",
@@ -130,8 +130,8 @@
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "0ef4ee6d110152dcdcf1170d2763d82c8163e04d9a88ba0a90b65ea58285203b",
-      "byteSize": 32906
+      "sha256": "4efde29fa66e66810a99df7bdf479135698c37456907923ef3ed35c23ea585fc",
+      "byteSize": 31907
     },
     {
       "path": "docs/start-here.md",
@@ -140,8 +140,8 @@
     },
     {
       "path": "docs/surface.json",
-      "sha256": "808f3e570e4c93af686c07b6412cf60c7bcffeb9c44117c2cf14d116155fb8ee",
-      "byteSize": 20707
+      "sha256": "95dadca73da655bc6c38a025cd58360d4bdbede7c6746ced54e4c2e36debf509",
+      "byteSize": 19904
     },
     {
       "path": "package.json",
@@ -232,13 +232,13 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/errors.json",
-      "sha256": "a0a3cb542f09429dad0d51d4e8de6d7b88df6f910052f0e614a864ad51b20b14",
-      "byteSize": 27024
+      "sha256": "449b5f96aac529fb58bceb2911c824057b264e2764a7829096cdba47aebdcd5d",
+      "byteSize": 27804
     },
     {
       "path": "agent-catalog/agentOS/references/agent/invariant-matrix.json",
-      "sha256": "c2d0d2fcd20c5b68aca85c420ca4d3bf270b00929a661fdaafad912b9fca077b",
-      "byteSize": 15699
+      "sha256": "f7a9af9d34ae01a9cecad592b247478e8e2d1446e4e274b21821ccad50f638dc",
+      "byteSize": 15781
     }
   ],
   "outputHashScope": "all generated files except references/provenance.json to avoid a self-referential hash",
