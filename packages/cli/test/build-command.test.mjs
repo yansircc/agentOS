@@ -4396,13 +4396,32 @@ void test("static target plan owns the client axis decision", () => {
   assert.notEqual(planStart, -1);
   const projectionSource = source.slice(projectionStart, planStart);
   assert.equal(source.match(/normalized\.client\.kind/gu)?.length, 1);
-  assert.match(projectionSource, /normalized\.client\.kind/);
+  assert.match(projectionSource, /if \(client === AGENTOS_CONFIG_CLIENT\.BROWSER_DIRECT_V1\)/);
+  assert.match(source.slice(planStart), /normalized\.client\.kind/);
   assert.match(projectionSource, /moduleImports:/);
   assert.match(projectionSource, /files:/);
   assert.doesNotMatch(
     source.slice(source.indexOf("const renderWorkspaceSvelteKitRemote ="), projectionStart),
     /normalized\.client\.kind/,
   );
+});
+
+void test("static target plan owns the profile axis decision", () => {
+  const source = readFileSync(
+    path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
+    "utf8",
+  );
+  const projectionStart = source.indexOf("const staticTargetProfileProjectionFor =");
+  const clientProjectionStart = source.indexOf("const staticTargetClientProjectionFor =");
+  assert.notEqual(projectionStart, -1);
+  assert.notEqual(clientProjectionStart, -1);
+  const projectionSource = source.slice(projectionStart, clientProjectionStart);
+  assert.equal(source.match(/normalized\.profile/gu)?.length, 1);
+  assert.match(projectionSource, /normalized\.profile/);
+  assert.match(projectionSource, /capabilityImports:/);
+  assert.match(projectionSource, /workspaceHostImports:/);
+  assert.match(projectionSource, /executionDomainImports:/);
+  assert.doesNotMatch(source.slice(0, projectionStart), /normalized\.profile/);
 });
 
 void test("static target injects skill advert and load_skill for workspace and chat profiles", () => {
