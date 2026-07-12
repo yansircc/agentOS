@@ -163,9 +163,12 @@
     {
       "invariant": "invariant.host.fact-owner",
       "statement": "Host profiles are the single source of truth for environment-provided facts; capabilities may only require facts declared by host profiles, and materialized host facts enter capability code only through CapabilityInstallContext.host.",
-      "primitives": ["primitive.runtime.defineHost"],
+      "primitives": [
+        "primitive.cloudflare-do.defineCloudflareMaterialResolverFactory",
+        "primitive.runtime.defineHost"
+      ],
       "errors": [],
-      "docs": ["docs/advanced/capability-authoring/define-host.md"],
+      "docs": ["docs/advanced/capability-authoring/define-host.md", "docs/packages/runtime.md"],
       "tests": ["packages/runtime/test/capability/resolve.test.ts"]
     },
     {

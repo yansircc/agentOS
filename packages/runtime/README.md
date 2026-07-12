@@ -167,6 +167,16 @@ scope workspace. Generated `submit_scope` targets use the named Durable Object
 routing identity at submit, provider-operation, read, reset, and destroy
 entrypoints; submit/browser/model input cannot select workspace state.
 
+Generated Cloudflare material resolution is composed from the app-owned
+`agent/material-resolver.ts` module. The module exports a factory defined with
+`defineCloudflareMaterialResolverFactory`; generated code calls it with raw
+Cloudflare bindings and uses the resulting `RefResolver` for both preflight and
+runtime provider calls. Wrangler configuration never injects a function object,
+and generated targets never synthesize credential fields or map env names to
+provider secrets. Tenant authorization, version matching, secret-vault access,
+rotation policy, and disposal remain app-owned resolver behavior under the
+runtime-owned truth identity.
+
 Runtime diagnostic facts are active only when a production runtime path can
 prove them from a positive contract. `handler_failed` is emitted by resolved
 capability handler wrappers. `projection_timeout` is emitted by tool projection

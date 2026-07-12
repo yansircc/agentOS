@@ -256,6 +256,10 @@ The generated target is a static residual program:
 
 - provider/backend/workspace wiring is expressed by static imports and factory
   composition;
+- `agent/material-resolver.ts` is the required app-owned Cloudflare binding
+  adapter; it exports `defineCloudflareMaterialResolverFactory(...)`, receives
+  raw Worker env bindings, and returns the shared symbolic `RefResolver`
+  contract;
 - `manifest.json` carries semantic declarations;
 - `deployment.json` carries deployment/provenance data such as generated
   workspace resource ids;
@@ -269,6 +273,8 @@ The generated target is a static residual program:
   class required by Wrangler;
 - `wrangler.jsonc` carries the deployable Worker shell, Durable Object binding,
   container binding, and SQLite migration declarations;
+- neither `worker.ts` nor `wrangler.jsonc` carries a resolved credential or a
+  synthetic `AGENTOS_MATERIAL_RESOLVER` binding;
 - runtime code must not choose provider, backend, tool, or capability
   implementations by interpreting strings from JSON.
 

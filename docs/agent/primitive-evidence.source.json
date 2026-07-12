@@ -256,6 +256,13 @@
     {
       "primitive": "primitive.cloudflare-do.createCloudflareWorkspaceJobResponse",
       "tests": ["packages/runtime/test/cloudflare/workspace-host-helpers.test.ts"]
+    },
+    {
+      "primitive": "primitive.cloudflare-do.defineCloudflareMaterialResolverFactory",
+      "tests": [
+        "packages/runtime/test/cloudflare/material-resolver-factory.test.ts",
+        "packages/cli/test/build-command.test.mjs"
+      ]
     }
   ]
 }

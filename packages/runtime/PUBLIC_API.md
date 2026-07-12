@@ -533,6 +533,8 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./cloudflare:CloudflareAttachedStreamFactoryContext`
 - `./cloudflare:CloudflareAttachedStreamSource`
 - `./cloudflare:CloudflareLedgerSseSource`
+- `./cloudflare:CloudflareMaterialResolverBindings`
+- `./cloudflare:CloudflareMaterialResolverFactory`
 - `./cloudflare:CloudflareTriggerFactory`
 - `./cloudflare:CloudflareTriggerFactoryContext`
 - `./cloudflare:CloudflareTriggerSource`
@@ -557,6 +559,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./cloudflare:createCloudflareSandboxWorkspaceEnvResolver`
 - `./cloudflare:createCloudflareWorkspaceEnvResolver`
 - `./cloudflare:createCloudflareWorkspaceJobResponse`
+- `./cloudflare:defineCloudflareMaterialResolverFactory`
 - `./cloudflare:DispatchTargetNamespace`
 - `./cloudflare:DispatchTargetRegistry`
 - `./cloudflare:durableObjectDispatchTarget`

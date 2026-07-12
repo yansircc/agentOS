@@ -160,6 +160,26 @@
       }
     },
     {
+      "id": "primitive.cloudflare-do.defineCloudflareMaterialResolverFactory",
+      "package": "@agent-os/runtime",
+      "packagePath": "packages/runtime",
+      "entrypoints": ["./cloudflare"],
+      "symbol": "defineCloudflareMaterialResolverFactory",
+      "exportKey": "./cloudflare:defineCloudflareMaterialResolverFactory",
+      "sourceFile": "packages/runtime/src/cloudflare/material-resolver-factory.ts",
+      "summary": "Defines a typed app-owned factory while erasing its binding shape only at the generated Cloudflare host boundary.",
+      "aliases": [],
+      "invariants": ["invariant.host.fact-owner"],
+      "docs": "docs/packages/runtime.md",
+      "capabilityKind": "runtime",
+      "testEvidence": {
+        "tests": [
+          "packages/cli/test/build-command.test.mjs",
+          "packages/runtime/test/cloudflare/material-resolver-factory.test.ts"
+        ]
+      }
+    },
+    {
       "id": "primitive.kernel.AgentSchema",
       "package": "@agent-os/core",
       "packagePath": "packages/core",

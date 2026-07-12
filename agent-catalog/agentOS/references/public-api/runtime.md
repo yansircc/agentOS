@@ -16,6 +16,28 @@ not emit deployment-time operational workspace constants. Generated host paths
 without an authenticated scope source fail closed; they must not fall back to a
 manifest scope.
 
+## Cloudflare Material Resolver Boundary
+
+`./cloudflare:defineCloudflareMaterialResolverFactory` is the public host
+composition boundary for generated Cloudflare targets. An app authors
+`agent/material-resolver.ts` and adapts its typed D1, KV, Durable Object,
+service, or secret-vault bindings into a `RefResolver`. Generated code passes
+the raw Worker env to that factory and caches one resolver per env object; it
+does not expect Wrangler to inject a JavaScript resolver object.
+
+The factory receives each runtime-owned `MaterialResolutionRequest`, including
+its authenticated `truthIdentity`, symbolic `materialRef`, and optional
+expected version. The app-owned resolver enforces tenant authorization and
+version policy. Resolved values remain scoped resources and are disposed by the
+provider-call acquire/use/release boundary; submit input, ledger events,
+projections, diagnostics, traces, and generated configuration carry only
+symbolic refs and safe resolution status.
+
+Generated `cloudflare-do@1` builds fail closed when
+`agent/material-resolver.ts` is absent or non-regular. A `node@1` build rejects
+that Cloudflare-only authored module; node hosts continue to inject the shared
+`RefResolver` contract through their own composition boundary.
+
 ## Local Runtime Boundary
 
 `./local:createLocalAgentRuntime` is the public dev/test harness. It exposes the
@@ -644,6 +666,8 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./cloudflare:CloudflareAttachedStreamFactoryContext`
 - `./cloudflare:CloudflareAttachedStreamSource`
 - `./cloudflare:CloudflareLedgerSseSource`
+- `./cloudflare:CloudflareMaterialResolverBindings`
+- `./cloudflare:CloudflareMaterialResolverFactory`
 - `./cloudflare:CloudflareTriggerFactory`
 - `./cloudflare:CloudflareTriggerFactoryContext`
 - `./cloudflare:CloudflareTriggerSource`
@@ -668,6 +692,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./cloudflare:createCloudflareSandboxWorkspaceEnvResolver`
 - `./cloudflare:createCloudflareWorkspaceEnvResolver`
 - `./cloudflare:createCloudflareWorkspaceJobResponse`
+- `./cloudflare:defineCloudflareMaterialResolverFactory`
 - `./cloudflare:DispatchTargetNamespace`
 - `./cloudflare:DispatchTargetRegistry`
 - `./cloudflare:durableObjectDispatchTarget`
