@@ -16,6 +16,7 @@ import {
   type SubmitSpec,
 } from "@agent-os/core/runtime-protocol";
 import { RefResolverEmpty } from "@agent-os/core/ref-resolver";
+import { UpstreamFailure } from "@agent-os/core/errors";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../src/internal-submit";
 
 const timeoutScope = {
@@ -75,6 +76,7 @@ const runWithHungLlm = (
   spec: InternalSubmitSpec,
   options: {
     readonly providerObservesAbort?: boolean;
+    readonly providerFailsOnAbort?: boolean;
     readonly providerAttemptStarted?: Deferred.Deferred<void>;
   } = {},
 ) =>
@@ -83,6 +85,7 @@ const runWithHungLlm = (
     let nextId = 1;
     let aborted = false;
     const providerObservesAbort = options.providerObservesAbort ?? true;
+    const providerFailsOnAbort = options.providerFailsOnAbort ?? false;
     const markProviderAttemptStarted =
       options.providerAttemptStarted === undefined
         ? Effect.void
@@ -180,13 +183,22 @@ const runWithHungLlm = (
             aborted = true;
           });
         }
-        return markProviderAttemptStarted.pipe(
-          Effect.andThen(
-            providerObservesAbort
-              ? Effect.never
-              : Effect.promise(() => new Promise<never>(() => {})),
-          ),
-        );
+        const providerWait = providerFailsOnAbort
+          ? Effect.callback<never, UpstreamFailure>((resume) => {
+              const signal = options?.signal;
+              const onAbort = () =>
+                resume(Effect.fail(new UpstreamFailure({ cause: "provider_observed_abort" })));
+              if (signal?.aborted) {
+                onAbort();
+                return;
+              }
+              signal?.addEventListener("abort", onAbort, { once: true });
+              return Effect.sync(() => signal?.removeEventListener("abort", onAbort));
+            })
+          : providerObservesAbort
+            ? Effect.never
+            : Effect.promise(() => new Promise<never>(() => {}));
+        return markProviderAttemptStarted.pipe(Effect.andThen(providerWait));
       },
     };
     const quota = {
@@ -247,7 +259,10 @@ const runWithHungLlm = (
 
 const forkHungLlmAfterProviderAttempt = (
   spec: InternalSubmitSpec,
-  options: { readonly providerObservesAbort?: boolean } = {},
+  options: {
+    readonly providerObservesAbort?: boolean;
+    readonly providerFailsOnAbort?: boolean;
+  } = {},
 ) =>
   Effect.gen(function* () {
     const providerAttemptStarted = yield* Deferred.make<void>();
@@ -289,6 +304,25 @@ describe("submit agent LLM provider timeout", () => {
         timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS,
       });
       for (const event of events) decodeRuntimeLedgerEvent(event);
+    }),
+  );
+
+  it.effect("keeps provider timeout authoritative when transport fails on abort", () =>
+    Effect.gen(function* () {
+      const fiber = yield* forkHungLlmAfterProviderAttempt(makeSpec({ maxTurns: 1 }), {
+        providerFailsOnAbort: true,
+      });
+      yield* TestClock.adjust(`${DEFAULT_LLM_CALL_TIMEOUT_MS + 1} millis`);
+      const { result, events, aborted } = yield* Fiber.join(fiber);
+
+      expect(result).toMatchObject({ ok: false, reason: "upstream_failure" });
+      expect(aborted).toBe(true);
+      expect(
+        events.find((event) => event.kind === "agent.aborted.upstream_failure")?.payload,
+      ).toMatchObject({
+        cause: "provider_timeout",
+        timeoutMs: DEFAULT_LLM_CALL_TIMEOUT_MS,
+      });
     }),
   );
 

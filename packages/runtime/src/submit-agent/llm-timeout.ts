@@ -104,12 +104,13 @@ export const runTimedLlmAttempt = <A, E, R>(
     return yield* attempt(controller.signal).pipe(
       Effect.timeoutOrElse({
         duration: Duration.millis(timeout.timeoutMs),
-        orElse: () =>
-          Effect.gen(function* () {
-            yield* abortLlmController(controller, "agent_os.llm_call_timeout");
-            return yield* Effect.fail(llmTimeoutError(timeout, budgetTimeMs));
-          }),
+        orElse: () => Effect.fail(llmTimeoutError(timeout, budgetTimeMs)),
       }),
+      Effect.tapError((error) =>
+        isLlmCallTimedOut(error)
+          ? abortLlmController(controller, "agent_os.llm_call_timeout")
+          : Effect.void,
+      ),
       Effect.onInterrupt(() => abortLlmController(controller, "llm_call_interrupted")),
     );
   });
