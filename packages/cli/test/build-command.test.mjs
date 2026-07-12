@@ -17,6 +17,8 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { buildSync } from "esbuild";
+import { releaseTagAdmissionFailures } from "../src/release-receipt.mjs";
+import { releaseStatusData } from "../src/release-status.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const cli = path.join(repoRoot, "packages/cli/src/main.mjs");
@@ -30,7 +32,7 @@ const repoSourceIdentity = () => ({
 });
 const agentOsReleaseVersion = () => {
   const manifest = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
-  return manifest.agentOsRelease?.version ?? manifest.version;
+  return manifest.agentOsRelease?.version;
 };
 const sha256Text = (text) => crypto.createHash("sha256").update(text).digest("hex");
 const sha256File = (file) => crypto.createHash("sha256").update(readFileSync(file)).digest("hex");
@@ -1005,6 +1007,23 @@ void test("agentos release status reports source, artifacts, and npm without wri
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(fakeBin, { recursive: true, force: true });
+  }
+});
+
+void test("release status has no package.json version fallback", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-release-owner-"));
+  try {
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "agentos-owner-negative", version: "9.9.9" }, null, 2),
+    );
+    const status = releaseStatusData({ context: { sourceRoot: root } });
+    assert.equal(status.release.owner, "package.json#agentOsRelease");
+    assert.equal(status.release.version, undefined);
+    assert.equal(status.receipt.expected.version, undefined);
+    assert.ok(releaseTagAdmissionFailures(status).includes("release_version_missing"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

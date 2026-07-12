@@ -128,7 +128,7 @@ const releaseIdentityProjection = (context) => {
     version:
       typeof manifest.agentOsRelease?.version === "string"
         ? manifest.agentOsRelease.version
-        : manifest.version,
+        : undefined,
     npmScope:
       typeof manifest.agentOsRelease?.npmScope === "string"
         ? manifest.agentOsRelease.npmScope
