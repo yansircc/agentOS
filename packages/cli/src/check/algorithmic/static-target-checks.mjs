@@ -36,6 +36,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       "const renderStaticRuntimeBootstrap =",
       "const renderSubmitSpecFromRunInput =",
     );
+    const renderCloudflareMaterialResolverFactorySource = sliceBetweenMarkers(
+      source,
+      "const renderCloudflareMaterialResolverFactory =",
+      "const renderWorkspaceStaticTarget =",
+    );
     const renderWorkspaceStaticTargetSource = sliceBetweenMarkers(
       source,
       "const renderWorkspaceStaticTarget =",
@@ -61,6 +66,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       renderStaticRuntimeBootstrapImportsSource,
       renderSemanticTruthIdentitySource,
       renderStaticRuntimeBootstrapSource,
+      renderCloudflareMaterialResolverFactorySource,
       renderWorkspaceStaticTargetSource,
       renderChatStaticTargetSource,
       renderLocalAgentAppSource,
@@ -134,6 +140,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       ["renderStaticRuntimeBootstrapImports", renderStaticRuntimeBootstrapImportsSource],
       ["renderSemanticTruthIdentity", renderSemanticTruthIdentitySource],
       ["renderStaticRuntimeBootstrap", renderStaticRuntimeBootstrapSource],
+      ["renderCloudflareMaterialResolverFactory", renderCloudflareMaterialResolverFactorySource],
       ["renderWorkspaceStaticTarget", renderWorkspaceStaticTargetSource],
       ["renderChatStaticTarget", renderChatStaticTargetSource],
       ["renderLocalAgentApp", renderLocalAgentAppSource],
