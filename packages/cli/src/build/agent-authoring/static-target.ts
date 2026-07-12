@@ -216,15 +216,30 @@ interface StaticTargetProfileProjectionBase {
   readonly mount: Pick<MountIR, "projectionSinks" | "providerResourceId">;
 }
 
+interface StaticTargetRenderInput {
+  readonly deployment: NormalizedAgentOsConfig<AuthoredAgentManifest>["deployment"];
+  readonly authoredToolNames: ReadonlyArray<string>;
+  readonly channels: ReadonlyArray<CompiledAgentChannel>;
+  readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
+  readonly llmRoutes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
+  readonly skills: ReadonlyArray<CompiledAgentSkill>;
+  readonly instructionFragments: ReadonlyArray<CompiledAgentInstructionFragment>;
+  readonly dynamicResolvers: ReadonlyArray<CompiledAgentDynamicResolver>;
+}
+
+interface StaticTargetWorkspaceRenderInput extends StaticTargetRenderInput {
+  readonly workspace: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>["workspace"];
+}
+
 type StaticTargetProfileProjection =
   | (StaticTargetProfileProjectionBase & {
       readonly kind: typeof AGENTOS_CONFIG_PROFILE.WORKSPACE_V1;
-      readonly normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>;
+      readonly renderInput: StaticTargetWorkspaceRenderInput;
       readonly nodeWorkspace: ManifestNormalizedWorkspace | null;
     })
   | (StaticTargetProfileProjectionBase & {
       readonly kind: typeof AGENTOS_CONFIG_PROFILE.CHAT_V1;
-      readonly normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>;
+      readonly renderInput: StaticTargetRenderInput;
       readonly nodeWorkspace: null;
     });
 
@@ -825,7 +840,7 @@ const renderInstructionFragments = (
 interface StaticRuntimeBootstrapModel {
   readonly toolNames: ReadonlyArray<string>;
   readonly customToolNames: ReadonlyArray<string>;
-  readonly manifestTools: NormalizedAgentOsConfig<AuthoredAgentManifest>["deployment"]["manifest"]["tools"];
+  readonly manifestTools: StaticTargetRenderInput["deployment"]["manifest"]["tools"];
   readonly llmRoutes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
   readonly instructionFragments: ReadonlyArray<CompiledAgentInstructionFragment>;
@@ -833,7 +848,7 @@ interface StaticRuntimeBootstrapModel {
 }
 
 const staticRuntimeBootstrapModelFor = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  normalized: StaticTargetRenderInput,
   toolNames: ReadonlyArray<string>,
 ): StaticRuntimeBootstrapModel => {
   const authoredToolNames = new Set(normalized.authoredToolNames);
@@ -1452,7 +1467,7 @@ const generatedMaterialResolverFor = (env: AgentOSTargetEnv): RefResolver => {
 };`;
 
 const renderWorkspaceStaticTarget = (
-  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
+  normalized: StaticTargetWorkspaceRenderInput,
   target: NormalizedCloudflareTarget,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
@@ -1949,7 +1964,7 @@ ${hasSchedules ? renderScheduleDurableObjectMethod("this.targetTruthIdentity") :
 };
 
 const renderChatStaticTarget = (
-  normalized: NormalizedChatAgentOsConfig<AuthoredAgentManifest>,
+  normalized: StaticTargetRenderInput,
   target: NormalizedCloudflareTarget,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
@@ -2145,7 +2160,7 @@ ${hasSchedules ? renderScheduleDurableObjectMethod("semanticTruthIdentity") : ""
 };
 
 const renderLocalAgentApp = (
-  normalized: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>,
+  normalized: StaticTargetWorkspaceRenderInput,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
@@ -2500,7 +2515,7 @@ export const createLocalAgentApp = async (
 };
 
 const renderCloudflareScopeHelper = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  normalized: StaticTargetRenderInput,
   target: NormalizedCloudflareTarget,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
@@ -2552,7 +2567,7 @@ export const agentOSRpcClient = <
 };
 
 const renderCloudflareWorkerEntry = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  normalized: StaticTargetRenderInput,
   target: NormalizedCloudflareTarget,
   modules: ReturnType<typeof staticTargetModules>,
   profile: {
@@ -2638,7 +2653,7 @@ export default {
 };
 
 const renderCloudflareWranglerConfig = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  normalized: StaticTargetRenderInput,
   profileConfig: Readonly<Record<string, unknown>>,
 ): string => {
   return stableJson({
@@ -3690,11 +3705,21 @@ const staticTargetProfileProjectionFor = (
   normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
   modules: ReturnType<typeof staticTargetModules>,
 ): StaticTargetProfileProjection => {
+  const renderInput: StaticTargetRenderInput = {
+    deployment: normalized.deployment,
+    authoredToolNames: normalized.authoredToolNames,
+    channels: normalized.channels,
+    schedules: normalized.schedules,
+    llmRoutes: normalized.llmRoutes,
+    skills: normalized.skills,
+    instructionFragments: normalized.instructionFragments,
+    dynamicResolvers: normalized.dynamicResolvers,
+  };
   const selected =
     normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? {
           kind: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
-          normalized,
+          renderInput: { ...renderInput, workspace: normalized.workspace },
           deployment: {
             workspace: {
               binding: normalized.workspace.binding,
@@ -3776,7 +3801,7 @@ const staticTargetProfileProjectionFor = (
         }
       : {
           kind: AGENTOS_CONFIG_PROFILE.CHAT_V1,
-          normalized,
+          renderInput,
           deployment: {},
           capabilityImports: [
             {
@@ -3825,13 +3850,13 @@ const staticTargetProfileProjectionFor = (
     ? {
         ...common,
         kind: selected.kind,
-        normalized: selected.normalized,
+        renderInput: selected.renderInput,
         nodeWorkspace: selected.nodeWorkspace,
       }
     : {
         ...common,
         kind: selected.kind,
-        normalized: selected.normalized,
+        renderInput: selected.renderInput,
         nodeWorkspace: null,
       };
 };
@@ -3934,7 +3959,7 @@ const staticTargetHostProjectionFor = (
           ...sharedGeneratedFilesFor(shared, deployment, moduleGraph),
           generatedPath(
             ".agentos/generated/local.ts",
-            renderLocalAgentApp(profile.normalized, shared.toolNames, modules),
+            renderLocalAgentApp(profile.renderInput, shared.toolNames, modules),
           ),
         ],
         moduleGraph,
@@ -3949,7 +3974,7 @@ const staticTargetHostProjectionFor = (
     profile.kind === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
       ? {
           targetText: renderWorkspaceStaticTarget(
-            profile.normalized,
+            profile.renderInput,
             target,
             shared.toolNames,
             modules,
@@ -3970,7 +3995,7 @@ const staticTargetHostProjectionFor = (
             ],
             durable_objects: {
               bindings: [
-                { class_name: "Sandbox", name: profile.normalized.workspace.binding },
+                { class_name: "Sandbox", name: profile.renderInput.workspace.binding },
                 {
                   class_name: target.durableObject.className,
                   name: target.durableObject.binding,
@@ -3986,7 +4011,12 @@ const staticTargetHostProjectionFor = (
           },
         }
       : {
-          targetText: renderChatStaticTarget(profile.normalized, target, shared.toolNames, modules),
+          targetText: renderChatStaticTarget(
+            profile.renderInput,
+            target,
+            shared.toolNames,
+            modules,
+          ),
           workerProfile: { sandboxImport: "", sandboxExport: "" },
           wranglerProfile: {
             durable_objects: {
@@ -4055,15 +4085,15 @@ const staticTargetHostProjectionFor = (
         generatedPath(".agentos/generated/target.ts", selected.targetText),
         generatedPath(
           ".agentos/generated/cloudflare-scope.ts",
-          renderCloudflareScopeHelper(normalized, target, modules),
+          renderCloudflareScopeHelper(profile.renderInput, target, modules),
         ),
         generatedPath(
           ".agentos/generated/worker.ts",
-          renderCloudflareWorkerEntry(normalized, target, modules, selected.workerProfile),
+          renderCloudflareWorkerEntry(profile.renderInput, target, modules, selected.workerProfile),
         ),
         generatedPath(
           ".agentos/generated/wrangler.jsonc",
-          renderCloudflareWranglerConfig(normalized, selected.wranglerProfile),
+          renderCloudflareWranglerConfig(profile.renderInput, selected.wranglerProfile),
         ),
         ...client.files,
       ],

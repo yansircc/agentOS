@@ -54,11 +54,6 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const renderLocalAgentAppSource = sliceBetweenMarkers(
       source,
       "const renderLocalAgentApp =",
-      "const renderStaticTarget =",
-    );
-    const renderStaticTargetDispatchSource = sliceBetweenMarkers(
-      source,
-      "const renderStaticTarget =",
       "const renderCloudflareScopeHelper =",
     );
     const renderStaticTargetSource = [
@@ -70,7 +65,6 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       renderWorkspaceStaticTargetSource,
       renderChatStaticTargetSource,
       renderLocalAgentAppSource,
-      renderStaticTargetDispatchSource,
     ].join("\n");
     const linkWorkspaceStaticTargetSource = sliceBetweenMarkers(
       source,
@@ -85,17 +79,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const renderChatSvelteKitRemoteSource = sliceBetweenMarkers(
       source,
       "const renderChatSvelteKitRemote =",
-      "const renderSvelteKitRemote =",
-    );
-    const renderSvelteKitRemoteDispatchSource = sliceBetweenMarkers(
-      source,
-      "const renderSvelteKitRemote =",
-      "const renderWorkspaceStaticClient =",
+      "const renderWorkspaceBrowserDirectClient =",
     );
     const renderSvelteKitRemoteSource = [
       renderWorkspaceSvelteKitRemoteSource,
       renderChatSvelteKitRemoteSource,
-      renderSvelteKitRemoteDispatchSource,
     ].join("\n");
     const renderCloudflareScopeHelperSource = sliceBetweenMarkers(
       source,
@@ -110,31 +98,14 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const renderCloudflareWranglerConfigSource = sliceBetweenMarkers(
       source,
       "const renderCloudflareWranglerConfig =",
-      "const generatedClientModuleImports =",
+      "const generatedProfileClientModuleImports =",
     );
     const renderWorkspaceStaticClientSource = sliceBetweenMarkers(
       source,
-      "const renderWorkspaceStaticClient =",
-      "const renderChatStaticClient =",
-    );
-    const renderChatStaticClientSource = sliceBetweenMarkers(
-      source,
-      "const renderChatStaticClient =",
-      "const renderStaticClient =",
-    );
-    const renderStaticClientDispatchSource = sliceBetweenMarkers(
-      source,
-      "const renderStaticClient =",
+      "const renderWorkspaceBrowserDirectClient =",
       "const renderStaticClientTypes =",
     );
-    const renderStaticClientSource = [
-      renderWorkspaceStaticClientSource,
-      renderChatStaticClientSource,
-      renderStaticClientDispatchSource,
-    ].join("\n");
-    if (renderStaticTargetSource.length === 0) {
-      failures.push(`${sourcePath}: generated-static-target-linking: missing renderStaticTarget`);
-    }
+    const renderStaticClientSource = renderWorkspaceStaticClientSource;
     for (const [name, targetSource] of [
       ["StaticRuntimeBootstrapModel", staticRuntimeBootstrapModelSource],
       ["renderStaticRuntimeBootstrapImports", renderStaticRuntimeBootstrapImportsSource],
@@ -506,7 +477,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       }
     }
 
-    if (!linkWorkspaceStaticTargetSource.includes('".agentos/generated/sveltekit.remote.ts"')) {
+    if (!source.includes('".agentos/generated/sveltekit.remote.ts"')) {
       failures.push(
         `${sourcePath}: generated-static-target-linking: SvelteKit target must emit sveltekit.remote.ts`,
       );
@@ -517,7 +488,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       '".agentos/generated/worker.ts"',
       '".agentos/generated/wrangler.jsonc"',
     ]) {
-      if (!linkWorkspaceStaticTargetSource.includes(generatedFile)) {
+      if (!source.includes(generatedFile)) {
         failures.push(
           `${sourcePath}: generated-static-target-linking: target shell must emit ${generatedFile}`,
         );
@@ -541,9 +512,9 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     }
 
     const requiredWorkerEntryMarkers = [
-      "Sandbox",
       '"./target"',
-      'normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1 ? ", Sandbox" : ""',
+      "profile.sandboxImport",
+      "profile.sandboxExport",
       "satisfies ExportedHandler<AgentOSTargetEnv>",
     ];
     for (const marker of requiredWorkerEntryMarkers) {
@@ -557,10 +528,6 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const requiredWranglerMarkers = [
       'main: "./worker.ts"',
       'compatibility_flags: ["nodejs_compat"]',
-      'class_name: "Sandbox"',
-      'image: "../../Dockerfile"',
-      "durable_objects",
-      "new_sqlite_classes",
     ];
     for (const marker of requiredWranglerMarkers) {
       if (!renderCloudflareWranglerConfigSource.includes(marker)) {
@@ -568,6 +535,101 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
           `${sourcePath}: generated-static-target-linking: wrangler config missing ${marker}`,
         );
       }
+    }
+
+    for (const marker of [
+      'class_name: "Sandbox"',
+      'image: "../../Dockerfile"',
+      "durable_objects",
+      "new_sqlite_classes",
+    ]) {
+      if (!source.includes(marker)) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: host projection missing wrangler marker ${marker}`,
+        );
+      }
+    }
+
+    const rendererSurfaces = [
+      ["renderWorkspaceStaticTarget", renderWorkspaceStaticTargetSource],
+      ["renderChatStaticTarget", renderChatStaticTargetSource],
+      ["renderLocalAgentApp", renderLocalAgentAppSource],
+      ["renderCloudflareScopeHelper", renderCloudflareScopeHelperSource],
+      ["renderCloudflareWorkerEntry", renderCloudflareWorkerEntrySource],
+      ["renderCloudflareWranglerConfig", renderCloudflareWranglerConfigSource],
+      ["renderSvelteKitRemote", renderSvelteKitRemoteSource],
+      ["renderStaticClient", renderStaticClientSource],
+    ];
+    for (const [name, rendererSource] of rendererSurfaces) {
+      if (/\bNormalized(?:Workspace|Chat)?AgentOsConfig\b/u.test(rendererSource)) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: ${name} receives raw normalized config`,
+        );
+      }
+      if (/\bnormalized\s*\.\s*(?:profile|target|client|config)\b/u.test(rendererSource)) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: ${name} reads a deployment axis`,
+        );
+      }
+      if (/\bAGENTOS_CONFIG_(?:PROFILE|TARGET|CLIENT)\b/u.test(rendererSource)) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: ${name} re-branches on an axis constant`,
+        );
+      }
+    }
+
+    const profileProjectionSource = sliceBetweenMarkers(
+      source,
+      "const staticTargetProfileProjectionFor =",
+      "const staticTargetClientProjectionFor =",
+    );
+    const clientProjectionSource = sliceBetweenMarkers(
+      source,
+      "const staticTargetClientProjectionFor =",
+      "const staticTargetHostProjectionFor =",
+    );
+    const hostProjectionSource = sliceBetweenMarkers(
+      source,
+      "const staticTargetHostProjectionFor =",
+      "const staticTargetPlanFor =",
+    );
+    const planSource = sliceBetweenMarkers(
+      source,
+      "const staticTargetPlanFor =",
+      "function sharedGeneratedFilesFor(",
+    );
+    for (const [axis, projectionSource, marker] of [
+      ["profile", profileProjectionSource, "normalized.profile"],
+      ["client", planSource, "normalized.client.kind"],
+      ["host", hostProjectionSource, "normalized.target.kind"],
+    ]) {
+      const count = source.split(marker).length - 1;
+      if (count !== 1 || !projectionSource.includes(marker)) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: ${axis} axis must have one plan-construction read; observed ${count}`,
+        );
+      }
+    }
+    for (const marker of [
+      "nodeWorkspace === null",
+      'kind: "unsupported_static_target"',
+      "files: plan.host.files",
+      "moduleGraph: plan.host.moduleGraph",
+      "...plan.profile.canonicalDeployment",
+      "...plan.host.canonicalDeployment",
+      "...plan.host.mount",
+      "...plan.profile.mount",
+    ]) {
+      if (!source.includes(marker)) {
+        failures.push(
+          `${sourcePath}: generated-static-target-linking: StaticTargetPlan closure missing ${marker}`,
+        );
+      }
+    }
+    if (/normalized\.(?:profile|target|client)/u.test(linkWorkspaceStaticTargetSource)) {
+      failures.push(
+        `${sourcePath}: generated-static-target-linking: linker must consume plan projections, not normalized axes`,
+      );
     }
 
     failIfAny("generated static target linking", failures);
