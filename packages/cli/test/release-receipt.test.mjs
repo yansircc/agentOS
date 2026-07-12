@@ -6,6 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+  assertReleaseSourceStable,
   createAnnotatedReleaseTag,
   RELEASE_FULL_GATE_COMMAND,
   RELEASE_RECEIPT_PROTOCOL,
@@ -186,6 +187,34 @@ void test("annotated tag creation roundtrips canonical receipt without becoming 
     assert.deepEqual(created.tag.receipt, releaseReceiptCandidate(status));
     assert.throws(() => createAnnotatedReleaseTag(root, { ...status, tag: created.tag }), {
       message: /release_tag_already_exists/u,
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("tag-time source proof rejects dirty or advanced source after admission", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-release-source-race-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "agentos-test"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "agentos@example.test"], { cwd: root });
+    fs.writeFileSync(path.join(root, "fact.txt"), "owner\n");
+    execFileSync("git", ["add", "fact.txt"], { cwd: root });
+    execFileSync("git", ["commit", "-qm", "test: owner fact"], { cwd: root });
+    const admittedHead = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf8",
+    }).trim();
+    assert.doesNotThrow(() => assertReleaseSourceStable(root, admittedHead));
+    fs.writeFileSync(path.join(root, "fact.txt"), "dirty\n");
+    assert.throws(() => assertReleaseSourceStable(root, admittedHead), {
+      message: /source changed after full-gate admission/u,
+    });
+    execFileSync("git", ["add", "fact.txt"], { cwd: root });
+    execFileSync("git", ["commit", "-qm", "test: advance source"], { cwd: root });
+    assert.throws(() => assertReleaseSourceStable(root, admittedHead), {
+      message: /source changed after full-gate admission/u,
     });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

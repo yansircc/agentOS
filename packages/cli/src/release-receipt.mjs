@@ -177,12 +177,21 @@ export const runReleaseFullGate = (sourceRoot) => {
   }
 };
 
+export const assertReleaseSourceStable = (sourceRoot, expectedCommit) => {
+  const currentCommit = gitText(sourceRoot, ["rev-parse", "HEAD"]);
+  const dirty = gitText(sourceRoot, ["status", "--short"]);
+  if (currentCommit !== expectedCommit || dirty !== "") {
+    throw new Error("agentos release tag: source changed after full-gate admission");
+  }
+};
+
 export const createAnnotatedReleaseTag = (sourceRoot, projection) => {
   const failures = releaseTagAdmissionFailures(projection);
   if (failures.length > 0) {
     throw new Error(`agentos release tag: admission failed: ${failures.join(",")}`);
   }
   const receipt = releaseReceiptCandidate(projection);
+  assertReleaseSourceStable(sourceRoot, projection.source.head);
   const result = git(sourceRoot, [
     "tag",
     "-a",
@@ -196,6 +205,7 @@ export const createAnnotatedReleaseTag = (sourceRoot, projection) => {
       `agentos release tag: git tag failed: ${result.stderr.trim() || result.stdout.trim()}`,
     );
   }
+  assertReleaseSourceStable(sourceRoot, projection.source.head);
   const observed = releaseTagProjection(sourceRoot, projection.release.version);
   if (
     observed.status !== "annotated" ||
