@@ -22,8 +22,174 @@ import {
   decodedRuntimeEvents,
   type SubmitSpec,
 } from "./_submit-agent-harness";
+import { captureLive } from "@agent-os/core/live-edge";
 
 export const registerSubmitAgentInterruptResumeCases = () => {
+  it.effect("fails closed before resume when continuation-required history has no sealed ref", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "publish",
+        description: "publish",
+        args: Schema.Struct({ title: Schema.String }),
+        execute: () => Effect.succeed({ applied: true }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const continuation = {
+        kind: "live" as const,
+        binding: {
+          adapterId: "openai-chat-compatible@v1",
+          adapterVersion: "v1",
+          routeFingerprint: "route-v1",
+          modelFingerprint: "model-v1",
+          truthIdentityFingerprint: "tenant-a",
+          sourceTurn: { id: 1, index: 0 },
+          successorTurn: { id: 1, index: 1 },
+        },
+        payload: captureLive({
+          reasoning_content: "private-reasoning",
+          encrypted_content: "encrypted-token",
+        }),
+      };
+      const services = makeServices([
+        response({
+          items: [
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "publish", arguments: '{"title":"Hello"}' },
+              },
+            },
+          ],
+          continuation: { kind: "available", value: continuation },
+        }),
+      ]);
+      const first = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { publish: tool },
+          decisionInterrupts: [{ toolName: "publish", reason: "approval_required" }],
+        }),
+        services,
+      );
+      if (first.result.status !== "interrupted" || first.result.inputRequest === undefined) {
+        expect.fail("expected interrupted continuation");
+      }
+      yield* services.boundaryEvents.commit(
+        decisionGateBoundaryContract,
+        DECISION_GATE_KIND.DECIDED,
+        {
+          gateRef: first.result.gateRef,
+          decisionRef: "decision/continuation",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      );
+      const resume = submitResumeDecisionFromInputRequestProjection(
+        projectInputRequest(services.events, first.result.inputRequest.ref),
+        { kind: "approval", approved: true },
+      );
+      if (!resume.ok) expect.fail(`expected resume: ${resume.reason}`);
+
+      const failure = yield* runSubmitWithServices(
+        baseSpec({ tools: { publish: tool }, resume: resume.resume }),
+        services,
+      ).pipe(Effect.flip);
+      expect(failure).toMatchObject({
+        operation: "submit",
+        cause: {
+          reason: "provider_continuation_resume_unsupported",
+          runId: 1,
+          turnIndex: 0,
+        },
+      });
+      expect(services.llmRequests).toHaveLength(1);
+      expect(JSON.stringify(services.events)).not.toContain("private-reasoning");
+    }),
+  );
+
+  it.effect("reconstructs sealed assistant continuation across interrupt and resume", () =>
+    Effect.gen(function* () {
+      const tool = defineTool({
+        name: "publish",
+        description: "publish",
+        args: Schema.Struct({ title: Schema.String }),
+        execute: () => Effect.succeed({ applied: true }),
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const continuation = {
+        kind: "sealed" as const,
+        binding: {
+          adapterId: "openai-chat-compatible@v1",
+          adapterVersion: "v1",
+          routeFingerprint: "route-v1",
+          modelFingerprint: "model-v1",
+          truthIdentityFingerprint: "tenant-a",
+          sourceTurn: { id: 1, index: 0 },
+          successorTurn: { id: 1, index: 1 },
+        },
+        ref: "sealed/continuation-1-0",
+      };
+      const services = makeServices([
+        response({
+          items: [
+            {
+              type: "tool_call",
+              call: {
+                id: "call-1",
+                type: "function",
+                function: { name: "publish", arguments: '{"title":"Hello"}' },
+              },
+            },
+          ],
+          continuation: { kind: "available", value: continuation },
+        }),
+        response({ items: [{ type: "message", text: "published" }] }),
+      ]);
+      const first = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { publish: tool },
+          decisionInterrupts: [{ toolName: "publish", reason: "approval_required" }],
+        }),
+        services,
+      );
+      if (first.result.status !== "interrupted" || first.result.inputRequest === undefined) {
+        expect.fail("expected interrupted continuation");
+      }
+      yield* services.boundaryEvents.commit(
+        decisionGateBoundaryContract,
+        DECISION_GATE_KIND.DECIDED,
+        {
+          gateRef: first.result.gateRef,
+          decisionRef: "decision/sealed-continuation",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+      );
+      const resume = submitResumeDecisionFromInputRequestProjection(
+        projectInputRequest(services.events, first.result.inputRequest.ref),
+        { kind: "approval", approved: true },
+      );
+      if (!resume.ok) expect.fail(`expected resume: ${resume.reason}`);
+
+      const resumed = yield* runSubmitWithServices(
+        baseSpec({ tools: { publish: tool }, resume: resume.resume }),
+        services,
+      );
+
+      expect(resumed.result).toMatchObject({ ok: true, final: "published" });
+      const assistant = services.llmRequests[1]?.messages.find(
+        (message) => message.role === "assistant",
+      );
+      expect(assistant).toMatchObject({ role: "assistant", continuation });
+      expect(JSON.stringify(services.events)).toContain('"sealedRef":"sealed/continuation-1-0"');
+    }),
+  );
+
   it.effect("interrupts an externally gated tool before execution", () =>
     Effect.gen(function* () {
       let executed = 0;

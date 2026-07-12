@@ -1,19 +1,34 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 import { ensureAgentSchema } from "@agent-os/core/agent-schema";
+import { captureLive } from "@agent-os/core/live-edge";
 
 import {
   canonicalLlmWireDescriptorJson,
   llmCallSnapshotFromResponse,
+  LlmProviderContinuationMarkerSchema,
   llmSnapshotRequestFingerprint,
   llmWireDescriptorFingerprint,
   llmRouteMaterialRefs,
+  markerFromProviderContinuation,
   replayLlmResponseFromSnapshot,
   textFromLlmOutputItems,
+  validateProviderContinuationBinding,
+  type LlmProviderContinuationBinding,
   type LlmRequest,
   type LlmResponse,
   type LlmWireDescriptor,
 } from "../../src/llm-protocol/index";
+
+const continuationBinding: LlmProviderContinuationBinding = {
+  adapterId: "openai-chat-compatible@v1",
+  adapterVersion: "v1",
+  routeFingerprint: "route-v1",
+  modelFingerprint: "model-v1",
+  truthIdentityFingerprint: "tenant-a",
+  sourceTurn: { id: 7, index: 0 },
+  successorTurn: { id: 7, index: 1 },
+};
 
 describe("@agent-os/llm-protocol", () => {
   it("derives material refs from route material handles without provider vocabulary", () => {
@@ -159,6 +174,75 @@ describe("@agent-os/llm-protocol", () => {
     expect(JSON.stringify(snapshot.request)).not.toContain("test-route");
     expect(JSON.stringify(snapshot.request)).not.toContain("parse");
     expect(replayLlmResponseFromSnapshot(snapshot)).toEqual(response);
+  });
+
+  it("records only the continuation marker in call snapshots", () => {
+    const continuation = {
+      kind: "live" as const,
+      binding: continuationBinding,
+      payload: captureLive({
+        reasoning_content: "private-reasoning",
+        encrypted_content: "private-encrypted-token",
+      }),
+    };
+    const marker = markerFromProviderContinuation(continuation);
+    const snapshot = llmCallSnapshotFromResponse({
+      wireDescriptor: {
+        method: "POST",
+        url: "https://llm.example/v1/chat",
+        headers: [["Content-Type", "application/json"]],
+      },
+      request: {
+        route: { kind: "test-route" },
+        messages: [{ role: "assistant", content: "", continuation }],
+      },
+      response: {
+        items: [{ type: "message", text: "done" }],
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        continuation: { kind: "available", value: continuation },
+      },
+    });
+
+    expect(snapshot.request.messages).toEqual([{ role: "assistant", content: "" }]);
+    expect(snapshot.response.continuationMarker).toEqual(marker);
+    expect(replayLlmResponseFromSnapshot(snapshot)).toEqual({
+      items: [{ type: "message", text: "done" }],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      continuation: { kind: "recorded", marker },
+    });
+    expect(JSON.stringify(snapshot)).not.toContain("private-reasoning");
+    expect(JSON.stringify(snapshot)).not.toContain("private-encrypted-token");
+  });
+
+  it("roundtrips the positive continuation marker contract", () => {
+    const marker = {
+      required: true as const,
+      binding: continuationBinding,
+      sealedRef: "sealed/continuation-7-0",
+    };
+    const decoded = Schema.decodeUnknownSync(LlmProviderContinuationMarkerSchema)(
+      JSON.parse(JSON.stringify(marker)),
+    );
+
+    expect(decoded).toEqual(marker);
+  });
+
+  it("rejects continuation reuse across every bound identity axis", () => {
+    const mismatchCases: ReadonlyArray<readonly [LlmProviderContinuationBinding, string]> = [
+      [{ ...continuationBinding, adapterId: "other-adapter" }, "adapter_mismatch"],
+      [{ ...continuationBinding, routeFingerprint: "other-route" }, "route_mismatch"],
+      [{ ...continuationBinding, modelFingerprint: "other-model" }, "model_mismatch"],
+      [{ ...continuationBinding, truthIdentityFingerprint: "tenant-b" }, "truth_identity_mismatch"],
+      [{ ...continuationBinding, sourceTurn: { id: 7, index: 2 } }, "source_turn_mismatch"],
+      [{ ...continuationBinding, successorTurn: { id: 7, index: 2 } }, "successor_turn_mismatch"],
+    ];
+
+    for (const [actual, reason] of mismatchCases) {
+      expect(validateProviderContinuationBinding(actual, continuationBinding)?.reason).toBe(reason);
+    }
+    expect(
+      validateProviderContinuationBinding(continuationBinding, continuationBinding),
+    ).toBeNull();
   });
 
   it("replay mode live LLM provider adapter not called when call snapshot is present", () => {

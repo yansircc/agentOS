@@ -19,11 +19,14 @@ import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { ensureAgentSchema } from "@agent-os/core/agent-schema";
 import {
+  LlmProviderContinuationFailure,
   llmCallSnapshotFromResponse,
   LlmTransport,
+  markerFromProviderContinuation,
   projectAgentSchemaForLlmTool,
   replayLlmResponseFromSnapshot,
   type LlmRequest,
+  type LlmProviderContinuationStore,
 } from "@agent-os/core/llm-protocol";
 import type { ToolDefinition } from "@agent-os/core/tools";
 import {
@@ -32,7 +35,11 @@ import {
   type RefResolverService,
 } from "@agent-os/core/ref-resolver";
 import { fixtureRefResolver } from "../_material-resolver-fixture";
-import { ProviderHttpFailure, UpstreamFailure } from "@agent-os/core/errors";
+import {
+  ProviderHttpFailure,
+  ProviderOutputDecodeError,
+  UpstreamFailure,
+} from "@agent-os/core/errors";
 import {
   callEffectAiLanguageModel,
   effectAiPromptFromMessages,
@@ -485,6 +492,264 @@ describe("@agent-os/runtime/llm-effect-ai", () => {
       expect(failure.cause).toBeInstanceOf(EffectAiUnsupportedRoute);
     }),
   );
+
+  it.effect("roundtrips bound assistant continuation on the next tool-result call", () => {
+    const bodies: unknown[] = [];
+    const client = fakeHttpClient((providerRequest) => {
+      bodies.push(decodeRequestBody(providerRequest));
+      return Effect.succeed(
+        bodies.length === 1
+          ? httpResponse(200, {
+              choices: [
+                {
+                  message: {
+                    content: "",
+                    reasoning_content: "reasoning-token",
+                    encrypted_content: "encrypted-token",
+                    tool_calls: [
+                      {
+                        id: "call-1",
+                        type: "function",
+                        function: { name: "lookup", arguments: '{"q":"x"}' },
+                      },
+                    ],
+                  },
+                },
+              ],
+              usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+            })
+          : httpResponse(200, {
+              choices: [{ message: { content: "done" } }],
+              usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
+            }),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const transport = yield* LlmTransport;
+      const first = yield* transport.call(
+        request({
+          continuationContext: {
+            truthIdentityFingerprint: "tenant-a|llm-test",
+            turn: { id: 7, index: 0 },
+          },
+        }),
+      );
+      if (first.continuation?.kind !== "available") expect.fail("expected continuation");
+      const firstContinuation = first.continuation.value;
+      expect(firstContinuation.kind).toBe("live");
+      const marker = markerFromProviderContinuation(firstContinuation);
+      expect(JSON.stringify(marker)).not.toContain("reasoning-token");
+      expect(JSON.stringify(marker)).not.toContain("encrypted-token");
+
+      const second = yield* transport.call(
+        request({
+          continuationContext: {
+            truthIdentityFingerprint: "tenant-a|llm-test",
+            turn: { id: 7, index: 1 },
+          },
+          messages: [
+            {
+              role: "assistant",
+              content: "",
+              tool_calls: first.items
+                .filter((item) => item.type === "tool_call")
+                .map((item) => item.call),
+              continuation: firstContinuation,
+            },
+            {
+              role: "tool",
+              tool_call_id: "call-1",
+              name: "lookup",
+              content: '{"ok":true}',
+            },
+          ],
+        }),
+      );
+      expect(second.items).toEqual([{ type: "message", text: "done" }]);
+      expect(bodies[1]).toMatchObject({
+        messages: [
+          {
+            role: "assistant",
+            reasoning_content: "reasoning-token",
+            encrypted_content: "encrypted-token",
+          },
+          { role: "tool", tool_call_id: "call-1" },
+        ],
+      });
+    }).pipe(
+      Effect.provide(makeOpenAiCompatibleLlmTransportLayer()),
+      Effect.provide(httpClientLive(client)),
+      Effect.provide(resolverLive),
+    );
+  });
+
+  it.effect("fails closed on a partial provider continuation shape", () => {
+    const client = fakeHttpClient(() =>
+      Effect.succeed(
+        httpResponse(200, {
+          choices: [{ message: { content: "", reasoning_content: "reasoning-only" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const transport = yield* LlmTransport;
+      const exit = yield* Effect.exit(
+        transport.call(
+          request({
+            continuationContext: {
+              truthIdentityFingerprint: "tenant-a|llm-test",
+              turn: { id: 9, index: 0 },
+            },
+          }),
+        ),
+      );
+      const failure = expectFailure(exit);
+      expect(failure).toBeInstanceOf(UpstreamFailure);
+      expect(failure.cause).toBeInstanceOf(ProviderOutputDecodeError);
+    }).pipe(
+      Effect.provide(makeOpenAiCompatibleLlmTransportLayer()),
+      Effect.provide(httpClientLive(client)),
+      Effect.provide(resolverLive),
+    );
+  });
+
+  it.effect("does not preserve arbitrary provider message fields", () => {
+    const client = fakeHttpClient(() =>
+      Effect.succeed(
+        httpResponse(200, {
+          choices: [
+            {
+              message: {
+                content: "done",
+                provider_private_state: "must-not-cross-adapter",
+              },
+            },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const transport = yield* LlmTransport;
+      const result = yield* transport.call(request());
+      expect(result.continuation).toBeUndefined();
+      expect(JSON.stringify(result)).not.toContain("must-not-cross-adapter");
+    }).pipe(
+      Effect.provide(makeOpenAiCompatibleLlmTransportLayer()),
+      Effect.provide(httpClientLive(client)),
+      Effect.provide(resolverLive),
+    );
+  });
+
+  it.effect("opens sealed continuation and rejects cross-model reuse before HTTP", () => {
+    const sealed = new Map<
+      string,
+      Parameters<LlmProviderContinuationStore["seal"]>[0]["payload"]
+    >();
+    const store: LlmProviderContinuationStore = {
+      available: true,
+      seal: ({ payload }) =>
+        Effect.sync(() => {
+          sealed.set("continuation-1", payload);
+          return "continuation-1";
+        }),
+      open: ({ ref }) => {
+        const payload = sealed.get(ref);
+        return payload === undefined
+          ? Effect.fail(new LlmProviderContinuationFailure({ reason: "sealed_ref_missing" }))
+          : Effect.succeed(payload);
+      },
+    };
+    const bodies: unknown[] = [];
+    const client = fakeHttpClient((providerRequest) => {
+      bodies.push(decodeRequestBody(providerRequest));
+      return Effect.succeed(
+        httpResponse(200, {
+          choices: [
+            {
+              message: {
+                content: "",
+                reasoning_content: "reasoning-token",
+                encrypted_content: "encrypted-token",
+                tool_calls: [],
+              },
+            },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+        }),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const transport = yield* LlmTransport;
+      const first = yield* transport.call(
+        request({
+          continuationContext: {
+            truthIdentityFingerprint: "tenant-a|llm-test",
+            turn: { id: 8, index: 0 },
+          },
+        }),
+      );
+      if (first.continuation?.kind !== "available") expect.fail("expected continuation");
+      const firstContinuation = first.continuation.value;
+      expect(firstContinuation).toMatchObject({ kind: "sealed", ref: "continuation-1" });
+      expect(markerFromProviderContinuation(firstContinuation).sealedRef).toBe("continuation-1");
+
+      yield* transport.call(
+        request({
+          continuationContext: {
+            truthIdentityFingerprint: "tenant-a|llm-test",
+            turn: { id: 8, index: 1 },
+          },
+          messages: [
+            {
+              role: "assistant",
+              content: "",
+              continuation: firstContinuation,
+            },
+          ],
+        }),
+      );
+      expect(bodies[1]).toMatchObject({
+        messages: [
+          {
+            role: "assistant",
+            reasoning_content: "reasoning-token",
+            encrypted_content: "encrypted-token",
+          },
+        ],
+      });
+
+      const exit = yield* Effect.exit(
+        transport.call(
+          request({
+            route: { ...openAiRoute(), modelId: "other-model" },
+            continuationContext: {
+              truthIdentityFingerprint: "tenant-a|llm-test",
+              turn: { id: 8, index: 1 },
+            },
+            messages: [
+              {
+                role: "assistant",
+                content: "",
+                continuation: firstContinuation,
+              },
+            ],
+          }),
+        ),
+      );
+      expect(expectFailure(exit)).toBeInstanceOf(UpstreamFailure);
+      expect(bodies).toHaveLength(2);
+    }).pipe(
+      Effect.provide(makeOpenAiCompatibleLlmTransportLayer(store)),
+      Effect.provide(httpClientLive(client)),
+      Effect.provide(resolverLive),
+    );
+  });
 
   it.effect("projects agentOS messages to Effect AI prompt without raw provider shapes", () =>
     Effect.gen(function* () {

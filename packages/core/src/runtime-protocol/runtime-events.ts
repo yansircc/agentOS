@@ -1,8 +1,10 @@
 import { Data, Option, Predicate, Schema } from "effect";
 import {
   LlmOutputItemSchema,
+  LlmProviderContinuationMarkerSchema,
   LlmUsageSchema,
   type LlmOutputItem,
+  type LlmProviderContinuationMarker,
   type LlmUsage,
 } from "@agent-os/core/llm-protocol";
 import type { LedgerEvent } from "@agent-os/core/types";
@@ -240,6 +242,7 @@ export type LlmResponsePayload = {
   };
   readonly items: ReadonlyArray<LlmOutputItem>;
   readonly usage: LlmUsage;
+  readonly continuation?: LlmProviderContinuationMarker;
   readonly traceContext?: TraceContext;
 };
 
@@ -671,6 +674,7 @@ export const LlmResponsePayloadSchema: Schema.Decoder<LlmResponsePayload> = Sche
   turn: TurnRefSchema,
   items: Schema.Array(LlmOutputItemSchema),
   usage: LlmUsageSchema,
+  continuation: Schema.optional(LlmProviderContinuationMarkerSchema),
   traceContext: Schema.optional(TraceContextSchema),
 });
 
@@ -2670,6 +2674,7 @@ export const llmResponseEvent = (
     readonly turn: { readonly id: number; readonly index: number };
     readonly items: ReadonlyArray<LlmOutputItem>;
     readonly usage: LlmUsage;
+    readonly continuation?: LlmProviderContinuationMarker;
     readonly traceContext?: TraceContext;
   },
 ): RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.LLM_RESPONSE> =>
@@ -2677,6 +2682,7 @@ export const llmResponseEvent = (
     turn: spec.turn,
     items: spec.items,
     usage: spec.usage,
+    ...(spec.continuation === undefined ? {} : { continuation: spec.continuation }),
     ...(spec.traceContext === undefined ? {} : { traceContext: spec.traceContext }),
   });
 

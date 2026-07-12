@@ -25,7 +25,9 @@ import {
   UpstreamFailure,
 } from "@agent-os/core/errors";
 import { ABORT } from "@agent-os/core/abort";
+import { backendProtocolTruthIdentityKey } from "@agent-os/core/backend-protocol";
 import {
+  markerFromProviderContinuation,
   textFromLlmOutputItems,
   toolCallsFromLlmOutputItems,
   type LlmToolCall,
@@ -926,6 +928,10 @@ export const submitAgentEffect = (
                     tools: toolDefs.length > 0 ? toolDefs : undefined,
                     tool_choice: toolChoice,
                     traceContext,
+                    continuationContext: {
+                      truthIdentityFingerprint: backendProtocolTruthIdentityKey(identity),
+                      turn: turnRefOf(started.id, turn),
+                    },
                     materialResolution: {
                       truthIdentity: identity,
                       expectedVersions: Object.fromEntries(materialVersions),
@@ -973,6 +979,12 @@ export const submitAgentEffect = (
                 turn: turnRefOf(started.id, turn),
                 items: resp.items,
                 usage: resp.usage,
+                continuation:
+                  resp.continuation === undefined
+                    ? undefined
+                    : resp.continuation.kind === "available"
+                      ? markerFromProviderContinuation(resp.continuation.value)
+                      : resp.continuation.marker,
                 traceContext,
               }),
             });
@@ -995,6 +1007,9 @@ export const submitAgentEffect = (
               role: "assistant",
               content: nextResponseText,
               tool_calls: nextResponseToolCalls.length > 0 ? nextResponseToolCalls : undefined,
+              ...(resp.continuation?.kind !== "available"
+                ? {}
+                : { continuation: resp.continuation.value }),
             });
 
             if (nextResponseToolCalls.length === 0) {

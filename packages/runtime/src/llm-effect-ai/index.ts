@@ -31,7 +31,14 @@ import {
   type HttpClientRequest,
 } from "effect/unstable/http/HttpClientRequest";
 import { Data, Effect, Layer, Schema } from "effect";
-import { LlmTransport, projectAgentSchemaForLlmTool } from "@agent-os/core/llm-protocol";
+import {
+  LlmProviderContinuationFailure,
+  LlmProviderContinuationStoreNone,
+  LlmTransport,
+  llmRouteFingerprint,
+  projectAgentSchemaForLlmTool,
+  validateProviderContinuationBinding,
+} from "@agent-os/core/llm-protocol";
 import type {
   LlmMessage,
   LlmOutputItem,
@@ -43,6 +50,10 @@ import type {
   LlmToolCall,
   LlmUsage,
   LlmWireDescriptor,
+  LlmProviderContinuation,
+  LlmProviderContinuationBinding,
+  LlmProviderContinuationJson,
+  LlmProviderContinuationStore,
 } from "@agent-os/core/llm-protocol";
 import {
   credentialMaterialRef,
@@ -55,7 +66,7 @@ import {
   type RefResolver,
   type ResolvedMaterialService,
 } from "@agent-os/core/ref-resolver";
-import { openLive } from "@agent-os/core/live-edge";
+import { captureLive, openLive } from "@agent-os/core/live-edge";
 import {
   ProviderHttpFailure,
   ProviderOutputDecodeError,
@@ -692,30 +703,125 @@ const openAiToolFromDefinition = (definition: ToolDefinition) => ({
   },
 });
 
+const openAiContinuationAdapterId =
+  "openai-chat-compatible@" + OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION;
+
+const openAiContinuationBinding = (
+  request: LlmRequest,
+  route: OpenAiChatCompatibleRoute,
+  position: "response" | "request",
+): Effect.Effect<LlmProviderContinuationBinding, LlmProviderContinuationFailure> => {
+  const context = request.continuationContext;
+  if (context === undefined) {
+    return Effect.fail(new LlmProviderContinuationFailure({ reason: "truth_identity_mismatch" }));
+  }
+  const sourceIndex = position === "response" ? context.turn.index : context.turn.index - 1;
+  if (sourceIndex < 0) {
+    return Effect.fail(new LlmProviderContinuationFailure({ reason: "source_turn_mismatch" }));
+  }
+  return Effect.succeed({
+    adapterId: openAiContinuationAdapterId,
+    adapterVersion: OPENAI_CHAT_PROVIDER_OUTPUT_ADAPTER_VERSION,
+    routeFingerprint: llmRouteFingerprint(route),
+    modelFingerprint: `model-v1:${route.modelId}`,
+    truthIdentityFingerprint: context.truthIdentityFingerprint,
+    sourceTurn: { id: context.turn.id, index: sourceIndex },
+    successorTurn: {
+      id: context.turn.id,
+      index: position === "response" ? context.turn.index + 1 : context.turn.index,
+    },
+  });
+};
+
+const openAiContinuationPayload = (
+  value: LlmProviderContinuationJson,
+): Effect.Effect<
+  Readonly<{ reasoning_content: string; encrypted_content: string }>,
+  LlmProviderContinuationFailure
+> => {
+  if (
+    !isRecord(value) ||
+    typeof value.reasoning_content !== "string" ||
+    typeof value.encrypted_content !== "string"
+  ) {
+    return Effect.fail(new LlmProviderContinuationFailure({ reason: "continuation_malformed" }));
+  }
+  return Effect.succeed({
+    reasoning_content: value.reasoning_content,
+    encrypted_content: value.encrypted_content,
+  });
+};
+
+const openAiContinuationValue = (
+  continuation: LlmProviderContinuation,
+  expected: LlmProviderContinuationBinding,
+  store: LlmProviderContinuationStore,
+): Effect.Effect<
+  Readonly<{ reasoning_content: string; encrypted_content: string }>,
+  LlmProviderContinuationFailure
+> =>
+  Effect.gen(function* () {
+    const mismatch = validateProviderContinuationBinding(continuation.binding, expected);
+    if (mismatch !== null) return yield* mismatch;
+    const payload =
+      continuation.kind === "live"
+        ? continuation.payload
+        : yield* store.open({ binding: continuation.binding, ref: continuation.ref });
+    return yield* openAiContinuationPayload(openLive(payload));
+  });
+
+const openAiWireMessage = (
+  message: LlmMessage,
+  request: LlmRequest,
+  route: OpenAiChatCompatibleRoute,
+  store: LlmProviderContinuationStore,
+): Effect.Effect<Readonly<Record<string, unknown>>, LlmProviderContinuationFailure> =>
+  Effect.gen(function* () {
+    const { continuation, ...wireMessage } = message;
+    if (continuation === undefined) return wireMessage;
+    if (message.role !== "assistant") {
+      return yield* new LlmProviderContinuationFailure({ reason: "continuation_malformed" });
+    }
+    const expected = yield* openAiContinuationBinding(request, route, "request");
+    const payload = yield* openAiContinuationValue(continuation, expected, store);
+    return { ...wireMessage, ...payload };
+  });
+
 const openAiChatBodyFromRequest = (
   request: LlmRequest,
   route: OpenAiChatCompatibleRoute,
-): Readonly<Record<string, unknown>> => ({
-  model: route.modelId,
-  messages: request.messages,
-  ...(request.tools === undefined || request.tools.length === 0
-    ? {}
-    : { tools: request.tools.map(openAiToolFromDefinition) }),
-  ...(request.tool_choice === undefined ? {} : { tool_choice: request.tool_choice }),
-  stream: false,
-});
+  store: LlmProviderContinuationStore,
+): Effect.Effect<Readonly<Record<string, unknown>>, LlmProviderContinuationFailure> =>
+  Effect.gen(function* () {
+    const messages = yield* Effect.forEach(request.messages, (message) =>
+      openAiWireMessage(message, request, route, store),
+    );
+    return {
+      model: route.modelId,
+      messages,
+      ...(request.tools === undefined || request.tools.length === 0
+        ? {}
+        : { tools: request.tools.map(openAiToolFromDefinition) }),
+      ...(request.tool_choice === undefined ? {} : { tool_choice: request.tool_choice }),
+      stream: false,
+    };
+  });
 
 const openAiChatRequest = (
   resolved: EffectAiLiveRoute<OpenAiChatCompatibleRoute>,
   request: LlmRequest,
-): Effect.Effect<HttpClientRequest, HttpBodyError> =>
-  httpPost(`${withoutTrailingSlash(resolved.endpoint)}/chat/completions`, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${resolved.credential}`,
-      "Content-Type": "application/json",
-    },
-  }).pipe(httpBodyJson(openAiChatBodyFromRequest(request, resolved.route)));
+  store: LlmProviderContinuationStore,
+): Effect.Effect<HttpClientRequest, HttpBodyError | LlmProviderContinuationFailure> =>
+  Effect.gen(function* () {
+    const body = yield* openAiChatBodyFromRequest(request, resolved.route, store);
+    return yield* httpPost(`${withoutTrailingSlash(resolved.endpoint)}/chat/completions`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${resolved.credential}`,
+        "Content-Type": "application/json",
+      },
+    }).pipe(httpBodyJson(body));
+  });
 
 const responseJsonOrEmpty = <E>(response: {
   readonly json: Effect.Effect<unknown, E>;
@@ -786,9 +892,38 @@ const normalizeOpenAiToolCall = (
     };
   });
 
+const decodeOpenAiContinuation = (
+  message: Readonly<Record<string, unknown>>,
+  request: LlmRequest,
+  route: OpenAiChatCompatibleRoute,
+  store: LlmProviderContinuationStore,
+): Effect.Effect<
+  LlmProviderContinuation | undefined,
+  ProviderOutputDecodeError | LlmProviderContinuationFailure
+> =>
+  Effect.gen(function* () {
+    const reasoning = message.reasoning_content;
+    const encrypted = message.encrypted_content;
+    if (reasoning === undefined && encrypted === undefined) return undefined;
+    if (typeof reasoning !== "string" || typeof encrypted !== "string") {
+      return yield* decodeFailure("choices[0].message.provider_continuation");
+    }
+    const binding = yield* openAiContinuationBinding(request, route, "response");
+    const payload = captureLive({
+      reasoning_content: reasoning,
+      encrypted_content: encrypted,
+    });
+    if (!store.available) return { kind: "live", binding, payload };
+    const ref = yield* store.seal({ binding, payload });
+    return { kind: "sealed", binding, ref };
+  });
+
 const normalizeOpenAiChatCompatibleResponse = (
   body: unknown,
-): Effect.Effect<LlmResponse, ProviderOutputDecodeError> =>
+  request: LlmRequest,
+  route: OpenAiChatCompatibleRoute,
+  store: LlmProviderContinuationStore,
+): Effect.Effect<LlmResponse, ProviderOutputDecodeError | LlmProviderContinuationFailure> =>
   Effect.gen(function* () {
     if (!isRecord(body)) return yield* decodeFailure("response");
     const usage = yield* normalizeOpenAiChatUsage(body);
@@ -808,23 +943,33 @@ const normalizeOpenAiChatCompatibleResponse = (
         call: yield* normalizeOpenAiToolCall(toolCalls[index], index),
       });
     }
-    return { items, usage };
+    const continuation = yield* decodeOpenAiContinuation(message, request, route, store);
+    return {
+      items,
+      usage,
+      ...(continuation === undefined
+        ? {}
+        : {
+            continuation: { kind: "available" as const, value: continuation },
+          }),
+    };
   });
 
 const callOpenAiChatCompatible = (
   httpClient: HttpClientService,
   resolved: EffectAiLiveRoute<OpenAiChatCompatibleRoute>,
   request: LlmRequest,
+  store: LlmProviderContinuationStore,
   options: LlmCallOptions = {},
 ): Effect.Effect<LlmResponse, UpstreamFailure> =>
   Effect.gen(function* () {
-    const providerRequest = yield* openAiChatRequest(resolved, request);
+    const providerRequest = yield* openAiChatRequest(resolved, request, store);
     const response = yield* withAbortSignal(httpClient.execute(providerRequest), options.signal);
     const body = yield* responseJsonOrEmpty(response);
     if (response.status < 200 || response.status >= 300) {
       return yield* providerHttpFailure(response.status, body);
     }
-    return yield* normalizeOpenAiChatCompatibleResponse(body);
+    return yield* normalizeOpenAiChatCompatibleResponse(body, request, resolved.route, store);
   }).pipe(
     Effect.mapError(
       (
@@ -833,7 +978,8 @@ const callOpenAiChatCompatible = (
           | HttpClientError
           | EffectAiAborted
           | ProviderHttpFailure
-          | ProviderOutputDecodeError,
+          | ProviderOutputDecodeError
+          | LlmProviderContinuationFailure,
       ) => new UpstreamFailure({ cause }),
     ),
   );
@@ -943,6 +1089,7 @@ const withEffectAiLiveRoute = <Route extends EffectAiSupportedRoute, A, E, R>(
 
 export const makeEffectAiLlmTransportLayer = <R>(
   modelFactory: EffectAiLanguageModelFactory<R>,
+  continuationStore: LlmProviderContinuationStore = LlmProviderContinuationStoreNone,
 ): Layer.Layer<LlmTransport, never, RefResolverService | HttpClientService | R> =>
   Layer.effect(
     LlmTransport,
@@ -969,6 +1116,7 @@ export const makeEffectAiLlmTransportLayer = <R>(
                         credential: liveRoute.credential,
                       },
                       request,
+                      continuationStore,
                       options,
                     );
                   } else {
@@ -1002,11 +1150,9 @@ export const makeEffectAiLlmTransportLayer = <R>(
  *
  * @public
  */
-export const makeOpenAiCompatibleLlmTransportLayer = (): Layer.Layer<
-  LlmTransport,
-  never,
-  RefResolverService | HttpClientService
-> =>
+export const makeOpenAiCompatibleLlmTransportLayer = (
+  continuationStore: LlmProviderContinuationStore = LlmProviderContinuationStoreNone,
+): Layer.Layer<LlmTransport, never, RefResolverService | HttpClientService> =>
   Layer.effect(
     LlmTransport,
     Effect.withSpan("agentos.llm_transport.openai_compatible.layer")(
@@ -1022,7 +1168,13 @@ export const makeOpenAiCompatibleLlmTransportLayer = (): Layer.Layer<
             Effect.gen(function* () {
               const resolved = yield* resolveOpenAiChatCompatibleRouteForTransport(request.route);
               return yield* withEffectAiLiveRoute(refs, request, resolved.route, (liveRoute) =>
-                callOpenAiChatCompatible(httpClient, liveRoute, request, options),
+                callOpenAiChatCompatible(
+                  httpClient,
+                  liveRoute,
+                  request,
+                  continuationStore,
+                  options,
+                ),
               ).pipe(
                 Effect.mapError((cause) =>
                   cause instanceof UpstreamFailure ? cause : new UpstreamFailure({ cause }),

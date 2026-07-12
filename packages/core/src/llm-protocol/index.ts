@@ -9,6 +9,13 @@ import type {
   RefResolutionFailed,
 } from "@agent-os/core/ref-resolver";
 import type { ToolDefinition } from "@agent-os/core/tools";
+export * from "./provider-continuation";
+import { markerFromProviderContinuation } from "./provider-continuation";
+import type {
+  LlmProviderContinuation,
+  LlmProviderContinuationCallContext,
+  LlmProviderContinuationMarker,
+} from "./provider-continuation";
 
 export const LLM_WIRE_DESCRIPTOR_VERSION = "llm-wire-descriptor-v1";
 export const LLM_CALL_SNAPSHOT_VERSION = "llm-call-snapshot-v1";
@@ -70,6 +77,9 @@ export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef
     : []),
 ];
 
+export const llmRouteFingerprint = (route: LlmRoute): string =>
+  `llm-route-v1:${JSON.stringify(canonicalize(route))}`;
+
 const unknownRecord = Schema.Record(Schema.String, Schema.Unknown);
 const nonNegativeInt = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
 
@@ -89,6 +99,7 @@ export interface LlmMessage {
   readonly tool_calls?: ReadonlyArray<LlmToolCall>;
   readonly tool_call_id?: string;
   readonly name?: string;
+  readonly continuation?: LlmProviderContinuation;
 }
 
 export interface LlmUsage {
@@ -164,9 +175,20 @@ export const LlmOutputItemSchema: Schema.Decoder<LlmOutputItem> = Schema.Union([
   }),
 ]);
 
+export type LlmResponseContinuation =
+  | {
+      readonly kind: "available";
+      readonly value: LlmProviderContinuation;
+    }
+  | {
+      readonly kind: "recorded";
+      readonly marker: LlmProviderContinuationMarker;
+    };
+
 export interface LlmResponse {
   readonly items: ReadonlyArray<LlmOutputItem>;
   readonly usage: LlmUsage;
+  readonly continuation?: LlmResponseContinuation;
 }
 
 export interface LlmSnapshotToolDefinition {
@@ -191,7 +213,13 @@ export interface LlmCallSnapshot {
   readonly wireDescriptorFingerprint: string;
   readonly request: LlmSnapshotRequest;
   readonly requestFingerprint: string;
-  readonly response: LlmResponse;
+  readonly response: LlmRecordedResponse;
+}
+
+export interface LlmRecordedResponse {
+  readonly items: ReadonlyArray<LlmOutputItem>;
+  readonly usage: LlmUsage;
+  readonly continuationMarker?: LlmProviderContinuationMarker;
 }
 
 export const llmSnapshotToolDefinitionFromToolDefinition = (
@@ -206,7 +234,7 @@ export const llmSnapshotToolDefinitionFromToolDefinition = (
 });
 
 export const llmSnapshotRequestFromRequest = (request: LlmRequest): LlmSnapshotRequest => ({
-  messages: request.messages,
+  messages: request.messages.map(({ continuation: _continuation, ...message }) => message),
   ...(request.tools === undefined
     ? {}
     : { tools: request.tools.map(llmSnapshotToolDefinitionFromToolDefinition) }),
@@ -232,12 +260,33 @@ export const llmCallSnapshotFromResponse = (spec: {
     wireDescriptorFingerprint: llmWireDescriptorFingerprint(spec.wireDescriptor),
     request: snapshotRequest,
     requestFingerprint: llmSnapshotRequestFingerprint(snapshotRequest),
-    response: spec.response,
+    response: {
+      items: spec.response.items,
+      usage: spec.response.usage,
+      ...(spec.response.continuation === undefined
+        ? {}
+        : {
+            continuationMarker:
+              spec.response.continuation.kind === "available"
+                ? markerFromProviderContinuation(spec.response.continuation.value)
+                : spec.response.continuation.marker,
+          }),
+    },
   };
 };
 
-export const replayLlmResponseFromSnapshot = (snapshot: LlmCallSnapshot): LlmResponse =>
-  snapshot.response;
+export const replayLlmResponseFromSnapshot = (snapshot: LlmCallSnapshot): LlmResponse => ({
+  items: snapshot.response.items,
+  usage: snapshot.response.usage,
+  ...(snapshot.response.continuationMarker === undefined
+    ? {}
+    : {
+        continuation: {
+          kind: "recorded" as const,
+          marker: snapshot.response.continuationMarker,
+        },
+      }),
+});
 
 export const textFromLlmOutputItems = (items: ReadonlyArray<LlmOutputItem>): string =>
   items
@@ -272,6 +321,8 @@ export interface LlmRequest {
   readonly tools?: ReadonlyArray<ToolDefinition>;
   readonly traceContext?: unknown;
   readonly tool_choice?: LlmToolChoice;
+  /** Runtime-only provider continuation identity; excluded from provider and snapshot projections. */
+  readonly continuationContext?: LlmProviderContinuationCallContext;
   /** Runtime-only resolution context; excluded from provider and snapshot projections. */
   readonly materialResolution?: Omit<MaterialResolutionRequest, "materialRef"> & {
     readonly expectedVersions?: Readonly<Record<string, string>>;

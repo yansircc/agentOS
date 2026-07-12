@@ -166,10 +166,29 @@ export const replayMessagesToInterruptedTool = (
       }
       const responseText = textFromLlmOutputItems(decoded.event.payload.items);
       const responseToolCalls = toolCallsFromLlmOutputItems(decoded.event.payload.items);
+      const continuationMarker = decoded.event.payload.continuation;
+      if (continuationMarker !== undefined && continuationMarker.sealedRef === undefined) {
+        return yield* Effect.fail(
+          runtimeStorageError("submit", {
+            reason: "provider_continuation_resume_unsupported",
+            runId: resume.runId,
+            turnIndex: index,
+          }),
+        );
+      }
       messages.push({
         role: "assistant",
         content: responseText,
         tool_calls: responseToolCalls.length > 0 ? responseToolCalls : undefined,
+        ...(continuationMarker === undefined
+          ? {}
+          : {
+              continuation: {
+                kind: "sealed" as const,
+                binding: continuationMarker.binding,
+                ref: continuationMarker.sealedRef as string,
+              },
+            }),
       });
 
       for (const call of responseToolCalls) {

@@ -17,8 +17,71 @@ import {
   decodedRuntimeBehaviorKinds,
   decodedRuntimeEvents,
 } from "./_submit-agent-harness";
+import { captureLive } from "@agent-os/core/live-edge";
 
 export const registerSubmitAgentProviderHistoryCases = () => {
+  it.effect(
+    "keeps live assistant continuation out of ledger and on the next provider request",
+    () =>
+      Effect.gen(function* () {
+        const tool = defineTool({
+          name: "lookup",
+          description: "lookup",
+          args: Schema.Struct({ q: Schema.String }),
+          execute: () => Effect.succeed({ ok: true }),
+          authority: "read",
+          admit: () => Effect.succeed({ ok: true }),
+          execution: deterministicToolExecution(),
+        });
+        const continuation = {
+          kind: "live" as const,
+          binding: {
+            adapterId: "openai-chat-compatible@v1",
+            adapterVersion: "v1",
+            routeFingerprint: "route-v1",
+            modelFingerprint: "model-v1",
+            truthIdentityFingerprint: "tenant-a",
+            sourceTurn: { id: 1, index: 0 },
+            successorTurn: { id: 1, index: 1 },
+          },
+          payload: captureLive({
+            reasoning_content: "private-reasoning",
+            encrypted_content: "encrypted-token",
+          }),
+        };
+        const { result, events, llmRequests } = yield* runSubmit(
+          baseSpec({ tools: { lookup: tool } }),
+          [
+            response({
+              items: [
+                {
+                  type: "tool_call",
+                  call: {
+                    id: "call-1",
+                    type: "function",
+                    function: { name: "lookup", arguments: '{"q":"x"}' },
+                  },
+                },
+              ],
+              continuation: { kind: "available", value: continuation },
+            }),
+            response({ items: [{ type: "message", text: "done" }] }),
+          ],
+        );
+
+        expect(result).toMatchObject({ ok: true, final: "done" });
+        const assistant = llmRequests[1]?.messages.find((message) => message.role === "assistant");
+        expect(assistant).toMatchObject({
+          role: "assistant",
+          continuation: { kind: "live", binding: continuation.binding },
+        });
+        const ledgerJson = JSON.stringify(events);
+        expect(ledgerJson).toContain('"required":true');
+        expect(ledgerJson).not.toContain("private-reasoning");
+        expect(ledgerJson).not.toContain("encrypted-token");
+      }),
+  );
+
   it.effect("known tool schema decode failure feeds sanitized diagnostics back to the model", () =>
     Effect.gen(function* () {
       const tool = defineTool({
