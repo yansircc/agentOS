@@ -1,6 +1,6 @@
 # agentOS Package Map
 
-Release version: `0.6.3`
+Release version: `0.6.4`
 Published scope: `@yansirplus`
 
 ## Packages
