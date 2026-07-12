@@ -1,5 +1,5 @@
 import type { ProviderResourceId } from "@agent-os/core/runtime-protocol";
-import type { HandlerKind } from "@agent-os/core/runtime-protocol";
+import type { AgentScopeIdentityPolicy, HandlerKind } from "@agent-os/core/runtime-protocol";
 import { WORKSPACE_TOOL_EXPOSURE_PROFILES, type WorkspaceToolName } from "@agent-os/runtime";
 import {
   digestText,
@@ -316,6 +316,16 @@ const cloudflareTargetFor = (target: AgentOsConfigTarget): AgentOsConfigCloudfla
   if (target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) return target;
   throw new TypeError(`cloudflare target renderer received ${target.kind}`);
 };
+
+type NormalizedWorkspace = NormalizedWorkspaceAgentOsConfig["workspace"];
+type ManifestNormalizedWorkspace = Extract<
+  NormalizedWorkspace,
+  { readonly scope: { readonly idSource: "manifest" } }
+>;
+
+const isManifestNormalizedWorkspace = (
+  workspace: NormalizedWorkspace,
+): workspace is ManifestNormalizedWorkspace => workspace.scope.idSource === "manifest";
 
 const staticTargetModules = (scope: string) => ({
   runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
@@ -1037,6 +1047,7 @@ const renderStaticRuntimeBootstrapImports = (
         "DynamicCapabilityEventRef",
         "DynamicCapabilityProjection",
         "DynamicCapabilityRunInput",
+        "LedgerTruthIdentity",
         "SubmitInstructionFragment",
       ],
       modules.runtimeProtocol,
@@ -1049,9 +1060,29 @@ const renderStaticRuntimeBootstrapImports = (
     .filter((statement) => statement.length > 0)
     .join("\n");
 
-const renderStaticRuntimeBootstrap = (model: StaticRuntimeBootstrapModel): string => `
+const renderSemanticTruthIdentity = (scope: AgentScopeIdentityPolicy): string =>
+  scope.idSource === "submit_scope"
+    ? `const semanticTruthIdentityFor = (scopeId: string): LedgerTruthIdentity => {
+  if (scopeId.length === 0) throw Error("authenticated routing scope is missing");
+  return {
+    scopeRef: { kind: ${jsString(scope.kind)}, scopeId },
+    effectAuthorityRef: semanticManifest.effectAuthorityRef,
+  };
+};`
+    : `const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
+const semanticTruthIdentityFor = (scopeId: string): LedgerTruthIdentity => {
+  if (scopeId !== semanticTruthIdentity.scopeRef.scopeId) {
+    throw Error("authenticated routing scope does not match manifest scope");
+  }
+  return semanticTruthIdentity;
+};`;
+
+const renderStaticRuntimeBootstrap = (
+  model: StaticRuntimeBootstrapModel,
+  scope: AgentScopeIdentityPolicy,
+): string => `
 const semanticManifest = semanticDeclarations as AgentManifest;
-const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
+${renderSemanticTruthIdentity(scope)}
 
 type GeneratedTargetFailure = {
   readonly ok: false;
@@ -1167,10 +1198,14 @@ const submitRunInputFromSessionTurn = (
   input: AgentSessionSubmitTurnInput,
 ): SubmitRunInput => submitRunInputFields(input);`;
 
-const renderProductApiDurableObjectMethods = (): string => `
+const renderProductApiDurableObjectMethods = (
+  truthIdentity: string,
+  bindingsScope?: string,
+): string => `
   submitSessionTurn(input: AgentSessionSubmitTurnInput): Promise<SubmitResult> {
     return generatedSubmitBindingsFor(
       this.targetEnv,
+      ${bindingsScope === undefined ? "" : `${bindingsScope},`}
       generatedDynamicCapabilityTurnEvent({
         sessionRef: input.sessionRef,
         turnRef: input.turnRef,
@@ -1196,18 +1231,19 @@ const renderProductApiDurableObjectMethods = (): string => `
   }
 
   inspectSession(input: { readonly sessionRef: string }): Promise<AgentSessionProjection> {
-    return this.events(semanticTruthIdentity).then((events) =>
+    return this.events(${truthIdentity}).then((events) =>
       projectAgentSession(events, input.sessionRef),
     );
   }
 
   listSessions(): Promise<AgentSessionListProjection> {
-    return this.events(semanticTruthIdentity).then((events) => projectAgentSessions(events));
+    return this.events(${truthIdentity}).then((events) => projectAgentSessions(events));
   }
 
   runWorkflow(input: AgentWorkflowRunInput): Promise<SubmitResult> {
     return generatedSubmitBindingsFor(
       this.targetEnv,
+      ${bindingsScope === undefined ? "" : `${bindingsScope},`}
       generatedDynamicCapabilityTurnEvent(),
       input.dynamicCapability,
     ).then((bindings) =>
@@ -1231,13 +1267,13 @@ const renderProductApiDurableObjectMethods = (): string => `
   }
 
   inspectWorkflowRun(input: AgentWorkflowRunRef): Promise<WorkflowRunProjection | null> {
-    return this.events(semanticTruthIdentity).then((events) =>
+    return this.events(${truthIdentity}).then((events) =>
       projectWorkflowRun(events, input.workflowId, input.workflowRunId),
     );
   }
 
   listWorkflowRuns(input: { readonly workflowId: string }): Promise<WorkflowRunListProjection> {
-    return this.events(semanticTruthIdentity).then((events) =>
+    return this.events(${truthIdentity}).then((events) =>
       projectWorkflowRuns(events, input.workflowId),
     );
   }`;
@@ -1256,13 +1292,13 @@ const generatedScheduleRuntimeFor = (target: {
     }),
   });`;
 
-const renderScheduleDurableObjectMethod = (): string => `
+const renderScheduleDurableObjectMethod = (truthIdentity: string): string => `
   dispatchSchedule(input: GeneratedScheduleTriggerInput): Promise<unknown> {
-    return this.events(semanticTruthIdentity).then((history) =>
+    return this.events(${truthIdentity}).then((history) =>
       dispatchGeneratedScheduleDelivery({
         ...input,
         history,
-        identity: semanticTruthIdentity,
+        identity: ${truthIdentity},
         runtime: generatedScheduleRuntimeFor(this),
       }).then((result) => this.commitScheduleFireDispatchFullWithDelivery(result)),
     );
@@ -1330,7 +1366,10 @@ const renderWorkspaceStaticTarget = (
     ...(hasSchedules
       ? [renderNamedImport(["dispatchGeneratedScheduleDelivery"], "./schedules")]
       : []),
-    renderNamedImport(["createAgentDurableObject"], modules.cloudflareDoRuntime),
+    renderNamedImport(
+      ["createAgentDurableObject", "createCloudflareSandboxWorkspaceEnvResolver"],
+      modules.cloudflareDoRuntime,
+    ),
     renderNamedImport(
       [
         "WORKSPACE_OPERATION_HOST_FACT",
@@ -1348,7 +1387,11 @@ const renderWorkspaceStaticTarget = (
       ["defineWorkspaceAgentMount", "WORKSPACE_AGENT_PROJECTION"],
       modules.workspaceAgentHost,
     ),
-    renderNamedImport(["makeCloudflareWorkspaceEnv"], modules.workspaceEnvCloudflare),
+    renderNamedImport(["bindWorkspaceToolsForRuntime"], modules.workspaceBinding),
+    renderNamedImport(
+      ["workspaceBindingRef", "workspaceProviderResourceId"],
+      modules.runtimeProtocol,
+    ),
     renderNamedImport(["getSandbox"], modules.cloudflareSandbox),
     renderTypeImport(
       ["InputRequestSettlement", "SubmitResult", "SubmitRunInput"],
@@ -1363,7 +1406,11 @@ const renderWorkspaceStaticTarget = (
       ],
       modules.runtimeRunProjector,
     ),
-    renderTypeImport(["AgentSubmitSpec"], modules.cloudflareDoRuntime),
+    renderTypeImport(
+      ["AgentSubmitSpec", "CloudflareWorkspaceEnvResolver"],
+      modules.cloudflareDoRuntime,
+    ),
+    renderTypeImport(["WorkspaceOperationEnvResolver"], modules.runtimeCapability),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderTypeImport(
       [
@@ -1396,20 +1443,60 @@ type AgentOSTargetEnv = {
 ${generatedLlmEnvFields}
 };
 
-${renderStaticRuntimeBootstrap(bootstrap)}
+${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
-const generatedWorkspaceSandboxId = ${jsString(normalized.workspace.cloudflareSandboxId)};
+const generatedWorkspaceScopeKind = ${jsString(normalized.deployment.manifest.scope.kind)};
+const generatedWorkspaceBindingRef = workspaceBindingRef(${jsString(
+    normalized.workspace.bindingRef,
+  )});
+const generatedWorkspaceResolverCache = new WeakMap<object, CloudflareWorkspaceEnvResolver>();
 
 const workspaceNamespaceFor = (env: AgentOSTargetEnv): DurableObjectNamespace<Sandbox> =>
   env[${jsString(normalized.workspace.binding)}] as DurableObjectNamespace<Sandbox>;
 
-const workspaceSandboxFor = (env: AgentOSTargetEnv): Sandbox =>
-  getSandbox(workspaceNamespaceFor(env), generatedWorkspaceSandboxId, {
+const generatedWorkspaceRefFor = (scope: string) =>
+  workspaceProviderResourceId({
+    deploymentNamespace: ${jsString(normalized.deployment.deploymentId)},
+    workspaceBindingRef: generatedWorkspaceBindingRef,
+    topology: ${JSON.stringify(normalized.workspace.topology)},
+    scopeRef: { kind: generatedWorkspaceScopeKind, scopeId: scope },
+  });
+
+const generatedWorkspaceResolverFor = (
+  env: AgentOSTargetEnv,
+): CloudflareWorkspaceEnvResolver => {
+  const existing = generatedWorkspaceResolverCache.get(env);
+  if (existing !== undefined) return existing;
+  const created = createCloudflareSandboxWorkspaceEnvResolver({
+    binding: workspaceNamespaceFor(env),
+    cwd: ${jsString(normalized.workspace.root)},
+    scopePrefix: ${jsString(
+      `${normalized.deployment.deploymentId}-${normalized.workspace.bindingRef}`,
+    )},
+    workspaceRef: ({ scope }) => generatedWorkspaceRefFor(scope),
+  });
+  generatedWorkspaceResolverCache.set(env, created);
+  return created;
+};
+
+const generatedWorkspaceLeaseFor = (
+  env: AgentOSTargetEnv,
+  scope: string,
+  runId: string,
+) => generatedWorkspaceResolverFor(env).resolve({ scope, runId });
+
+const workspaceSandboxFor = async (
+  env: AgentOSTargetEnv,
+  scope: string,
+): Promise<Sandbox> => {
+  const lease = await generatedWorkspaceLeaseFor(env, scope, "workspace-command");
+  return getSandbox(workspaceNamespaceFor(env), lease.sandboxId, {
     normalizeId: true,
     sleepAfter: "10m",
     transport: env.SANDBOX_TRANSPORT ?? "rpc",
   });
+};
 
 type WorkspacePathResult =
   | { readonly ok: true; readonly path: string }
@@ -1470,12 +1557,26 @@ const workspaceFileEntryFor = (value: unknown): WorkspaceAgentFileEntry | null =
   };
 };
 
-const workspaceEnvFor = (env: AgentOSTargetEnv) =>
-  makeCloudflareWorkspaceEnv({
-    client: workspaceSandboxFor(env),
-    cwd: ${jsString(normalized.workspace.root)},
-    workspaceRef: ${jsString(normalized.workspace.providerResourceId)},
-  });
+const generatedWorkspaceOperationEnvFor = (
+  env: AgentOSTargetEnv,
+): WorkspaceOperationEnvResolver => async (input) => {
+  if (input.mode !== "operation") {
+    throw Error("workspace binding must be resolved under an authenticated routing scope");
+  }
+  if (input.runId === undefined || input.runId.length === 0) {
+    throw Error("workspace operation is missing runtime-owned run identity");
+  }
+  const scope = input.event.scopeRef.scopeId;
+  if (input.workspaceRef !== generatedWorkspaceRefFor(scope)) {
+    throw Error("workspace operation ref does not match authenticated event scope");
+  }
+  const lease = await generatedWorkspaceLeaseFor(
+    env,
+    scope,
+    input.runId,
+  );
+  return lease.env;
+};
 
 const generatedHostProfileFor = (env: AgentOSTargetEnv) => defineHost({
   target: "cloudflare-do@1",
@@ -1490,14 +1591,14 @@ const generatedHostProfileFor = (env: AgentOSTargetEnv) => defineHost({
     "llm.openai",
   ],
   materialize: () => ({
-    [WORKSPACE_OPERATION_HOST_FACT]: () => workspaceEnvFor(env),
+    [WORKSPACE_OPERATION_HOST_FACT]: generatedWorkspaceOperationEnvFor(env),
   }),
 });
 
 const generatedCapabilityInstallGraphFor = (env: AgentOSTargetEnv) => {
   const graph = resolveRuntimeInstallGraph(
     generatedHostProfileFor(env),
-    [workspaceOperations(generatedWorkspaceOperations)],
+    [workspaceOperations({ ...generatedWorkspaceOperations, toolNames: [] })],
     { identity: semanticManifest.agentId },
   );
   if (!graph.ok) {
@@ -1512,6 +1613,7 @@ const generatedCapabilityInstallGraphFor = (env: AgentOSTargetEnv) => {
 
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
+  scope: string,
   event: DynamicCapabilityEventRef = generatedDynamicCapabilityTurnEvent(),
   dynamicCapability: DynamicCapabilityRunInput | undefined = undefined,
 ): Promise<GeneratedTargetResult<AgentSubmitBindings>> => {
@@ -1530,15 +1632,24 @@ const generatedSubmitBindingsFor = async (
   if (!routes.ok) return routes;
   const dynamicBindings = await generatedDynamicSubmitBindingsFor(event, dynamicCapability);
   if (!dynamicBindings.ok) return dynamicBindings;
+  const workspaceLease = await generatedWorkspaceLeaseFor(env, scope, "submit-bindings");
+  const workspaceBindings = bindWorkspaceToolsForRuntime({
+    env: workspaceLease.env,
+    authority: "agentos.workspace.capability",
+    admit: () => Effect.succeed({ ok: true as const }),
+    ...generatedWorkspaceOperations,
+  });
   const dynamicCapabilityProjection = dynamicBindings.value.dynamicCapabilityProjection;
   return {
     ok: true,
     value: {
       ...capabilityGraph.bindings,
+      ...workspaceBindings,
       ...dynamicBindings.value,
       llmRoutes: routes.value,
       tools: {
         ...(capabilityGraph.bindings.tools ?? {}),
+        ...(workspaceBindings.tools ?? {}),
         ...generatedCustomTools,
         ${hasSkills ? "...generatedFrameworkToolsFor(dynamicCapabilityProjection)," : ""}
       },
@@ -1579,15 +1690,24 @@ const Base${target.durableObject.className} = createAgentDurableObject<AgentOSTa
 
 export class ${target.durableObject.className} extends Base${target.durableObject.className} {
   private readonly targetEnv: AgentOSTargetEnv;
+  private readonly targetScope: string;
+  private readonly targetTruthIdentity: LedgerTruthIdentity;
 
   constructor(ctx: DurableObjectState, env: AgentOSTargetEnv) {
     super(ctx, env);
+    const scope = ctx.id.name;
+    if (scope === undefined || scope.length === 0) {
+      throw Error("authenticated Durable Object routing scope is missing");
+    }
     this.targetEnv = env;
+    this.targetScope = scope;
+    this.targetTruthIdentity = semanticTruthIdentityFor(scope);
   }
 
   override submit(spec: AgentSubmitSpec): Promise<SubmitResult> {
     return generatedSubmitBindingsFor(
       this.targetEnv,
+      this.targetScope,
       generatedDynamicCapabilityTurnEvent(),
       spec.dynamicCapability,
     ).then((bindings) =>
@@ -1598,6 +1718,7 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
   submitRunInput(input: SubmitRunInput): Promise<SubmitResult> {
     return generatedSubmitBindingsFor(
       this.targetEnv,
+      this.targetScope,
       generatedDynamicCapabilityTurnEvent(),
       input.dynamicCapability,
     ).then((bindings) =>
@@ -1610,11 +1731,11 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
     );
   }
 
-${renderProductApiDurableObjectMethods()}
-${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
+${renderProductApiDurableObjectMethods("this.targetTruthIdentity", "this.targetScope")}
+${hasSchedules ? renderScheduleDurableObjectMethod("this.targetTruthIdentity") : ""}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
-    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+    return generatedSubmitBindingsFor(this.targetEnv, this.targetScope).then((bindings) =>
       bindings.ok
         ? this.resumeInputRequestWithBindings(input, bindings.value)
         : rejectTargetFailure(bindings),
@@ -1622,7 +1743,7 @@ ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
   }
 
   decideInputRequest(input: WorkspaceAgentDecideInputRequestCommandInput): Promise<SubmitResult> {
-    return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
+    return generatedSubmitBindingsFor(this.targetEnv, this.targetScope).then((bindings) =>
       bindings.ok
         ? this.decideInputRequestWithBindings(input, bindings.value)
         : rejectTargetFailure(bindings),
@@ -1647,17 +1768,19 @@ ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
   readWorkspaceState(
     input: WorkspaceAgentReadStateCommandInput = {},
   ): Promise<WorkspaceAgentReadStateCommandOutput> {
-    const sandbox = workspaceSandboxFor(this.targetEnv);
-    return sandbox
-      .mkdir(${jsString(normalized.workspace.root)}, { recursive: true })
-      .then(() =>
-        sandbox.listFiles(${jsString(normalized.workspace.root)}, {
-          recursive: true,
-          includeHidden: input.includeHidden ?? true,
-        }),
+    return workspaceSandboxFor(this.targetEnv, this.targetScope)
+      .then((sandbox) =>
+        sandbox
+          .mkdir(${jsString(normalized.workspace.root)}, { recursive: true })
+          .then(() =>
+            sandbox.listFiles(${jsString(normalized.workspace.root)}, {
+              recursive: true,
+              includeHidden: input.includeHidden ?? true,
+            }),
+          ),
       )
       .then((listed) => ({
-        workspaceRef: ${jsString(normalized.workspace.providerResourceId)},
+        workspaceRef: generatedWorkspaceRefFor(this.targetScope),
         files: listed.files
           .map(workspaceFileEntryFor)
           .filter((file): file is WorkspaceAgentFileEntry => file !== null)
@@ -1670,10 +1793,12 @@ ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
   ): Promise<WorkspaceAgentReadFileCommandOutput> {
     const path = workspacePathFor(input.path);
     if (!path.ok) return Promise.reject(new TypeError(path.message));
-    return workspaceSandboxFor(this.targetEnv)
-      .readFile(path.path, {
-        encoding: input.encoding ?? "utf-8",
-      })
+    return workspaceSandboxFor(this.targetEnv, this.targetScope)
+      .then((sandbox) =>
+        sandbox.readFile(path.path, {
+          encoding: input.encoding ?? "utf-8",
+        }),
+      )
       .then((file) => ({
         path: relativeWorkspacePath(path.path),
         content: file.content,
@@ -1681,19 +1806,18 @@ ${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
   }
 
   resetWorkspace(): Promise<WorkspaceAgentMutationCommandOutput> {
-    return workspaceSandboxFor(this.targetEnv)
-      .destroy()
-      .then(() =>
-        workspaceSandboxFor(this.targetEnv).mkdir(${jsString(normalized.workspace.root)}, {
-          recursive: true,
-        }),
+    return workspaceSandboxFor(this.targetEnv, this.targetScope)
+      .then((sandbox) => sandbox.destroy())
+      .then(() => workspaceSandboxFor(this.targetEnv, this.targetScope))
+      .then((sandbox) =>
+        sandbox.mkdir(${jsString(normalized.workspace.root)}, { recursive: true }),
       )
       .then(() => ({ ok: true as const }));
   }
 
   destroyWorkspace(): Promise<WorkspaceAgentMutationCommandOutput> {
-    return workspaceSandboxFor(this.targetEnv)
-      .destroy()
+    return workspaceSandboxFor(this.targetEnv, this.targetScope)
+      .then((sandbox) => sandbox.destroy())
       .then(() => ({ ok: true as const }));
   }
 }
@@ -1767,7 +1891,7 @@ type AgentOSTargetEnv = {
 ${generatedLlmEnvFields}
 };
 
-${renderStaticRuntimeBootstrap(bootstrap)}
+${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}
 
 const generatedSubmitBindingsFor = async (
   env: AgentOSTargetEnv,
@@ -1853,8 +1977,8 @@ export class ${target.durableObject.className} extends Base${target.durableObjec
     );
   }
 
-${renderProductApiDurableObjectMethods()}
-${hasSchedules ? renderScheduleDurableObjectMethod() : ""}
+${renderProductApiDurableObjectMethods("semanticTruthIdentity")}
+${hasSchedules ? renderScheduleDurableObjectMethod("semanticTruthIdentity") : ""}
 
   resumeInputRequest(input: WorkspaceAgentResumeInputRequestCommandInput): Promise<SubmitResult> {
     return generatedSubmitBindingsFor(this.targetEnv).then((bindings) =>
@@ -1985,7 +2109,7 @@ const renderLocalAgentApp = (
 
 type AgentOSTargetEnv = Readonly<Record<string, string | undefined>>;
 
-${renderStaticRuntimeBootstrap(bootstrap)}
+${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}
 
 ${renderGeneratedWorkspaceOperations(workspaceToolArray, usesMutationTools, usesShellTools)}
 
@@ -2262,19 +2386,30 @@ const renderCloudflareScopeHelper = (
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
   const target = cloudflareTargetFor(normalized.target);
+  const submitScope = normalized.deployment.manifest.scope.idSource === "submit_scope";
+  const identityProjection = submitScope
+    ? `export const agentOSTruthIdentityFor = (scopeId: string): LedgerTruthIdentity => {
+  if (scopeId.length === 0) throw Error("authenticated routing scope is missing");
+  return {
+    scopeRef: { kind: ${jsString(normalized.deployment.manifest.scope.kind)}, scopeId },
+    effectAuthorityRef: (manifest as AgentManifest).effectAuthorityRef,
+  };
+};`
+    : `export const agentOSTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
+export const agentOSScopeId = agentOSTruthIdentity.scopeRef.scopeId;`;
+  const scopeParameter = submitScope ? "scopeId: string" : "scopeId: string = agentOSScopeId";
   return `${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
 ${renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol)}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
 ${renderTypeImport(["DurableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
-${renderTypeImport(["AgentManifest"], modules.runtimeProtocol)}
+${renderTypeImport(["AgentManifest", "LedgerTruthIdentity"], modules.runtimeProtocol)}
 import manifest from "./manifest.json";
 
 export type AgentOSTargetEnv = {
   readonly [binding: string]: unknown;
 };
 
-export const agentOSTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
-export const agentOSScopeId = agentOSTruthIdentity.scopeRef.scopeId;
+${identityProjection}
 export const agentOSDurableObjectBinding = ${jsString(target.durableObject.binding)};
 
 export const agentOSDurableObjectNamespace = (
@@ -2286,7 +2421,7 @@ export const agentOSRpcClient = <
   Rpc extends Pick<AgentRuntimeClient, "events" | "streamEvents"> = AgentRuntimeClient,
 >(
   env: AgentOSTargetEnv,
-  scopeId: string = agentOSScopeId,
+  ${scopeParameter},
 ): DurableObjectRpcClient<Rpc> => durableObjectRpcClient<Rpc>(agentOSDurableObjectNamespace(env), scopeId);
 `;
 };
@@ -3522,6 +3657,13 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         issues: [{ kind: "unsupported_static_target", target: normalized.target.kind }],
       };
     }
+    if (!isManifestNormalizedWorkspace(normalized.workspace)) {
+      return {
+        ok: false,
+        issues: [{ kind: "unsupported_static_target", target: normalized.target.kind }],
+      };
+    }
+    const nodeWorkspace = normalized.workspace;
     const authoredManifestToolNames = toolNames.filter((toolName) =>
       normalized.authoredToolNames.includes(toolName),
     );
@@ -3534,11 +3676,11 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
         ? {}
         : { providerStrategy: normalized.deployment.providerStrategy }),
       workspace: {
-        binding: normalized.workspace.binding,
-        bindingRef: normalized.workspace.bindingRef,
-        root: normalized.workspace.root,
-        topology: normalized.workspace.topology,
-        providerResourceId: normalized.workspace.providerResourceId,
+        binding: nodeWorkspace.binding,
+        bindingRef: nodeWorkspace.bindingRef,
+        root: nodeWorkspace.root,
+        topology: nodeWorkspace.topology,
+        providerResourceId: nodeWorkspace.providerResourceId,
       },
     };
     const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
@@ -3685,7 +3827,7 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             "runtime.events",
             "runtime.input_requests",
           ],
-          providerResourceId: normalized.workspace.providerResourceId,
+          providerResourceId: nodeWorkspace.providerResourceId,
         },
       },
     };
@@ -3708,8 +3850,12 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
             bindingRef: normalized.workspace.bindingRef,
             root: normalized.workspace.root,
             topology: normalized.workspace.topology,
-            providerResourceId: normalized.workspace.providerResourceId,
-            cloudflareSandboxId: normalized.workspace.cloudflareSandboxId,
+            scope: normalized.workspace.scope,
+            ...(isManifestNormalizedWorkspace(normalized.workspace)
+              ? {
+                  providerResourceId: normalized.workspace.providerResourceId,
+                }
+              : {}),
           },
         }
       : {}),
@@ -3807,7 +3953,12 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
           {
             kind: "execution-domain-runtime" as const,
             source: modules.workspaceEnvCloudflare,
-            imports: ["makeCloudflareWorkspaceEnv"],
+            imports: ["createCloudflareSandboxWorkspaceEnvResolver"],
+          },
+          {
+            kind: "workspace-binding" as const,
+            source: modules.workspaceBinding,
+            imports: ["bindWorkspaceToolsForRuntime"],
           },
           {
             kind: "platform-runtime" as const,
@@ -3955,7 +4106,9 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
               ]
             : ["agent.info", "runtime.events", "runtime.input_requests"],
         ...(normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
-          ? { providerResourceId: normalized.workspace.providerResourceId }
+          ? isManifestNormalizedWorkspace(normalized.workspace)
+            ? { providerResourceId: normalized.workspace.providerResourceId }
+            : {}
           : {}),
       },
     },

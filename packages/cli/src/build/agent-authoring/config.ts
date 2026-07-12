@@ -4,6 +4,7 @@ import type {
   AgentCapabilityBindingRef,
   AgentExecutionDomainRef,
   AgentManifest,
+  AgentScopeKind,
   AgentToolBindingRef,
   ProviderResourceId,
   WorkspaceBindingRef,
@@ -23,7 +24,7 @@ import {
   type WorkspaceToolDefaultDeclaration,
   type WorkspaceToolName,
 } from "@agent-os/runtime";
-import { digestHex64, isNonEmptyString, isRecord, type JsonRecord } from "./shared";
+import { isNonEmptyString, isRecord, type JsonRecord } from "./shared";
 import { workspaceManifestMacroOrigin } from "./manifest-compiler";
 import type {
   AgentManifestFactKey,
@@ -157,6 +158,16 @@ export type AgentOsConfigIssue =
       readonly reason: "scope_not_manifest_owned" | "stable_scope_id_missing";
     }
   | {
+      readonly kind: "workspace_submit_scope_requires_cloudflare_routing";
+      readonly path: "agent/agent.json#/scope";
+      readonly target: AgentOsConfigTargetKind;
+    }
+  | {
+      readonly kind: "workspace_submit_scope_host_path_unsupported";
+      readonly path: "agentos.config.jsonc#/client" | "agent/channels" | "agent/schedules";
+      readonly hostPath: "svelte-kit-remote" | "channel" | "schedule";
+    }
+  | {
       readonly kind: "llm_material_env_name_collision";
       readonly path: "agentos.config.jsonc#/llm";
       readonly envName: string;
@@ -221,9 +232,21 @@ export interface NormalizedWorkspaceAgentOsConfig<
   readonly workspace: AgentOsConfigWorkspace & {
     readonly topology: AgentOsConfigWorkspaceTopology;
     readonly bindingRef: WorkspaceBindingRef;
-    readonly providerResourceId: ProviderResourceId;
-    readonly cloudflareSandboxId: string;
-  };
+  } & (
+      | {
+          readonly scope: {
+            readonly idSource: "manifest";
+            readonly scopeRef: { readonly kind: AgentScopeKind; readonly scopeId: string };
+          };
+          readonly providerResourceId: ProviderResourceId;
+        }
+      | {
+          readonly scope: {
+            readonly idSource: "submit_scope";
+            readonly kind: AgentScopeKind;
+          };
+        }
+    );
 }
 
 export interface NormalizedChatAgentOsConfig<
@@ -738,12 +761,24 @@ const defaultWorkspaceTopology = (): AgentOsConfigWorkspaceTopology => ({
   allocator: "workspace-per-scope-v1",
 });
 
-const workspaceMaterialRef = (providerResourceId: ProviderResourceId): MaterialRef => ({
+const workspaceMaterialRef = (ref: string): MaterialRef => ({
   kind: "external_resource",
   provider: "agent-os",
   resourceKind: "workspace-env",
-  ref: providerResourceId,
+  ref,
 });
+
+const submitScopeWorkspaceMaterialRef = (input: {
+  readonly deploymentNamespace: string;
+  readonly workspaceBindingRef: WorkspaceBindingRef;
+}): string =>
+  [
+    "agentos-workspace-material",
+    "v1",
+    encodeURIComponent(input.deploymentNamespace),
+    encodeURIComponent(input.workspaceBindingRef),
+    "submit-scope",
+  ].join(":");
 
 const workspaceDefaultToolFactKey = (
   toolId: WorkspaceToolName,
@@ -877,7 +912,7 @@ const applyWorkspaceDefaultTools = <K extends HandlerKind>(
 const addWorkspaceMaterial = <K extends HandlerKind>(
   manifest: AuthoredAgentManifest<K>,
   provenance: StaticTargetProvenance["manifest"],
-  providerResourceId: ProviderResourceId,
+  materialRef: string,
 ): {
   readonly manifest: AuthoredAgentManifest<K>;
   readonly provenance: StaticTargetProvenance["manifest"];
@@ -887,7 +922,7 @@ const addWorkspaceMaterial = <K extends HandlerKind>(
   }
   const materials = {
     ...manifest.materials,
-    workspace: workspaceMaterialRef(providerResourceId),
+    workspace: workspaceMaterialRef(materialRef),
   };
   const sortedMaterials = Object.fromEntries(
     Object.entries(materials).sort(([left], [right]) => left.localeCompare(right)),
@@ -935,36 +970,6 @@ const validateManifestToolReferences = <K extends HandlerKind>(
     }
   }
   return issues;
-};
-
-const cloudflareSandboxIdPrefix = (
-  deploymentNamespace: string,
-  workspaceBindingRef: WorkspaceBindingRef,
-  scopeRef: { readonly kind: string; readonly scopeId: string },
-): string =>
-  `${deploymentNamespace}-${workspaceBindingRef}-${scopeRef.kind}-${scopeRef.scopeId}`
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-const cloudflareWorkspaceSandboxId = (input: {
-  readonly deploymentNamespace: string;
-  readonly workspaceBindingRef: WorkspaceBindingRef;
-  readonly scopeRef: { readonly kind: string; readonly scopeId: string };
-  readonly providerResourceId: ProviderResourceId;
-}): string => {
-  const digest = digestHex64(input.providerResourceId);
-  const suffix = `-${digest}`;
-  const rawPrefix = cloudflareSandboxIdPrefix(
-    input.deploymentNamespace,
-    input.workspaceBindingRef,
-    input.scopeRef,
-  );
-  const prefix = rawPrefix.length === 0 ? "agentos-sandbox" : rawPrefix;
-  const prefixBudget = 63 - suffix.length;
-  const shortenedPrefix = prefix.slice(0, prefixBudget).replace(/-+$/g, "") || "agentos-sandbox";
-  return `${shortenedPrefix}${suffix}`;
 };
 
 const defaultLlmRoute = (llm: AgentOsConfigLlm): AgentOsConfigLlmRouteBinding => ({
@@ -1031,20 +1036,20 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   if (profileManifest.issues.length > 0) {
     return { ok: false, issues: profileManifest.issues };
   }
-  const scopeRef = manifestScopeRefResult(profileManifest.manifest);
-  if (!scopeRef.ok) {
-    return {
-      ok: false,
-      issues: [
-        {
-          kind: "workspace_scope_not_manifest_owned",
-          path: "agent/agent.json#/scope",
-          reason: scopeRef.reason,
-        },
-      ],
-    };
-  }
   if (value.profile === AGENTOS_CONFIG_PROFILE.CHAT_V1) {
+    const scopeRef = manifestScopeRefResult(profileManifest.manifest);
+    if (!scopeRef.ok) {
+      return {
+        ok: false,
+        issues: [
+          {
+            kind: "workspace_scope_not_manifest_owned",
+            path: "agent/agent.json#/scope",
+            reason: scopeRef.reason,
+          },
+        ],
+      };
+    }
     const referenceIssues = validateManifestToolReferences(profileManifest.manifest);
     if (referenceIssues.length > 0) {
       return { ok: false, issues: referenceIssues };
@@ -1102,22 +1107,109 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
   }
   const topology = value.workspace.topology ?? defaultWorkspaceTopology();
   const bindingRef = workspaceBindingRef(value.workspace.binding);
-  const providerResourceId = workspaceProviderResourceId({
-    deploymentNamespace: value.deployment.id,
-    workspaceBindingRef: bindingRef,
-    topology,
-    scopeRef: scopeRef.value,
-  });
-  const cloudflareSandboxId = cloudflareWorkspaceSandboxId({
-    deploymentNamespace: value.deployment.id,
-    workspaceBindingRef: bindingRef,
-    scopeRef: scopeRef.value,
-    providerResourceId,
-  });
+  const scopePolicy = profileManifest.manifest.scope;
+  if (scopePolicy.idSource === "extension") {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "workspace_scope_not_manifest_owned",
+          path: "agent/agent.json#/scope",
+          reason: "scope_not_manifest_owned",
+        },
+      ],
+    };
+  }
+  if (
+    scopePolicy.idSource === "submit_scope" &&
+    value.target.kind !== AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1
+  ) {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "workspace_submit_scope_requires_cloudflare_routing",
+          path: "agent/agent.json#/scope",
+          target: value.target.kind,
+        },
+      ],
+    };
+  }
+  if (scopePolicy.idSource === "submit_scope") {
+    const unsupportedHostPaths: AgentOsConfigIssue[] = [
+      ...(value.client.kind === AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1
+        ? [
+            {
+              kind: "workspace_submit_scope_host_path_unsupported" as const,
+              path: "agentos.config.jsonc#/client" as const,
+              hostPath: "svelte-kit-remote" as const,
+            },
+          ]
+        : []),
+      ...(compiled.channels.length > 0
+        ? [
+            {
+              kind: "workspace_submit_scope_host_path_unsupported" as const,
+              path: "agent/channels" as const,
+              hostPath: "channel" as const,
+            },
+          ]
+        : []),
+      ...(compiled.schedules.length > 0
+        ? [
+            {
+              kind: "workspace_submit_scope_host_path_unsupported" as const,
+              path: "agent/schedules" as const,
+              hostPath: "schedule" as const,
+            },
+          ]
+        : []),
+    ];
+    if (unsupportedHostPaths.length > 0) return { ok: false, issues: unsupportedHostPaths };
+  }
+  const manifestScopeRef =
+    scopePolicy.idSource === "manifest" ? manifestScopeRefResult(profileManifest.manifest) : null;
+  if (manifestScopeRef !== null && !manifestScopeRef.ok) {
+    return {
+      ok: false,
+      issues: [
+        {
+          kind: "workspace_scope_not_manifest_owned",
+          path: "agent/agent.json#/scope",
+          reason: manifestScopeRef.reason,
+        },
+      ],
+    };
+  }
+  const staticWorkspaceIdentity =
+    manifestScopeRef !== null && manifestScopeRef.ok
+      ? (() => {
+          const scopeRef = {
+            kind: scopePolicy.kind,
+            scopeId: manifestScopeRef.value.scopeId,
+          };
+          const providerResourceId = workspaceProviderResourceId({
+            deploymentNamespace: value.deployment.id,
+            workspaceBindingRef: bindingRef,
+            topology,
+            scopeRef,
+          });
+          return {
+            scope: { idSource: "manifest" as const, scopeRef },
+            providerResourceId,
+          };
+        })()
+      : null;
+  const workspaceMaterialIdentity =
+    staticWorkspaceIdentity?.providerResourceId ??
+    submitScopeWorkspaceMaterialRef({
+      deploymentNamespace: value.deployment.id,
+      workspaceBindingRef: bindingRef,
+    });
   const manifestWithWorkspaceMaterial = addWorkspaceMaterial(
     profileManifest.manifest,
     profileManifest.provenance,
-    providerResourceId,
+    workspaceMaterialIdentity,
   );
   const referenceIssues = validateManifestToolReferences(manifestWithWorkspaceMaterial.manifest);
   if (referenceIssues.length > 0) {
@@ -1147,8 +1239,13 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
     "/deployment/adapter": `derived:/target/kind`,
     "/deployment/codec": workspaceMacroOrigin("/deployment/codec"),
     "/deployment/providerStrategy": `derived:/llm/route`,
-    "/workspace/providerResourceId": `derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope`,
-    "/workspace/cloudflareSandboxId": `derived:/workspace/providerResourceId`,
+    "/workspace/scope/idSource": `derived:agent/agent.json#/scope/idSource`,
+    ...(staticWorkspaceIdentity === null
+      ? { "/workspace/scope/kind": `derived:agent/agent.json#/scope/kind` as const }
+      : {
+          "/workspace/providerResourceId":
+            `derived:/deployment/id+/workspace/binding+/workspace/topology+/agent/scope` as const,
+        }),
   };
   addLlmRouteOrigins(origins, value.llm);
   return {
@@ -1183,8 +1280,9 @@ export const normalizeAgentOsConfig = <K extends HandlerKind = HandlerKind>(
         bindingRef,
         root: value.workspace.root,
         topology,
-        providerResourceId,
-        cloudflareSandboxId,
+        ...(staticWorkspaceIdentity ?? {
+          scope: { idSource: "submit_scope" as const, kind: scopePolicy.kind },
+        }),
       },
       origins,
       provenance: {

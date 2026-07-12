@@ -38,8 +38,6 @@ const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_f
 const forbiddenCloudflareLifecycleTargetFragments = [
   /installCloudflareWorkspaceOperationProvider/,
   /installCloudflareWorkspaceJobProfile/,
-  /createCloudflareWorkspaceEnvResolver/,
-  /createCloudflareSandboxWorkspaceEnvResolver/,
   /workspace-job-profile/,
 ];
 
@@ -2292,7 +2290,10 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(target, /resolveRuntimeInstallGraph/);
     assert.match(target, /workspaceOperations/);
     assert.match(target, /WORKSPACE_OPERATION_HOST_FACT/);
-    assert.match(target, /\[WORKSPACE_OPERATION_HOST_FACT\]: \(\) => workspaceEnvFor\(env\)/);
+    assert.match(
+      target,
+      /\[WORKSPACE_OPERATION_HOST_FACT\]: generatedWorkspaceOperationEnvFor\(env\)/,
+    );
     assert.doesNotMatch(target, /workspaceOperations\(\{\s*env:/);
     assert.match(target, /from "@agent-os\/core\/runtime-protocol";/);
     assert.match(target, /from "@agent-os\/runtime\/run-projector";/);
@@ -2305,9 +2306,10 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(target, /projectAgentSessions/);
     assert.match(target, /projectWorkflowRuns/);
     assert.doesNotMatch(target, /submitAgentEffect/);
-    assert.doesNotMatch(target, /from "@agent-os\/runtime\/workspace-binding";/);
+    assert.match(target, /from "@agent-os\/runtime\/workspace-binding";/);
     assertNoCloudflareLifecycleTargetWiring(target);
-    assert.doesNotMatch(target, /bindWorkspaceToolsForRuntime/);
+    assert.match(target, /bindWorkspaceToolsForRuntime/);
+    assert.match(target, /createCloudflareSandboxWorkspaceEnvResolver/);
     assert.match(target, /generatedWorkspaceToolInteractions/);
     assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
     assert.match(target, /readonly AGENTOS_MATERIAL_RESOLVER: RefResolver;/);
@@ -2388,6 +2390,127 @@ void test("agentos build compiles an authored workspace tree into generated file
     assert.match(client, /WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections>/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test("workspace submit_scope generation binds every workspace path to authenticated DO scope", () => {
+  const result = runTypeScript(
+    [
+      'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
+      "const compiled = compileAgentTree({ files: [",
+      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
+      '  { path: "agent/agent.json", kind: "json", value: { agentId: "dynamic-workspace", scope: { kind: "session", idSource: "submit_scope" }, effectAuthorityRef: { authorityClass: "effect", authorityId: "dynamic-workspace" } } },',
+      "] });",
+      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
+      "const base = {",
+      '  profile: "workspace@1",',
+      '  agent: "./agent",',
+      '  deployment: { id: "dynamic-workspace" },',
+      '  client: { kind: "browser-direct@1" },',
+      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
+      '  workspace: { binding: "Sandbox", root: "/workspace" },',
+      "};",
+      'const cloudflare = normalizeAgentOsConfig({ ...base, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, compiled.value);',
+      'const node = normalizeAgentOsConfig({ ...base, target: { kind: "node@1" } }, compiled.value);',
+      'const remote = normalizeAgentOsConfig({ ...base, client: { kind: "svelte-kit-remote@1" }, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, compiled.value);',
+      'const hostPaths = normalizeAgentOsConfig({ ...base, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, { ...compiled.value, channels: [{ name: "github" }], schedules: [{ scheduleId: "daily" }] });',
+      "if (!cloudflare.ok) { console.error(JSON.stringify(cloudflare.issues)); process.exit(1); }",
+      'const linked = linkWorkspaceStaticTarget(cloudflare.value, { packageScope: "@yansirplus" });',
+      "if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
+      "const file = (path) => linked.value.files.find((entry) => entry.path === path).text;",
+      "console.log(JSON.stringify({",
+      '  target: file(".agentos/generated/target.ts"),',
+      '  scope: file(".agentos/generated/cloudflare-scope.ts"),',
+      '  deployment: JSON.parse(file(".agentos/generated/deployment.json")),',
+      "  moduleGraph: linked.value.moduleGraph,",
+      "  node,",
+      "  remote,",
+      "  hostPaths,",
+      "}));",
+    ].join("\n"),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.deployment.workspace.scope, {
+    idSource: "submit_scope",
+    kind: "session",
+  });
+  assert.equal(Object.hasOwn(output.deployment.workspace, "providerResourceId"), false);
+  assert.equal(Object.hasOwn(output.deployment.workspace, "cloudflareSandboxId"), false);
+  assert.deepEqual(output.node, {
+    ok: false,
+    issues: [
+      {
+        kind: "workspace_submit_scope_requires_cloudflare_routing",
+        path: "agent/agent.json#/scope",
+        target: "node@1",
+      },
+    ],
+  });
+  assert.deepEqual(output.remote, {
+    ok: false,
+    issues: [
+      {
+        kind: "workspace_submit_scope_host_path_unsupported",
+        path: "agentos.config.jsonc#/client",
+        hostPath: "svelte-kit-remote",
+      },
+    ],
+  });
+  assert.deepEqual(output.hostPaths, {
+    ok: false,
+    issues: [
+      {
+        kind: "workspace_submit_scope_host_path_unsupported",
+        path: "agent/channels",
+        hostPath: "channel",
+      },
+      {
+        kind: "workspace_submit_scope_host_path_unsupported",
+        path: "agent/schedules",
+        hostPath: "schedule",
+      },
+    ],
+  });
+
+  assert.match(output.target, /createCloudflareSandboxWorkspaceEnvResolver/);
+  assert.match(output.target, /authority: "agentos\.workspace\.capability"/);
+  assert.match(output.target, /admit: \(\) => Effect\.succeed\(\{ ok: true as const \}\)/);
+  assert.match(output.target, /const scope = ctx\.id\.name;/);
+  assert.match(output.target, /this\.targetTruthIdentity = semanticTruthIdentityFor\(scope\)/);
+  assert.match(output.target, /generatedWorkspaceRefFor\(this\.targetScope\)/);
+  assert.match(output.target, /workspaceSandboxFor\(this\.targetEnv, this\.targetScope\)/);
+  assert.match(
+    output.target,
+    /generatedSubmitBindingsFor\(\s*this\.targetEnv,\s*this\.targetScope,/,
+  );
+  assert.match(output.target, /input\.workspaceRef !== generatedWorkspaceRefFor\(scope\)/);
+  assert.doesNotMatch(output.target, /const generatedWorkspaceSandboxId/);
+  assert.doesNotMatch(output.target, /scopeId: string =/);
+  assert.doesNotMatch(output.target, /input\.(?:tenant|installation|sandboxId)/);
+  const submitFields = output.target.match(
+    /const submitRunInputFields = \(input: SubmitRunInput\): SubmitRunInput => \(\{[\s\S]*?\n\}\);/,
+  );
+  assert.ok(submitFields);
+  assert.doesNotMatch(submitFields[0], /workspaceRef/);
+
+  assert.match(output.scope, /agentOSTruthIdentityFor/);
+  assert.match(output.scope, /scopeId: string/);
+  assert.doesNotMatch(output.scope, /agentOSScopeId/);
+  assert.doesNotMatch(output.scope, /scopeId: string =/);
+
+  const publicSpecifiers = [
+    ...output.target.matchAll(/from "(@yansirplus\/(?:core|runtime)(?:\/[^"]+)?)"/g),
+  ].map((match) => match[1]);
+  assert.ok(publicSpecifiers.includes("@yansirplus/runtime/cloudflare"));
+  assert.ok(publicSpecifiers.includes("@yansirplus/runtime/workspace-binding"));
+  for (const specifier of publicSpecifiers) {
+    assert.doesNotMatch(specifier, /\/src\//);
+    const [scope, packageName, ...subpath] = specifier.split("/");
+    const packageSpecifier = `${scope}/${packageName}`;
+    const exports = projectedPackedExportsFor(packageSpecifier);
+    const exportKey = subpath.length === 0 ? "." : `./${subpath.join("/")}`;
+    assert.ok(exports?.[exportKey], `packed ${packageSpecifier} does not export ${exportKey}`);
   }
 });
 
@@ -4253,14 +4376,14 @@ void test("static target wires one dynamic capability registry for cloudflare an
       "});",
       "const hostIsolation = {",
       "  workspace: {",
-      "    workspaceSandbox: workspace.text.includes('generatedWorkspaceSandboxId') && workspace.text.includes('workspaceSandboxFor') && workspace.text.includes('@cloudflare/sandbox'),",
+      "    workspaceSandbox: workspace.text.includes('createCloudflareSandboxWorkspaceEnvResolver') && workspace.text.includes('generatedWorkspaceRefFor') && workspace.text.includes('workspaceSandboxFor') && workspace.text.includes('@cloudflare/sandbox'),",
       "    workspaceHostGraph: workspace.text.includes('generatedCapabilityInstallGraphFor'),",
       "    cloudflareLifecycle: workspace.text.includes('createAgentDurableObject'),",
       "    excludesNode: !workspace.text.includes('lowerLocalAgentRuntime') && !workspace.text.includes('createLocalAgentApp') && !workspace.text.includes('generatedTargetEnvFor'),",
       "  },",
       "  chat: {",
       "    cloudflareLifecycle: chat.text.includes('createAgentDurableObject'),",
-      "    excludesWorkspace: !chat.text.includes('generatedWorkspaceSandboxId') && !chat.text.includes('workspaceSandboxFor') && !chat.text.includes('generatedCapabilityInstallGraphFor') && !chat.text.includes('@cloudflare/sandbox'),",
+      "    excludesWorkspace: !chat.text.includes('createCloudflareSandboxWorkspaceEnvResolver') && !chat.text.includes('workspaceSandboxFor') && !chat.text.includes('generatedCapabilityInstallGraphFor') && !chat.text.includes('@cloudflare/sandbox'),",
       "    excludesNode: !chat.text.includes('lowerLocalAgentRuntime') && !chat.text.includes('createLocalAgentApp') && !chat.text.includes('generatedTargetEnvFor'),",
       "  },",
       "  node: {",
