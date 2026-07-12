@@ -1028,6 +1028,7 @@ const generatedFrameworkToolsFor = (
 
 const renderStaticRuntimeBootstrapImports = (
   model: StaticRuntimeBootstrapModel,
+  scope: AgentScopeIdentityPolicy,
   modules: ReturnType<typeof staticTargetModules>,
 ): string =>
   [
@@ -1066,6 +1067,14 @@ const renderStaticRuntimeBootstrapImports = (
     renderTypeImport(["DynamicCapabilityResolverDefinition"], modules.runtimeCapability),
     renderTypeImport(["Tool"], modules.coreTools),
     renderTypeImport(["RefResolver"], modules.coreRefResolver),
+    ...(scope.idSource === "submit_scope"
+      ? [
+          renderNamedImport(
+            ["cloudflareDefaultTruthIdentityFromRoutingScope"],
+            modules.cloudflareDoRuntime,
+          ),
+        ]
+      : []),
     renderCustomToolImports(model),
   ]
     .filter((statement) => statement.length > 0)
@@ -1075,10 +1084,7 @@ const renderSemanticTruthIdentity = (scope: AgentScopeIdentityPolicy): string =>
   scope.idSource === "submit_scope"
     ? `const semanticTruthIdentityFor = (scopeId: string): LedgerTruthIdentity => {
   if (scopeId.length === 0) throw Error("authenticated routing scope is missing");
-  return {
-    scopeRef: { kind: ${jsString(scope.kind)}, scopeId },
-    effectAuthorityRef: semanticManifest.effectAuthorityRef,
-  };
+  return cloudflareDefaultTruthIdentityFromRoutingScope(scopeId, ${jsString(scope.kind)});
 };`
     : `const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);
 const semanticTruthIdentityFor = (scopeId: string): LedgerTruthIdentity => {
@@ -1385,7 +1391,7 @@ const renderWorkspaceStaticTarget = (
     .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
   const imports = [
-    renderStaticRuntimeBootstrapImports(bootstrap, modules),
+    renderStaticRuntimeBootstrapImports(bootstrap, normalized.deployment.manifest.scope, modules),
     `import generatedMaterialResolverFactory from ${jsString(
       importMaterialResolverPath(target.materialResolver.path),
     )};`,
@@ -1870,7 +1876,7 @@ const renderChatStaticTarget = (
     .map((binding) => `  readonly ${binding.envName}?: string;`)
     .join("\n");
   const imports = [
-    renderStaticRuntimeBootstrapImports(bootstrap, modules),
+    renderStaticRuntimeBootstrapImports(bootstrap, normalized.deployment.manifest.scope, modules),
     `import generatedMaterialResolverFactory from ${jsString(
       importMaterialResolverPath(target.materialResolver.path),
     )};`,
@@ -2072,7 +2078,7 @@ const renderLocalAgentApp = (
     workspaceShellToolNames.has(toolName),
   );
   const imports = [
-    renderStaticRuntimeBootstrapImports(bootstrap, modules),
+    renderStaticRuntimeBootstrapImports(bootstrap, normalized.deployment.manifest.scope, modules),
     ...(hasChannels ? [renderNamedImport(["dispatchGeneratedChannelRequest"], "./channels")] : []),
     ...(hasChannels ? [renderTypeImport(["ChannelRuntime"], modules.runtimeChannel)] : []),
     ...(hasSchedules
@@ -2423,15 +2429,22 @@ const renderCloudflareScopeHelper = (
   const identityProjection = submitScope
     ? `export const agentOSTruthIdentityFor = (scopeId: string): LedgerTruthIdentity => {
   if (scopeId.length === 0) throw Error("authenticated routing scope is missing");
-  return {
-    scopeRef: { kind: ${jsString(normalized.deployment.manifest.scope.kind)}, scopeId },
-    effectAuthorityRef: (manifest as AgentManifest).effectAuthorityRef,
-  };
+  return cloudflareDefaultTruthIdentityFromRoutingScope(scopeId, ${jsString(
+    normalized.deployment.manifest.scope.kind,
+  )});
 };`
     : `export const agentOSTruthIdentity = manifestTruthIdentity(manifest as AgentManifest);
 export const agentOSScopeId = agentOSTruthIdentity.scopeRef.scopeId;`;
   const scopeParameter = submitScope ? "scopeId: string" : "scopeId: string = agentOSScopeId";
   return `${renderNamedImport(["durableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}
+${
+  submitScope
+    ? renderNamedImport(
+        ["cloudflareDefaultTruthIdentityFromRoutingScope"],
+        modules.cloudflareDoRuntime,
+      )
+    : ""
+}
 ${renderNamedImport(["manifestTruthIdentity"], modules.runtimeProtocol)}
 ${renderTypeImport(["AgentRuntimeClient"], modules.cloudflareDoRuntime)}
 ${renderTypeImport(["DurableObjectRpcClient"], `${modules.cloudflareDoRuntime}/do-rpc`)}

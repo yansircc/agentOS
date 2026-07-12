@@ -16,6 +16,12 @@ not emit deployment-time operational workspace constants. Generated host paths
 without an authenticated scope source fail closed; they must not fall back to a
 manifest scope.
 
+`./cloudflare:cloudflareDefaultTruthIdentityFromRoutingScope` is the runtime-owned
+projection from that authenticated routing scope to ledger truth identity. It
+derives both `scopeRef` and `effectAuthorityRef` from the same scope; generated
+submit, inspection, and event paths must share it instead of combining dynamic
+scope with manifest-owned authority.
+
 ## Cloudflare Material Resolver Boundary
 
 `./cloudflare:defineCloudflareMaterialResolverFactory` is the public host
@@ -670,6 +676,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./cloudflare:CloudflareAttachedStreamFactory`
 - `./cloudflare:CloudflareAttachedStreamFactoryContext`
 - `./cloudflare:CloudflareAttachedStreamSource`
+- `./cloudflare:cloudflareDefaultTruthIdentityFromRoutingScope`
 - `./cloudflare:CloudflareLedgerSseSource`
 - `./cloudflare:CloudflareMaterialResolverBindings`
 - `./cloudflare:CloudflareMaterialResolverFactory`

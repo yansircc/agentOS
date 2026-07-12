@@ -7,6 +7,7 @@
  */
 
 export { createAgentDurableObject } from "./agent-do";
+export { cloudflareDefaultTruthIdentityFromRoutingScope } from "./ledger/identity";
 export { materializeCloudflareAgentDeployment } from "./deployment";
 export { cloudflareAgentMountPort, mountCloudflareAgent } from "./mount";
 export {

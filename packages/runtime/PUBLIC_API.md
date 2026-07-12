@@ -532,6 +532,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./cloudflare:CloudflareAttachedStreamFactory`
 - `./cloudflare:CloudflareAttachedStreamFactoryContext`
 - `./cloudflare:CloudflareAttachedStreamSource`
+- `./cloudflare:cloudflareDefaultTruthIdentityFromRoutingScope`
 - `./cloudflare:CloudflareLedgerSseSource`
 - `./cloudflare:CloudflareMaterialResolverBindings`
 - `./cloudflare:CloudflareMaterialResolverFactory`

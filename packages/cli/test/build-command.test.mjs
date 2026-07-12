@@ -2607,6 +2607,11 @@ void test("workspace submit_scope generation binds every workspace path to authe
   assert.match(output.target, /authority: "agentos\.workspace\.capability"/);
   assert.match(output.target, /admit: \(\) => Effect\.succeed\(\{ ok: true as const \}\)/);
   assert.match(output.target, /const scope = ctx\.id\.name;/);
+  assert.match(
+    output.target,
+    /cloudflareDefaultTruthIdentityFromRoutingScope\(scopeId, "session"\)/,
+  );
+  assert.doesNotMatch(output.target, /effectAuthorityRef: semanticManifest\.effectAuthorityRef/);
   assert.match(output.target, /this\.targetTruthIdentity = semanticTruthIdentityFor\(scope\)/);
   assert.match(output.target, /generatedWorkspaceRefFor\(this\.targetScope\)/);
   assert.match(output.target, /workspaceSandboxFor\(this\.targetEnv, this\.targetScope\)/);
@@ -2627,6 +2632,14 @@ void test("workspace submit_scope generation binds every workspace path to authe
   assert.doesNotMatch(submitFields[0], /workspaceRef/);
 
   assert.match(output.scope, /agentOSTruthIdentityFor/);
+  assert.match(
+    output.scope,
+    /cloudflareDefaultTruthIdentityFromRoutingScope\(scopeId, "session"\)/,
+  );
+  assert.doesNotMatch(
+    output.scope,
+    /effectAuthorityRef: \(manifest as AgentManifest\)\.effectAuthorityRef/,
+  );
   assert.match(output.scope, /scopeId: string/);
   assert.doesNotMatch(output.scope, /agentOSScopeId/);
   assert.doesNotMatch(output.scope, /scopeId: string =/);

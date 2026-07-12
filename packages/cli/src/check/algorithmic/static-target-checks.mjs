@@ -296,6 +296,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
           "OpenAiCompatibleLlmTransportLive",
           "preflightOpenAiCompatibleProviderMaterial",
           "manifestTruthIdentity",
+          "cloudflareDefaultTruthIdentityFromRoutingScope",
           "deterministicToolInvocation",
           "unsafeRunToolByName",
           "renderCustomToolImports(model)",
@@ -309,6 +310,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
           'scope.idSource === "submit_scope"',
           "const semanticTruthIdentityFor = (scopeId: string): LedgerTruthIdentity =>",
           'if (scopeId.length === 0) throw Error("authenticated routing scope is missing")',
+          "cloudflareDefaultTruthIdentityFromRoutingScope(scopeId",
           "const semanticTruthIdentity = manifestTruthIdentity(semanticManifest);",
           "scopeId !== semanticTruthIdentity.scopeRef.scopeId",
         ],
@@ -347,7 +349,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const requiredBootstrapConsumerMarkers = [
       "const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);",
       "const hasSkills = bootstrap.skills.length > 0;",
-      "renderStaticRuntimeBootstrapImports(bootstrap, modules)",
+      "renderStaticRuntimeBootstrapImports(bootstrap, normalized.deployment.manifest.scope, modules)",
       "${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}",
     ];
     const forbiddenTargetLocalBootstrapMarkers = [
