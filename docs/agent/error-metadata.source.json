@@ -98,6 +98,12 @@
       "fix": "Decode provider output through the runtime output-item schema instead of product-side fallback parsing."
     },
     {
+      "tag": "agent_os.llm_provider_continuation_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/carriers-and-material.md",
+      "fix": "Resume only through the owning adapter codec with matching route, model, truth identity, and turn bindings; provide a sealed continuation store for durable resume."
+    },
+    {
       "tag": "agent_os.aead_sealed_codec_failure",
       "invariants": ["invariant.boundary.runtime-validation-external-only"],
       "docs": "docs/concepts/carriers-and-material.md",

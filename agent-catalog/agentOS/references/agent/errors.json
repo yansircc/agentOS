@@ -253,6 +253,13 @@
       "sourceFiles": ["packages/runtime/src/submit-agent/llm-timeout.ts"]
     },
     {
+      "tag": "agent_os.llm_provider_continuation_failure",
+      "invariants": ["invariant.boundary.runtime-validation-external-only"],
+      "docs": "docs/concepts/carriers-and-material.md",
+      "fix": "Resume only through the owning adapter codec with matching route, model, truth identity, and turn bindings; provide a sealed continuation store for durable resume.",
+      "sourceFiles": ["packages/core/src/llm-protocol/provider-continuation.ts"]
+    },
+    {
       "tag": "agent_os.missing_submit_run_binding",
       "invariants": ["invariant.d10.truth-identity"],
       "docs": "docs/packages/core.md",

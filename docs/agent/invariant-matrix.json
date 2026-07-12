@@ -116,6 +116,7 @@
         "agent_os.invalid_trace_context",
         "agent_os.llm_call_timed_out",
         "agent_os.llm_call_timeout",
+        "agent_os.llm_provider_continuation_failure",
         "agent_os.postgres_harness_error",
         "agent_os.provider_http_failure",
         "agent_os.ref_resolution_failed",
