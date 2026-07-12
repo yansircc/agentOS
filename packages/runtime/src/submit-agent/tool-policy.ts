@@ -30,14 +30,18 @@ export const completeAfterToolPolicyNames = (spec: InternalSubmitSpec): Readonly
   return [...new Set(toolNames.filter((toolName) => toolName.length > 0))];
 };
 
+export const completeAfterToolsRequireInvocation = (spec: InternalSubmitSpec): boolean =>
+  spec.toolPolicy?.completeAfterToolsExecuted?.invocation === "required";
+
 export const routeModelId = (route: LlmRoute): string | undefined =>
   typeof route.modelId === "string" && route.modelId.length > 0 ? route.modelId : undefined;
 
 export const requiredToolPolicyNames = (spec: InternalSubmitSpec): ReadonlyArray<string> => [
   ...new Set(
-    [singleRequiredToolPolicyName(spec), ...completeAfterToolPolicyNames(spec)].filter(
-      (toolName): toolName is string => toolName !== null,
-    ),
+    [
+      singleRequiredToolPolicyName(spec),
+      ...(completeAfterToolsRequireInvocation(spec) ? completeAfterToolPolicyNames(spec) : []),
+    ].filter((toolName): toolName is string => toolName !== null),
   ),
 ];
 

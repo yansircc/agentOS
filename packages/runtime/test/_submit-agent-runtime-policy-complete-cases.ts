@@ -12,6 +12,59 @@ import {
 } from "./_submit-agent-harness";
 
 export const registerSubmitAgentRuntimePolicyCompleteCases = () => {
+  it.effect(
+    "does not force a model-selected terminal tool and completes immediately when chosen",
+    () =>
+      Effect.gen(function* () {
+        const createCandidate = defineTool({
+          name: "create_candidate",
+          description: "create a review candidate",
+          args: Schema.Struct({ value: Schema.String }),
+          execute: ({ value }) => Effect.succeed({ status: "candidate_lived", value }),
+          authority: "write",
+          admit: () => Effect.succeed({ ok: true }),
+          execution: deterministicToolExecution(),
+        });
+        const spec = baseSpec({
+          tools: { create_candidate: createCandidate },
+          toolPolicy: {
+            completeAfterToolsExecuted: {
+              invocation: "model_selected",
+              toolNames: ["create_candidate"],
+              finalMessage: "candidate ready",
+            },
+          },
+        });
+
+        const readOnly = yield* runSubmit(spec, [
+          response({ items: [{ type: "message", text: "current page summary" }] }),
+        ]);
+        expect(readOnly.result).toMatchObject({ ok: true, final: "current page summary" });
+        expect(readOnly.llmRequests.map((request) => request.tool_choice)).toEqual([undefined]);
+
+        const mutation = yield* runSubmit(spec, [
+          response({
+            items: [
+              {
+                type: "tool_call",
+                call: {
+                  id: "call-candidate",
+                  type: "function",
+                  function: {
+                    name: "create_candidate",
+                    arguments: '{"value":"redesign"}',
+                  },
+                },
+              },
+            ],
+          }),
+          response({ items: [{ type: "message", text: "must not be requested" }] }),
+        ]);
+        expect(mutation.result).toMatchObject({ ok: true, final: "candidate ready" });
+        expect(mutation.llmRequests.map((request) => request.tool_choice)).toEqual([undefined]);
+      }),
+  );
+
   it.effect("does not complete until every runtime-required policy tool executes", () =>
     Effect.gen(function* () {
       const prepare = defineTool({
@@ -42,6 +95,7 @@ export const registerSubmitAgentRuntimePolicyCompleteCases = () => {
           toolPolicy: {
             requiredUntilToolExecuted: { toolName: "prepare" },
             completeAfterToolsExecuted: {
+              invocation: "required",
               toolNames: ["write_artifact"],
               finalMessage: "artifact ready",
             },
@@ -150,6 +204,7 @@ export const registerSubmitAgentRuntimePolicyCompleteCases = () => {
             },
             toolPolicy: {
               completeAfterToolsExecuted: {
+                invocation: "required",
                 toolNames: ["write_html", "write_design"],
                 finalMessage: "artifacts written",
               },
@@ -305,6 +360,7 @@ export const registerSubmitAgentRuntimePolicyCompleteCases = () => {
           },
           toolPolicy: {
             completeAfterToolsExecuted: {
+              invocation: "required",
               toolNames: ["write_first", "write_second", "write_third"],
               ordered: true,
               finalMessage: "ordered artifacts written",

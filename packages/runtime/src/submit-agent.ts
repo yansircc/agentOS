@@ -136,6 +136,7 @@ import { finalAbort, submitResultFromEvents } from "./submit-agent/result";
 import {
   allPolicyToolsExecuted,
   completeAfterToolPolicyNames,
+  completeAfterToolsRequireInvocation,
   hasExecutedTool,
   policyToolViolationReason,
   remainingRequiredToolNames,
@@ -574,9 +575,11 @@ export const submitAgentEffect = (
       }
       const requiredToolNames = requiredToolPolicyNames(spec);
       const completeAfterToolNames = completeAfterToolPolicyNames(spec);
+      const policyToolNames = [...new Set([...requiredToolNames, ...completeAfterToolNames])];
       const orderedCompleteAfterTools =
+        completeAfterToolsRequireInvocation(spec) &&
         spec.toolPolicy?.completeAfterToolsExecuted?.ordered === true;
-      const unknownPolicyToolName = requiredToolNames.find(
+      const unknownPolicyToolName = policyToolNames.find(
         (toolName) => visibleTools[toolName] === undefined,
       );
       if (unknownPolicyToolName !== undefined) {
@@ -680,9 +683,7 @@ export const submitAgentEffect = (
         let admittedResume: InputRequestResumePayload | undefined;
         let toolPolicyFailures = 0;
         const executedToolNames = new Set(
-          requiredToolNames.filter((toolName) =>
-            hasExecutedTool(priorEvents, started.id, toolName),
-          ),
+          policyToolNames.filter((toolName) => hasExecutedTool(priorEvents, started.id, toolName)),
         );
 
         if (spec.resume !== undefined) {
@@ -1732,7 +1733,7 @@ export const submitAgentEffect = (
                 traceContext,
               }),
             });
-            if (requiredToolNames.includes(call.function.name)) {
+            if (policyToolNames.includes(call.function.name)) {
               executedToolNames.add(call.function.name);
             }
             const historyArguments = yield* providerHistoryArgumentsJson(
@@ -1757,7 +1758,7 @@ export const submitAgentEffect = (
             });
             if (
               completeAfterToolNames.length > 0 &&
-              allPolicyToolsExecuted(requiredToolNames, executedToolNames)
+              allPolicyToolsExecuted(policyToolNames, executedToolNames)
             ) {
               const final =
                 spec.toolPolicy?.completeAfterToolsExecuted?.finalMessage ??

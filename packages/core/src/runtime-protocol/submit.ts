@@ -56,19 +56,30 @@ export interface SubmitToolPolicy {
    *
    * Artifact-first submissions often use tool effects as the terminal evidence
    * and do not need one more model prose turn after the files are written. The
-   * runtime treats these tools as required until they execute, then commits the
-   * run completion fact without another LLM call.
+   * Invocation obligation is explicit: artifact-first runs can require the
+   * listed tools, while mixed chat/tool runs can complete only when the model
+   * selects them without forcing unrelated read-only runs to call them.
    */
   readonly completeAfterToolsExecuted?: {
-    readonly toolNames: ReadonlyArray<string>;
-    /**
-     * Treat toolNames as a listed sequence after the model starts terminal
-     * artifact writes. Non-policy tools may still run before the first listed
-     * tool; listed tools themselves must execute in order.
-     */
-    readonly ordered?: boolean;
     readonly finalMessage?: string;
-  };
+  } & (
+    | {
+        readonly invocation: "required";
+        readonly toolNames: ReadonlyArray<string>;
+        /**
+         * Treat toolNames as a listed sequence after the model starts terminal
+         * artifact writes. Non-policy tools may still run before the first listed
+         * tool; listed tools themselves must execute in order.
+         */
+        readonly ordered?: boolean;
+      }
+    | {
+        readonly invocation: "model_selected";
+        /** A model-selected terminal tool completes immediately when chosen. */
+        readonly toolNames: readonly [string];
+        readonly ordered?: never;
+      }
+  );
 }
 
 export type SubmitToolRetryDelayPolicy =

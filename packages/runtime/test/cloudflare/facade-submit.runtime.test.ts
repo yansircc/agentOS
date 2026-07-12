@@ -387,6 +387,7 @@ describe("defineAgentDO facade submit", () => {
         input: {},
         toolPolicy: {
           completeAfterToolsExecuted: {
+            invocation: "required",
             toolNames: ["write_first", "write_second"],
             finalMessage: "facade artifacts written",
           },

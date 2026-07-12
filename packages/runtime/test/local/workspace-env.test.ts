@@ -275,6 +275,7 @@ describe("createLocalWorkspaceEnv", () => {
         decisionInterrupts: [{ toolName: "write_file", reason: "approval_required" }],
         toolPolicy: {
           completeAfterToolsExecuted: {
+            invocation: "required",
             toolNames: ["write_file"],
             finalMessage: "local input request resumed",
           },
@@ -379,6 +380,7 @@ describe("createLocalWorkspaceEnv", () => {
         decisionInterrupts: [{ toolName: "write_file", reason: "approval_required" }],
         toolPolicy: {
           completeAfterToolsExecuted: {
+            invocation: "required",
             toolNames: ["write_file"],
             finalMessage: "local hydrated request resumed",
           },
@@ -511,6 +513,7 @@ describe("createLocalWorkspaceEnv", () => {
         decisionInterrupts: [{ toolName: "write_file", reason: "approval_required" }],
         toolPolicy: {
           completeAfterToolsExecuted: {
+            invocation: "required",
             toolNames: ["write_file"],
             finalMessage: "should not complete",
           },
@@ -860,6 +863,7 @@ describe("createLocalWorkspaceEnv", () => {
         intent: "write a local file",
         toolPolicy: {
           completeAfterToolsExecuted: {
+            invocation: "required",
             toolNames: ["write_file"],
             finalMessage: "local workspace write complete",
           },

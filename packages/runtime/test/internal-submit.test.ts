@@ -36,6 +36,7 @@ const toolRetryPolicy = {
 
 const toolPolicy = {
   completeAfterToolsExecuted: {
+    invocation: "required",
     toolNames: ["write_terminal"],
     finalMessage: "done",
   },

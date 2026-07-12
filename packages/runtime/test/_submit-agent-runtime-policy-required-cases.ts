@@ -195,6 +195,7 @@ export const registerSubmitAgentRuntimePolicyRequiredCases = () => {
           },
           toolPolicy: {
             completeAfterToolsExecuted: {
+              invocation: "required",
               toolNames: ["write_html", "write_design"],
               finalMessage: "artifacts written",
             },
