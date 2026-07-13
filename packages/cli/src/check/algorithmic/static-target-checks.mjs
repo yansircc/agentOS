@@ -1,4 +1,449 @@
+import fs from "node:fs";
+import path from "node:path";
 import ts from "typescript";
+
+const repoRoot = path.resolve(import.meta.dirname, "../../../../..");
+const staticTargetRoot = "packages/cli/src/build/agent-authoring/static-target";
+const staticTargetPaths = Object.freeze({
+  facade: "packages/cli/src/build/agent-authoring/static-target.ts",
+  model: `${staticTargetRoot}/model.ts`,
+  encoding: `${staticTargetRoot}/encoding.ts`,
+  registries: `${staticTargetRoot}/registries.ts`,
+  semanticBootstrap: `${staticTargetRoot}/semantic-bootstrap.ts`,
+  compiler: `${staticTargetRoot}/compiler.ts`,
+  artifacts: `${staticTargetRoot}/artifacts.ts`,
+  linker: `${staticTargetRoot}/linker.ts`,
+});
+const rendererPaths = Object.freeze([
+  `${staticTargetRoot}/renderers/profile-workspace.ts`,
+  `${staticTargetRoot}/renderers/profile-chat.ts`,
+  `${staticTargetRoot}/renderers/host-local.ts`,
+  `${staticTargetRoot}/renderers/host-cloudflare.ts`,
+  `${staticTargetRoot}/renderers/client-browser.ts`,
+  `${staticTargetRoot}/renderers/client-remote-workspace.ts`,
+  `${staticTargetRoot}/renderers/client-remote-chat.ts`,
+]);
+const authoringInputPaths = new Set([
+  "packages/cli/src/build/agent-authoring/manifest-compiler.ts",
+  "packages/cli/src/build/agent-authoring/deployment-intent.ts",
+]);
+const rendererForbiddenPaths = new Set([staticTargetPaths.compiler, ...authoringInputPaths]);
+const rendererClassifierImports = new Set([
+  "DEPLOYMENT_TARGET_KIND",
+  "DEPLOYMENT_TRANSPORT",
+  "PRODUCT_AGENT_KIND",
+  "PROVIDER_PROTOCOL",
+  "ProductPlan",
+  "StaticTargetBinding",
+  "WORKSPACE_TOOL_DEFAULT_DECLARATIONS",
+  "WORKSPACE_TOOL_EXPOSURE_PROFILES",
+  "isWorkspaceToolName",
+  "verifyProductPlanDigest",
+]);
+const planModelTypes = new Set([
+  "StaticTargetPlanShared",
+  "StaticTargetClientProjection",
+  "StaticTargetProfileProjectionBase",
+  "StaticTargetProfileProjection",
+  "StaticTargetHostProjection",
+  "StaticTargetPlan",
+]);
+const forbiddenPlanProjectionFields = new Set([
+  "files",
+  "moduleGraph",
+  "clientCandidates",
+  "browserDirect",
+  "svelteKit",
+  "svelteKitRemote",
+  "targetText",
+  "skillResourceBundle",
+]);
+
+const compare = (left, right) => left.localeCompare(right);
+const toRepoPath = (absolutePath) =>
+  path.relative(repoRoot, absolutePath).split(path.sep).join("/");
+const isInsideRepo = (absolutePath) => {
+  const relative = path.relative(repoRoot, absolutePath);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+};
+
+let cachedCompilerOptions;
+const cliCompilerOptions = () => {
+  if (cachedCompilerOptions !== undefined) return cachedCompilerOptions;
+  const configPath = path.join(repoRoot, "packages/cli/tsconfig.json");
+  const parsed = ts.getParsedCommandLineOfConfigFile(configPath, {}, ts.sys);
+  if (parsed === undefined || parsed.errors.length > 0) {
+    throw new Error("packages/cli/tsconfig.json: cannot resolve static target module graph");
+  }
+  cachedCompilerOptions = parsed.options;
+  return cachedCompilerOptions;
+};
+
+const virtualModuleCandidates = (fromFile, specifier) => {
+  if (!specifier.startsWith(".")) return [];
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier));
+  const withoutJsExtension = /\.(?:c|m)?jsx?$/u.test(base)
+    ? base.replace(/\.(?:c|m)?jsx?$/u, "")
+    : base;
+  return [
+    base,
+    `${withoutJsExtension}.ts`,
+    `${withoutJsExtension}.tsx`,
+    `${withoutJsExtension}.mts`,
+    `${withoutJsExtension}.cts`,
+    `${base}.ts`,
+    `${base}.tsx`,
+    `${base}.mts`,
+    `${base}.cts`,
+    `${base}.js`,
+    `${base}.mjs`,
+    `${base}.cjs`,
+    `${base}/index.ts`,
+    `${base}/index.tsx`,
+    `${base}/index.mts`,
+    `${base}/index.mjs`,
+  ].filter((candidate, index, candidates) => candidates.indexOf(candidate) === index);
+};
+
+const importedNames = (node) => {
+  if (ts.isImportDeclaration(node)) {
+    const names = [];
+    if (node.importClause?.name !== undefined) names.push("default");
+    const bindings = node.importClause?.namedBindings;
+    if (ts.isNamespaceImport(bindings)) names.push("*");
+    if (ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        names.push((element.propertyName ?? element.name).text);
+      }
+    }
+    return names;
+  }
+  if (ts.isExportDeclaration(node)) {
+    if (node.exportClause === undefined || ts.isNamespaceExport(node.exportClause)) return ["*"];
+    return node.exportClause.elements.map((element) => (element.propertyName ?? element.name).text);
+  }
+  return ["*"];
+};
+
+const staticModuleRecords = (file, source) => {
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const records = [];
+  const failures = [];
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      records.push({ specifier: node.moduleSpecifier.text, names: importedNames(node) });
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteralLike(node.moduleReference.expression)
+    ) {
+      records.push({ specifier: node.moduleReference.expression.text, names: ["*"] });
+    } else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      ts.isStringLiteralLike(node.argument.literal)
+    ) {
+      records.push({ specifier: node.argument.literal.text, names: ["*"] });
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      if (node.arguments.length !== 1 || !ts.isStringLiteralLike(node.arguments[0])) {
+        failures.push(`${file}: static target module graph contains non-literal dynamic import`);
+      } else {
+        records.push({ specifier: node.arguments[0].text, names: ["*"] });
+      }
+    } else if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "require"
+    ) {
+      failures.push(`${file}: static target module graph forbids require`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  const preprocessed = ts.preProcessFile(source, true, true);
+  for (const [references, kind] of [
+    [preprocessed.referencedFiles, "path"],
+    [preprocessed.typeReferenceDirectives, "types"],
+    [preprocessed.libReferenceDirectives, "lib"],
+  ]) {
+    if (references.length > 0) {
+      failures.push(`${file}: static target module graph forbids triple-slash ${kind} reference`);
+    }
+  }
+  return { sourceFile, records, failures };
+};
+
+const resolveStaticModule = ({ fromFile, specifier, sources, read }) => {
+  for (const candidate of virtualModuleCandidates(fromFile, specifier)) {
+    if (sources.has(candidate)) return candidate;
+    if (read === undefined) continue;
+    try {
+      const source = read(candidate);
+      sources.set(candidate, source);
+      return candidate;
+    } catch (error) {
+      if (error?.code !== "ENOENT" && error?.code !== "EISDIR") throw error;
+    }
+  }
+  if (read === undefined) return undefined;
+  const resolved = ts.resolveModuleName(
+    specifier,
+    path.join(repoRoot, fromFile),
+    cliCompilerOptions(),
+    ts.sys,
+  ).resolvedModule?.resolvedFileName;
+  if (resolved === undefined || !isInsideRepo(resolved) || !fs.existsSync(resolved)) {
+    return undefined;
+  }
+  const repoPath = toRepoPath(resolved);
+  if (!repoPath.startsWith("packages/cli/src/")) return undefined;
+  if (!sources.has(repoPath)) sources.set(repoPath, read(repoPath));
+  return repoPath;
+};
+
+const staticTargetModuleGraph = ({ moduleSources, read }) => {
+  const sources = new Map(Object.entries(moduleSources ?? {}));
+  const pending = [...sources.keys()];
+  const parsed = new Map();
+  const edges = [];
+  const failures = [];
+  while (pending.length > 0) {
+    const file = pending.shift();
+    if (file === undefined || parsed.has(file)) continue;
+    const source = sources.get(file);
+    if (source === undefined) continue;
+    const record = staticModuleRecords(file, source);
+    parsed.set(file, record);
+    if (file === staticTargetPaths.facade || file.startsWith(`${staticTargetRoot}/`)) {
+      failures.push(...record.failures);
+    }
+    for (const imported of record.records) {
+      const target = resolveStaticModule({
+        fromFile: file,
+        specifier: imported.specifier,
+        sources,
+        read,
+      });
+      edges.push({ from: file, to: target, ...imported });
+      if (target !== undefined && !parsed.has(target)) pending.push(target);
+      if (target === undefined && imported.specifier.startsWith(".")) {
+        failures.push(`${file}: unresolved relative dependency ${imported.specifier}`);
+      }
+    }
+  }
+  return { sources, parsed, edges, failures };
+};
+
+const graphAdjacency = (graph) => {
+  const adjacency = new Map();
+  for (const edge of graph.edges) {
+    const current = adjacency.get(edge.from) ?? [];
+    current.push(edge);
+    adjacency.set(edge.from, current);
+  }
+  return adjacency;
+};
+
+const dependencyClosure = (adjacency, entry) => {
+  const visited = new Set();
+  const pending = [entry];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || visited.has(current)) continue;
+    visited.add(current);
+    for (const edge of adjacency.get(current) ?? []) {
+      if (edge.to !== undefined) pending.push(edge.to);
+    }
+  }
+  return visited;
+};
+
+const propertySignatureName = (node) => {
+  if (!ts.isPropertySignature(node)) return undefined;
+  if (ts.isIdentifier(node.name) || ts.isStringLiteralLike(node.name)) return node.name.text;
+  return undefined;
+};
+
+const planModelFailures = (graph) => {
+  const parsed = graph.parsed.get(staticTargetPaths.model)?.sourceFile;
+  if (parsed === undefined) return [`${staticTargetPaths.model}: plan model is missing`];
+  const failures = [];
+  for (const statement of parsed.statements) {
+    const name =
+      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) &&
+      statement.name !== undefined
+        ? statement.name.text
+        : undefined;
+    if (name === undefined || !planModelTypes.has(name)) continue;
+    const visit = (node) => {
+      const field = propertySignatureName(node);
+      if (field !== undefined && forbiddenPlanProjectionFields.has(field)) {
+        failures.push(
+          `${staticTargetPaths.model}: plan model contains pre-rendered field ${field} in ${name}`,
+        );
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(statement);
+  }
+  return failures;
+};
+
+const axisReferenceIn = (root) => {
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (ts.isPropertyAccessExpression(node)) {
+      const name = node.name.text;
+      if (name === "profile" || name === "host" || name === "client") {
+        found = true;
+        return;
+      }
+      if (
+        name === "kind" &&
+        ((ts.isIdentifier(node.expression) && node.expression.text === "target") ||
+          (ts.isPropertyAccessExpression(node.expression) &&
+            node.expression.name.text === "target"))
+      ) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+};
+
+const rendererSecondCompilationFailures = (file, sourceFile) => {
+  const failures = [];
+  const wideInput =
+    /\b(?:ProductIntent|ProductPlan|DeploymentIntent|StaticTargetBinding|StaticTargetPlan|StaticTargetProfileProjection|StaticTargetHostProjection|StaticTargetClientProjection)\b/u;
+  const visit = (node) => {
+    if (
+      ts.isParameter(node) &&
+      node.type !== undefined &&
+      wideInput.test(node.type.getText(sourceFile))
+    ) {
+      failures.push(`${file}: renderer performs second compilation through a wide input`);
+    }
+    const condition = ts.isIfStatement(node)
+      ? node.expression
+      : ts.isConditionalExpression(node)
+        ? node.condition
+        : ts.isSwitchStatement(node)
+          ? node.expression
+          : undefined;
+    if (condition !== undefined && axisReferenceIn(condition)) {
+      failures.push(`${file}: renderer performs second compilation by reopening an axis`);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "filter" &&
+      /\btoolNames\b/u.test(node.expression.expression.getText(sourceFile))
+    ) {
+      failures.push(`${file}: renderer performs second compilation by reclassifying tools`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return failures;
+};
+
+const staticTargetPhysicalBoundaryFailures = ({ staticTargetModuleSources, read }) => {
+  const requiredPaths = [...Object.values(staticTargetPaths), ...rendererPaths];
+  const failures = [];
+  for (const required of requiredPaths) {
+    if (staticTargetModuleSources?.[required] === undefined) {
+      failures.push(`${required}: static target role module is missing`);
+    }
+  }
+  if (failures.length > 0) return failures;
+
+  const graph = staticTargetModuleGraph({ moduleSources: staticTargetModuleSources, read });
+  failures.push(...graph.failures);
+  const adjacency = graphAdjacency(graph);
+
+  const facade = graph.parsed.get(staticTargetPaths.facade)?.sourceFile;
+  if (facade !== undefined) {
+    for (const statement of facade.statements) {
+      if (
+        ts.isExportDeclaration(statement) &&
+        (statement.exportClause === undefined || ts.isNamespaceExport(statement.exportClause))
+      ) {
+        failures.push(`${staticTargetPaths.facade}: facade must not use export *`);
+      }
+    }
+  }
+
+  failures.push(...planModelFailures(graph));
+
+  for (const edge of graph.edges) {
+    if (
+      edge.from.startsWith(`${staticTargetRoot}/`) &&
+      edge.from !== staticTargetPaths.compiler &&
+      edge.to !== undefined &&
+      authoringInputPaths.has(edge.to)
+    ) {
+      failures.push(`${edge.from}: only the plan compiler may import raw authoring input`);
+    }
+  }
+
+  const linkerSource = graph.sources.get(staticTargetPaths.linker) ?? "";
+  for (const edge of adjacency.get(staticTargetPaths.linker) ?? []) {
+    if (
+      edge.to === staticTargetPaths.compiler ||
+      (edge.to !== undefined && authoringInputPaths.has(edge.to))
+    ) {
+      failures.push(`${staticTargetPaths.linker}: linker must not consume raw input`);
+    }
+  }
+  if (
+    /\b(?:ProductIntent|ProductPlan|DeploymentIntent|StaticTargetBinding)\b/u.test(linkerSource)
+  ) {
+    failures.push(`${staticTargetPaths.linker}: linker must not consume raw input`);
+  }
+
+  const artifactClosure = dependencyClosure(adjacency, staticTargetPaths.artifacts);
+  if (
+    artifactClosure.has(staticTargetPaths.compiler) ||
+    [...authoringInputPaths].some((input) => artifactClosure.has(input))
+  ) {
+    failures.push(`${staticTargetPaths.artifacts}: artifacts must not import compiler`);
+  }
+
+  for (const renderer of rendererPaths) {
+    const closure = dependencyClosure(adjacency, renderer);
+    const forbidden = [...closure].find((file) => rendererForbiddenPaths.has(file));
+    if (forbidden !== undefined) {
+      failures.push(`${renderer}: renderer dependency reaches authoring compiler at ${forbidden}`);
+    }
+    for (const current of closure) {
+      for (const edge of adjacency.get(current) ?? []) {
+        const classifier = edge.names.find((name) => rendererClassifierImports.has(name));
+        const sharedNamespace =
+          edge.to === "packages/cli/src/build/agent-authoring/shared.ts" &&
+          edge.names.includes("*");
+        if (classifier !== undefined || sharedNamespace) {
+          failures.push(
+            `${renderer}: renderer performs second compilation through classifier ${classifier ?? "namespace"}`,
+          );
+        }
+      }
+    }
+    const rendererFile = graph.parsed.get(renderer)?.sourceFile;
+    if (rendererFile !== undefined) {
+      failures.push(...rendererSecondCompilationFailures(renderer, rendererFile));
+    }
+  }
+
+  return [...new Set(failures)];
+};
 
 export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
   const sliceBetweenMarkers = (source, startMarker, endMarker) => {
@@ -10,11 +455,20 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
 
   const checkGeneratedStaticTargetLinking = () => {
     const failures = [];
-    const sourcePath = "packages/cli/src/build/agent-authoring/static-target.ts";
+    const sourcePath = staticTargetPaths.facade;
     const workspaceAgentSourcePath = "packages/core/src/workspace-agent.ts";
     const commandProjectionSourcePath =
       "packages/cli/src/build/agent-authoring/generated-command-projection.ts";
-    const source = read(sourcePath);
+    const staticTargetModuleSources = Object.fromEntries(
+      [...Object.values(staticTargetPaths), ...rendererPaths].map((modulePath) => [
+        modulePath,
+        read(modulePath),
+      ]),
+    );
+    const source = Object.entries(staticTargetModuleSources)
+      .sort(([left], [right]) => compare(left, right))
+      .map(([, moduleSource]) => moduleSource)
+      .join("\n");
     const workspaceAgentSource = read(workspaceAgentSourcePath);
     const commandProjectionSource = read(commandProjectionSourcePath);
     const surface = readJson("docs/surface.json");
@@ -42,51 +496,39 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       ...staticTargetArchitectureFailures({
         manifestCompilerSource,
         deploymentIntentSource,
-        staticTargetSource: source,
+        staticTargetSource: staticTargetModuleSources[sourcePath],
+        staticTargetModuleSources,
         entrySources,
         legacyConfigPresent,
+        read,
       }),
     );
-    const staticRuntimeBootstrapModelSource = sliceBetweenMarkers(
-      source,
-      "interface StaticRuntimeBootstrapModel",
-      "const renderCustomToolImports =",
-    );
+    const modelSource = staticTargetModuleSources[staticTargetPaths.model];
+    const compilerSource = staticTargetModuleSources[staticTargetPaths.compiler];
+    const semanticBootstrapSource = staticTargetModuleSources[staticTargetPaths.semanticBootstrap];
+    const staticRuntimeBootstrapModelSource = `${modelSource}\n${compilerSource}`;
     const renderStaticRuntimeBootstrapImportsSource = sliceBetweenMarkers(
-      source,
+      semanticBootstrapSource,
       "const renderStaticRuntimeBootstrapImports =",
       "const renderSemanticTruthIdentity =",
     );
     const renderSemanticTruthIdentitySource = sliceBetweenMarkers(
-      source,
+      semanticBootstrapSource,
       "const renderSemanticTruthIdentity =",
       "const renderStaticRuntimeBootstrap =",
     );
     const renderStaticRuntimeBootstrapSource = sliceBetweenMarkers(
-      source,
+      semanticBootstrapSource,
       "const renderStaticRuntimeBootstrap =",
       "const renderSubmitSpecFromRunInput =",
     );
-    const renderCloudflareMaterialResolverFactorySource = sliceBetweenMarkers(
-      source,
-      "const renderCloudflareMaterialResolverFactory =",
-      "const renderWorkspaceStaticTarget =",
-    );
-    const renderWorkspaceStaticTargetSource = sliceBetweenMarkers(
-      source,
-      "const renderWorkspaceStaticTarget =",
-      "const renderChatStaticTarget =",
-    );
-    const renderChatStaticTargetSource = sliceBetweenMarkers(
-      source,
-      "const renderChatStaticTarget =",
-      "const renderLocalAgentApp =",
-    );
-    const renderLocalAgentAppSource = sliceBetweenMarkers(
-      source,
-      "const renderLocalAgentApp =",
-      "const renderCloudflareScopeHelper =",
-    );
+    const renderCloudflareMaterialResolverFactorySource = semanticBootstrapSource;
+    const renderWorkspaceStaticTargetSource =
+      staticTargetModuleSources[`${staticTargetRoot}/renderers/profile-workspace.ts`];
+    const renderChatStaticTargetSource =
+      staticTargetModuleSources[`${staticTargetRoot}/renderers/profile-chat.ts`];
+    const renderLocalAgentAppSource =
+      staticTargetModuleSources[`${staticTargetRoot}/renderers/host-local.ts`];
     const renderStaticTargetSource = [
       staticRuntimeBootstrapModelSource,
       renderStaticRuntimeBootstrapImportsSource,
@@ -97,40 +539,29 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       renderChatStaticTargetSource,
       renderLocalAgentAppSource,
     ].join("\n");
-    const renderWorkspaceSvelteKitRemoteSource = sliceBetweenMarkers(
-      source,
-      "const renderWorkspaceSvelteKitRemote =",
-      "const renderChatSvelteKitRemote =",
-    );
-    const renderChatSvelteKitRemoteSource = sliceBetweenMarkers(
-      source,
-      "const renderChatSvelteKitRemote =",
-      "const renderWorkspaceBrowserDirectClient =",
-    );
+    const renderWorkspaceSvelteKitRemoteSource =
+      staticTargetModuleSources[`${staticTargetRoot}/renderers/client-remote-workspace.ts`];
+    const renderChatSvelteKitRemoteSource =
+      staticTargetModuleSources[`${staticTargetRoot}/renderers/client-remote-chat.ts`];
     const renderSvelteKitRemoteSource = [
       renderWorkspaceSvelteKitRemoteSource,
       renderChatSvelteKitRemoteSource,
     ].join("\n");
+    const hostCloudflareSource =
+      staticTargetModuleSources[`${staticTargetRoot}/renderers/host-cloudflare.ts`];
     const renderCloudflareScopeHelperSource = sliceBetweenMarkers(
-      source,
+      hostCloudflareSource,
       "const renderCloudflareScopeHelper =",
       "const renderCloudflareWorkerEntry =",
     );
     const renderCloudflareWorkerEntrySource = sliceBetweenMarkers(
-      source,
+      hostCloudflareSource,
       "const renderCloudflareWorkerEntry =",
       "const renderCloudflareWranglerConfig =",
     );
-    const renderCloudflareWranglerConfigSource = sliceBetweenMarkers(
-      source,
-      "const renderCloudflareWranglerConfig =",
-      "const generatedProfileClientModuleImports =",
-    );
-    const renderWorkspaceStaticClientSource = sliceBetweenMarkers(
-      source,
-      "const renderWorkspaceBrowserDirectClient =",
-      "const renderStaticClientTypes =",
-    );
+    const renderCloudflareWranglerConfigSource = hostCloudflareSource;
+    const renderWorkspaceStaticClientSource =
+      staticTargetModuleSources[`${staticTargetRoot}/renderers/client-browser.ts`];
     const renderStaticClientSource = renderWorkspaceStaticClientSource;
     for (const [name, targetSource] of [
       ["StaticRuntimeBootstrapModel", staticRuntimeBootstrapModelSource],
@@ -269,13 +700,13 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
         targetSource: staticRuntimeBootstrapModelSource,
         markers: [
           "interface StaticRuntimeBootstrapModel",
-          "const staticRuntimeBootstrapModelFor =",
+          "const staticRuntimeBootstrapFor =",
           "customToolNames: toolNames.filter",
-          "manifestTools: input.deployment.manifest.tools",
-          "llmRoutes: input.llmRoutes",
-          "skills: input.skills",
-          "instructionFragments: input.instructionFragments",
-          "dynamicResolvers: input.dynamicResolvers",
+          "manifestTools: facts.deployment.manifest.tools",
+          "llmRoutes: facts.llmRoutes",
+          "skills: [...product.assets.skills].sort",
+          "instructionFragments: [...product.assets.instructionFragments].sort",
+          "dynamicResolvers: [...product.assets.dynamicResolvers].sort",
         ],
       },
       {
@@ -339,7 +770,7 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       { name: "node local", targetSource: renderLocalAgentAppSource },
     ];
     const requiredBootstrapConsumerMarkers = [
-      "const bootstrap = staticRuntimeBootstrapModelFor(normalized, toolNames);",
+      "const bootstrap = normalized.bootstrap;",
       "const hasSkills = bootstrap.skills.length > 0;",
       "renderStaticRuntimeBootstrapImports(bootstrap, normalized.deployment.manifest.scope, modules)",
       "${renderStaticRuntimeBootstrap(bootstrap, normalized.deployment.manifest.scope)}",
@@ -733,16 +1164,38 @@ export const staticTargetArchitectureFailures = ({
   manifestCompilerSource,
   deploymentIntentSource,
   staticTargetSource,
+  staticTargetModuleSources,
   entrySources = [],
   legacyConfigPresent = false,
+  read,
 }) => {
   const failures = [];
   const manifestPath = "packages/cli/src/build/agent-authoring/manifest-compiler.ts";
   const deploymentPath = "packages/cli/src/build/agent-authoring/deployment-intent.ts";
-  const targetPath = "packages/cli/src/build/agent-authoring/static-target.ts";
+  const targetPath = staticTargetPaths.facade;
+  const splitSources = staticTargetModuleSources ?? {
+    [targetPath]: staticTargetSource,
+  };
+  const split = staticTargetModuleSources !== undefined;
+  const compilerPath = split ? staticTargetPaths.compiler : targetPath;
+  const modelPath = split ? staticTargetPaths.model : targetPath;
+  const artifactsPath = split ? staticTargetPaths.artifacts : targetPath;
+  const linkerPath = split ? staticTargetPaths.linker : targetPath;
   const manifestFile = parseSource(manifestPath, manifestCompilerSource);
   const deploymentFile = parseSource(deploymentPath, deploymentIntentSource);
-  const targetFile = parseSource(targetPath, staticTargetSource);
+  const compilerFile = parseSource(compilerPath, splitSources[compilerPath] ?? "");
+  const modelFile = parseSource(modelPath, splitSources[modelPath] ?? "");
+  const artifactsFile = parseSource(artifactsPath, splitSources[artifactsPath] ?? "");
+  const linkerFile = parseSource(linkerPath, splitSources[linkerPath] ?? "");
+
+  if (split) {
+    failures.push(
+      ...staticTargetPhysicalBoundaryFailures({
+        staticTargetModuleSources: splitSources,
+        read,
+      }),
+    );
+  }
 
   const productPlan = namedInterface(manifestFile, "ProductPlan");
   if (productPlan === undefined || !hasExportModifier(productPlan)) {
@@ -793,116 +1246,145 @@ export const staticTargetArchitectureFailures = ({
     }
   }
 
-  const productImports = namedImportNames(targetFile, "./manifest-compiler");
+  const productImports = namedImportNames(
+    compilerFile,
+    split ? "../manifest-compiler" : "./manifest-compiler",
+  );
   if (!productImports.has("ProductPlan")) {
-    failures.push(`${targetPath}: binder must import ProductPlan from manifest-compiler`);
+    failures.push(`${compilerPath}: binder must import ProductPlan from manifest-compiler`);
   }
-  const deploymentImports = namedImportNames(targetFile, "./deployment-intent");
+  const deploymentImports = namedImportNames(
+    compilerFile,
+    split ? "../deployment-intent" : "./deployment-intent",
+  );
   if (!deploymentImports.has("StaticTargetBinding")) {
-    failures.push(`${targetPath}: binder must import StaticTargetBinding from deployment-intent`);
+    failures.push(`${compilerPath}: binder must import StaticTargetBinding from deployment-intent`);
   }
 
-  const binder = exportedCallable(targetFile, "bindStaticTargetPlan");
+  const binder = exportedCallable(compilerFile, "bindStaticTargetPlan");
   if (binder === undefined) {
-    failures.push(`${targetPath}: missing exported bindStaticTargetPlan`);
+    failures.push(`${compilerPath}: missing exported bindStaticTargetPlan`);
   } else {
-    const parameters = callableParameterContract(targetFile, binder);
+    const parameters = callableParameterContract(compilerFile, binder);
     const [product, binding] = parameters;
     if (product?.type !== "ProductPlan" || binding?.type !== "StaticTargetBinding") {
       failures.push(
-        `${targetPath}: bindStaticTargetPlan must consume ProductPlan + StaticTargetBinding`,
+        `${compilerPath}: bindStaticTargetPlan must consume ProductPlan + StaticTargetBinding`,
       );
     }
-    if (normalizedTypeText(targetFile, binder.type) !== "StaticTargetPlanResult") {
-      failures.push(`${targetPath}: bindStaticTargetPlan must return StaticTargetPlanResult`);
+    if (normalizedTypeText(compilerFile, binder.type) !== "StaticTargetPlanResult") {
+      failures.push(`${compilerPath}: bindStaticTargetPlan must return StaticTargetPlanResult`);
     }
     if (
       product?.name !== undefined &&
       binding?.name !== undefined &&
-      !hasCallWithLeadingArguments(targetFile, binder, "bindingFactsFor", [
+      !hasCallWithLeadingArguments(compilerFile, binder, "bindingFactsFor", [
         product.name,
         binding.name,
       ])
     ) {
-      failures.push(`${targetPath}: binder must derive binding facts from product + binding`);
+      failures.push(`${compilerPath}: binder must derive binding facts from product + binding`);
     }
     if (
       product?.name !== undefined &&
       !callExpressionsNamed(binder.body, "staticTargetPlanFor").some(
-        (call) => call.arguments[0]?.getText(targetFile) === product.name,
+        (call) => call.arguments[0]?.getText(compilerFile) === product.name,
       )
     ) {
-      failures.push(`${targetPath}: binder must close the ProductPlan into StaticTargetPlan`);
+      failures.push(`${compilerPath}: binder must close the ProductPlan into StaticTargetPlan`);
     }
   }
 
-  const plan = namedInterface(targetFile, "StaticTargetPlan");
+  const plan = namedInterface(modelFile, "StaticTargetPlan");
   if (plan === undefined || !hasExportModifier(plan)) {
-    failures.push(`${targetPath}: StaticTargetPlan must be an exported closed plan`);
+    failures.push(`${modelPath}: StaticTargetPlan must be an exported closed plan`);
   } else {
     const fields = interfaceMemberNames(plan);
     for (const required of ["shared", "profile", "host", "client"]) {
       if (!fields.includes(required)) {
-        failures.push(`${targetPath}: StaticTargetPlan is missing closed projection ${required}`);
+        failures.push(`${modelPath}: StaticTargetPlan is missing closed projection ${required}`);
       }
     }
   }
 
-  const renderer = exportedCallable(targetFile, "renderStaticTargetPlan");
+  const renderer = exportedCallable(artifactsFile, "renderStaticTargetPlan");
   if (renderer === undefined) {
-    failures.push(`${targetPath}: missing exported renderStaticTargetPlan`);
+    failures.push(`${artifactsPath}: missing exported renderStaticTargetPlan`);
   } else {
-    const parameters = callableParameterContract(targetFile, renderer);
+    const parameters = callableParameterContract(artifactsFile, renderer);
     if (parameters.length !== 1 || parameters[0]?.type !== "StaticTargetPlan") {
-      failures.push(`${targetPath}: renderer must consume only one closed StaticTargetPlan`);
+      failures.push(`${artifactsPath}: renderer must consume only one closed StaticTargetPlan`);
     }
-    if (normalizedTypeText(targetFile, renderer.type) !== "StaticTargetLink") {
-      failures.push(`${targetPath}: renderStaticTargetPlan must return StaticTargetLink`);
+    if (normalizedTypeText(artifactsFile, renderer.type) !== "StaticTargetLink") {
+      failures.push(`${artifactsPath}: renderStaticTargetPlan must return StaticTargetLink`);
     }
-    const planName = parameters[0]?.name ?? "plan";
-    const paths = propertyAccessPaths(renderer.body);
-    for (const required of [
-      `${planName}.host.files`,
-      `${planName}.host.moduleGraph`,
-      `${planName}.profile.canonicalDeployment`,
-      `${planName}.host.canonicalDeployment`,
-      `${planName}.client.kind`,
-      `${planName}.shared.toolNames`,
-      `${planName}.host.mount`,
-      `${planName}.profile.mount`,
-    ]) {
-      if (!paths.has(required)) {
-        failures.push(`${targetPath}: closed renderer is missing projection ${required}`);
+    if (!split) {
+      const planName = parameters[0]?.name ?? "plan";
+      const paths = propertyAccessPaths(renderer.body);
+      for (const required of [
+        `${planName}.host.files`,
+        `${planName}.host.moduleGraph`,
+        `${planName}.profile.canonicalDeployment`,
+        `${planName}.host.canonicalDeployment`,
+        `${planName}.client.kind`,
+        `${planName}.shared.toolNames`,
+        `${planName}.host.mount`,
+        `${planName}.profile.mount`,
+      ]) {
+        if (!paths.has(required)) {
+          failures.push(`${artifactsPath}: closed renderer is missing projection ${required}`);
+        }
       }
     }
   }
 
-  const linker = exportedCallable(targetFile, "linkStaticTarget");
+  const linker = exportedCallable(compilerFile, "linkStaticTarget");
   if (linker === undefined) {
-    failures.push(`${targetPath}: missing exported linkStaticTarget`);
+    failures.push(`${compilerPath}: missing exported linkStaticTarget`);
   } else {
-    const parameters = callableParameterContract(targetFile, linker);
+    const parameters = callableParameterContract(compilerFile, linker);
     const [product, binding] = parameters;
     if (product?.type !== "ProductPlan" || binding?.type !== "StaticTargetBinding") {
       failures.push(
-        `${targetPath}: linkStaticTarget must consume ProductPlan + StaticTargetBinding`,
+        `${compilerPath}: linkStaticTarget must consume ProductPlan + StaticTargetBinding`,
       );
     }
-    if (normalizedTypeText(targetFile, linker.type) !== "StaticTargetLinkResult") {
-      failures.push(`${targetPath}: linkStaticTarget must return StaticTargetLinkResult`);
+    if (normalizedTypeText(compilerFile, linker.type) !== "StaticTargetLinkResult") {
+      failures.push(`${compilerPath}: linkStaticTarget must return StaticTargetLinkResult`);
     }
     if (
       product?.name !== undefined &&
       binding?.name !== undefined &&
-      !hasCallWithLeadingArguments(targetFile, linker, "bindStaticTargetPlan", [
+      !hasCallWithLeadingArguments(compilerFile, linker, "bindStaticTargetPlan", [
         product.name,
         binding.name,
       ])
     ) {
-      failures.push(`${targetPath}: linkStaticTarget must delegate product binding to the binder`);
+      failures.push(
+        `${compilerPath}: linkStaticTarget must delegate product binding to the binder`,
+      );
     }
-    if (callExpressionsNamed(linker.body, "renderStaticTargetPlan").length !== 1) {
-      failures.push(`${targetPath}: linkStaticTarget must render exactly one closed plan`);
+    const finalLinkCall = split ? "linkStaticTargetPlan" : "renderStaticTargetPlan";
+    if (callExpressionsNamed(linker.body, finalLinkCall).length !== 1) {
+      failures.push(`${compilerPath}: linkStaticTarget must link exactly one closed plan`);
+    }
+  }
+
+  if (split) {
+    const closedLinker = exportedCallable(linkerFile, "linkStaticTargetPlan");
+    if (closedLinker === undefined) {
+      failures.push(`${linkerPath}: missing exported linkStaticTargetPlan`);
+    } else {
+      const parameters = callableParameterContract(linkerFile, closedLinker);
+      if (parameters.length !== 1 || parameters[0]?.type !== "StaticTargetPlanResult") {
+        failures.push(`${linkerPath}: linker must consume one closed StaticTargetPlanResult`);
+      }
+      if (normalizedTypeText(linkerFile, closedLinker.type) !== "StaticTargetLinkResult") {
+        failures.push(`${linkerPath}: linker must return StaticTargetLinkResult`);
+      }
+      if (callExpressionsNamed(closedLinker.body, "renderStaticTargetPlan").length !== 1) {
+        failures.push(`${linkerPath}: linker must render exactly one closed plan`);
+      }
     }
   }
 
@@ -918,7 +1400,7 @@ export const staticTargetArchitectureFailures = ({
   for (const { path, source } of [
     { path: manifestPath, source: manifestCompilerSource },
     { path: deploymentPath, source: deploymentIntentSource },
-    { path: targetPath, source: staticTargetSource },
+    ...Object.entries(splitSources).map(([path, source]) => ({ path, source })),
     ...entrySources,
   ]) {
     for (const marker of legacyMarkers) {

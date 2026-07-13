@@ -1325,6 +1325,14 @@ const cloudflareDeployment = {
 const cloudLink = linkStaticTarget(workspace.value, cloudflareDeployment, {
   packageScope: "@product-test",
 });
+const unsupportedNodeSvelte = bindStaticTargetPlan(
+  workspace.value,
+  {
+    ...cloudflareDeployment,
+    target: { kind: "node" },
+  },
+  { packageScope: "@product-test" },
+);
 const { workspace: _workspace, ...deploymentWithoutWorkspace } = cloudflareDeployment;
 const missingWorkspace = linkStaticTarget(workspace.value, deploymentWithoutWorkspace);
 const unboundModel = linkStaticTarget(chat.value, {
@@ -1352,6 +1360,7 @@ console.log(
     workspaceLocal: summarize(workspaceLink),
     chatLocal: summarize(chatLink),
     cloud: summarize(cloudLink),
+    unsupportedNodeSvelte,
     planRendersLink:
       workspacePlan.ok &&
       workspaceLink.ok &&
@@ -1397,6 +1406,18 @@ console.log(
   assert.ok(output.cloud.paths.includes(".agentos/generated/wrangler.jsonc"));
   assert.equal(output.cloud.target.lifecycleInstaller, false);
   assert.ok(output.cloud.modules.includes("../../agent/material-resolver"));
+
+  assert.deepEqual(output.unsupportedNodeSvelte, {
+    ok: false,
+    issues: [
+      {
+        kind: "unsupported_static_combination",
+        profile: "workspace",
+        target: "node@1",
+        client: "svelte-kit-remote",
+      },
+    ],
+  });
 
   assert.deepEqual(output.missingWorkspace, {
     ok: false,

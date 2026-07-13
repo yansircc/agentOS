@@ -307,6 +307,45 @@
               "exitCode": 1,
               "outputIncludes": "missing marker one driver mount"
             }
+          },
+          {
+            "id": "reject-renderer-transitive-authoring-import",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "create",
+                "path": "packages/cli/src/build/agent-authoring/static-target/renderers/phase-o-authoring-leak.ts",
+                "content": "import type { ProductPlan } from \"../../manifest-compiler\";\nexport type PhaseORendererLeak = ProductPlan;\n"
+              },
+              {
+                "op": "replace",
+                "path": "packages/cli/src/build/agent-authoring/static-target/renderers/client-browser.ts",
+                "before": "import { renderNamedImport, renderTypeImport, staticTargetModules } from \"../encoding\";\n",
+                "after": "import { renderNamedImport, renderTypeImport, staticTargetModules } from \"../encoding\";\nimport type { PhaseORendererLeak } from \"./phase-o-authoring-leak\";\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "renderer dependency reaches authoring compiler"
+            }
+          },
+          {
+            "id": "reject-renderer-second-compilation",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/cli/src/build/agent-authoring/static-target/renderers/host-local.ts",
+                "before": "  const bootstrap = normalized.bootstrap;\n",
+                "after": "  if ((normalized as StaticTargetRenderInput & { readonly profile: string }).profile === \"workspace\") throw new Error(\"phase-o-red\");\n  const bootstrap = normalized.bootstrap;\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "renderer performs second compilation"
+            }
           }
         ],
         "blindSpots": [
