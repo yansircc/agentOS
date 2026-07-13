@@ -15,13 +15,23 @@ instead of sharing the agentOS source workspace lockfile.
 1. Install required packages with semver versions.
 2. Use the published `@yansirplus/core`, `@yansirplus/runtime`,
    `@yansirplus/client`, and `@yansirplus/cli` package names.
-3. Install required peers such as `effect`. Workspace-profile Cloudflare targets
+3. Install required peers such as `effect`. Workspace-kind Cloudflare targets
    also need the generated target imports they use, including
    `@cloudflare/sandbox` and the selected runtime provider peers.
-4. Build generated agent targets with the public package scope:
-   `pnpm run agentos build --cwd /path/to/consumer --package-scope
-@yansirplus`. This makes generated imports use the public `@yansirplus` scope
-   instead of source workspace packages.
+4. Keep the two-file product intent under `agent/`, put advanced host facts in
+   `agentos.deployment.jsonc`, and build with both boundaries explicit:
+
+   ```sh
+   pnpm exec agentos build \
+     --cwd /path/to/consumer \
+     --deployment agentos.deployment.jsonc \
+     --package-scope @yansirplus
+   ```
+
+   This makes generated imports use the public `@yansirplus` scope instead of
+   source workspace packages. Local first use needs no deployment file; use
+   `agentos ask` or `agentos dev`.
+
 5. For prepublish first-party work, run `pnpm run install:consumer
 /path/to/consumer` in agentOS. This overlays the generated final public package
    projection into the consumer `node_modules` without changing the consumer
@@ -64,9 +74,14 @@ owning package/docs facts and regenerate the catalog.
 Use direct package roots only for consumer-facing packages:
 
 ```ts
-import { compileAgentTree } from "@yansirplus/cli";
+import { compileProductPlan, linkStaticTarget } from "@yansirplus/cli";
 import { createAgentClient } from "@yansirplus/client";
 ```
+
+`compileProductPlan` closes product semantics from `agent/agent.json`,
+`agent/instructions.md`, and optional product assets. `linkStaticTarget` then
+adds one explicit `LocalHost` or `DeploymentIntent`; it does not infer a target
+from package scope or reinterpret product fields.
 
 Generated agent targets emit their own runtime/core imports. Do not hand-write
 these in ordinary app code; keep them inside generated target files:

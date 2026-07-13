@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "evidence": [
     {
-      "primitive": "primitive.agent-authoring.compileAgentTree",
-      "tests": ["packages/cli/test/build-command.test.mjs"]
+      "primitive": "primitive.agent-authoring.compileProductPlan",
+      "tests": ["packages/cli/test/product-plan.test.mjs"]
     },
     {
-      "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "primitive": "primitive.agent-authoring.linkStaticTarget",
       "tests": ["packages/cli/test/build-command.test.mjs"]
     },
     {

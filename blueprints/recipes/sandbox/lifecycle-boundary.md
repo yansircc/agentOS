@@ -5,7 +5,7 @@
   "kind": "sandbox",
   "title": "Sandbox Lifecycle Boundary",
   "summary": "Keep sandbox lifecycle, credentials, and network policy outside runtime public API.",
-  "primaryFile": "agentos.config.jsonc",
+  "primaryFile": "agentos.deployment.jsonc",
   "appliesTo": ["agentos add", "agentos update"],
   "upgradeGuide": "blueprints/UPGRADE.md",
   "lifecycleOwnership": {
@@ -20,7 +20,7 @@
 
 # Sandbox Lifecycle Boundary
 
-<!-- agentos:primary-file path="agentos.config.jsonc" -->
+<!-- agentos:primary-file path="agentos.deployment.jsonc" -->
 
 ## Boundary
 
@@ -36,9 +36,9 @@ adapters only; it does not own sandbox lifecycle policy.
 
 ## Steps
 
-1. Declare the sandbox material or host requirement in the app-owned
-   `agentos.config.jsonc`.
-2. Bind credentials through product-owned material refs.
+1. Declare the sandbox host requirement in the host-owned
+   `agentos.deployment.jsonc`.
+2. Bind credentials through symbolic refs resolved by the deployment host.
 3. Implement create, reuse, delete, and network policy in app-owned or generated
    target source.
 4. Consume runtime stable contracts or pure adapters only through declared

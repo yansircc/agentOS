@@ -1,50 +1,30 @@
-import type { Authored } from "@agent-os/core";
 import { isAgentSchema } from "@agent-os/core/agent-schema";
 import type { AgentSchemaSpec } from "@agent-os/core/agent-schema";
-import { authoredValue } from "@agent-os/core/authored-value";
-import { isAuthorityRef, type AuthorityRef } from "@agent-os/core/effect-claim";
-import { isMaterialRef, type MaterialRef } from "@agent-os/core/material-ref";
-import type {
-  AgentCapabilityBindingRef,
-  AgentExecutionDomainRef,
-  AgentInstructionsRef,
-  AgentInteractionRef,
-  AgentLlmRouteBindingRef,
-  AgentManifest,
-  AgentScopeIdentityPolicy,
-  AgentToolBindingRef,
-} from "@agent-os/core/runtime-protocol";
-import { BUILTIN_HANDLER_KINDS, type HandlerKind } from "@agent-os/core/runtime-protocol";
-import {
-  WORKSPACE_TOOL_DEFAULT_DECLARATIONS,
-  type WorkspaceToolDefaultDeclaration,
-  type WorkspaceToolInteractionFloor,
-  type WorkspaceToolName,
-} from "@agent-os/runtime";
+import { WORKSPACE_TOOL_DEFAULT_DECLARATIONS } from "@agent-os/runtime";
 import { cronMinuteExpression } from "@agent-os/runtime/schedule";
 import {
-  AUTHORING_DEFAULTS_VERSION,
   digestBytes,
   digestText,
   encodeBase64,
-  findFunctionPath,
   GENERATED_LOAD_SKILL_TOOL_NAME,
   GENERATED_READ_SKILL_FILE_TOOL_NAME,
-  hasFunction,
   isNonEmptyString,
   isRecord,
-  isWorkspaceToolName,
   type JsonRecord,
 } from "./shared";
 
-export type AgentManifestFactKey = `/${string}`;
+export const PRODUCT_AGENT_KIND = {
+  CHAT: "chat",
+  WORKSPACE: "workspace",
+} as const;
 
-export type AgentManifestOrigin =
-  | `path:${string}`
-  | `author:${string}#${string}`
-  | `scaffold:${string}@${string}#${string}`
-  | `default:${typeof AUTHORING_DEFAULTS_VERSION}#${string}`
-  | `macro(workspace@1)#${string}`;
+export type ProductAgentKind = (typeof PRODUCT_AGENT_KIND)[keyof typeof PRODUCT_AGENT_KIND];
+
+export type ProductFactKey = `/${string}`;
+
+export type ProductOrigin = `path:${string}` | `author:${string}#${string}`;
+
+export type ProductProvenance = Readonly<Record<ProductFactKey, ProductOrigin>>;
 
 export interface AuthoredAgentTree {
   readonly files: ReadonlyArray<AuthoredAgentTreeFile>;
@@ -98,7 +78,6 @@ export type AuthoredToolEffect =
   | (string & {});
 
 export interface AuthoredToolDeclaration {
-  readonly bindingRef?: string;
   readonly executionDomain?: string;
   readonly interaction?: string;
   readonly materialRefs?: ReadonlyArray<string>;
@@ -157,25 +136,20 @@ export interface AuthoredScheduleFile {
 export interface CompiledAgentChannel {
   readonly name: string;
   readonly path: string;
-  readonly origin: AgentManifestOrigin;
-}
-
-export interface CompiledAgentMaterialResolver {
-  readonly path: string;
-  readonly origin: AgentManifestOrigin;
+  readonly origin: ProductOrigin;
 }
 
 export interface CompiledAgentWorkflow {
   readonly name: string;
   readonly path: string;
-  readonly origin: AgentManifestOrigin;
+  readonly origin: ProductOrigin;
 }
 
 export interface CompiledAgentSchedule {
   readonly scheduleId: string;
   readonly cron: string;
   readonly path: string;
-  readonly origin: AgentManifestOrigin;
+  readonly origin: ProductOrigin;
 }
 
 export interface CompiledAgentSkill {
@@ -199,7 +173,7 @@ export interface CompiledAgentInstructionFragment {
   readonly path: string;
   readonly digest: string;
   readonly text: string;
-  readonly origin: AgentManifestOrigin;
+  readonly origin: ProductOrigin;
 }
 
 export interface CompiledAgentDynamicResolver {
@@ -207,41 +181,44 @@ export interface CompiledAgentDynamicResolver {
   readonly slot: DynamicCapabilitySlot;
   readonly path: string;
   readonly outputs: ReadonlyArray<string>;
-  readonly origin: AgentManifestOrigin;
+  readonly origin: ProductOrigin;
 }
-
-export interface AuthoredWorkspaceDefaultToolOverride {
-  readonly interaction?: WorkspaceToolInteractionFloor;
-}
-
-export type AuthoredWorkspaceDefaultToolControl = false | AuthoredWorkspaceDefaultToolOverride;
 
 export interface AuthoredAgentJson {
-  readonly agentId?: string;
-  readonly version?: string;
-  readonly scope?: AgentScopeIdentityPolicy;
-  readonly effectAuthorityRef?: AuthorityRef;
-  readonly handlers?: ReadonlyArray<HandlerKind>;
-  readonly capabilities?: Readonly<Record<string, AgentCapabilityBindingRef>>;
-  readonly llmRoutes?: Readonly<Record<string, AgentLlmRouteBindingRef>>;
-  readonly tools?: Readonly<Record<string, AuthoredWorkspaceDefaultToolControl>>;
-  readonly materials?: Readonly<Record<string, MaterialRef>>;
-  readonly executionDomains?: Readonly<Record<string, AgentExecutionDomainRef>>;
-  readonly interactions?: Readonly<Record<string, AgentInteractionRef>>;
+  readonly agentId: string;
+  readonly kind: ProductAgentKind;
+  readonly model?: string;
+  readonly tools?: ReadonlyArray<string>;
   readonly outputSchema?: AgentSchemaSpec;
 }
 
-export type AuthoredAgentManifest<K extends HandlerKind = HandlerKind> = AgentManifest<K> &
-  Authored<AgentManifest<K>>;
+export interface ProductPlanAgent {
+  readonly id: string;
+  readonly kind: ProductAgentKind;
+}
 
-export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
-  readonly manifest: AuthoredAgentManifest<K>;
-  readonly provenance: Readonly<Record<AgentManifestFactKey, AgentManifestOrigin>>;
-  readonly workspaceToolControls: Readonly<
-    Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>>
-  >;
-  readonly toolFilePaths: Readonly<Record<string, string>>;
-  readonly materialResolver?: CompiledAgentMaterialResolver;
+export interface ProductIntentInstructions {
+  readonly path: "agent/instructions.md";
+  readonly text: string;
+}
+
+export interface ProductPlanInstructions extends ProductIntentInstructions {
+  readonly digest: string;
+}
+
+export interface ProductPlanToolAsset {
+  readonly name: string;
+  readonly path: string;
+  readonly origin: ProductOrigin;
+  readonly effects: ReadonlyArray<AuthoredToolEffect>;
+  readonly materialRefs: ReadonlyArray<string>;
+  readonly executionDomain?: string;
+  readonly interaction?: string;
+  readonly receiptPolicy?: string;
+}
+
+export interface ProductPlanAssets {
+  readonly tools: ReadonlyArray<ProductPlanToolAsset>;
   readonly channels: ReadonlyArray<CompiledAgentChannel>;
   readonly workflows: ReadonlyArray<CompiledAgentWorkflow>;
   readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
@@ -250,20 +227,47 @@ export interface CompiledAgentManifest<K extends HandlerKind = HandlerKind> {
   readonly dynamicResolvers: ReadonlyArray<CompiledAgentDynamicResolver>;
 }
 
-export type CompileAgentTreeIssue =
+export type ProductSymbolicRequirement =
+  | { readonly kind: "model" }
+  | { readonly kind: "workspace" }
+  | { readonly kind: "material"; readonly ref: string; readonly tool: string }
+  | { readonly kind: "execution-domain"; readonly ref: string; readonly tool: string }
+  | { readonly kind: "interaction"; readonly ref: string; readonly tool: string };
+
+export interface ProductIntent {
+  readonly agent: ProductPlanAgent;
+  readonly instructions: ProductIntentInstructions;
+  readonly modelPreference?: string;
+  readonly toolSelection?: ReadonlyArray<string>;
+  readonly outputSchema?: AgentSchemaSpec;
+  readonly assets: ProductPlanAssets;
+  readonly provenance: ProductProvenance;
+}
+
+export interface ProductPlan {
+  readonly agent: ProductPlanAgent;
+  readonly instructions: ProductPlanInstructions;
+  readonly modelPreference?: string;
+  readonly toolSelection?: ReadonlyArray<string>;
+  readonly outputSchema?: AgentSchemaSpec;
+  readonly symbolicRequirements: ReadonlyArray<ProductSymbolicRequirement>;
+  readonly assets: ProductPlanAssets;
+  readonly provenance: ProductProvenance;
+  readonly productDigest: string;
+}
+
+export type CompileProductPlanIssue =
   | { readonly kind: "unsupported_path"; readonly path: string; readonly reason: string }
   | { readonly kind: "duplicate_path"; readonly path: string; readonly existingPath: string }
   | {
       readonly kind: "duplicate_fact";
-      readonly factKey: AgentManifestFactKey;
-      readonly origins: readonly [AgentManifestOrigin, AgentManifestOrigin];
+      readonly factKey: ProductFactKey;
+      readonly origins: readonly [ProductOrigin, ProductOrigin];
     }
   | {
-      readonly kind: "non_overrideable_fact";
-      readonly factKey: AgentManifestFactKey;
-      readonly origins: readonly [AgentManifestOrigin, AgentManifestOrigin];
+      readonly kind: "missing_required_file";
+      readonly path: "agent/agent.json" | "agent/instructions.md";
     }
-  | { readonly kind: "missing_required_file"; readonly path: "agent/instructions.md" }
   | { readonly kind: "empty_instructions"; readonly path: string }
   | { readonly kind: "invalid_json_file"; readonly path: string; readonly reason: string }
   | {
@@ -283,27 +287,11 @@ export type CompileAgentTreeIssue =
   | { readonly kind: "effectful_tool_missing_interaction"; readonly toolId: string }
   | { readonly kind: "effectful_tool_missing_receipt_policy"; readonly toolId: string }
   | {
-      readonly kind: "unknown_workspace_default_tool_control";
+      readonly kind: "unknown_product_tool";
       readonly path: string;
-      readonly toolId: string;
-    }
-  | {
-      readonly kind: "workspace_default_tool_control_field_forbidden";
-      readonly path: string;
-      readonly toolId: string;
       readonly field: string;
-    }
-  | {
-      readonly kind: "workspace_default_tool_interaction_weakened";
-      readonly path: string;
       readonly toolId: string;
-      readonly floor: WorkspaceToolInteractionFloor;
-      readonly attempted: WorkspaceToolInteractionFloor;
-    }
-  | {
-      readonly kind: "workspace_default_tool_shadowed";
-      readonly path: string;
-      readonly toolId: string;
+      readonly reason: "tool_not_found";
     }
   | {
       readonly kind: "skill_identity_mismatch";
@@ -343,29 +331,23 @@ export type CompileAgentTreeIssue =
       readonly targetId: string;
     }
   | { readonly kind: "reserved_tool_name"; readonly path: string; readonly toolId: string }
-  | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string }
-  | { readonly kind: "function_in_manifest"; readonly path: string };
+  | { readonly kind: "runtime_fact_forbidden"; readonly path: string; readonly field: string };
 
-export type CompileAgentTreeResult<K extends HandlerKind = HandlerKind> =
-  | { readonly ok: true; readonly value: CompiledAgentManifest<K> }
-  | { readonly ok: false; readonly issues: ReadonlyArray<CompileAgentTreeIssue> };
-
-type Layer = 1 | 2 | 3;
+export type CompileProductPlanResult =
+  | { readonly ok: true; readonly value: ProductPlan }
+  | { readonly ok: false; readonly issues: ReadonlyArray<CompileProductPlanIssue> };
 
 interface Fact {
   readonly value: unknown;
-  readonly origin: AgentManifestOrigin;
-  readonly layer: Layer;
-  readonly overrideable: boolean;
+  readonly origin: ProductOrigin;
 }
 
 interface CompilerState {
-  readonly facts: Map<AgentManifestFactKey, Fact>;
-  readonly issues: CompileAgentTreeIssue[];
+  readonly facts: Map<ProductFactKey, Fact>;
+  readonly issues: CompileProductPlanIssue[];
   readonly pathKeys: Map<string, string>;
-  readonly toolIds: Set<string>;
-  readonly toolFilePaths: Map<string, string>;
-  readonly materialResolver: { value?: CompiledAgentMaterialResolver };
+  readonly requiredFiles: Set<"agent/agent.json" | "agent/instructions.md">;
+  readonly tools: Map<string, ProductPlanToolAsset>;
   readonly channels: Map<string, CompiledAgentChannel>;
   readonly workflows: Map<string, CompiledAgentWorkflow>;
   readonly schedules: Map<string, CompiledAgentSchedule>;
@@ -374,7 +356,6 @@ interface CompilerState {
   readonly skillSupportByteTotals: Map<string, number>;
   readonly instructionFragments: Map<string, CompiledAgentInstructionFragment>;
   readonly dynamicResolvers: Map<string, CompiledAgentDynamicResolver>;
-  readonly workspaceToolControls: Map<WorkspaceToolName, WorkspaceDefaultToolControl>;
 }
 
 const SKILL_DESCRIPTION_MAX_BYTES = 240;
@@ -391,42 +372,13 @@ const dynamicResolverIdPattern = /^[a-z][a-z0-9_-]{0,63}$/u;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
-export type WorkspaceDefaultToolControl =
-  | { readonly kind: "disabled"; readonly origin: AgentManifestOrigin }
-  | {
-      readonly kind: "override";
-      readonly interaction?: {
-        readonly value: WorkspaceToolInteractionFloor;
-        readonly origin: AgentManifestOrigin;
-      };
-    };
-
-const defaultOrigin = (factKey: AgentManifestFactKey): AgentManifestOrigin =>
-  `default:${AUTHORING_DEFAULTS_VERSION}#${factKey}`;
-
-export const workspaceManifestMacroOrigin = (factKey: AgentManifestFactKey): AgentManifestOrigin =>
-  `macro(workspace@1)#${factKey}`;
-
 const authoredPath = (path: string): string =>
   path.startsWith("workflows/") ? path : `agent/${path}`;
 
-const authorOrigin = (path: string, pointer: string): AgentManifestOrigin =>
+const authorOrigin = (path: string, pointer: string): ProductOrigin =>
   `author:${authoredPath(path)}#${pointer}`;
 
-const pathOrigin = (path: string): AgentManifestOrigin => `path:${authoredPath(path)}`;
-
-const isManifestMapId = (value: string): boolean =>
-  value.length > 0 && !value.includes("/") && value !== "." && value !== "..";
-
-const isExtensionHandlerKind = (value: string): boolean => {
-  const separator = value.indexOf(".");
-  return separator > 0 && separator < value.length - 1;
-};
-
-const isHandlerKind = (value: unknown): value is HandlerKind =>
-  typeof value === "string" &&
-  ((BUILTIN_HANDLER_KINDS as ReadonlyArray<string>).includes(value) ||
-    isExtensionHandlerKind(value));
+const pathOrigin = (path: string): ProductOrigin => `path:${authoredPath(path)}`;
 
 const invalidAuthoredValue = (
   state: CompilerState,
@@ -568,109 +520,29 @@ const parseStringArrayField = (
   return out;
 };
 
-const parseHandlers = (
+const parseExactStringArrayField = (
   state: CompilerState,
   path: string,
+  field: string,
   value: unknown,
-): ReadonlyArray<HandlerKind> | null => {
+): ReadonlyArray<string> | null => {
   if (!Array.isArray(value)) {
-    invalidAuthoredValue(state, path, "/handlers", "array_required");
+    invalidAuthoredValue(state, path, field, "string_array_required");
     return null;
   }
-  const handlers: HandlerKind[] = [];
+  const values: string[] = [];
+  const seen = new Set<string>();
   for (let index = 0; index < value.length; index += 1) {
-    const item = value[index];
-    if (!isHandlerKind(item)) {
-      invalidAuthoredValue(state, path, `/handlers/${index}`, "handler_kind_invalid");
+    const item = parseStringField(state, path, `${field}/${index}`, value[index]);
+    if (item === null) continue;
+    if (seen.has(item)) {
+      invalidAuthoredValue(state, path, `${field}/${index}`, "duplicate_value");
       continue;
     }
-    handlers.push(item);
+    seen.add(item);
+    values.push(item);
   }
-  return handlers;
-};
-
-const parseScope = (
-  state: CompilerState,
-  path: string,
-  value: unknown,
-): AgentScopeIdentityPolicy | null => {
-  if (!isRecord(value)) {
-    invalidAuthoredValue(state, path, "/scope", "object_required");
-    return null;
-  }
-  assertAllowedFields(state, path, value, new Set(["kind", "idSource", "stableScopeId"]));
-  const kind = value.kind;
-  if (kind !== "realm" && kind !== "conversation" && kind !== "session" && kind !== "artifact") {
-    invalidAuthoredValue(state, path, "/scope/kind", "scope_kind_invalid");
-    return null;
-  }
-  const idSource = value.idSource;
-  if (idSource !== "submit_scope" && idSource !== "manifest" && idSource !== "extension") {
-    invalidAuthoredValue(state, path, "/scope/idSource", "scope_id_source_invalid");
-    return null;
-  }
-  const stableScopeId = parseOptionalStringField(
-    state,
-    path,
-    "/scope/stableScopeId",
-    value.stableScopeId,
-  );
-  return {
-    kind,
-    idSource,
-    ...(stableScopeId === undefined ? {} : { stableScopeId }),
-  };
-};
-
-const parseBindingRefObject = <A extends { readonly bindingRef: string }>(
-  state: CompilerState,
-  path: string,
-  field: string,
-  value: unknown,
-): A | null => {
-  if (!isRecord(value)) {
-    invalidAuthoredValue(state, path, field, "object_required");
-    return null;
-  }
-  assertAllowedFields(state, path, value, new Set(["bindingRef"]));
-  const bindingRef = parseStringField(state, path, `${field}/bindingRef`, value.bindingRef);
-  return bindingRef === null ? null : ({ bindingRef } as A);
-};
-
-const parseRecordMap = <A>(
-  state: CompilerState,
-  path: string,
-  field: string,
-  value: unknown,
-  parse: (id: string, child: unknown) => A | null,
-): Readonly<Record<string, A>> | null => {
-  if (!isRecord(value)) {
-    invalidAuthoredValue(state, path, field, "object_required");
-    return null;
-  }
-  const out: Record<string, A> = {};
-  for (const [id, child] of Object.entries(value)) {
-    if (!isManifestMapId(id)) {
-      invalidAuthoredValue(state, path, `${field}/${id}`, "id_invalid");
-      continue;
-    }
-    const parsed = parse(id, child);
-    if (parsed !== null) out[id] = parsed;
-  }
-  return out;
-};
-
-const parseMaterialRef = (
-  state: CompilerState,
-  path: string,
-  field: string,
-  value: unknown,
-): MaterialRef | null => {
-  if (!isMaterialRef(value)) {
-    invalidAuthoredValue(state, path, field, "material_ref_invalid");
-    return null;
-  }
-  return value;
+  return values.sort((left, right) => left.localeCompare(right));
 };
 
 const parseOutputSchema = (
@@ -739,43 +611,24 @@ const registerPath = (state: CompilerState, path: string): string | null => {
 
 const putFact = (
   state: CompilerState,
-  factKey: AgentManifestFactKey,
+  factKey: ProductFactKey,
   value: unknown,
-  origin: AgentManifestOrigin,
-  layer: Layer,
-  overrideable: boolean,
+  origin: ProductOrigin,
 ): void => {
   const existing = state.facts.get(factKey);
   if (existing === undefined) {
-    state.facts.set(factKey, { value, origin, layer, overrideable });
+    state.facts.set(factKey, { value, origin });
     return;
   }
-  if (existing.layer === layer) {
-    state.issues.push({ kind: "duplicate_fact", factKey, origins: [existing.origin, origin] });
-    return;
-  }
-  if (existing.layer > layer) return;
-  if (!existing.overrideable) {
-    state.issues.push({
-      kind: "non_overrideable_fact",
-      factKey,
-      origins: [existing.origin, origin],
-    });
-    return;
-  }
-  state.facts.set(factKey, { value, origin, layer, overrideable });
+  state.issues.push({ kind: "duplicate_fact", factKey, origins: [existing.origin, origin] });
 };
-
-const putDefault = (state: CompilerState, factKey: AgentManifestFactKey, value: unknown): void =>
-  putFact(state, factKey, value, defaultOrigin(factKey), 1, true);
 
 const putAuthored = (
   state: CompilerState,
-  factKey: AgentManifestFactKey,
+  factKey: ProductFactKey,
   value: unknown,
-  origin: AgentManifestOrigin,
-  overrideable = false,
-): void => putFact(state, factKey, value, origin, 3, overrideable);
+  origin: ProductOrigin,
+): void => putFact(state, factKey, value, origin);
 
 const assertAllowedFields = (
   state: CompilerState,
@@ -831,7 +684,6 @@ const assertNoPathIdentityFields = (
 };
 
 const toolAllowedFields = new Set([
-  "bindingRef",
   "executionDomain",
   "interaction",
   "materialRefs",
@@ -846,131 +698,28 @@ const dynamicOutputSlots: ReadonlyArray<DynamicCapabilitySlot> = [
   "instructions",
 ];
 
-const domainAllowedFields = new Set(["bindingRef"]);
-const interactionAllowedFields = new Set(["bindingRef"]);
-
-const agentAllowedFields = new Set([
-  "agentId",
-  "version",
-  "scope",
-  "effectAuthorityRef",
-  "handlers",
-  "capabilities",
-  "llmRoutes",
-  "tools",
-  "materials",
-  "executionDomains",
-  "interactions",
-  "outputSchema",
-]);
+const agentAllowedFields = new Set(["agentId", "kind", "model", "tools", "outputSchema"]);
 
 const materialEffectNames = new Set(["material", "provider_call"]);
-const workspaceDefaultToolByName = new Map<WorkspaceToolName, WorkspaceToolDefaultDeclaration>(
-  WORKSPACE_TOOL_DEFAULT_DECLARATIONS.map((tool) => [tool.name, tool]),
+const workspaceDefaultToolNames = new Set<string>(
+  WORKSPACE_TOOL_DEFAULT_DECLARATIONS.map((tool) => tool.name),
 );
-const workspaceInteractionRank: Readonly<Record<WorkspaceToolInteractionFloor, number>> = {
-  never: 0,
-  approval: 1,
-};
 
-const isEffectfulTool = (tool: Pick<AgentToolBindingRef, "effects" | "materialRefs">): boolean =>
+const isEffectfulTool = (tool: Pick<ProductPlanToolAsset, "effects" | "materialRefs">): boolean =>
   (tool.effects?.length ?? 0) > 0 || (tool.materialRefs?.length ?? 0) > 0;
 
-const requiresMaterial = (tool: Pick<AgentToolBindingRef, "effects" | "materialRefs">): boolean =>
-  tool.materialRefs !== undefined ||
+const requiresMaterial = (tool: Pick<ProductPlanToolAsset, "effects" | "materialRefs">): boolean =>
+  tool.materialRefs.length > 0 ||
   (tool.effects?.some((effect) => materialEffectNames.has(effect)) ?? false);
-
-const parseWorkspaceDefaultToolInteraction = (
-  state: CompilerState,
-  path: string,
-  toolId: WorkspaceToolName,
-  value: unknown,
-): WorkspaceToolInteractionFloor | null => {
-  if (value !== "never" && value !== "approval") {
-    invalidAuthoredValue(state, path, `/tools/${toolId}/interaction`, "interaction_invalid");
-    return null;
-  }
-  return value;
-};
-
-const recordWorkspaceDefaultToolControl = (
-  state: CompilerState,
-  path: string,
-  toolId: string,
-  control: AuthoredWorkspaceDefaultToolControl,
-): void => {
-  if (!isWorkspaceToolName(toolId)) {
-    state.issues.push({ kind: "unknown_workspace_default_tool_control", path, toolId });
-    return;
-  }
-  if (control === false) {
-    state.workspaceToolControls.set(toolId, {
-      kind: "disabled",
-      origin: authorOrigin(path, `/tools/${toolId}`),
-    });
-    return;
-  }
-  if (!isRecord(control)) {
-    invalidAuthoredValue(state, path, `/tools/${toolId}`, "object_or_false_required");
-    return;
-  }
-  for (const field of Object.keys(control)) {
-    if (field !== "interaction") {
-      state.issues.push({
-        kind: "workspace_default_tool_control_field_forbidden",
-        path,
-        toolId,
-        field,
-      });
-    }
-  }
-  const defaultTool = workspaceDefaultToolByName.get(toolId);
-  if (defaultTool === undefined) {
-    state.issues.push({ kind: "unknown_workspace_default_tool_control", path, toolId });
-    return;
-  }
-  const next: Extract<WorkspaceDefaultToolControl, { readonly kind: "override" }> = {
-    kind: "override",
-  };
-  if (Object.prototype.hasOwnProperty.call(control, "interaction")) {
-    const attempted = parseWorkspaceDefaultToolInteraction(
-      state,
-      path,
-      toolId,
-      control.interaction,
-    );
-    if (attempted !== null) {
-      if (workspaceInteractionRank[attempted] < workspaceInteractionRank[defaultTool.interaction]) {
-        state.issues.push({
-          kind: "workspace_default_tool_interaction_weakened",
-          path,
-          toolId,
-          floor: defaultTool.interaction,
-          attempted,
-        });
-      } else {
-        state.workspaceToolControls.set(toolId, {
-          ...next,
-          interaction: {
-            value: attempted,
-            origin: authorOrigin(path, `/tools/${toolId}/interaction`),
-          },
-        });
-      }
-    }
-  } else {
-    state.workspaceToolControls.set(toolId, next);
-  }
-};
 
 const recordToolFacts = (
   state: CompilerState,
   toolId: string,
   path: string,
   declaration: AuthoredToolDeclaration,
-  originFor: (field: string) => AgentManifestOrigin,
+  originFor: (field: string) => ProductOrigin,
 ): void => {
-  state.toolIds.add(toolId);
+  const localIssueCount = state.issues.length;
   const declarationRecord = declaration as JsonRecord;
   assertNoPathIdentityFields(state, path, declarationRecord);
   if (Object.prototype.hasOwnProperty.call(declarationRecord, "kind")) {
@@ -978,7 +727,6 @@ const recordToolFacts = (
   }
   assertAllowedFields(state, path, declarationRecord, toolAllowedFields);
   assertNoRuntimeFactFields(state, path, declarationRecord);
-  const bindingRef = parseOptionalStringField(state, path, "/bindingRef", declaration.bindingRef);
   const executionDomain = parseOptionalStringField(
     state,
     path,
@@ -993,43 +741,65 @@ const recordToolFacts = (
   );
   const materialRefs =
     declaration.materialRefs === undefined
-      ? undefined
-      : parseStringArrayField(state, path, "/materialRefs", declaration.materialRefs);
+      ? []
+      : parseExactStringArrayField(state, path, "/materialRefs", declaration.materialRefs);
   const effects =
     declaration.effects === undefined
-      ? undefined
-      : parseStringArrayField(state, path, "/effects", declaration.effects);
+      ? []
+      : parseExactStringArrayField(state, path, "/effects", declaration.effects);
   const receiptPolicy = parseOptionalStringField(
     state,
     path,
     "/receiptPolicy",
     declaration.receiptPolicy,
   );
-  putAuthored(
-    state,
-    `/tools/${toolId}/bindingRef`,
-    bindingRef ?? `tool.${toolId}`,
-    bindingRef === undefined ? pathOrigin(path) : originFor("bindingRef"),
-  );
+  if (materialRefs === null || effects === null || state.issues.length > localIssueCount) return;
+  const asset: ProductPlanToolAsset = {
+    name: toolId,
+    path: authoredPath(path),
+    origin: pathOrigin(path),
+    effects: effects as ReadonlyArray<AuthoredToolEffect>,
+    materialRefs,
+    ...(executionDomain === undefined ? {} : { executionDomain }),
+    ...(interaction === undefined ? {} : { interaction }),
+    ...(receiptPolicy === undefined ? {} : { receiptPolicy }),
+  };
+  state.tools.set(toolId, asset);
+  putAuthored(state, `/assets/tools/${toolId}`, authoredPath(path), pathOrigin(path));
   if (executionDomain !== undefined) {
     putAuthored(
       state,
-      `/tools/${toolId}/executionDomain`,
+      `/assets/tools/${toolId}/executionDomain`,
       executionDomain,
       originFor("executionDomain"),
     );
   }
   if (interaction !== undefined) {
-    putAuthored(state, `/tools/${toolId}/interaction`, interaction, originFor("interaction"));
+    putAuthored(
+      state,
+      `/assets/tools/${toolId}/interaction`,
+      interaction,
+      originFor("interaction"),
+    );
   }
-  if (materialRefs !== undefined) {
-    putAuthored(state, `/tools/${toolId}/materialRefs`, materialRefs, originFor("materialRefs"));
+  if (materialRefs.length > 0) {
+    putAuthored(
+      state,
+      `/assets/tools/${toolId}/materialRefs`,
+      materialRefs,
+      originFor("materialRefs"),
+    );
   }
-  if (effects !== undefined) {
-    putAuthored(state, `/tools/${toolId}/effects`, effects, originFor("effects"));
+  if (effects.length > 0) {
+    putAuthored(state, `/assets/tools/${toolId}/effects`, effects, originFor("effects"));
   }
   if (receiptPolicy !== undefined) {
-    putAuthored(state, `/tools/${toolId}/receiptPolicy`, receiptPolicy, originFor("receiptPolicy"));
+    putAuthored(
+      state,
+      `/assets/tools/${toolId}/receiptPolicy`,
+      receiptPolicy,
+      originFor("receiptPolicy"),
+    );
   }
 };
 
@@ -1040,231 +810,45 @@ const recordAgentJson = (state: CompilerState, path: string, value: unknown): vo
   }
   assertAllowedFields(state, path, value, agentAllowedFields);
   assertNoRuntimeFactFields(state, path, value);
-  const agentId = parseOptionalStringField(state, path, "/agentId", value.agentId);
-  const version = parseOptionalStringField(state, path, "/version", value.version);
-  const scope = value.scope === undefined ? undefined : parseScope(state, path, value.scope);
-  const effectAuthorityRef =
-    value.effectAuthorityRef === undefined
+  const agentId =
+    value.agentId === undefined
+      ? (invalidAuthoredValue(state, path, "/agentId", "required"), null)
+      : parseStringField(state, path, "/agentId", value.agentId);
+  const kind =
+    value.kind === undefined
+      ? (invalidAuthoredValue(state, path, "/kind", "required"), null)
+      : value.kind === PRODUCT_AGENT_KIND.CHAT || value.kind === PRODUCT_AGENT_KIND.WORKSPACE
+        ? value.kind
+        : (invalidAuthoredValue(state, path, "/kind", "product_kind_invalid"), null);
+  const model = parseOptionalStringField(state, path, "/model", value.model);
+  const tools =
+    value.tools === undefined
       ? undefined
-      : isAuthorityRef(value.effectAuthorityRef)
-        ? value.effectAuthorityRef
-        : null;
-  if (value.effectAuthorityRef !== undefined && effectAuthorityRef === null) {
-    invalidAuthoredValue(state, path, "/effectAuthorityRef", "authority_ref_invalid");
-  }
-  const handlers =
-    value.handlers === undefined ? undefined : parseHandlers(state, path, value.handlers);
-  const capabilities =
-    value.capabilities === undefined
-      ? undefined
-      : parseRecordMap<AgentCapabilityBindingRef>(
-          state,
-          path,
-          "/capabilities",
-          value.capabilities,
-          (_capability, child) =>
-            parseBindingRefObject<AgentCapabilityBindingRef>(state, path, "/capabilities", child),
-        );
-  const llmRoutes =
-    value.llmRoutes === undefined
-      ? undefined
-      : parseRecordMap<AgentLlmRouteBindingRef>(
-          state,
-          path,
-          "/llmRoutes",
-          value.llmRoutes,
-          (_route, child) =>
-            parseBindingRefObject<AgentLlmRouteBindingRef>(state, path, "/llmRoutes", child),
-        );
+      : parseExactStringArrayField(state, path, "/tools", value.tools);
   const outputSchema =
     value.outputSchema === undefined
       ? undefined
       : parseOutputSchema(state, path, value.outputSchema);
-  const materials =
-    value.materials === undefined
-      ? undefined
-      : parseRecordMap<MaterialRef>(state, path, "/materials", value.materials, (_id, child) =>
-          parseMaterialRef(state, path, "/materials", child),
-        );
-  const executionDomains =
-    value.executionDomains === undefined
-      ? undefined
-      : parseRecordMap<AgentExecutionDomainRef>(
-          state,
-          path,
-          "/executionDomains",
-          value.executionDomains,
-          (_domainId, child) =>
-            parseBindingRefObject<AgentExecutionDomainRef>(state, path, "/executionDomains", child),
-        );
-  const interactions =
-    value.interactions === undefined
-      ? undefined
-      : parseRecordMap<AgentInteractionRef>(
-          state,
-          path,
-          "/interactions",
-          value.interactions,
-          (_interactionId, child) =>
-            parseBindingRefObject<AgentInteractionRef>(state, path, "/interactions", child),
-        );
-  if (value.tools !== undefined) {
-    if (!isRecord(value.tools)) {
-      invalidAuthoredValue(state, path, "/tools", "object_required");
-    } else {
-      for (const [toolId, child] of Object.entries(value.tools)) {
-        if (!isManifestMapId(toolId)) {
-          invalidAuthoredValue(state, path, `/tools/${toolId}`, "id_invalid");
-          continue;
-        }
-        recordWorkspaceDefaultToolControl(
-          state,
-          path,
-          toolId,
-          child as AuthoredWorkspaceDefaultToolControl,
-        );
-      }
-    }
+  if (agentId !== null) putAuthored(state, "/agent/id", agentId, authorOrigin(path, "/agentId"));
+  if (kind !== null) putAuthored(state, "/agent/kind", kind, authorOrigin(path, "/kind"));
+  if (model !== undefined) {
+    putAuthored(state, "/modelPreference", model, authorOrigin(path, "/model"));
   }
-  if (agentId !== undefined)
-    putAuthored(state, "/agentId", agentId, authorOrigin(path, "/agentId"));
-  if (version !== undefined)
-    putAuthored(state, "/version", version, authorOrigin(path, "/version"));
-  if (scope !== undefined && scope !== null) {
-    putAuthored(state, "/scope", scope, authorOrigin(path, "/scope"));
-  }
-  if (effectAuthorityRef !== undefined && effectAuthorityRef !== null) {
-    putAuthored(
-      state,
-      "/effectAuthorityRef",
-      effectAuthorityRef,
-      authorOrigin(path, "/effectAuthorityRef"),
-    );
-  }
-  if (handlers !== undefined && handlers !== null)
-    putAuthored(state, "/handlers", handlers, authorOrigin(path, "/handlers"));
-  if (capabilities !== undefined && capabilities !== null) {
-    for (const [capabilityId, ref] of Object.entries(capabilities)) {
-      putAuthored(
-        state,
-        `/capabilities/${capabilityId}/bindingRef`,
-        ref.bindingRef,
-        authorOrigin(path, `/capabilities/${capabilityId}/bindingRef`),
-      );
-    }
-  }
-  if (llmRoutes !== undefined && llmRoutes !== null) {
-    for (const [route, ref] of Object.entries(llmRoutes)) {
-      putAuthored(
-        state,
-        `/llmRoutes/${route}/bindingRef`,
-        ref.bindingRef,
-        authorOrigin(path, `/llmRoutes/${route}/bindingRef`),
-      );
-    }
+  if (tools !== undefined && tools !== null) {
+    putAuthored(state, "/toolSelection", tools, authorOrigin(path, "/tools"));
   }
   if (outputSchema !== undefined && outputSchema !== null) {
     putAuthored(state, "/outputSchema", outputSchema, authorOrigin(path, "/outputSchema"));
   }
-  if (materials !== undefined && materials !== null) {
-    for (const [materialId, materialRef] of Object.entries(materials)) {
-      putAuthored(
-        state,
-        `/materials/${materialId}`,
-        materialRef,
-        authorOrigin(path, `/materials/${materialId}`),
-      );
-    }
-  }
-  if (executionDomains !== undefined && executionDomains !== null) {
-    for (const [domainId, domainRef] of Object.entries(executionDomains)) {
-      putAuthored(
-        state,
-        `/executionDomains/${domainId}/bindingRef`,
-        domainRef.bindingRef,
-        authorOrigin(path, `/executionDomains/${domainId}/bindingRef`),
-      );
-    }
-  }
-  if (interactions !== undefined && interactions !== null) {
-    for (const [interactionId, interactionRef] of Object.entries(interactions)) {
-      putAuthored(
-        state,
-        `/interactions/${interactionId}/bindingRef`,
-        interactionRef.bindingRef,
-        authorOrigin(path, `/interactions/${interactionId}/bindingRef`),
-      );
-    }
-  }
 };
 
 const recordJsonFile = (state: CompilerState, path: string, value: unknown): void => {
-  const parts = path.split("/");
   if (path === "agent.json") {
+    state.requiredFiles.add("agent/agent.json");
     recordAgentJson(state, path, value);
     return;
   }
-  if (parts.length !== 2 || !parts[1]?.endsWith(".json")) {
-    state.issues.push({ kind: "unsupported_path", path, reason: "json_path_not_in_grammar" });
-    return;
-  }
-  const id = parts[1].slice(0, -".json".length);
-  if (id.length === 0) {
-    state.issues.push({ kind: "unsupported_path", path, reason: "empty_path_identity" });
-    return;
-  }
-  if (!isRecord(value)) {
-    state.issues.push({ kind: "invalid_json_file", path, reason: "json_value_not_object" });
-    return;
-  }
-  assertNoPathIdentityFields(state, path, value);
-  assertNoRuntimeFactFields(state, path, value);
-  switch (parts[0]) {
-    case "materials": {
-      if (!isMaterialRef(value)) {
-        state.issues.push({ kind: "invalid_json_file", path, reason: "material_ref_invalid" });
-        return;
-      }
-      putAuthored(state, `/materials/${id}`, value as MaterialRef, pathOrigin(path));
-      return;
-    }
-    case "domains":
-      if (Object.prototype.hasOwnProperty.call(value, "kind")) {
-        state.issues.push({ kind: "identity_field_forbidden", path, field: "kind" });
-      }
-      assertAllowedFields(state, path, value, domainAllowedFields);
-      const domainBindingRef = Object.prototype.hasOwnProperty.call(value, "bindingRef")
-        ? parseStringField(state, path, "/bindingRef", value.bindingRef)
-        : id;
-      putAuthored(
-        state,
-        `/executionDomains/${id}/bindingRef`,
-        domainBindingRef ?? id,
-        Object.prototype.hasOwnProperty.call(value, "bindingRef")
-          ? authorOrigin(path, "/bindingRef")
-          : pathOrigin(path),
-      );
-      return;
-    case "interactions":
-      if (Object.prototype.hasOwnProperty.call(value, "kind")) {
-        state.issues.push({ kind: "identity_field_forbidden", path, field: "kind" });
-      }
-      assertAllowedFields(state, path, value, interactionAllowedFields);
-      const interactionBindingRef = Object.prototype.hasOwnProperty.call(value, "bindingRef")
-        ? parseStringField(state, path, "/bindingRef", value.bindingRef)
-        : id;
-      putAuthored(
-        state,
-        `/interactions/${id}/bindingRef`,
-        interactionBindingRef ?? id,
-        Object.prototype.hasOwnProperty.call(value, "bindingRef")
-          ? authorOrigin(path, "/bindingRef")
-          : pathOrigin(path),
-      );
-      return;
-    default:
-      state.issues.push({ kind: "unsupported_path", path, reason: "json_path_not_in_grammar" });
-  }
+  state.issues.push({ kind: "unsupported_path", path, reason: "json_path_not_in_grammar" });
 };
 
 const skillIdentityForPath = (path: string): string | null => {
@@ -1525,10 +1109,14 @@ const recordMarkdownFile = (
     state.issues.push({ kind: "unsupported_path", path, reason: "markdown_path_not_in_grammar" });
     return;
   }
+  state.requiredFiles.add("agent/instructions.md");
+  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
   if (text.trim().length === 0) state.issues.push({ kind: "empty_instructions", path });
-  const instructions: AgentInstructionsRef = {
+  if (!assertNoNulText(state, path, "/body", text)) return;
+  const instructions: ProductPlanInstructions = {
     path: "agent/instructions.md",
     digest: digestText(text),
+    text,
   };
   putAuthored(state, "/instructions", instructions, pathOrigin(path));
 };
@@ -1550,18 +1138,13 @@ const recordResourceFile = (
 const recordMaterialResolverFile = (
   state: CompilerState,
   path: string,
-  sourceKind?: AuthoredFileSourceKind,
+  _sourceKind?: AuthoredFileSourceKind,
 ): void => {
-  if (path !== "material-resolver.ts") {
-    state.issues.push({
-      kind: "unsupported_path",
-      path,
-      reason: "material_resolver_path_not_in_grammar",
-    });
-    return;
-  }
-  if (!assertRegularAuthoredSource(state, path, sourceKind)) return;
-  state.materialResolver.value = { path, origin: pathOrigin(path) };
+  state.issues.push({
+    kind: "unsupported_path",
+    path,
+    reason: "material_resolver_is_deployment_owned",
+  });
 };
 
 const recordToolFile = (
@@ -1587,7 +1170,6 @@ const recordToolFile = (
     state.issues.push({ kind: "reserved_tool_name", path, toolId });
     return;
   }
-  state.toolFilePaths.set(toolId, path);
   recordToolFacts(state, toolId, path, declaration ?? {}, (field) => authorOrigin(path, field));
 };
 
@@ -1802,172 +1384,91 @@ const recordScheduleFile = (
   });
 };
 
-const applyDefaults = (state: CompilerState): void => {
-  putDefault(state, "/agentId", "agent");
-  const agentId = state.facts.get("/agentId")?.value;
-  putDefault(state, "/scope", { kind: "conversation", idSource: "submit_scope" });
-  putDefault(state, "/llmRoutes/default/bindingRef", "llm.default");
-  putDefault(state, "/handlers", []);
-  putDefault(state, "/executionDomains/app-runtime/bindingRef", "app-runtime");
-  putDefault(state, "/interactions/never/bindingRef", "never");
-  putDefault(state, "/interactions/approval/bindingRef", "approval");
-  putDefault(state, "/effectAuthorityRef", {
-    authorityClass: "agent",
-    authorityId: typeof agentId === "string" ? agentId : "agent",
-  });
-  for (const toolId of [...state.toolIds].sort()) {
-    const tool = collectToolConstraintState(state, toolId);
-    if (!tool.effectful) {
-      putDefault(state, `/tools/${toolId}/executionDomain`, "app-runtime");
-      putDefault(state, `/tools/${toolId}/interaction`, "never");
-    }
-  }
-};
-
-const enforceL0 = (state: CompilerState): void => {
-  if (!state.facts.has("/instructions")) {
-    state.issues.push({ kind: "missing_required_file", path: "agent/instructions.md" });
-  }
-  for (const toolId of [...state.toolIds].sort()) {
-    const tool = collectToolConstraintState(state, toolId);
-    if (!tool.effectful) continue;
-    if (tool.needsMaterial && (tool.materialRefs?.length ?? 0) === 0) {
-      state.issues.push({ kind: "effectful_tool_missing_material", toolId });
-    }
-    if (tool.executionDomain === undefined) {
-      state.issues.push({ kind: "effectful_tool_missing_execution_domain", toolId });
-    }
-    if (tool.interaction === undefined) {
-      state.issues.push({ kind: "effectful_tool_missing_interaction", toolId });
-    }
-    if (tool.receiptPolicy === undefined) {
-      state.issues.push({ kind: "effectful_tool_missing_receipt_policy", toolId });
-    }
-  }
-};
-
-const factValue = <A>(state: CompilerState, factKey: AgentManifestFactKey): A | undefined =>
+const factValue = <A>(state: CompilerState, factKey: ProductFactKey): A | undefined =>
   state.facts.get(factKey)?.value as A | undefined;
 
-const collectRecord = <A>(
-  state: CompilerState,
-  prefix: string,
-  make: (id: string) => A | null,
-): Readonly<Record<string, A>> | undefined => {
-  const ids = new Set<string>();
-  for (const key of state.facts.keys()) {
-    if (!key.startsWith(prefix)) continue;
-    const rest = key.slice(prefix.length);
-    const id = rest.split("/")[0];
-    if (id.length > 0) ids.add(id);
+const validateRequiredFiles = (state: CompilerState): void => {
+  for (const path of ["agent/agent.json", "agent/instructions.md"] as const) {
+    if (!state.requiredFiles.has(path)) state.issues.push({ kind: "missing_required_file", path });
   }
-  if (ids.size === 0) return undefined;
-  const out: Record<string, A> = {};
-  for (const id of [...ids].sort()) {
-    const value = make(id);
-    if (value !== null) out[id] = value;
+};
+
+const validateTools = (state: CompilerState): void => {
+  for (const tool of [...state.tools.values()].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  )) {
+    if (!isEffectfulTool(tool)) continue;
+    if (requiresMaterial(tool) && tool.materialRefs.length === 0) {
+      state.issues.push({ kind: "effectful_tool_missing_material", toolId: tool.name });
+    }
+    if (tool.executionDomain === undefined) {
+      state.issues.push({ kind: "effectful_tool_missing_execution_domain", toolId: tool.name });
+    }
+    if (tool.interaction === undefined) {
+      state.issues.push({ kind: "effectful_tool_missing_interaction", toolId: tool.name });
+    }
+    if (tool.receiptPolicy === undefined) {
+      state.issues.push({ kind: "effectful_tool_missing_receipt_policy", toolId: tool.name });
+    }
   }
-  return out;
 };
 
-const collectToolConstraintState = (
-  state: CompilerState,
-  toolId: string,
-): {
-  readonly effectful: boolean;
-  readonly needsMaterial: boolean;
-  readonly materialRefs?: ReadonlyArray<string>;
-  readonly executionDomain?: string;
-  readonly interaction?: string;
-  readonly receiptPolicy?: string;
-} => {
-  const effects =
-    factValue<ReadonlyArray<AuthoredToolEffect>>(state, `/tools/${toolId}/effects`) ?? [];
-  const materialRefs = factValue<ReadonlyArray<string>>(state, `/tools/${toolId}/materialRefs`);
-  const tool = { effects, materialRefs };
-  return {
-    executionDomain: factValue<string>(state, `/tools/${toolId}/executionDomain`),
-    interaction: factValue<string>(state, `/tools/${toolId}/interaction`),
-    materialRefs,
-    receiptPolicy: factValue<string>(state, `/tools/${toolId}/receiptPolicy`),
-    effectful: isEffectfulTool(tool),
-    needsMaterial: requiresMaterial(tool),
-  };
+const availableProductToolIds = (
+  kind: ProductAgentKind | undefined,
+  authoredToolIds: Iterable<string>,
+): ReadonlySet<string> => {
+  const available = new Set(authoredToolIds);
+  if (kind === PRODUCT_AGENT_KIND.WORKSPACE) {
+    for (const toolId of workspaceDefaultToolNames) available.add(toolId);
+  }
+  return available;
 };
 
-const collectTool = (state: CompilerState, toolId: string): AgentToolBindingRef => {
-  const executionDomain = factValue<string>(state, `/tools/${toolId}/executionDomain`);
-  const interaction = factValue<string>(state, `/tools/${toolId}/interaction`);
-  const materialRefs = factValue<ReadonlyArray<string>>(state, `/tools/${toolId}/materialRefs`);
-  const effects = factValue<ReadonlyArray<AuthoredToolEffect>>(state, `/tools/${toolId}/effects`);
-  const receiptPolicy = factValue<string>(state, `/tools/${toolId}/receiptPolicy`);
-  return {
-    bindingRef: factValue<string>(state, `/tools/${toolId}/bindingRef`) ?? `tool.${toolId}`,
-    ...(executionDomain === undefined ? {} : { executionDomain }),
-    ...(interaction === undefined ? {} : { interaction }),
-    ...(materialRefs === undefined ? {} : { materialRefs }),
-    ...(effects === undefined ? {} : { effects }),
-    ...(receiptPolicy === undefined ? {} : { receiptPolicy }),
-  };
+const effectiveProductToolIds = (
+  kind: ProductAgentKind | undefined,
+  toolSelection: ReadonlyArray<string> | undefined,
+  authoredToolIds: Iterable<string>,
+): ReadonlySet<string> =>
+  toolSelection === undefined
+    ? availableProductToolIds(kind, authoredToolIds)
+    : new Set(toolSelection);
+
+const validateToolNamespace = (state: CompilerState): void => {
+  if (factValue<ProductAgentKind>(state, "/agent/kind") !== PRODUCT_AGENT_KIND.WORKSPACE) return;
+  for (const tool of state.tools.values()) {
+    if (!workspaceDefaultToolNames.has(tool.name)) continue;
+    state.issues.push({ kind: "reserved_tool_name", path: tool.path, toolId: tool.name });
+  }
 };
 
-const buildManifest = <K extends HandlerKind>(state: CompilerState): AgentManifest<K> => {
-  const version = factValue<string>(state, "/version");
-  const instructions = factValue<AgentInstructionsRef>(state, "/instructions");
-  const llmRoutes = collectRecord<AgentLlmRouteBindingRef>(state, "/llmRoutes/", (id) => {
-    const bindingRef = factValue<string>(state, `/llmRoutes/${id}/bindingRef`);
-    return bindingRef === undefined ? null : { bindingRef };
+const validateToolSelection = (state: CompilerState): void => {
+  const selection = factValue<ReadonlyArray<string>>(state, "/toolSelection");
+  const kind = factValue<ProductAgentKind>(state, "/agent/kind");
+  if (selection === undefined || kind === undefined) return;
+  const allowed = availableProductToolIds(kind, state.tools.keys());
+  selection.forEach((toolId, index) => {
+    if (allowed.has(toolId)) return;
+    state.issues.push({
+      kind: "unknown_product_tool",
+      path: "agent/agent.json",
+      field: `/tools/${index}`,
+      toolId,
+      reason: "tool_not_found",
+    });
   });
-  const capabilities = collectRecord<AgentCapabilityBindingRef>(state, "/capabilities/", (id) => {
-    const bindingRef = factValue<string>(state, `/capabilities/${id}/bindingRef`);
-    return bindingRef === undefined ? null : { bindingRef };
-  });
-  const tools = collectRecord<AgentToolBindingRef>(state, "/tools/", (id) =>
-    collectTool(state, id),
-  );
-  const materials = collectRecord<MaterialRef>(
-    state,
-    "/materials/",
-    (id) => factValue<MaterialRef>(state, `/materials/${id}`) ?? null,
-  );
-  const executionDomains = collectRecord<AgentExecutionDomainRef>(
-    state,
-    "/executionDomains/",
-    (id) => {
-      const bindingRef = factValue<string>(state, `/executionDomains/${id}/bindingRef`);
-      return bindingRef === undefined ? null : { bindingRef };
-    },
-  );
-  const interactions = collectRecord<AgentInteractionRef>(state, "/interactions/", (id) => {
-    const bindingRef = factValue<string>(state, `/interactions/${id}/bindingRef`);
-    return bindingRef === undefined ? null : { bindingRef };
-  });
-  const outputSchema = factValue<AgentSchemaSpec>(state, "/outputSchema");
-  return {
-    agentId: factValue<string>(state, "/agentId") ?? "agent",
-    scope:
-      factValue<AgentScopeIdentityPolicy>(state, "/scope") ??
-      ({ kind: "conversation", idSource: "submit_scope" } satisfies AgentScopeIdentityPolicy),
-    effectAuthorityRef:
-      factValue<AuthorityRef>(state, "/effectAuthorityRef") ??
-      ({ authorityClass: "agent", authorityId: "agent" } satisfies AuthorityRef),
-    handlers: factValue<ReadonlyArray<K>>(state, "/handlers") ?? [],
-    ...(version === undefined ? {} : { version }),
-    ...(instructions === undefined ? {} : { instructions }),
-    ...(capabilities === undefined ? {} : { capabilities }),
-    ...(llmRoutes === undefined ? {} : { llmRoutes }),
-    ...(tools === undefined ? {} : { tools }),
-    ...(materials === undefined ? {} : { materials }),
-    ...(executionDomains === undefined ? {} : { executionDomains }),
-    ...(interactions === undefined ? {} : { interactions }),
-    ...(outputSchema === undefined ? {} : { outputSchema }),
-  };
 };
 
-const buildProvenance = (
-  state: CompilerState,
-): Readonly<Record<AgentManifestFactKey, AgentManifestOrigin>> => {
-  const provenance: Record<AgentManifestFactKey, AgentManifestOrigin> = {};
+const validateProductState = (state: CompilerState): void => {
+  validateRequiredFiles(state);
+  validateSkillSupportFiles(state);
+  validateTools(state);
+  validateToolNamespace(state);
+  validateToolSelection(state);
+  validateDynamicResolvers(state);
+};
+
+const buildProvenance = (state: CompilerState): ProductProvenance => {
+  const provenance: Record<ProductFactKey, ProductOrigin> = {};
   for (const [key, fact] of [...state.facts.entries()].sort(([left], [right]) =>
     left.localeCompare(right),
   )) {
@@ -1976,27 +1477,8 @@ const buildProvenance = (
   return provenance;
 };
 
-const buildWorkspaceToolControls = (
-  state: CompilerState,
-): Readonly<Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>>> => {
-  const controls: Partial<Record<WorkspaceToolName, WorkspaceDefaultToolControl>> = {};
-  for (const [toolId, control] of [...state.workspaceToolControls.entries()].sort(
-    ([left], [right]) => left.localeCompare(right),
-  )) {
-    controls[toolId] = control;
-  }
-  return controls;
-};
-
-const buildToolFilePaths = (state: CompilerState): Readonly<Record<string, string>> => {
-  const paths: Record<string, string> = {};
-  for (const [toolId, path] of [...state.toolFilePaths.entries()].sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    paths[toolId] = path;
-  }
-  return paths;
-};
+const buildTools = (state: CompilerState): ReadonlyArray<ProductPlanToolAsset> =>
+  [...state.tools.values()].sort((left, right) => left.name.localeCompare(right.name));
 
 const buildChannels = (state: CompilerState): ReadonlyArray<CompiledAgentChannel> =>
   [...state.channels.values()].sort((left, right) => left.name.localeCompare(right.name));
@@ -2042,7 +1524,11 @@ const dynamicResolverTargets = (
 ): ReadonlySet<string> => {
   switch (slot) {
     case "tools":
-      return state.toolIds;
+      return effectiveProductToolIds(
+        factValue<ProductAgentKind>(state, "/agent/kind"),
+        factValue<ReadonlyArray<string>>(state, "/toolSelection"),
+        state.tools.keys(),
+      );
     case "skills":
       return new Set(state.skills.keys());
     case "instructions":
@@ -2075,27 +1561,125 @@ const buildSkills = (state: CompilerState): ReadonlyArray<CompiledAgentSkill> =>
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
+const buildAssets = (state: CompilerState): ProductPlanAssets => ({
+  tools: buildTools(state),
+  channels: buildChannels(state),
+  workflows: buildWorkflows(state),
+  schedules: buildSchedules(state),
+  skills: buildSkills(state),
+  instructionFragments: buildInstructionFragments(state),
+  dynamicResolvers: buildDynamicResolvers(state),
+});
+
+const buildProductIntent = (state: CompilerState): ProductIntent => {
+  const instructions = factValue<ProductPlanInstructions>(state, "/instructions");
+  const modelPreference = factValue<string>(state, "/modelPreference");
+  const toolSelection = factValue<ReadonlyArray<string>>(state, "/toolSelection");
+  const outputSchema = factValue<AgentSchemaSpec>(state, "/outputSchema");
+  return {
+    agent: {
+      id: factValue<string>(state, "/agent/id") as string,
+      kind: factValue<ProductAgentKind>(state, "/agent/kind") as ProductAgentKind,
+    },
+    instructions: {
+      path: "agent/instructions.md",
+      text: (instructions as ProductPlanInstructions).text,
+    },
+    ...(modelPreference === undefined ? {} : { modelPreference }),
+    ...(toolSelection === undefined ? {} : { toolSelection }),
+    ...(outputSchema === undefined ? {} : { outputSchema }),
+    assets: buildAssets(state),
+    provenance: buildProvenance(state),
+  };
+};
+
+const requirementKey = (requirement: ProductSymbolicRequirement): string =>
+  `${requirement.kind}\0${"tool" in requirement ? requirement.tool : ""}\0${
+    "ref" in requirement ? requirement.ref : ""
+  }`;
+
+const buildSymbolicRequirements = (
+  intent: ProductIntent,
+): ReadonlyArray<ProductSymbolicRequirement> => {
+  const selected = effectiveProductToolIds(
+    intent.agent.kind,
+    intent.toolSelection,
+    intent.assets.tools.map((tool) => tool.name),
+  );
+  const requirements: ProductSymbolicRequirement[] = [{ kind: "model" }];
+  if (intent.agent.kind === PRODUCT_AGENT_KIND.WORKSPACE) requirements.push({ kind: "workspace" });
+  for (const tool of intent.assets.tools) {
+    if (!selected.has(tool.name)) continue;
+    if (tool.executionDomain !== undefined) {
+      requirements.push({ kind: "execution-domain", ref: tool.executionDomain, tool: tool.name });
+    }
+    if (tool.interaction !== undefined) {
+      requirements.push({ kind: "interaction", ref: tool.interaction, tool: tool.name });
+    }
+    for (const ref of tool.materialRefs) {
+      requirements.push({ kind: "material", ref, tool: tool.name });
+    }
+  }
+  return requirements.sort((left, right) =>
+    requirementKey(left).localeCompare(requirementKey(right)),
+  );
+};
+
+const canonicalJsonValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalJsonValue);
+  if (!isRecord(value)) return value;
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) sorted[key] = canonicalJsonValue(value[key]);
+  return sorted;
+};
+
+const productDigestPayload = (plan: Omit<ProductPlan, "productDigest"> | ProductPlan): unknown => ({
+  agent: plan.agent,
+  instructions: plan.instructions,
+  ...(plan.modelPreference === undefined ? {} : { modelPreference: plan.modelPreference }),
+  ...(plan.toolSelection === undefined ? {} : { toolSelection: plan.toolSelection }),
+  ...(plan.outputSchema === undefined
+    ? {}
+    : { outputSchemaFingerprint: plan.outputSchema.fingerprint }),
+  symbolicRequirements: plan.symbolicRequirements,
+  assets: {
+    tools: plan.assets.tools.map(({ origin: _origin, ...tool }) => tool),
+    channels: plan.assets.channels.map(({ origin: _origin, ...channel }) => channel),
+    workflows: plan.assets.workflows.map(({ origin: _origin, ...workflow }) => workflow),
+    schedules: plan.assets.schedules.map(({ origin: _origin, ...schedule }) => schedule),
+    skills: plan.assets.skills,
+    instructionFragments: plan.assets.instructionFragments.map(
+      ({ origin: _origin, ...fragment }) => fragment,
+    ),
+    dynamicResolvers: plan.assets.dynamicResolvers.map(
+      ({ origin: _origin, ...resolver }) => resolver,
+    ),
+  },
+});
+
+const productDigestFor = (plan: Omit<ProductPlan, "productDigest"> | ProductPlan): string =>
+  digestText(JSON.stringify(canonicalJsonValue(productDigestPayload(plan))));
+
+/** Verify the product semantic digest without binding host or deployment facts. */
+export const verifyProductPlanDigest = (plan: ProductPlan): boolean =>
+  plan.instructions.digest === digestText(plan.instructions.text) &&
+  plan.productDigest === productDigestFor(plan);
+
 /**
- * Compile authored `agent/` and `workflows/` roots into one normalized
- * manifest plus authoring facts. This is the app-author entrypoint; runtime
- * facts and provider material are rejected before they can become manifest
- * truth.
+ * Compile authored product facts into one backend-neutral product plan.
  *
- * @agentosPrimitive primitive.agent-authoring.compileAgentTree
+ * @agentosPrimitive primitive.agent-authoring.compileProductPlan
  * @agentosInvariant invariant.docs.agent-projection
  * @agentosInvariant invariant.algebra.single-code-source
- * @agentosDocs docs/guides/build-natural-language-workspace-agent.md
+ * @agentosDocs docs/guides/quickstart-node.md
  */
-export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
-  tree: AuthoredAgentTree,
-): CompileAgentTreeResult<K> => {
+export const compileProductPlan = (tree: AuthoredAgentTree): CompileProductPlanResult => {
   const state: CompilerState = {
     facts: new Map(),
     issues: [],
     pathKeys: new Map(),
-    toolIds: new Set(),
-    toolFilePaths: new Map(),
-    materialResolver: {},
+    requiredFiles: new Set(),
+    tools: new Map(),
     channels: new Map(),
     workflows: new Map(),
     schedules: new Map(),
@@ -2104,7 +1688,6 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     skillSupportByteTotals: new Map(),
     instructionFragments: new Map(),
     dynamicResolvers: new Map(),
-    workspaceToolControls: new Map(),
   };
 
   for (const file of tree.files) {
@@ -2141,37 +1724,18 @@ export const compileAgentTree = <K extends HandlerKind = HandlerKind>(
     }
   }
 
-  validateSkillSupportFiles(state);
-  validateDynamicResolvers(state);
-  applyDefaults(state);
-  enforceL0(state);
+  validateProductState(state);
   if (state.issues.length > 0) return { ok: false, issues: state.issues };
 
-  const manifest = buildManifest<K>(state);
-  const functionPath = findFunctionPath(manifest, "manifest");
-  if (functionPath !== null || hasFunction(manifest)) {
-    return {
-      ok: false,
-      issues: [{ kind: "function_in_manifest", path: functionPath ?? "manifest" }],
-    };
-  }
-
-  return {
-    ok: true,
-    value: {
-      manifest: authoredValue(manifest) as AuthoredAgentManifest<K>,
-      provenance: buildProvenance(state),
-      workspaceToolControls: buildWorkspaceToolControls(state),
-      toolFilePaths: buildToolFilePaths(state),
-      ...(state.materialResolver.value === undefined
-        ? {}
-        : { materialResolver: state.materialResolver.value }),
-      channels: buildChannels(state),
-      workflows: buildWorkflows(state),
-      schedules: buildSchedules(state),
-      skills: buildSkills(state),
-      instructionFragments: buildInstructionFragments(state),
-      dynamicResolvers: buildDynamicResolvers(state),
-    },
+  const intent = buildProductIntent(state);
+  const instructions = factValue<ProductPlanInstructions>(
+    state,
+    "/instructions",
+  ) as ProductPlanInstructions;
+  const semanticPlan: Omit<ProductPlan, "productDigest"> = {
+    ...intent,
+    instructions,
+    symbolicRequirements: buildSymbolicRequirements(intent),
   };
+  return { ok: true, value: { ...semanticPlan, productDigest: productDigestFor(semanticPlan) } };
 };

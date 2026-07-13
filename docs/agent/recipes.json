@@ -6,13 +6,13 @@
       "id": "recipe.natural-language-workspace-agent",
       "title": "Build a natural-language workspace agent",
       "intents": [
-        "compile an authored workspace agent into a static target",
-        "generate a typed client from agentos.config.jsonc"
+        "compile closed product intent into a backend-neutral product plan",
+        "bind a product plan to an explicit local host or deployment intent"
       ],
       "tutorial": "docs/guides/quickstart-node.md",
       "primitives": [
-        "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget"
+        "primitive.agent-authoring.compileProductPlan",
+        "primitive.agent-authoring.linkStaticTarget"
       ],
       "commands": ["pnpm --filter @agent-os/cli test", "pnpm run test:internal-consumer"],
       "evidence": [

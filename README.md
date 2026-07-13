@@ -54,7 +54,7 @@ state to make a product flow appear complete.
 | `@agent-os/runtime` | Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry. |
 | `@agent-os/client`  | transport-neutral agent client store, decoded runtime ledger stream adapter, typed command surface, product-shell composition helper, and optional framework subpath bridges                                                                      |
 | `@agent-os/evals`   | eval authoring DSL, symbolic eval configuration, deterministic assertion declarations, and runner-facing case/context types for generated app behavior checks                                                                                     |
-| `@agent-os/cli`     | developer command surface for generated projections, authored agent builds, structural checks, and distribution gates                                                                                                                             |
+| `@agent-os/cli`     | closed product-intent compiler, explicit local or deployment target binder, developer command surface, structural checks, and distribution gates                                                                                                  |
 
 <!-- agentos:generated package-map:end -->
 
@@ -69,19 +69,15 @@ Author pre-runtime intent as files, not runtime wiring:
 agent/
   instructions.md
   agent.json
-  tools/
-  workspace/reconcile.ts      # optional product policy
-
-agentos.config.jsonc          # typed deployment data
 .agentos/generated/           # ignored compiler projection
-app/                          # optional product UI only
 ```
 
-`agentos.config.jsonc` selects the versioned workspace macro, target, client
-bridge, LLM route refs, and workspace topology as typed data. The generated
-surface owns target wiring and the typed client; product code should not
-hand-write backend `SubmitSpec`, Durable Object wiring, identity glue, or stream
-glue.
+`agentos ask` and `agentos dev` bind that closed product intent to the local
+host directly. Advanced builds use a separate explicit
+`agentos.deployment.jsonc`; deployment, provider, workspace-host, transport,
+and correlation facts never enter `agent/agent.json`. The generated surface
+owns target wiring and the typed client; product code should not hand-write
+backend `SubmitSpec`, Durable Object wiring, identity glue, or stream glue.
 
 Start at the executable
 [local Node quickstart](docs/guides/quickstart-node.md). The full

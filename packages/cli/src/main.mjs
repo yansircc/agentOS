@@ -38,12 +38,12 @@ const helpText = `agentOS repository CLI ${version}
 Usage:
   agentos --help
   agentos --version
-  agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
-  agentos info [--cwd <path>] [--config <path>] [--json]
-  agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
-  agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
-  agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
-  agentos preflight llm [--cwd <path>] [--config <path>] [--route <binding-ref>] [--json]
+  agentos ask <prompt> [--cwd <path>] [--package-scope <scope>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos dev [--cwd <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos build --deployment <path> [--cwd <path>] [--package-scope <scope>]
+  agentos info [--cwd <path>] [--deployment <path>] [--json]
+  agentos eval [--cwd <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos preflight llm --deployment <path> [--cwd <path>] [--route <binding-ref>] [--json]
   agentos release status [path/to/consumer] [--json] [--check-npm] [--registry <url>] [--install-manifest <path>]
   agentos release tag [--json] [--registry <url>] [--install-manifest <path>]
   agentos consumer install /path/to/consumer [--from-manifest <path>] [--no-install] [--skip-pack] [--json]
@@ -80,7 +80,7 @@ const fail = (message) => {
     message.startsWith("agentos:") ||
     message.startsWith("agentos build:") ||
     message.startsWith("agentos info:") ||
-    message.startsWith("agentos serve:") ||
+    message.startsWith("agentos ask:") ||
     message.startsWith("agentos dev:") ||
     message.startsWith("agentos eval:") ||
     message.startsWith("agentos preflight:") ||
@@ -139,7 +139,7 @@ const runBuild = async (args) => runBuildRunner("build", args);
 
 const runInfo = async (args) => runBuildRunner("info", args);
 
-const runServe = async (args) => runBuildRunner("serve", args);
+const runAsk = async (args) => runBuildRunner("ask", args);
 
 const runDev = async (args) => runBuildRunner("dev", args);
 
@@ -391,8 +391,8 @@ const main = async () => {
     case "info":
       await runInfo(rest);
       return;
-    case "serve":
-      await runServe(rest);
+    case "ask":
+      await runAsk(rest);
       return;
     case "dev":
       await runDev(rest);
@@ -417,7 +417,7 @@ const main = async () => {
       return;
     default:
       throw new Error(
-        "agentos: choose one of build, info, serve, dev, eval, preflight, release, consumer, check, generate",
+        "agentos: choose one of ask, dev, build, info, eval, preflight, release, consumer, check, generate",
       );
   }
 };

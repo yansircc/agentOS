@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import type { LedgerEvent } from "@agent-os/core/types";
 import {
   agentRunCompletedEvent,
@@ -8,10 +8,11 @@ import {
   RUNTIME_FACT_OWNER,
   type RuntimeEventCommitSpec,
   type RuntimeLedgerEvent,
+  type SubmitResult,
 } from "@agent-os/core/runtime-protocol";
 import type { AgentClientCommandSpec, AgentClientStreamSource } from "../src/index";
 import { projectAgentClientRunInspection } from "../src/index";
-import { createProductShellAgentClient } from "../src/product-shell-client";
+import { createAgentSession, createProductShellAgentClient } from "../src/product-shell-client";
 
 const identity = {
   scopeRef: { kind: "session" as const, scopeId: "product-shell-client-pattern" },
@@ -71,6 +72,121 @@ const completedEvent = (): RuntimeLedgerEvent =>
   );
 
 describe("@agent-os/client/product-shell-client", () => {
+  it("owns default session and turn correlation through crypto.randomUUID", async () => {
+    const refs = [
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
+    ] as const;
+    const randomUUID = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockReturnValueOnce(refs[0])
+      .mockReturnValueOnce(refs[1]);
+    const inputs: unknown[] = [];
+    const result = {
+      ok: true,
+      status: "delivered",
+      runId: 1,
+      final: "done",
+      eventCount: 2,
+      tokensUsed: 3,
+    } satisfies SubmitResult;
+    const session = createAgentSession({
+      submitTurn: async (input) => {
+        inputs.push(input);
+        return result;
+      },
+    });
+
+    expect(session.sessionRef).toBe(refs[0]);
+    await expect(session.prompt("prepare candidate")).resolves.toBe(result);
+    expect(inputs).toEqual([
+      {
+        sessionRef: refs[0],
+        turnRef: refs[1],
+        intent: "prepare candidate",
+        context: {},
+      },
+    ]);
+    expect(randomUUID).toHaveBeenCalledTimes(2);
+    randomUUID.mockRestore();
+  });
+
+  it("allocates monotonic turn correlation synchronously across concurrent prompts", async () => {
+    const inputs: Array<{
+      readonly sessionRef: string;
+      readonly turnRef: string;
+      readonly intent: string;
+      readonly context: Record<string, unknown>;
+    }> = [];
+    const pending: Array<(result: SubmitResult) => void> = [];
+    const turnIndexes: number[] = [];
+    let sessionAllocations = 0;
+    const session = createAgentSession({
+      correlation: {
+        createSessionRef: () => {
+          sessionAllocations += 1;
+          return "session:stable";
+        },
+        createTurnRef: ({ sessionRef, turnIndex }) => {
+          turnIndexes.push(turnIndex);
+          return `turn:${sessionRef}:${turnIndex}`;
+        },
+      },
+      submitTurn: (input) => {
+        inputs.push(input);
+        return new Promise((resolve) => pending.push(resolve));
+      },
+    });
+
+    const first = session.prompt("first prompt", {
+      context: { candidateRef: "candidate:1" },
+      system: "product-owned instruction",
+    });
+    const second = session.prompt("second prompt", {
+      context: { candidateRef: "candidate:2" },
+    });
+
+    expect(sessionAllocations).toBe(1);
+    expect(turnIndexes).toEqual([1, 2]);
+    expect(inputs).toEqual([
+      {
+        sessionRef: "session:stable",
+        turnRef: "turn:session:stable:1",
+        intent: "first prompt",
+        context: { candidateRef: "candidate:1" },
+        system: "product-owned instruction",
+      },
+      {
+        sessionRef: "session:stable",
+        turnRef: "turn:session:stable:2",
+        intent: "second prompt",
+        context: { candidateRef: "candidate:2" },
+      },
+    ]);
+
+    const firstResult = {
+      ok: true,
+      status: "delivered",
+      runId: 1,
+      final: "first",
+      eventCount: 1,
+      tokensUsed: 1,
+    } satisfies SubmitResult;
+    const secondResult = {
+      ok: true,
+      status: "delivered",
+      runId: 2,
+      final: "second",
+      eventCount: 1,
+      tokensUsed: 1,
+    } satisfies SubmitResult;
+    pending[1]?.(secondResult);
+    pending[0]?.(firstResult);
+
+    await expect(first).resolves.toBe(firstResult);
+    await expect(second).resolves.toBe(secondResult);
+  });
+
   it("composes product-owned commands with agentOS runtime ledger projection", async () => {
     type ProductCommands = {
       readonly approveCandidate: AgentClientCommandSpec<

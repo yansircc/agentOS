@@ -73,8 +73,8 @@
       "invariant": "invariant.algebra.single-code-source",
       "statement": "Every algebra has one code source; projections and docs derive from that source.",
       "primitives": [
-        "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "primitive.agent-authoring.compileProductPlan",
+        "primitive.agent-authoring.linkStaticTarget",
         "primitive.kernel.AgentSchema",
         "primitive.kernel.AgentSchemaProjections",
         "primitive.kernel.projectAgentSchema"
@@ -92,7 +92,7 @@
       "docs": [
         "docs/concepts/agent-schema.md",
         "docs/concepts/materialized-projections.md",
-        "docs/guides/build-natural-language-workspace-agent.md",
+        "docs/guides/quickstart-node.md",
         "docs/packages/runtime.md",
         "docs/verification.md"
       ],
@@ -266,13 +266,13 @@
       "invariant": "invariant.docs.agent-projection",
       "statement": "Agent-facing docs indexes are projections; source JSON and exported TSDoc own routable ids.",
       "primitives": [
-        "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget"
+        "primitive.agent-authoring.compileProductPlan",
+        "primitive.agent-authoring.linkStaticTarget"
       ],
       "errors": ["agent_os.projection_sink_failure"],
       "docs": [
         "docs/concepts/materialized-projections.md",
-        "docs/guides/build-natural-language-workspace-agent.md",
+        "docs/guides/quickstart-node.md",
         "docs/verification.md"
       ],
       "tests": [

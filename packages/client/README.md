@@ -50,6 +50,18 @@ owns reconnect/replay state, Recorded runtime-event snapshots, symbolic
 ContinuationRef/InputRequestRef lifecycle, and a generic command invoker; browser
 direct transports and server bridges supply only `streamSource` and `rpcInvoker`.
 
+Generated local and remote product clients share one correlation algebra:
+
+```ts
+import { createAgentSession } from "@agent-os/client/product-shell-client";
+
+const session = createAgentSession({ submitTurn });
+const result = await session.prompt("Prepare the report");
+```
+
+`createAgentSession` allocates session and turn refs by default; deterministic
+correlation is an explicit injected override for tests or product hosts.
+
 ## Verification
 
 ```sh

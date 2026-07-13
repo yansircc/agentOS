@@ -1,30 +1,27 @@
 import {
-  compileAgentTree as compileAgentTreeImpl,
-  linkWorkspaceStaticTarget as linkWorkspaceStaticTargetImpl,
+  compileProductPlan as compileProductPlanImpl,
+  linkStaticTarget as linkStaticTargetImpl,
 } from "./build/agent-authoring";
 
 /**
- * Compile an authored `agent/` tree into one normalized manifest plus
- * provenance. Runtime facts and provider material are rejected before they can
- * become manifest truth.
+ * Compile closed authored product facts into one backend-neutral ProductPlan.
  *
- * @agentosPrimitive primitive.agent-authoring.compileAgentTree
+ * @agentosPrimitive primitive.agent-authoring.compileProductPlan
  * @agentosInvariant invariant.docs.agent-projection
  * @agentosInvariant invariant.algebra.single-code-source
- * @agentosDocs docs/guides/build-natural-language-workspace-agent.md
+ * @agentosDocs docs/guides/quickstart-node.md
  * @public
  */
-export const compileAgentTree = compileAgentTreeImpl;
+export const compileProductPlan = compileProductPlanImpl;
 
 /**
- * Link normalized workspace authoring intent to a closed-target residual
- * program. Implementation wiring is static imports and factory composition;
- * manifest and deployment JSON remain semantic/provenance data only.
+ * Bind one ProductPlan to an explicit local host or deployment intent and
+ * render the resulting closed static target.
  *
- * @agentosPrimitive primitive.agent-authoring.linkWorkspaceStaticTarget
+ * @agentosPrimitive primitive.agent-authoring.linkStaticTarget
  * @agentosInvariant invariant.docs.agent-projection
  * @agentosInvariant invariant.algebra.single-code-source
- * @agentosDocs docs/guides/build-natural-language-workspace-agent.md
+ * @agentosDocs docs/guides/quickstart-node.md
  * @public
  */
-export const linkWorkspaceStaticTarget = linkWorkspaceStaticTargetImpl;
+export const linkStaticTarget = linkStaticTargetImpl;

@@ -16,7 +16,8 @@ runtime behavior.
 ```sh
 pnpm run agentos check all
 pnpm run agentos check guard public-api
-pnpm run agentos build --cwd /path/to/app
+pnpm exec agentos ask "Say hello" --cwd /path/to/app --llm test
+pnpm exec agentos build --cwd /path/to/app --deployment agentos.deployment.jsonc
 pnpm run agentos generate docs
 ```
 

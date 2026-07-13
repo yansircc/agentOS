@@ -4,8 +4,8 @@
 
 ## Public exports
 
-- `.:compileAgentTree` - Compile an authored `agent/` tree into one normalized manifest plus provenance. Runtime facts and provider material are rejected before they can become manifest truth.
-- `.:linkWorkspaceStaticTarget` - Link normalized workspace authoring intent to a closed-target residual program. Implementation wiring is static imports and factory composition; manifest and deployment JSON remain semantic/provenance data only.
+- `.:compileProductPlan` - Compile closed authored product facts into one backend-neutral ProductPlan.
+- `.:linkStaticTarget` - Bind one ProductPlan to an explicit local host or deployment intent and render the resulting closed static target.
 
 ## Experimental exports
 

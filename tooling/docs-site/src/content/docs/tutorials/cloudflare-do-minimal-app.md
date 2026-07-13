@@ -7,13 +7,15 @@ slug: "tutorials/cloudflare-do-minimal-app"
 
 ## Goal
 
-Build the smallest authored agent and compile it into one manifest before any
+Build the smallest product intent, compile it once into a backend-neutral
+`ProductPlan`, then link it to an explicit Cloudflare deployment before any
 runtime starts.
 
 ## What You Build
 
-An `agent/` directory with instructions and one tool declaration, plus a build
-step that produces a manifest and provenance map.
+An `agent/` directory containing the two required product files, plus a separate
+deployment contract that produces a manifest, deployment projection, and
+provenance map.
 
 ## Prerequisites
 
@@ -31,77 +33,130 @@ step that produces a manifest and provenance map.
    pnpm add -D typescript
    ```
 
-2. Create the authored root:
+2. Create the two-file product intent:
 
    ```text
    agent/
+     agent.json
      instructions.md
-     tools/
-       echo.ts
    ```
 
-3. Write `agent/instructions.md`:
+3. Write `agent/agent.json`:
+
+   ```json
+   {
+     "agentId": "echo-agent",
+     "kind": "chat"
+   }
+   ```
+
+4. Write `agent/instructions.md`:
 
    ```md
    Echo the user text exactly.
    ```
 
-4. Declare the tool at `agent/tools/echo.ts`:
+5. Keep the deployment facts outside the product tree in
+   `agentos.deployment.jsonc`:
 
-   ```ts
-   export const declaration = {
-     bindingRef: "tool.echo",
-   };
+   ```jsonc
+   {
+     "kind": "deployment",
+     "release": { "id": "echo-agent", "version": "0.1.0" },
+     "target": {
+       "kind": "cloudflare-do",
+       "className": "EchoAgent",
+       "binding": "AGENT_OS",
+       "materialResolver": "./deployment/material-resolver.ts",
+     },
+     "transport": "svelte-kit-remote",
+     "providers": {
+       "default": {
+         "protocol": "openai-chat-compatible",
+         "endpointRef": "openrouter",
+         "credentialRef": "openrouter-key",
+         "modelRef": "default-text-model",
+       },
+     },
+   }
    ```
 
-5. Compile the authored tree in your build step:
+   `deployment/material-resolver.ts` is the target-owned adapter that resolves
+   those symbolic provider refs from Cloudflare bindings. It is not product
+   intent and must not put resolved credentials into the deployment file.
+
+6. The public authoring API has one compile stage and one binding stage:
 
    ```ts
-   import { compileAgentTree } from "@yansirplus/cli";
+   import { compileProductPlan, linkStaticTarget } from "@yansirplus/cli";
 
-   const compiled = compileAgentTree({
+   const product = compileProductPlan({
      files: [
+       {
+         path: "agent/agent.json",
+         kind: "json",
+         value: { agentId: "echo-agent", kind: "chat" },
+       },
        {
          path: "agent/instructions.md",
          kind: "markdown",
          text: "Echo the user text exactly.",
        },
-       {
-         path: "agent/tools/echo.ts",
-         kind: "tool",
-         declaration: { bindingRef: "tool.echo" },
-       },
      ],
    });
 
-   if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));
+   if (!product.ok) throw new Error(JSON.stringify(product.issues));
 
-   await writeGeneratedAgent({
-     manifest: compiled.value.manifest,
-     provenance: compiled.value.provenance,
+   const linked = linkStaticTarget(product.value, {
+     kind: "deployment",
+     release: { id: "echo-agent", version: "0.1.0" },
+     target: {
+       kind: "cloudflare-do",
+       className: "EchoAgent",
+       binding: "AGENT_OS",
+       materialResolver: "./deployment/material-resolver.ts",
+     },
+     transport: "svelte-kit-remote",
+     providers: {
+       default: {
+         protocol: "openai-chat-compatible",
+         endpointRef: "openrouter",
+         credentialRef: "openrouter-key",
+         modelRef: "default-text-model",
+       },
+     },
    });
+
+   if (!linked.ok) throw new Error(JSON.stringify(linked.issues));
    ```
 
-6. Run the generated dev entry:
+   `ProductPlan` contains no target, provider, transport, credential, scope, or
+   correlation facts. `linkStaticTarget` adds those facts without reinterpreting
+   the product.
+
+7. Let the CLI collect the same files and write the linked target:
 
    ```sh
-   pnpm run build
-   pnpm run dev
+   pnpm exec agentos build \
+     --deployment agentos.deployment.jsonc \
+     --package-scope @yansirplus
    ```
 
 ## Checkpoint
 
-The app author wrote only authored intent. The build output has:
+The product author wrote only `agent/agent.json` and
+`agent/instructions.md`. The linked output has separate owners:
 
 ```text
 manifest.agentId
 manifest.instructions
-manifest.tools.echo.bindingRef
-provenance["/tools/echo"]
+deployment.backend
+provenance.manifest
+provenance.deployment
 ```
 
-The author did not hand-write a backend submit shape, a Durable Object class, or
-a kernel primitive import.
+The product did not hand-write a backend submit shape, a Durable Object class,
+scope, authority, provider material, or client correlation.
 
 ## Next
 

@@ -2,13 +2,14 @@
 
 ## Goal
 
-Declare one weather tool and one LLM route in the authored tree so the generated
-runtime can call the tool before producing a final answer.
+Declare one weather tool and one model preference in product intent so the
+generated runtime can call the tool before producing a final answer. The host,
+not the product, binds that preference to a provider.
 
 ## What You Build
 
-An authored `get_current_weather` tool declaration with a symbolic binding ref
-and a default LLM route ref.
+An authored `get_current_weather` tool whose identity comes from its path, plus
+a backend-neutral `ProductPlan` that a local host can link and run.
 
 ## Prerequisites
 
@@ -18,65 +19,105 @@ and a default LLM route ref.
 
 ## Steps
 
-1. Add a default LLM route to `agent/agent.json`:
+1. Select the tool and a logical model in `agent/agent.json`:
 
    ```json
    {
-     "handlers": ["user_message"],
-     "llmRoutes": {
-       "default": { "bindingRef": "llm.default" }
-     }
+     "agentId": "weather-agent",
+     "kind": "chat",
+     "model": "default",
+     "tools": ["get_current_weather"]
    }
    ```
 
 2. Add `agent/tools/get_current_weather.ts`:
 
    ```ts
-   export const declaration = {
-     bindingRef: "tool.get_current_weather",
-   };
+   import { defineProductTool } from "@yansirplus/core/tools";
+   import { Effect, Schema } from "effect";
+
+   export const declaration = {};
+
+   export default defineProductTool({
+     name: "get_current_weather",
+     description: "Get the current weather for a city.",
+     args: Schema.Struct({ city: Schema.String }),
+     authority: "weather.read",
+     admit: () => Effect.succeed({ ok: true as const }),
+     execute: ({ city }) => Effect.succeed({ city, temperatureC: 21 }),
+   });
    ```
 
-3. Compile the tree:
+   The deterministic result keeps this tutorial focused on the tool loop. The
+   next tutorial replaces it with an effectful, material-backed lookup.
+
+3. Compile the product once, then link the closed plan to a local host:
 
    ```ts
-   const compiled = compileAgentTree({
+   import { compileProductPlan, linkStaticTarget } from "@yansirplus/cli";
+
+   const compiled = compileProductPlan({
      files: [
-       { path: "agent/instructions.md", kind: "markdown", text: instructions },
-       { path: "agent/agent.json", kind: "json", value: agentJson },
+       {
+         path: "agent/instructions.md",
+         kind: "markdown",
+         text: "Use the weather tool before answering weather questions.",
+       },
+       {
+         path: "agent/agent.json",
+         kind: "json",
+         value: {
+           agentId: "weather-agent",
+           kind: "chat",
+           model: "default",
+           tools: ["get_current_weather"],
+         },
+       },
        {
          path: "agent/tools/get_current_weather.ts",
          kind: "tool",
-         declaration: { bindingRef: "tool.get_current_weather" },
+         declaration: {},
        },
      ],
    });
+
+   if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));
+
+   const linked = linkStaticTarget(compiled.value, {
+     kind: "local",
+     mode: "ask",
+     cwd: "/workspace/weather-agent",
+     env: {},
+   });
+
+   if (!linked.ok) throw new Error(JSON.stringify(linked.issues));
    ```
 
-4. Mount the generated manifest and generated bindings through the backend
-   adapter in the framework build output.
+   `compileProductPlan` owns product semantics. `linkStaticTarget` adds the
+   local node host, default provider route, scope, authority, and correlation
+   boundary without recompiling the product.
 
-5. Submit a user turn through the generated client:
+4. Let the CLI perform the same local link and submit one turn:
 
-   ```ts
-   await agent.submit({
-     message: "What is the weather in Lisbon?",
-   });
+   ```sh
+   pnpm exec agentos ask "What is the weather in Lisbon?"
    ```
 
 ## Checkpoint
 
-The manifest contains only symbolic refs:
+The `ProductPlan` contains product facts and symbolic requirements:
 
 ```text
-handlers: user_message
-llmRoutes.default.bindingRef: llm.default
-tools.get_current_weather.bindingRef: tool.get_current_weather
+agent.kind: chat
+modelPreference: default
+toolSelection: get_current_weather
+assets.tools[0].path: agent/tools/get_current_weather.ts
+symbolicRequirements: model
 ```
 
-Tool implementation, provider credentials, and live route clients stay outside
-the authored manifest. The ledger records runtime facts after the generated
-driver runs.
+The linked manifest derives the tool binding and default route. Provider
+credentials, host scope, and live route clients never enter product intent. The
+ledger records runtime facts only after the generated driver runs.
 
 ## Next
 

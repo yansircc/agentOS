@@ -131,7 +131,7 @@ const blueprintRecipeMarkdown = ({
   id = "provider.material-binding",
   kind = "provider",
   title = "Provider Material Binding",
-  primaryFile = "agentos.config.jsonc",
+  primaryFile = "agentos.deployment.jsonc",
   markerPath = primaryFile,
   ownership = lifecycleOwnership,
   channel = undefined,
@@ -421,6 +421,65 @@ void test("blueprint recipe contract accepts versioned markdown source", () => {
         '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="provider.material-binding" -->\n',
     }),
     [],
+  );
+});
+
+void test("blueprint recipe contract accepts product intent authoring files", () => {
+  assert.deepEqual(
+    blueprintRecipeFindingsForSources({
+      recipeSources: [
+        {
+          file: "blueprints/recipes/database/agent-intent.md",
+          content: blueprintRecipeMarkdown({
+            id: "database.agent-intent",
+            kind: "database",
+            title: "Agent Intent",
+            primaryFile: "agent/agent.json",
+            ownership: undefined,
+          }),
+        },
+        {
+          file: "blueprints/recipes/observability/instructions.md",
+          content: blueprintRecipeMarkdown({
+            id: "observability.instructions",
+            kind: "observability",
+            title: "Agent Instructions",
+            primaryFile: "agent/instructions.md",
+            ownership: undefined,
+          }),
+        },
+      ],
+      upgradeGuideContent: [
+        "# Blueprint Upgrade Guide",
+        "",
+        '<!-- agentos:blueprint-upgrade id="database.agent-intent" -->',
+        '<!-- agentos:blueprint-upgrade id="observability.instructions" -->',
+        "",
+      ].join("\n"),
+    }),
+    [],
+  );
+});
+
+void test("blueprint recipe contract rejects retired agentos.config.jsonc authoring", () => {
+  const findings = blueprintRecipeFindingsForSources({
+    recipeSources: [
+      {
+        file: "blueprints/recipes/provider/material-binding.md",
+        content: blueprintRecipeMarkdown({ primaryFile: "agentos.config.jsonc" }),
+      },
+    ],
+    upgradeGuideContent:
+      '# Blueprint Upgrade Guide\n\n<!-- agentos:blueprint-upgrade id="provider.material-binding" -->\n',
+  });
+
+  assert.equal(
+    findings.some(
+      (finding) =>
+        finding.includes("primaryFile must be one of") &&
+        finding.includes("agentos.deployment.jsonc"),
+    ),
+    true,
   );
 });
 

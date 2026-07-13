@@ -164,7 +164,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "index.ts"),
     [
-      `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
+      `import { compileProductPlan } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { Effect } from "effect";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { defineExternalEffectAttempt, runExternalEffectAttempt, type DefinedExternalEffectAttempt, type RunExternalEffectAttemptSpec } from "${publicSpecifier("@agent-os/runtime/external-effect")}";`,
@@ -211,17 +211,20 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "  return descriptor.transportAdapterId;",
       "});",
       "void llmTransportConsumerProgram;",
-      "const compiled = compileAgentTree({",
-      "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
+      "const compiled = compileProductPlan({",
+      "  files: [",
+      "    { path: 'agent/agent.json', kind: 'json', value: { agentId: 'packed-consumer', kind: 'chat' } },",
+      "    { path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' },",
+      "  ],",
       "});",
       "if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));",
-      "void compiled.value.manifest;",
+      "void compiled.value.productDigest;",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
     [
-      `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
+      `import { compileProductPlan } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { ABORT } from "${publicSpecifier("@agent-os/core")}";`,
       `import { Effect } from "effect";`,
       `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
@@ -267,7 +270,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "const backendReport = await runBackendConformance('packed-broken-backend', brokenBackendFactory, { runtimeFactOwner: '@agent-os/packed-consumer' });",
       "if (backendReport.results.length !== BACKEND_CONFORMANCE_LAWS.length || backendReport.results.find((result) => result.lawId === BACKEND_CONFORMANCE_LAW_ID.LEDGER_READ_PREFIX)?.status !== 'failed') throw new Error('backend conformance did not identify the broken law');",
       "if (validateBackendConformanceReport(backendReport).ok !== true) throw new Error('backend conformance report failed core validation');",
-      "if (!compileAgentTree || !ABORT || !triggerParseOk || !defineExternalEffectAttempt || !runExternalEffectAttempt || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !externalEffectConformance || !runBackendConformance || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
+      "if (!compileProductPlan || !ABORT || !triggerParseOk || !defineExternalEffectAttempt || !runExternalEffectAttempt || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !externalEffectConformance || !runBackendConformance || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
@@ -380,21 +383,21 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
   fs.writeFileSync(
     path.join(dir, "cf-entry.ts"),
     [
-      `import { compileAgentTree } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { createAgentDurableObject, createCloudflareSandboxWorkspaceEnvResolver, createCloudflareWorkspaceEnvResolver, createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai/openai-compatible")}";`,
-      `import { defineAgentBindings } from "${publicSpecifier("@agent-os/core")}";`,
+      `import { defineAgentBindings, defineAgentManifest } from "${publicSpecifier("@agent-os/core")}";`,
       "void createCloudflareWorkspaceJobResponse;",
       "void makeCloudflareWorkspaceEnv;",
       "void createCloudflareWorkspaceEnvResolver;",
       "void createCloudflareSandboxWorkspaceEnvResolver;",
-      "const compiled = compileAgentTree({",
-      "  files: [{ path: 'agent/instructions.md', kind: 'markdown', text: 'Say hello.' }],",
-      "});",
-      "if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));",
       "const agentBindings = defineAgentBindings<never>({ handlers: {} });",
       "export const AgentDO = createAgentDurableObject({",
-      "  manifest: compiled.value.manifest,",
+      "  manifest: defineAgentManifest({",
+      "    agentId: 'packed-cloudflare-runtime',",
+      "    scope: { kind: 'conversation', idSource: 'manifest', stableScopeId: 'packed-cloudflare-runtime' },",
+      "    effectAuthorityRef: { authorityClass: 'agent', authorityId: 'packed-cloudflare-runtime' },",
+      "    handlers: [] as const,",
+      "  }),",
       "  agentBindings,",
       "  llmTransport: () => OpenAiCompatibleLlmTransportLive,",
       "});",
@@ -556,6 +559,7 @@ const channelDispatchSmokeSource = ({ importLine, dispatchExpression, scopeId })
 
 export const writeGeneratedTargetConsumerApp = (dir) => {
   fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "deployment"), { recursive: true });
   fs.mkdirSync(path.join(dir, "agent", "skills", "review", "references"), { recursive: true });
   fs.mkdirSync(path.join(dir, "agent", "skills", "review", "scripts"), { recursive: true });
   writeJson(path.join(dir, "package.json"), {
@@ -572,7 +576,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   fs.writeFileSync(path.join(dir, "Dockerfile"), 'FROM alpine:3.20\nCMD ["sleep", "infinity"]\n');
   fs.writeFileSync(path.join(dir, "agent", "instructions.md"), "Operate on the workspace.\n");
   fs.writeFileSync(
-    path.join(dir, "agent", "material-resolver.ts"),
+    path.join(dir, "deployment", "material-resolver.ts"),
     [
       `import { defineCloudflareMaterialResolverFactory } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { materialRefKey } from "${publicSpecifier("@agent-os/core/material-ref")}";`,
@@ -626,44 +630,28 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
   );
   writeJson(path.join(dir, "agent", "agent.json"), {
     agentId: "generated-target-consumer",
-    scope: {
-      kind: "session",
-      idSource: "manifest",
-      stableScopeId: "generated-target-consumer",
-    },
-    effectAuthorityRef: {
-      authorityClass: "effect",
-      authorityId: "generated-target-consumer",
-    },
-    materials: {
-      workspace: {
-        kind: "external_resource",
-        provider: "agent-os",
-        resourceKind: "workspace-env",
-        ref: "cloudflare-sandbox:generated-target-consumer",
-      },
-    },
-    executionDomains: {
-      workspace: { bindingRef: "workspace" },
-    },
+    kind: "workspace",
   });
   fs.writeFileSync(
-    path.join(dir, "agentos.config.jsonc"),
+    path.join(dir, "agentos.deployment.jsonc"),
     [
       "{",
-      '  "profile": "workspace@1",',
-      '  "agent": "./agent",',
-      '  "deployment": { "id": "generated-target-consumer", "version": "0.1.0" },',
+      '  "kind": "deployment",',
+      '  "release": { "id": "generated-target-consumer", "version": "0.1.0" },',
       '  "target": {',
-      '    "kind": "cloudflare-do@1",',
-      '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
+      '    "kind": "cloudflare-do",',
+      '    "className": "AgentOS",',
+      '    "binding": "AGENT_OS",',
+      '    "materialResolver": "deployment/material-resolver.ts"',
       "  },",
-      '  "client": { "kind": "svelte-kit-remote@1" },',
-      '  "llm": {',
-      '    "route": "openai-chat-compatible",',
-      '    "endpointRef": "openrouter",',
-      '    "credentialRef": "openrouter-key",',
-      '    "modelRef": "openrouter-default-text-model"',
+      '  "transport": "svelte-kit-remote",',
+      '  "providers": {',
+      '    "default": {',
+      '      "protocol": "openai-chat-compatible",',
+      '      "endpointRef": "openrouter",',
+      '      "credentialRef": "openrouter-key",',
+      '      "modelRef": "openrouter-default-text-model"',
+      "    }",
       "  },",
       '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
       "}",
@@ -678,6 +666,8 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
       "build",
       "--cwd",
       dir,
+      "--deployment",
+      "agentos.deployment.jsonc",
       "--package-scope",
       publishScope(),
     ],
@@ -745,7 +735,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     }
   }
   for (const fragment of [
-    "../../agent/material-resolver",
+    "../../deployment/material-resolver",
     "generatedMaterialResolverFactory",
     "generatedMaterialResolverFor",
     "generatedMaterialResolverFactoryContract.create(env)",
@@ -842,7 +832,7 @@ export const writeGeneratedTargetConsumerApp = (dir) => {
     [
       'import { Effect } from "effect";',
       `import { openLive } from "${publicSpecifier("@agent-os/core/live-edge")}";`,
-      'import materialResolverFactory from "./agent/material-resolver";',
+      'import materialResolverFactory from "./deployment/material-resolver";',
       "const resolvedScopes: string[] = [];",
       "const disposedRefs: string[] = [];",
       "const resolver = materialResolverFactory.create({",
@@ -923,33 +913,23 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
   writeScheduleConsumerFixture(dir);
   writeJson(path.join(dir, "agent", "agent.json"), {
     agentId: "generated-local-target-consumer",
-    scope: {
-      kind: "session",
-      idSource: "manifest",
-      stableScopeId: "generated-local-target-consumer",
-    },
-    effectAuthorityRef: {
-      authorityClass: "effect",
-      authorityId: "generated-local-target-consumer",
-    },
-    tools: {
-      write_file: { interaction: "never" },
-    },
+    kind: "workspace",
   });
   fs.writeFileSync(
-    path.join(dir, "agentos.config.jsonc"),
+    path.join(dir, "agentos.deployment.jsonc"),
     [
       "{",
-      '  "profile": "workspace@1",',
-      '  "agent": "./agent",',
-      '  "deployment": { "id": "generated-local-target-consumer", "version": "0.1.0" },',
-      '  "target": { "kind": "node@1" },',
-      '  "client": { "kind": "browser-direct@1" },',
-      '  "llm": {',
-      '    "route": "openai-chat-compatible",',
-      '    "endpointRef": "openrouter",',
-      '    "credentialRef": "openrouter-key",',
-      '    "modelRef": "openrouter-default-text-model"',
+      '  "kind": "deployment",',
+      '  "release": { "id": "generated-local-target-consumer", "version": "0.1.0" },',
+      '  "target": { "kind": "node" },',
+      '  "transport": "direct",',
+      '  "providers": {',
+      '    "default": {',
+      '      "protocol": "openai-chat-compatible",',
+      '      "endpointRef": "openrouter",',
+      '      "credentialRef": "openrouter-key",',
+      '      "modelRef": "openrouter-default-text-model"',
+      "    }",
       "  },",
       '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
       "}",
@@ -964,6 +944,8 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "build",
       "--cwd",
       dir,
+      "--deployment",
+      "agentos.deployment.jsonc",
       "--package-scope",
       publishScope(),
     ],
@@ -1622,9 +1604,11 @@ export const assertGeneratedLocalTargetConsumer = () => {
     ].join("\n"),
   );
   const preflightEnv = { PATH: process.env.PATH ?? "" };
-  const preflightOk = runAgentosJson(["preflight", "llm", "--cwd", dir], 0, {
-    env: preflightEnv,
-  });
+  const preflightOk = runAgentosJson(
+    ["preflight", "llm", "--cwd", dir, "--deployment", "agentos.deployment.jsonc"],
+    0,
+    { env: preflightEnv },
+  );
   if (preflightOk.json.ok !== true || preflightOk.json.route.bindingRef !== "default") {
     fail(`generated local consumer preflight did not pass: ${preflightOk.result.stdout}`);
   }
@@ -1634,7 +1618,16 @@ export const assertGeneratedLocalTargetConsumer = () => {
     }
   }
   const preflightFailure = runAgentosJson(
-    ["preflight", "llm", "--cwd", dir, "--route", "product_loop"],
+    [
+      "preflight",
+      "llm",
+      "--cwd",
+      dir,
+      "--deployment",
+      "agentos.deployment.jsonc",
+      "--route",
+      "product_loop",
+    ],
     1,
     { env: preflightEnv },
   );

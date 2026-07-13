@@ -45,16 +45,37 @@ typechecks a smoke import from the authoring surface.
    }
    ```
 
-4. Import only package entrypoints:
+4. Import only package entrypoints and prove both product compilation and host
+   linking:
 
    ```ts
-   import { compileAgentTree } from "@yansirplus/cli";
+   import { compileProductPlan, linkStaticTarget } from "@yansirplus/cli";
 
-   const result = compileAgentTree({
-     files: [{ path: "agent/instructions.md", kind: "markdown", text: "Say hello." }],
+   const product = compileProductPlan({
+     files: [
+       {
+         path: "agent/agent.json",
+         kind: "json",
+         value: { agentId: "packed-consumer", kind: "chat" },
+       },
+       {
+         path: "agent/instructions.md",
+         kind: "markdown",
+         text: "Say hello.",
+       },
+     ],
    });
 
-   if (!result.ok) throw new Error(JSON.stringify(result.issues));
+   if (!product.ok) throw new Error(JSON.stringify(product.issues));
+
+   const target = linkStaticTarget(product.value, {
+     kind: "local",
+     mode: "ask",
+     cwd: "/tmp/packed-consumer",
+     env: {},
+   });
+
+   if (!target.ok) throw new Error(JSON.stringify(target.issues));
    ```
 
 5. Run:
@@ -69,7 +90,10 @@ typechecks a smoke import from the authoring surface.
    ```js
    const authoring = await import("@yansirplus/cli");
 
-   if (typeof authoring.compileAgentTree !== "function") {
+   if (
+     typeof authoring.compileProductPlan !== "function" ||
+     typeof authoring.linkStaticTarget !== "function"
+   ) {
      throw new Error("agentOS packed consumer proof failed");
    }
    ```

@@ -14,6 +14,11 @@ This subpath does not define product commands, product reports, approvals,
 candidates, receipts, previews, or workflow state. Product command outputs stay
 opaque to agentOS and are not appended to the runtime event snapshot.
 
+`createAgentSession` is the single session/turn correlation constructor shared
+by generated local and remote clients. Callers inject only `submitTurn`; random
+session and turn refs are the default, while deterministic correlation is an
+explicit test or product-host override.
+
 ## Public exports
 
 - `.:AgentClientCommandMap`
@@ -65,6 +70,12 @@ opaque to agentOS and are not appended to the runtime event snapshot.
 - `./svelte:clientReadable`
 - `./svelte:selectClientReadable`
 - `./product-shell-client:createProductShellAgentClient`
+- `./product-shell-client:createAgentSession`
+- `./product-shell-client:AgentPromptOptions`
+- `./product-shell-client:AgentSession`
+- `./product-shell-client:AgentSessionCorrelation`
+- `./product-shell-client:AgentSessionTurnInput`
+- `./product-shell-client:CreateAgentSessionOptions`
 - `./product-shell-client:CreateProductShellAgentClientOptions`
 - `./product-shell-client:ProductShellCommandInvoker`
 - `./product-shell-client:ProductShellCommandMap`

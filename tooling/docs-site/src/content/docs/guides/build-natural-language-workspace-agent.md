@@ -11,10 +11,10 @@ authoring slots, generated targets, clients, and ownership boundaries.
 
 ## Outcome
 
-An app author writes one authored agent tree plus deployment JSONC. agentOS
-compiles that pre-runtime intent into generated target files, mounts a
-Cloudflare Durable Object through static target linking, and gives product UI a
-typed client over runtime projections and commands.
+An app author writes one closed product tree. agentOS compiles it once into a
+backend-neutral `ProductPlan`. A local host or an explicit deployment intent
+then binds environment facts and renders generated target files. Product UI
+consumes one typed session facade over runtime projections and commands.
 
 The first path is:
 
@@ -34,25 +34,27 @@ agent/
   schedules/
     daily.ts             # optional UTC time ingress handler
   tools/                # optional custom execute code only
-  workspace/reconcile.ts
 workflows/
   deploy.ts             # optional finite workflow authoring slot
-agentos.config.jsonc
+agentos.deployment.jsonc # optional; required only by deployment builds
 .agentos/generated/
 app/
 ```
 
-Only `agent/` and `agentos.config.jsonc` are required. `workflows/` is optional
-finite workflow authoring. `workspace/reconcile.ts` is optional authored policy.
+Only `agent/agent.json` and `agent/instructions.md` are required for
+`agentos ask` and `agentos dev`. `workflows/` and the other asset directories
+are optional product assets. `agentos.deployment.jsonc` is a separate advanced
+host contract used only with `build`, `info --deployment`, and `preflight`.
 `app/` is product UI only.
 
 ## Authoring Tree
 
 `agent/instructions.md` is required and owns the natural-language operating
-instructions. `agent/agent.json` owns scalar pre-runtime intent such as the
-agent id and scope policy. `workspace@1` supplies the standard workspace tool
-declarations. `agent/tools/*.ts` exists only for custom execute code; path
-segments are identities for custom tools.
+instructions. `agent/agent.json` owns only non-derivable product intent:
+`agentId`, `kind`, optional `model`, optional exact `tools`, and optional
+`outputSchema`. `kind: "workspace"` contributes the standard workspace tool
+declarations; `kind: "chat"` does not. `agent/tools/*.ts` exists only for
+custom execute code; path segments are identities for custom tools.
 
 `agent/skills/` is optional authoring-only instruction data. The v1 grammar has
 two main file shapes:
@@ -107,10 +109,10 @@ reserved by this framework projection and cannot be used as authored
 `agent/tools/*.ts` tool names.
 
 `agent/channels/<name>.ts` is an optional inbound request slot. The path stem is
-the channel identity; there is no second channel name in `agent.json` or
-`agentos.config.jsonc`. Each file exports a `defineChannel` declaration from the
-runtime channel subpath with a verifier and HTTP method routes. The generated
-Cloudflare and node targets consume the same compiled channel registry.
+the channel identity; there is no second channel name. Each file exports a
+`defineChannel` declaration from the runtime channel subpath with a verifier
+and HTTP method routes. The generated Cloudflare and node targets consume the
+same compiled channel registry.
 
 Channel handlers receive the provider-native `Request` and read the raw body
 themselves. The verifier maps request evidence, such as a signature check, to a
@@ -131,12 +133,12 @@ webhook helpers, provider lifecycle helpers, or provider-normalized universal
 events.
 
 `agent/schedules/<id>.ts` is an optional time ingress slot. The path stem is the
-schedule identity; there is no second schedule list in `agent.json` or
-`agentos.config.jsonc`. Each file exports a `defineSchedule` declaration with a
-five-field UTC cron expression. The generated target owns provider scheduled
-metadata routing; node/local targets expose explicit `schedules.list`,
-`schedules.trigger`, and `schedules.history` dev/test APIs by schedule id and do
-not start an implicit background cron engine.
+schedule identity; there is no second schedule list. Each file exports a
+`defineSchedule` declaration with a five-field UTC cron expression. The
+generated target owns provider scheduled metadata routing; node/local targets
+expose explicit `schedules.list`, `schedules.trigger`, and `schedules.history`
+dev/test APIs by schedule id and do not start an implicit background cron
+engine.
 
 Schedule handlers receive only `appPrincipal`, stable `fireId`, normalized
 `scheduledAt`, and product `sessions`/`workflows` ingress. A fire identity is
@@ -155,72 +157,60 @@ provider SDK lifecycle, external side-effect helpers, or provider callback
 helpers.
 
 `workflows/<name>.ts` is an optional finite workflow authoring slot. The path
-stem is the workflow identity; there is no second workflow name in `agent.json`,
-`agentos.config.jsonc`, `workspace@1`, or `chat@1`. The grammar accepts only
-direct `workflows/<name>.ts` files with lowercase slug names. Nested workflow
-files, symlinks, `agent/workflows/*`, and unsupported roots fail closed. Profile
-values such as `workspace@1` and `chat@1` describe capability surface, not
-lifecycle.
+stem is the workflow identity; there is no second workflow name. The grammar
+accepts only direct `workflows/<name>.ts` files with lowercase slug names.
+Nested workflow files, symlinks, `agent/workflows/*`, and unsupported roots
+fail closed. Product kind describes capability surface, not lifecycle.
 
-Default workspace tool policy is controlled as data in `agent/agent.json`.
-Unknown slugs fail closed. A default can be disabled with `false`; disabling a
-default releases that slug for an authored replacement file. Interaction
-overrides are safety-monotone, and receipt policy is not overrideable through
-this surface.
+When `tools` is absent, the effective tool set is derived from product kind,
+workspace built-ins, and authored tool assets. When present, `tools` is the
+exact selected set. Unknown names and authored collisions with workspace
+built-ins fail closed; the compiler reuses the same effective set for dynamic
+resolver validation and symbolic requirements.
 
-For `workspace@1`, `agent/agent.json` must own a stable manifest scope. The
-generated workspace resource id and Durable Object route are derived from that
-scope; the build fails closed instead of inventing an implicit workspace
-identity.
+The minimal product declaration is:
 
 ```json
 {
   "agentId": "web-cursor-demo",
-  "scope": {
-    "kind": "session",
-    "idSource": "manifest",
-    "stableScopeId": "web-cursor-demo"
-  },
-  "effectAuthorityRef": {
-    "authorityClass": "effect",
-    "authorityId": "web-cursor-demo"
-  }
+  "kind": "workspace"
 }
 ```
 
-Authored files may contain symbolic refs such as LLM route refs, material refs,
-workspace command names, custom tool declarations, interaction policy, and
-reconcile policy. They must not contain resolved credentials, provider URLs,
+Scope, authority, deployment, provider refs, target, client, workspace host,
+and correlation are not product fields. The binder derives or requires those
+facts from `LocalHost` or `DeploymentIntent`. Product assets may carry symbolic
+requirements, but they must not contain resolved credentials, provider URLs,
 sandbox handles, continuation refs, snapshots, actual trigger times, or ledger
 events.
 
 ## Deployment JSONC
 
-`agentos.config.jsonc` selects the deployment recipe as typed data:
+`agentos.deployment.jsonc` contains only explicit host and release facts. It is
+never loaded by `ask` or `dev`; pass it to deployment commands with
+`--deployment`:
 
 ```jsonc
 {
-  "profile": "workspace@1",
-  "agent": "./agent",
-  "deployment": {
+  "kind": "deployment",
+  "release": {
     "id": "web-cursor-demo",
     "version": "0.1.0",
   },
   "target": {
-    "kind": "cloudflare-do@1",
-    "durableObject": {
-      "className": "AgentOS",
-      "binding": "AGENT_OS",
+    "kind": "cloudflare-do",
+    "className": "AgentOS",
+    "binding": "AGENT_OS",
+    "materialResolver": "./deployment/material-resolver.ts",
+  },
+  "transport": "svelte-kit-remote",
+  "providers": {
+    "default": {
+      "protocol": "openai-chat-compatible",
+      "endpointRef": "openrouter",
+      "credentialRef": "openrouter-key",
+      "modelRef": "openrouter-default-text-model",
     },
-  },
-  "client": {
-    "kind": "svelte-kit-remote@1",
-  },
-  "llm": {
-    "route": "openai-chat-compatible",
-    "endpointRef": "openrouter",
-    "credentialRef": "openrouter-key",
-    "modelRef": "openrouter-default-text-model",
   },
   "workspace": {
     "binding": "Sandbox",
@@ -233,22 +223,23 @@ events.
 }
 ```
 
-The config is not executable TypeScript. It cannot read env, clock, random, or
-IO. The normalized deployment is a pure function of the authored files and this
-JSONC data.
+The deployment file is not executable TypeScript. It cannot read env, clock,
+random, or IO. Resolved provider material stays in host environment bindings;
+the file carries only symbolic refs. Cloudflare material resolution is an
+explicit target module, not an authored product asset.
 
-## Profiles
+## Product Kinds And Hosts
 
-`workspace@1` is the workspace agent profile. It requires `/workspace` config,
-adds the default workspace tools, derives the Sandbox resource from the
-manifest-owned scope, and emits workspace state/file projections plus
-read/reset/destroy commands.
+`kind: "workspace"` adds the default workspace tools and emits workspace
+state/file projections plus read/reset/destroy commands. A local host derives
+the workspace root from `--cwd`; a deployment host must declare its workspace
+binding and root.
 
-`chat@1` is the chat profile. It still requires manifest-owned `scope`, LLM,
-target, deployment, and client config, and it still supports `agent/tools/*.ts`
-custom tools plus decision interrupts through submit/resume/decide. It forbids
-`/workspace` and emits no workspace tools, workspace material, Sandbox binding,
-container config, workspace projections, or workspace-only commands.
+`kind: "chat"` supports custom tools plus decision interrupts through
+submit/resume/decide, but contributes no workspace tools, workspace material,
+Sandbox binding, container config, workspace projections, or workspace-only
+commands. Both legal product kinds compile against local node and explicit
+deployment hosts through the same binder.
 
 ## Generated Surface
 
@@ -260,7 +251,7 @@ The generated target is a static residual program:
 
 - provider/backend/workspace wiring is expressed by static imports and factory
   composition;
-- `agent/material-resolver.ts` is the required app-owned Cloudflare binding
+- the deployment-declared `materialResolver` module is the required app-owned Cloudflare binding
   adapter; it exports `defineCloudflareMaterialResolverFactory(...)`, receives
   raw Worker env bindings, and returns the shared symbolic `RefResolver`
   contract;
@@ -284,13 +275,15 @@ The generated target is a static residual program:
 
 For local development there are two public shapes with different owners.
 `createLocalAgentRuntime` from `@agent-os/runtime/local` is the direct
-dev/test harness. It lowers the authored config to the same local substrate but
+dev/test harness. It lowers an explicit runtime input to the same local substrate but
 returns only `submit`, `events`, `diagnostics`, and `inspect`. Use it when a
 test or spike needs to submit one run and inspect runtime facts directly.
 
-The product local path is the generated `node@1` `LocalAgentApp`, or the
-`lowerLocalAgentRuntime` primitive used by that generated app. That path owns
-product-facing `sessions.*`, `workflows.*`, channel dispatch, schedule fire
+The ordinary product path is `agentos ask` or `agentos dev`, both backed by the
+same generated `node@1` `LocalAgentApp`. Its `session` field is the first-use
+facade: `createAgentSession` owns default session and turn correlation and calls
+the same `sessions.submitTurn` boundary used by generated remote clients. The
+app also exposes `sessions.*`, `workflows.*`, channel dispatch, schedule fire
 handoff, dynamic capability wiring, generated target identity, and
 `submitWithProductLink`. Product code should not copy
 `resolveRuntime + submitAgentEffect + workspaceOperations` assembly; it should
@@ -399,9 +392,11 @@ Workspace state, file metadata, run events, input requests, and agent info are
 projection reads. Submit, input-request resume, live file reads, reset, destroy,
 and custom product RPC are commands.
 
-`agent/workspace/reconcile.ts` is the only authored runtime policy hook. It
-receives Live sandbox material, Derived projection input, and an append function
-that accepts only Recordable facts owned by the runtime/carrier contract.
+Workspace capability is derived from product kind plus the host binding. The
+product tree does not carry sandbox handles, roots, topology, or reconciliation
+state. Product-specific workspace policy belongs in declared tools or product
+commands; runtime-owned workspace operations remain bound by the generated
+host.
 
 ## References
 

@@ -25,13 +25,13 @@
     },
     {
       "path": "docs/agent/capability-rules.source.json",
-      "sha256": "b0519f73acdc424a9896222d0e3d7a858caf0762fbf8e7b4ca2b725a97569baf",
-      "byteSize": 6118
+      "sha256": "ee1e0535ed79438631f4667850eebf41047561c78d4988310cff436569f61f3c",
+      "byteSize": 6128
     },
     {
       "path": "docs/agent/decision-graph.json",
-      "sha256": "e194ba2e9dd3162b3adfbf327a17e34d103322a60ce8584bbf6a16db9af9c701",
-      "byteSize": 18389
+      "sha256": "f5264cd5c6a6dab00447706c56ecfa45a38b55e74419612f91c5390f7cda440d",
+      "byteSize": 18334
     },
     {
       "path": "docs/agent/error-metadata.source.json",
@@ -55,8 +55,8 @@
     },
     {
       "path": "docs/agent/invariant-matrix.json",
-      "sha256": "76c5ff6eb29366858fcb7f6cdb99f355f063a2fc08e7e88c7a71a65d9cbe975c",
-      "byteSize": 15726
+      "sha256": "3dc7f3be6425f575d9f7896ac4463cfb1c577e65b80b8c4ba32a36299b7f9566",
+      "byteSize": 15666
     },
     {
       "path": "docs/agent/invariants.source.json",
@@ -65,23 +65,23 @@
     },
     {
       "path": "docs/agent/primitive-evidence.source.json",
-      "sha256": "c61b9768e013df2762ce147d61f26bf6609231f898c76b7452a497e3bb77a81b",
-      "byteSize": 9033
+      "sha256": "b6921607bd97ba3835fa464d700a4d45784799aad35079bd348e8d973327f94b",
+      "byteSize": 9025
     },
     {
       "path": "docs/agent/primitives.json",
-      "sha256": "87a3a31466767e85215bdf56b6021cb9cc890768d00b01aab4d2263d24358a71",
-      "byteSize": 43080
+      "sha256": "060daff8196edcc42ba1a84d2e581b9e02566e0eb9c47e9b58265db1b57d0d57",
+      "byteSize": 42823
     },
     {
       "path": "docs/agent/recipes.json",
-      "sha256": "bb31c79a3c404d53f0193e905ccf39cf504391cf0b32e6f241e6d7c0cbd8af2c",
-      "byteSize": 5381
+      "sha256": "179c5cfa69c80d9cacc27033ed5a739a58b4f570a9fcfa039d9460dfca8aeebd",
+      "byteSize": 5400
     },
     {
       "path": "docs/agent/recipes.source.json",
-      "sha256": "737efda125212f3bd74f3206439eae9564c3394be548084dea9066323c7ae540",
-      "byteSize": 5287
+      "sha256": "9a19d7a93cfbf4034460c92c047ddd3393e8953082567854608ac97bd2528511",
+      "byteSize": 5306
     },
     {
       "path": "docs/agent/schemas/capability-rules.source.schema.json",
@@ -110,13 +110,13 @@
     },
     {
       "path": "docs/api/cli.md",
-      "sha256": "45e254ca97dde42c1f75407609dac457e6d2ce02234ec08339f1cd6d55e20ace",
-      "byteSize": 733
+      "sha256": "bf7920daa148f089e4406c758775e67f3d08a389ac15f83315ad1da10078b585",
+      "byteSize": 537
     },
     {
       "path": "docs/api/client.md",
-      "sha256": "d854978f495167362bc2226cd6ce33547f22eb516194bd209796bb97ef969068",
-      "byteSize": 4970
+      "sha256": "5e2267e92c8a71c2de23cabc077c11ab23cbc28abb32a7699a03adf1fe294bb2",
+      "byteSize": 5532
     },
     {
       "path": "docs/api/core.md",
@@ -130,18 +130,18 @@
     },
     {
       "path": "docs/runtime-packages.md",
-      "sha256": "4efde29fa66e66810a99df7bdf479135698c37456907923ef3ed35c23ea585fc",
+      "sha256": "d1888c233378e9f4254f4be19ca73d2f342550503c30c223ac379266b00951a4",
       "byteSize": 31907
     },
     {
       "path": "docs/start-here.md",
-      "sha256": "38330dab691107569dfb6b46bfa229a97c2e76e2932ac858043befbc06abdbbe",
+      "sha256": "3a6d94e3f85f8edf9be4a0cc6c7e13750ee266c76a1277face2e6f9e21916688",
       "byteSize": 3172
     },
     {
       "path": "docs/surface.json",
-      "sha256": "95dadca73da655bc6c38a025cd58360d4bdbede7c6746ced54e4c2e36debf509",
-      "byteSize": 19904
+      "sha256": "ce67f5e2ff6adb4cae756ab42507724f0362a3f6b6f0ee62c3c9df8c0c792143",
+      "byteSize": 19987
     },
     {
       "path": "package.json",
@@ -187,7 +187,7 @@
     },
     {
       "path": "agent-catalog/agentOS/references/package-map.md",
-      "sha256": "4f1247e3dffacca929bf98e5af0fbd31a88dbe426664ef32f4abef27014e118b",
+      "sha256": "933aa605282b2160126b29f8c7877e8f07cdf6e0989f401b977dc9c288dd50b8",
       "byteSize": 15174
     },
     {
@@ -202,33 +202,33 @@
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",
-      "sha256": "e3f5abad790acfc681ca5aaa0a4cf3a5850163c20915584b202dd72aa38873d2",
-      "byteSize": 4972
+      "sha256": "5382e8b14c8e39a77489898a7ae7fbf55f3250fb2d2397188b18fbcb2b5fa857",
+      "byteSize": 5534
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/cli.md",
-      "sha256": "f710dd2771ad370f003f6051eb715376a637151e046a98b06c068502abb2408a",
-      "byteSize": 735
+      "sha256": "2eae77074065bc7015ebc611aae9078fb0dd6011213532985ce97a9f2127e96c",
+      "byteSize": 539
     },
     {
       "path": "agent-catalog/agentOS/references/agent/start-here.md",
-      "sha256": "4af48f094693bab9690ca50ffa02bfd4bbcd15f69a181c329ccb8cc7a82d77ac",
+      "sha256": "2151bf70e7b633adb9d878cd1f47ede56ef79768b6c445f71b13020f6be1163e",
       "byteSize": 3067
     },
     {
       "path": "agent-catalog/agentOS/references/agent/recipes.json",
-      "sha256": "bb31c79a3c404d53f0193e905ccf39cf504391cf0b32e6f241e6d7c0cbd8af2c",
-      "byteSize": 5381
+      "sha256": "179c5cfa69c80d9cacc27033ed5a739a58b4f570a9fcfa039d9460dfca8aeebd",
+      "byteSize": 5400
     },
     {
       "path": "agent-catalog/agentOS/references/agent/primitives.json",
-      "sha256": "87a3a31466767e85215bdf56b6021cb9cc890768d00b01aab4d2263d24358a71",
-      "byteSize": 43080
+      "sha256": "060daff8196edcc42ba1a84d2e581b9e02566e0eb9c47e9b58265db1b57d0d57",
+      "byteSize": 42823
     },
     {
       "path": "agent-catalog/agentOS/references/agent/decision-graph.json",
-      "sha256": "e194ba2e9dd3162b3adfbf327a17e34d103322a60ce8584bbf6a16db9af9c701",
-      "byteSize": 18389
+      "sha256": "f5264cd5c6a6dab00447706c56ecfa45a38b55e74419612f91c5390f7cda440d",
+      "byteSize": 18334
     },
     {
       "path": "agent-catalog/agentOS/references/agent/errors.json",
@@ -237,8 +237,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/invariant-matrix.json",
-      "sha256": "76c5ff6eb29366858fcb7f6cdb99f355f063a2fc08e7e88c7a71a65d9cbe975c",
-      "byteSize": 15726
+      "sha256": "3dc7f3be6425f575d9f7896ac4463cfb1c577e65b80b8c4ba32a36299b7f9566",
+      "byteSize": 15666
     }
   ],
   "outputHashScope": "all generated files except references/provenance.json to avoid a self-referential hash",

@@ -7,13 +7,11 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { buildSync } from "esbuild";
@@ -34,51 +32,8 @@ const agentOsReleaseVersion = () => {
   const manifest = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   return manifest.agentOsRelease?.version;
 };
-const sha256Text = (text) => crypto.createHash("sha256").update(text).digest("hex");
 const sha256File = (file) => crypto.createHash("sha256").update(readFileSync(file)).digest("hex");
 const workspaceDefaultToolNames = ["bash", "glob", "grep", "read_file", "write_file"];
-const compiledCloudflareMaterialResolverFile = Object.freeze({
-  path: "agent/material-resolver.ts",
-  kind: "material-resolver",
-  sourceKind: "regular",
-});
-const writeCloudflareMaterialResolverFixture = (root) => {
-  mkdirSync(path.join(root, "agent"), { recursive: true });
-  writeFileSync(
-    path.join(root, "agent/material-resolver.ts"),
-    [
-      'import { defineCloudflareMaterialResolverFactory } from "@agent-os/runtime/cloudflare";',
-      'import { liveResolvedMaterial, RefResolutionFailed } from "@agent-os/core/ref-resolver";',
-      'import { materialRefKey } from "@agent-os/core/material-ref";',
-      'import { Effect } from "effect";',
-      "",
-      "export default defineCloudflareMaterialResolverFactory<{",
-      "  readonly MATERIALS: Readonly<Record<string, string>>;",
-      "}>((env) => ({",
-      "  material: (request) => {",
-      "    const value = env.MATERIALS[materialRefKey(request.materialRef)];",
-      "    return value === undefined",
-      "      ? Effect.fail(new RefResolutionFailed({",
-      "          kind: request.materialRef.kind,",
-      "          ref: materialRefKey(request.materialRef),",
-      '          reason: "material_missing",',
-      "        }))",
-      "      : Effect.succeed(liveResolvedMaterial({",
-      "          ref: request.materialRef,",
-      '          version: "fixture-v1",',
-      "          value,",
-      "        }));",
-      "  },",
-      "}));",
-      "",
-    ].join("\n"),
-  );
-};
-const forbiddenCloudflareLifecycleTargetFragments = [
-  /installCloudflareWorkspaceOperationProvider/,
-  /installCloudflareWorkspaceJobProfile/,
-  /workspace-job-profile/,
-];
 
 const staticRelativeImportSpecifiers = (source) =>
   [...source.matchAll(/^\s*import\s+(?:[^'"]+\s+from\s+)?["'](\.[^"']+)["'];?/gmu)].map(
@@ -100,12 +55,6 @@ const staticRelativeImportClosure = (entry) => {
 };
 
 const repoRelative = (file) => path.relative(repoRoot, file).split(path.sep).join("/");
-
-const assertNoCloudflareLifecycleTargetWiring = (target) => {
-  for (const fragment of forbiddenCloudflareLifecycleTargetFragments) {
-    assert.doesNotMatch(target, fragment);
-  }
-};
 
 const sourceNameForPublicPackage = (packageName) => {
   const release = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
@@ -204,29 +153,7 @@ const runTypeScript = (source, { cwd = repoRoot, resolveDir = repoRoot } = {}) =
   }
 };
 
-const digestText = (text) => {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return `fnv1a32:${hash.toString(16).padStart(8, "0")}:${text.length}`;
-};
-
-const linkSmokeDependency = (root, specifier, target) => {
-  const destination = path.join(root, "node_modules", ...specifier.split("/"));
-  mkdirSync(path.dirname(destination), { recursive: true });
-  symlinkSync(target, destination, process.platform === "win32" ? "junction" : "dir");
-};
-
-const linkGeneratedTargetSmokeDependencies = (root) => {
-  linkSmokeDependency(root, "@agent-os/core", path.join(repoRoot, "packages/core"));
-  linkSmokeDependency(root, "@agent-os/evals", path.join(repoRoot, "packages/evals"));
-  linkSmokeDependency(root, "@agent-os/runtime", path.join(repoRoot, "packages/runtime"));
-  linkSmokeDependency(root, "effect", path.join(repoRoot, "node_modules/effect"));
-};
-
-const writeNodeWorkspaceAgentFixture = (root) => {
+const writeWorkspaceProductFixture = (root, overrides = {}) => {
   writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
   mkdirSync(path.join(root, "agent"), { recursive: true });
   writeFileSync(path.join(root, "agent/instructions.md"), "Operate locally.");
@@ -235,77 +162,38 @@ const writeNodeWorkspaceAgentFixture = (root) => {
     JSON.stringify(
       {
         agentId: "node-local-agent",
-        scope: {
-          kind: "session",
-          idSource: "manifest",
-          stableScopeId: "node-local-scope",
-        },
-        effectAuthorityRef: {
-          authorityClass: "effect",
-          authorityId: "node-local-agent",
-        },
-        tools: {
-          write_file: { interaction: "approval" },
-        },
+        kind: "workspace",
+        ...overrides,
       },
       null,
       2,
     ),
   );
-  writeFileSync(
-    path.join(root, "agentos.config.jsonc"),
-    [
-      "{",
-      '  "profile": "workspace@1",',
-      '  "agent": "./agent",',
-      '  "deployment": { "id": "node-local-deployment", "version": "0.1.0" },',
-      '  "target": { "kind": "node@1" },',
-      '  "client": { "kind": "browser-direct@1" },',
-      '  "llm": {',
-      '    "route": "openai-chat-compatible",',
-      '    "endpointRef": "openrouter",',
-      '    "credentialRef": "openrouter-key",',
-      '    "modelRef": "openrouter-default-text-model"',
-      "  },",
-      '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-      "}",
-      "",
-    ].join("\n"),
-  );
 };
 
-const waitForJsonLine = (child) =>
-  new Promise((resolve, reject) => {
-    let stdout = "";
-    let stderr = "";
-    const timeout = setTimeout(() => {
-      reject(
-        new Error(`timed out waiting for server stdout\nstdout:\n${stdout}\nstderr:\n${stderr}`),
-      );
-    }, 20_000);
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-      const line = stdout.split("\n").find((candidate) => candidate.trim().startsWith("{"));
-      if (line === undefined) return;
-      clearTimeout(timeout);
-      try {
-        resolve(JSON.parse(line));
-      } catch (error) {
-        reject(error);
-      }
-    });
-    child.on("exit", (code, signal) => {
-      clearTimeout(timeout);
-      reject(
-        new Error(`server exited before ready: code=${code} signal=${signal}\nstderr:\n${stderr}`),
-      );
-    });
-  });
+const nodeDeploymentIntent = (overrides = {}) => ({
+  kind: "deployment",
+  release: { id: "node-local-deployment", version: "0.1.0" },
+  target: { kind: "node" },
+  transport: "direct",
+  providers: {
+    default: {
+      protocol: "openai-chat-compatible",
+      endpointRef: "openrouter",
+      credentialRef: "openrouter-key",
+      modelRef: "openrouter-default-text-model",
+    },
+  },
+  workspace: { binding: "Sandbox", root: "/workspace" },
+  ...overrides,
+});
+
+const writeDeploymentIntentFixture = (root, intent = nodeDeploymentIntent()) => {
+  writeFileSync(
+    path.join(root, "agentos.deployment.jsonc"),
+    `${JSON.stringify(intent, null, 2)}\n`,
+  );
+};
 
 const runCli = (args, options = {}) =>
   new Promise((resolve, reject) => {
@@ -329,14 +217,6 @@ const runCli = (args, options = {}) =>
       resolve({ status, signal, stdout, stderr });
     });
   });
-
-const stopProcessGroup = (child) => {
-  try {
-    process.kill(-child.pid, "SIGTERM");
-  } catch {
-    child.kill("SIGTERM");
-  }
-};
 
 void test("agentos --version derives from the release source fact", () => {
   const rootPackage = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
@@ -1144,14 +1024,15 @@ void test("agentos release status composes consumer projection without mutating 
   }
 });
 
-void test("agentos preflight llm uses normalized material env bindings without leaking values", async () => {
+void test("agentos preflight llm reads explicit deployment provider bindings without leaking values", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "agentos-preflight-llm-"));
   const secret = "sk-agentos-preflight-secret";
   const endpoint = "https://llm.example.test/v1";
   const model = "agentos-test-model";
   const childEnv = { PATH: process.env.PATH ?? "" };
   try {
-    writeNodeWorkspaceAgentFixture(root);
+    writeWorkspaceProductFixture(root);
+    writeDeploymentIntentFixture(root);
     writeFileSync(
       path.join(root, ".dev.vars"),
       [
@@ -1162,9 +1043,10 @@ void test("agentos preflight llm uses normalized material env bindings without l
       ].join("\n"),
     );
 
-    const passing = await runCli(["preflight", "llm", "--cwd", root, "--json"], {
-      env: childEnv,
-    });
+    const passing = await runCli(
+      ["preflight", "llm", "--cwd", root, "--deployment", "agentos.deployment.jsonc", "--json"],
+      { env: childEnv },
+    );
     assert.equal(passing.status, 0, passing.stderr);
     assert.doesNotMatch(passing.stdout, new RegExp(secret));
     assert.doesNotMatch(passing.stdout, new RegExp(endpoint.replaceAll(".", "\\.")));
@@ -1218,9 +1100,10 @@ void test("agentos preflight llm uses normalized material env bindings without l
         "",
       ].join("\n"),
     );
-    const missingCredential = await runCli(["preflight", "llm", "--cwd", root, "--json"], {
-      env: childEnv,
-    });
+    const missingCredential = await runCli(
+      ["preflight", "llm", "--cwd", root, "--deployment", "agentos.deployment.jsonc", "--json"],
+      { env: childEnv },
+    );
     assert.equal(missingCredential.status, 1);
     assert.equal(missingCredential.stderr, "");
     assert.doesNotMatch(missingCredential.stdout, new RegExp(endpoint.replaceAll(".", "\\.")));
@@ -1233,7 +1116,17 @@ void test("agentos preflight llm uses normalized material env bindings without l
     );
 
     const wrongRoute = await runCli(
-      ["preflight", "llm", "--cwd", root, "--route", "product_loop", "--json"],
+      [
+        "preflight",
+        "llm",
+        "--cwd",
+        root,
+        "--deployment",
+        "agentos.deployment.jsonc",
+        "--route",
+        "product_loop",
+        "--json",
+      ],
       { env: childEnv },
     );
     assert.equal(wrongRoute.status, 1);
@@ -1244,23 +1137,19 @@ void test("agentos preflight llm uses normalized material env bindings without l
     const namedSecret = "sk-agentos-product-loop-secret";
     const namedEndpoint = "https://product-loop.example.test/v1";
     const namedModel = "product-loop-test-model";
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      readFileSync(path.join(root, "agentos.config.jsonc"), "utf8").replace(
-        '    "modelRef": "openrouter-default-text-model"\n  },',
-        [
-          '    "modelRef": "openrouter-default-text-model",',
-          '    "routes": {',
-          '      "product_loop": {',
-          '        "route": "openai-chat-compatible",',
-          '        "endpointRef": "product-loop",',
-          '        "credentialRef": "product-loop-key",',
-          '        "modelRef": "product-loop-model"',
-          "      }",
-          "    }",
-          "  },",
-        ].join("\n"),
-      ),
+    writeDeploymentIntentFixture(
+      root,
+      nodeDeploymentIntent({
+        providers: {
+          ...nodeDeploymentIntent().providers,
+          product_loop: {
+            protocol: "openai-chat-compatible",
+            endpointRef: "product-loop",
+            credentialRef: "product-loop-key",
+            modelRef: "product-loop-model",
+          },
+        },
+      }),
     );
     writeFileSync(
       path.join(root, ".dev.vars"),
@@ -1275,7 +1164,17 @@ void test("agentos preflight llm uses normalized material env bindings without l
       ].join("\n"),
     );
     const namedRoute = await runCli(
-      ["preflight", "llm", "--cwd", root, "--route", "product_loop", "--json"],
+      [
+        "preflight",
+        "llm",
+        "--cwd",
+        root,
+        "--deployment",
+        "agentos.deployment.jsonc",
+        "--route",
+        "product_loop",
+        "--json",
+      ],
       { env: childEnv },
     );
     assert.equal(namedRoute.status, 0, namedRoute.stderr);
@@ -1326,555 +1225,284 @@ void test("agentos preflight llm uses normalized material env bindings without l
   }
 });
 
-void test("compileAgentTree keeps skills as authoring-only output", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const utf8 = (text) => new TextEncoder().encode(text);",
-      "const compiled = compileAgentTree({",
-      "  files: [",
-      '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-      '    { path: "agent/agent.json", kind: "json", value: { agentId: "skills-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "skills-fixture" } } },',
-      '    { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
-      '    { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace facts\\n---\\nUse echo." },',
-      '    { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review output carefully\\n---\\nReview carefully." },',
-      '    { path: "agent/skills/review/references/checklist.md", kind: "resource", bytes: utf8("Check every claim.") },',
-      '    { path: "agent/skills/review/scripts/audit.sh", kind: "resource", bytes: utf8("echo audit") },',
-      "  ],",
-      "});",
-      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-      "const normalized = normalizeAgentOsConfig({",
-      '  profile: "chat@1",',
-      '  agent: "./agent",',
-      '  deployment: { id: "skills-fixture" },',
-      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
-      '  client: { kind: "browser-direct@1" },',
-      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-      "}, compiled.value);",
-      "if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
-      "console.log(JSON.stringify({",
-      "  skills: compiled.value.skills,",
-      "  normalizedSkills: normalized.value.skills,",
-      '  manifestHasSkills: Object.hasOwn(compiled.value.manifest, "skills"),',
-      "  manifestToolNames: Object.keys(compiled.value.manifest.tools ?? {}).sort(),",
-      "}));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  assert.deepEqual(
-    output.skills.map((skill) => ({
-      name: skill.name,
-      description: skill.description,
-      path: skill.path,
-      text: skill.text,
-      files: skill.files,
-    })),
-    [
+void test("ProductPlan binds independently to local and deployment hosts", () => {
+  const result = runTypeScript(`
+import {
+  bindStaticTargetPlan,
+  compileProductPlan,
+  linkStaticTarget,
+  localHost,
+  renderStaticTargetPlan,
+} from "./packages/cli/src/build/agent-authoring.ts";
+
+const product = (agentId: string, kind: "chat" | "workspace") =>
+  compileProductPlan({
+    files: [
       {
-        name: "echo",
-        description: "Echo workspace facts",
-        path: "agent/skills/echo.md",
-        text: "Use echo.",
-        files: [],
+        path: "agent/instructions.md",
+        kind: "markdown" as const,
+        text: "Answer from product-owned instructions.\\n",
       },
       {
-        name: "review",
-        description: "Review output carefully",
-        path: "agent/skills/review/SKILL.md",
-        text: "Review carefully.",
-        files: [
-          {
-            path: "references/checklist.md",
-            digest: digestText("Check every claim."),
-            bytes: 18,
-            contentBase64: "Q2hlY2sgZXZlcnkgY2xhaW0u",
-          },
-          {
-            path: "scripts/audit.sh",
-            digest: digestText("echo audit"),
-            bytes: 10,
-            contentBase64: "ZWNobyBhdWRpdA==",
-          },
-        ],
+        path: "agent/agent.json",
+        kind: "json" as const,
+        value: { agentId, kind, model: "primary" },
       },
     ],
-  );
-  assert.deepEqual(output.normalizedSkills, output.skills);
-  assert.equal(output.skills[0].digest, digestText("Use echo."));
-  assert.equal(output.skills[1].digest, digestText("Review carefully."));
-  assert.equal(output.manifestHasSkills, false);
-  assert.deepEqual(output.manifestToolNames, []);
-});
+  });
 
-void test("compileAgentTree keeps dynamic resolvers as slot-local authoring output", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const compiled = compileAgentTree({",
-      "  files: [",
-      '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-      '    { path: "agent/instructions/tone.md", kind: "markdown", text: "Use a terse tone." },',
-      '    { path: "agent/tools/echo.ts", kind: "tool", declaration: {} },',
-      '    { path: "agent/skills/review.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview." },',
-      '    { path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
-      '    { path: "agent/skills/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } },',
-      '    { path: "agent/instructions/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { instructions: ["tone"] } } },',
-      "  ],",
-      "});",
-      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-      "console.log(JSON.stringify({",
-      "  dynamicResolvers: compiled.value.dynamicResolvers,",
-      "  instructionFragments: compiled.value.instructionFragments,",
-      '  manifestHasDynamicResolvers: Object.hasOwn(compiled.value.manifest, "dynamicResolvers"),',
-      '  manifestHasInstructionFragments: Object.hasOwn(compiled.value.manifest, "instructionFragments"),',
-      "}));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.dynamicResolvers, [
-    {
-      resolverId: "session",
-      slot: "instructions",
-      path: "agent/instructions/session.dynamic.ts",
-      outputs: ["tone"],
-      origin: "path:agent/instructions/session.dynamic.ts",
-    },
-    {
-      resolverId: "session",
-      slot: "skills",
-      path: "agent/skills/session.dynamic.ts",
-      outputs: ["review"],
-      origin: "path:agent/skills/session.dynamic.ts",
-    },
-    {
-      resolverId: "session",
-      slot: "tools",
-      path: "agent/tools/session.dynamic.ts",
-      outputs: ["echo"],
-      origin: "path:agent/tools/session.dynamic.ts",
-    },
-  ]);
-  assert.deepEqual(output.instructionFragments, [
-    {
-      fragmentId: "tone",
-      path: "agent/instructions/tone.md",
-      digest: digestText("Use a terse tone."),
-      text: "Use a terse tone.",
-      origin: "path:agent/instructions/tone.md",
-    },
-  ]);
-  assert.equal(output.manifestHasDynamicResolvers, false);
-  assert.equal(output.manifestHasInstructionFragments, false);
-});
+const workspace = product("workspace-product", "workspace");
+const chat = product("chat-product", "chat");
+if (!workspace.ok || !chat.ok) {
+  console.log(JSON.stringify({ workspace, chat }));
+  process.exit(0);
+}
 
-void test("compileAgentTree rejects invalid dynamic resolver grammar", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
-      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
-      'const tone = { path: "agent/instructions/tone.md", kind: "markdown", text: "Use a terse tone." };',
-      'const echo = { path: "agent/tools/echo.ts", kind: "tool", declaration: {} };',
-      'const review = { path: "agent/skills/review.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview." };',
-      "const compile = (file) => compileAgentTree({ files: [instructions, tone, echo, review, file] });",
-      'const forbiddenRoot = compile({ path: "agent/dynamic/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } });',
-      'const identity = compile({ path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { id: "manual", name: "manual", outputs: { tools: ["echo"] } } });',
-      'const nested = compile({ path: "agent/skills/review/scripts/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } });',
-      "const duplicate = compileAgentTree({ files: [",
-      "  instructions,",
-      "  echo,",
-      '  { path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
-      '  { path: "tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
-      "] });",
-      'const misclassifiedTool = compileAgentTree({ files: [instructions, { path: "agent/tools/session.dynamic.ts", kind: "tool", declaration: {} }] });',
-      'const crossSlot = compile({ path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } });',
-      'const unknownTool = compile({ path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["missing"] } } });',
-      'const unknownSkill = compile({ path: "agent/skills/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["missing"] } } });',
-      'const unknownInstruction = compile({ path: "agent/instructions/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { instructions: ["missing"] } } });',
-      "console.log(JSON.stringify({ forbiddenRoot, identity, nested, duplicate, misclassifiedTool, crossSlot, unknownTool, unknownSkill, unknownInstruction }));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.forbiddenRoot.issues, [
-    {
-      kind: "unsupported_path",
-      path: "agent/dynamic/session.dynamic.ts",
-      reason: "dynamic_path_not_in_grammar",
-    },
-  ]);
-  assert.equal(output.identity.ok, false);
-  assert.deepEqual(output.identity.issues, [
-    { kind: "identity_field_forbidden", path: "tools/session.dynamic.ts", field: "id" },
-    { kind: "identity_field_forbidden", path: "tools/session.dynamic.ts", field: "name" },
-  ]);
-  assert.deepEqual(output.nested.issues, [
-    {
-      kind: "unsupported_path",
-      path: "skills/review/scripts/session.dynamic.ts",
-      reason: "dynamic_path_not_in_grammar",
-    },
-  ]);
-  assert.deepEqual(output.duplicate.issues, [
-    {
-      kind: "duplicate_path",
-      path: "tools/session.dynamic.ts",
-      existingPath: "tools/session.dynamic.ts",
-    },
-  ]);
-  assert.deepEqual(output.misclassifiedTool.issues, [
-    {
-      kind: "unsupported_path",
-      path: "tools/session.dynamic.ts",
-      reason: "dynamic_path_not_in_grammar",
-    },
-  ]);
-  assert.ok(
-    output.crossSlot.issues.some(
-      (issue) =>
-        issue.kind === "dynamic_resolver_cross_slot_output" &&
-        issue.path === "tools/session.dynamic.ts" &&
-        issue.slot === "tools" &&
-        issue.outputSlot === "skills",
-    ),
-  );
-  for (const [name, slot] of [
-    ["unknownTool", "tools"],
-    ["unknownSkill", "skills"],
-    ["unknownInstruction", "instructions"],
-  ]) {
-    assert.ok(
-      output[name].issues.some(
-        (issue) =>
-          issue.kind === "dynamic_resolver_unknown_target" &&
-          issue.slot === slot &&
-          issue.targetId === "missing",
-      ),
-      `${name} did not reject an unknown ${slot} target`,
-    );
-  }
-});
+const summarize = (linked: ReturnType<typeof linkStaticTarget>) => {
+  if (!linked.ok) return linked;
+  const file = (path: string) => linked.value.files.find((candidate) => candidate.path === path);
+  const local = file(".agentos/generated/local.ts")?.text;
+  const target = file(".agentos/generated/target.ts")?.text;
+  return {
+    ok: true as const,
+    paths: linked.value.files.map((candidate) => candidate.path),
+    canonical: linked.value.canonicalDeployment,
+    mount: linked.value.mount,
+    manifest: JSON.parse(file(".agentos/generated/manifest.json")?.text ?? "null"),
+    deployment: JSON.parse(file(".agentos/generated/deployment.json")?.text ?? "null"),
+    modules: linked.value.moduleGraph.map((entry) => entry.source),
+    local:
+      local === undefined
+        ? null
+        : {
+            sessionFacade: local.includes("const session = createAgentSession"),
+            exportedApp: local.includes("export const createLocalAgentApp"),
+          },
+    target:
+      target === undefined
+        ? null
+        : {
+            lifecycleInstaller: /installCloudflareWorkspace(?:OperationProvider|JobProfile)/u.test(
+              target,
+            ),
+          },
+  };
+};
 
-void test("agentos.config normalizes node@1 as the local convention target", () => {
-  const result = runTypeScript(
-    [
-      'import { AGENTOS_CONFIG_TARGET, compileAgentTree, decodeAgentOsConfig, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const compiled = compileAgentTree({",
-      "  files: [",
-      '    { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-      '    { path: "agent/agent.json", kind: "json", value: { agentId: "node-target-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "node-target-fixture" } } },',
-      "  ],",
-      "});",
-      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-      "const config = {",
-      '  profile: "workspace@1",',
-      '  agent: "./agent",',
-      '  deployment: { id: "node-target-fixture" },',
-      '  target: { kind: "node@1" },',
-      '  client: { kind: "browser-direct@1" },',
-      "  llm: {",
-      '    route: "openai-chat-compatible",',
-      '    endpointRef: "openrouter",',
-      '    credentialRef: "openrouter-key",',
-      '    modelRef: "openrouter-model",',
-      "    routes: {",
-      '      product_loop: { route: "openai-chat-compatible", endpointRef: "product-loop", credentialRef: "product-loop-key", modelRef: "product-loop-model" },',
-      "    },",
-      "  },",
-      '  workspace: { binding: "Sandbox", root: "/workspace" },',
-      "};",
-      "const decoded = decodeAgentOsConfig(config);",
-      "if (!decoded.ok) { console.error(JSON.stringify(decoded.issues)); process.exit(1); }",
-      "const normalized = normalizeAgentOsConfig(decoded.value, compiled.value);",
-      "if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
-      "const linked = linkWorkspaceStaticTarget(normalized.value);",
-      'const nodeWithEntry = decodeAgentOsConfig({ ...config, target: { kind: "node@1", entry: "./src/app.ts" } });',
-      'const nodeWithDurableObject = decodeAgentOsConfig({ ...config, target: { kind: "node@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } });',
-      'const bunTarget = decodeAgentOsConfig({ ...config, target: { kind: "bun@1" } });',
-      "console.log(JSON.stringify({",
-      "  targetKinds: Object.values(AGENTOS_CONFIG_TARGET).sort(),",
-      "  normalizedTarget: normalized.value.target,",
-      "  llmRoutes: normalized.value.llmRoutes,",
-      "  deploymentBackend: normalized.value.deployment.backend,",
-      "  deploymentAdapter: normalized.value.deployment.adapter,",
-      '  targetOrigins: Object.fromEntries(Object.entries(normalized.value.provenance.deployment).filter(([key]) => key.startsWith("/target"))),',
-      "  linkIssues: linked.ok ? [] : linked.issues,",
-      "  linkFiles: linked.ok ? linked.value.files.map((file) => file.path).sort() : [],",
-      "  nodeWithEntryIssues: nodeWithEntry.ok ? [] : nodeWithEntry.issues,",
-      "  nodeWithDurableObjectIssues: nodeWithDurableObject.ok ? [] : nodeWithDurableObject.issues,",
-      "  bunTargetIssues: bunTarget.ok ? [] : bunTarget.issues,",
-      "}));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.targetKinds, ["cloudflare-do@1", "node@1"]);
-  assert.deepEqual(output.normalizedTarget, { kind: "node@1" });
-  assert.deepEqual(output.llmRoutes, {
+const workspaceHost = localHost("ask", "/tmp/agentos-workspace-product", {});
+const workspacePlan = bindStaticTargetPlan(workspace.value, workspaceHost, {
+  packageScope: "@product-test",
+});
+const workspaceLink = linkStaticTarget(workspace.value, workspaceHost, {
+  packageScope: "@product-test",
+});
+const chatLink = linkStaticTarget(
+  chat.value,
+  localHost("dev", "/tmp/agentos-chat-product", {}),
+  { packageScope: "@product-test" },
+);
+
+const cloudflareDeployment = {
+  kind: "deployment",
+  release: { id: "cloud-product", version: "1.0.0" },
+  target: {
+    kind: "cloudflare-do",
+    className: "AgentOS",
+    binding: "AGENT_OS",
+    materialResolver: "agent/material-resolver.ts",
+  },
+  transport: "svelte-kit-remote",
+  providers: {
+    primary: {
+      protocol: "openai-chat-compatible",
+      endpointRef: "provider-endpoint",
+      credentialRef: "provider-credential",
+      modelRef: "provider-model",
+    },
+  },
+  workspace: { binding: "Sandbox", root: "/workspace" },
+} as const;
+const cloudLink = linkStaticTarget(workspace.value, cloudflareDeployment, {
+  packageScope: "@product-test",
+});
+const { workspace: _workspace, ...deploymentWithoutWorkspace } = cloudflareDeployment;
+const missingWorkspace = linkStaticTarget(workspace.value, deploymentWithoutWorkspace);
+const unboundModel = linkStaticTarget(chat.value, {
+  ...deploymentWithoutWorkspace,
+  providers: {
     default: {
-      route: "openai-chat-compatible",
-      endpointRef: "openrouter",
-      credentialRef: "openrouter-key",
-      modelRef: "openrouter-model",
+      protocol: "openai-chat-compatible",
+      endpointRef: "provider-endpoint",
+      credentialRef: "provider-credential",
+      modelRef: "provider-model",
     },
-    product_loop: {
-      route: "openai-chat-compatible",
-      endpointRef: "product-loop",
-      credentialRef: "product-loop-key",
-      modelRef: "product-loop-model",
-    },
-  });
-  assert.equal(output.deploymentBackend, "node");
-  assert.equal(output.deploymentAdapter, "node@1");
-  assert.deepEqual(output.targetOrigins, {
-    "/target/kind": "author:agentos.config.jsonc#/target/kind",
-  });
-  assert.deepEqual(output.linkIssues, []);
-  assert.deepEqual(output.linkFiles, [
-    ".agentos/generated/deployment.json",
-    ".agentos/generated/fingerprints.json",
-    ".agentos/generated/local.ts",
-    ".agentos/generated/manifest.json",
-    ".agentos/generated/provenance.json",
-  ]);
-  assert.deepEqual(output.nodeWithEntryIssues, [
-    { kind: "unknown_field", path: "/target", field: "entry" },
-  ]);
-  assert.deepEqual(output.nodeWithDurableObjectIssues, [
-    { kind: "unknown_field", path: "/target", field: "durableObject" },
-  ]);
-  assert.deepEqual(output.bunTargetIssues, [
-    {
-      kind: "invalid_config_value",
-      path: "/target",
-      field: "/target/kind",
-      reason: "target_kind_invalid",
-    },
-  ]);
+  },
 });
+const digestMismatch = linkStaticTarget(
+  { ...chat.value, agent: { ...chat.value.agent, id: "tampered" } },
+  localHost("ask", "/tmp/agentos-chat-product", {}),
+);
 
-void test("cloudflare material resolver authoring contract fails closed by target", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
-      'const agent = { path: "agent/agent.json", kind: "json", value: { agentId: "material-contract", scope: { kind: "session", idSource: "manifest", stableScopeId: "material-contract" } } };',
-      'const resolver = { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" };',
-      'const baseConfig = { profile: "chat@1", agent: "./agent", deployment: { id: "material-contract" }, client: { kind: "browser-direct@1" }, llm: { route: "openai-chat-compatible", endpointRef: "endpoint", credentialRef: "credential", modelRef: "model" } };',
-      "const withoutResolver = compileAgentTree({ files: [instructions, agent] });",
-      "const withResolver = compileAgentTree({ files: [instructions, agent, resolver] });",
-      'const symlink = compileAgentTree({ files: [instructions, agent, { ...resolver, sourceKind: "symlink" }] });',
-      "if (!withoutResolver.ok || !withResolver.ok) process.exit(2);",
-      'const cloudflareTarget = { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } };',
-      "const missing = normalizeAgentOsConfig({ ...baseConfig, target: cloudflareTarget }, withoutResolver.value);",
-      "const cloudflare = normalizeAgentOsConfig({ ...baseConfig, target: cloudflareTarget }, withResolver.value);",
-      'const node = normalizeAgentOsConfig({ ...baseConfig, target: { kind: "node@1" } }, withResolver.value);',
-      "console.log(JSON.stringify({ missing, cloudflare, node, symlink }));",
-    ].join("\n"),
-  );
+console.log(
+  JSON.stringify({
+    product: {
+      workspace: workspace.value,
+      chat: chat.value,
+    },
+    workspaceLocal: summarize(workspaceLink),
+    chatLocal: summarize(chatLink),
+    cloud: summarize(cloudLink),
+    planRendersLink:
+      workspacePlan.ok &&
+      workspaceLink.ok &&
+      JSON.stringify(renderStaticTargetPlan(workspacePlan.value)) ===
+        JSON.stringify(workspaceLink.value),
+    missingWorkspace,
+    unboundModel,
+    digestMismatch,
+  }),
+);
+`);
+
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.missing, {
-    ok: false,
-    issues: [{ kind: "cloudflare_material_resolver_missing", path: "agent/material-resolver.ts" }],
-  });
-  assert.equal(output.cloudflare.ok, true);
-  assert.deepEqual(output.cloudflare.value.target.materialResolver, {
-    path: "material-resolver.ts",
-    origin: "path:agent/material-resolver.ts",
-  });
-  assert.deepEqual(output.node, {
-    ok: false,
-    issues: [
-      {
-        kind: "material_resolver_target_unsupported",
-        path: "agent/material-resolver.ts",
-        target: "node@1",
-      },
-    ],
-  });
-  assert.deepEqual(output.symlink, {
-    ok: false,
-    issues: [
-      { kind: "unsupported_path", path: "material-resolver.ts", reason: "symlink_forbidden" },
-    ],
-  });
+  assert.equal(output.product.workspace.agent.kind, "workspace");
+  assert.equal(output.product.chat.agent.kind, "chat");
+  assert.deepEqual(output.product.workspace.symbolicRequirements, [
+    { kind: "model" },
+    { kind: "workspace" },
+  ]);
+  assert.equal(output.planRendersLink, true);
 
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-material-symlink-"));
-  try {
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Operate.");
-    symlinkSync("missing-material-resolver.ts", path.join(root, "agent/material-resolver.ts"));
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      JSON.stringify({
-        profile: "chat@1",
-        agent: "./agent",
-        deployment: { id: "material-symlink" },
-        target: {
-          kind: "cloudflare-do@1",
-          durableObject: { className: "AgentOS", binding: "AGENT_OS" },
-        },
-        client: { kind: "browser-direct@1" },
-        llm: {
-          route: "openai-chat-compatible",
-          endpointRef: "endpoint",
-          credentialRef: "credential",
-          modelRef: "model",
-        },
-      }),
-    );
-    const build = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.notEqual(build.status, 0);
-    assert.match(build.stderr, /symlink_forbidden/u);
-    assert.match(build.stderr, /material-resolver\.ts/u);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+  assert.equal(output.workspaceLocal.ok, true, JSON.stringify(output.workspaceLocal));
+  assert.equal(output.workspaceLocal.canonical.target, "node@1");
+  assert.equal(output.workspaceLocal.canonical.client, "direct");
+  assert.equal(output.workspaceLocal.mount.driver.kind, "local-node");
+  assert.ok(output.workspaceLocal.mount.projectionSinks.includes("workspace.files"));
+  assert.ok(output.workspaceLocal.paths.includes(".agentos/generated/local.ts"));
+  assert.equal(output.workspaceLocal.local.sessionFacade, true);
+  assert.equal(output.workspaceLocal.local.exportedApp, true);
+  assert.equal(output.workspaceLocal.deployment.workspace.root, "/tmp/agentos-workspace-product");
+
+  assert.equal(output.chatLocal.ok, true, JSON.stringify(output.chatLocal));
+  assert.equal(output.chatLocal.canonical.target, "node@1");
+  assert.equal(output.chatLocal.local.sessionFacade, true);
+  assert.equal("workspace" in output.chatLocal.deployment, false);
+  assert.equal(output.chatLocal.mount.projectionSinks.includes("workspace.files"), false);
+
+  assert.equal(output.cloud.ok, true, JSON.stringify(output.cloud));
+  assert.equal(output.cloud.canonical.target, "cloudflare-do@1");
+  assert.equal(output.cloud.canonical.client, "svelte-kit-remote");
+  assert.ok(output.cloud.paths.includes(".agentos/generated/target.ts"));
+  assert.ok(output.cloud.paths.includes(".agentos/generated/wrangler.jsonc"));
+  assert.equal(output.cloud.target.lifecycleInstaller, false);
+  assert.ok(output.cloud.modules.includes("../../agent/material-resolver"));
+
+  assert.deepEqual(output.missingWorkspace, {
+    ok: false,
+    issues: [{ kind: "workspace_binding_required", host: "deployment" }],
+  });
+  assert.deepEqual(output.unboundModel, {
+    ok: false,
+    issues: [{ kind: "model_provider_unbound", logicalId: "primary" }],
+  });
+  assert.deepEqual(output.digestMismatch, {
+    ok: false,
+    issues: [{ kind: "product_digest_mismatch" }],
+  });
 });
 
-void test("compileAgentTree enforces skill identity and opaque resource package invariants", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const utf8 = (text) => new TextEncoder().encode(text);",
-      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
-      'const packagedReview = { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview." };',
-      "const compile = (file) => compileAgentTree({ files: [",
-      "  instructions,",
-      "  file,",
-      "] });",
-      'const mismatch = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: other\\ndescription: Echo facts\\n---\\nUse echo." });',
-      'const duplicateName = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: wrong\\nname: echo\\ndescription: Echo facts\\n---\\nUse echo." });',
-      'const missingDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\n---\\nUse echo." });',
-      'const emptyDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription:   \\n---\\nUse echo." });',
-      'const oversizedDescription = compile({ path: "agent/skills/echo.md", kind: "markdown", text: `---\\nname: echo\\ndescription: ${"x".repeat(241)}\\n---\\nUse echo.` });',
-      'const unknownFrontmatter = compile({ path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo facts\\nallowed-tools: bash\\n---\\nUse echo." });',
-      'const supportWithoutPackage = compile({ path: "agent/skills/echo/references/ref.md", kind: "resource", bytes: utf8("Ref.") });',
-      "const flatSupport = compileAgentTree({ files: [",
-      "  instructions,",
-      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo facts\\n---\\nUse echo." },',
-      '  { path: "agent/skills/echo/references/ref.md", kind: "resource", bytes: utf8("Ref.") },',
-      "] });",
-      'const arbitraryRoot = compileAgentTree({ files: [instructions, packagedReview, { path: "agent/skills/review/assets/icon.bin", kind: "resource", bytes: new Uint8Array([0, 255, 1]) }] });',
-      'const dotdotPath = compile({ path: "agent/skills/echo/references/../secret.md", kind: "resource", bytes: utf8("secret") });',
-      "const symlinkSupport = compileAgentTree({ files: [",
-      "  instructions,",
-      "  packagedReview,",
-      '  { path: "agent/skills/review/references/ref.md", kind: "resource", bytes: new Uint8Array(), sourceKind: "symlink" },',
-      "] });",
-      "const invalidUtf8 = compileAgentTree({ files: [",
-      "  instructions,",
-      "  packagedReview,",
-      '  { path: "agent/skills/review/references/ref.md", kind: "resource", bytes: new Uint8Array([0xff]) },',
-      "] });",
-      "const oversizedFile = compileAgentTree({ files: [",
-      "  instructions,",
-      "  packagedReview,",
-      '  { path: "agent/skills/review/references/ref.md", kind: "resource", bytes: utf8("x".repeat(65537)) },',
-      "] });",
-      "const tooManyFiles = compileAgentTree({ files: [",
-      "  instructions,",
-      "  packagedReview,",
-      '  ...Array.from({ length: 65 }, (_, index) => ({ path: `agent/skills/review/references/${index}.txt`, kind: "resource", bytes: utf8("x") })),',
-      "] });",
-      "const packageTooLarge = compileAgentTree({ files: [",
-      "  instructions,",
-      "  packagedReview,",
-      '  ...Array.from({ length: 5 }, (_, index) => ({ path: `agent/skills/review/references/large-${index}.txt`, kind: "resource", bytes: utf8("x".repeat(65536)) })),',
-      "] });",
-      "const duplicate = compileAgentTree({ files: [",
-      "  instructions,",
-      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo one\\n---\\nOne." },',
-      '  { path: "agent/skills/echo/SKILL.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo two\\n---\\nTwo." },',
-      "] });",
-      "const reservedTool = compileAgentTree({ files: [",
-      "  instructions,",
-      '  { path: "agent/tools/load_skill.ts", kind: "tool", declaration: {} },',
-      "] });",
-      "const reservedReadSkillFile = compileAgentTree({ files: [",
-      "  instructions,",
-      '  { path: "agent/tools/read_skill_file.ts", kind: "tool", declaration: {} },',
-      "] });",
-      "console.log(JSON.stringify({ mismatch, duplicateName, missingDescription, emptyDescription, oversizedDescription, unknownFrontmatter, supportWithoutPackage, flatSupport, arbitraryRoot, dotdotPath, symlinkSupport, invalidUtf8, oversizedFile, tooManyFiles, packageTooLarge, duplicate, reservedTool, reservedReadSkillFile }));",
-    ].join("\n"),
-  );
+void test("compileProductPlan enforces packaged skill identity and resource bounds", () => {
+  const result = runTypeScript(`
+import { compileProductPlan } from "./packages/cli/src/build/agent-authoring.ts";
+
+const utf8 = (text: string) => new TextEncoder().encode(text);
+const base = [
+  {
+    path: "agent/instructions.md",
+    kind: "markdown" as const,
+    text: "Use only validated product assets.\\n",
+  },
+  {
+    path: "agent/agent.json",
+    kind: "json" as const,
+    value: { agentId: "skill-product", kind: "chat" },
+  },
+];
+const packaged = {
+  path: "agent/skills/review/SKILL.md",
+  kind: "markdown" as const,
+  text: "---\\nname: review\\ndescription: Review facts.\\n---\\nReview carefully.\\n",
+};
+const compile = (...files: ReadonlyArray<unknown>) =>
+  compileProductPlan({ files: [...base, ...files] as never });
+
+const results = {
+  validBinary: compile(
+    packaged,
+    {
+      path: "agent/skills/review/assets/icon.bin",
+      kind: "resource" as const,
+      bytes: new Uint8Array([0, 255, 1]),
+    },
+  ),
+  identityMismatch: compile({
+    path: "agent/skills/echo.md",
+    kind: "markdown" as const,
+    text: "---\\nname: other\\ndescription: Echo facts.\\n---\\nEcho.\\n",
+  }),
+  supportWithoutPackage: compile({
+    path: "agent/skills/echo/references/ref.md",
+    kind: "resource" as const,
+    bytes: utf8("reference"),
+  }),
+  nonNormalizedPath: compile({
+    path: "agent/skills/review/references/../secret.md",
+    kind: "resource" as const,
+    bytes: utf8("secret"),
+  }),
+  symlink: compile(
+    packaged,
+    {
+      path: "agent/skills/review/references/ref.md",
+      kind: "resource" as const,
+      bytes: new Uint8Array(),
+      sourceKind: "symlink" as const,
+    },
+  ),
+  oversized: compile(
+    packaged,
+    {
+      path: "agent/skills/review/references/ref.md",
+      kind: "resource" as const,
+      bytes: utf8("x".repeat(65_537)),
+    },
+  ),
+  duplicate: compile(
+    {
+      path: "agent/skills/echo.md",
+      kind: "markdown" as const,
+      text: "---\\nname: echo\\ndescription: Echo one.\\n---\\nOne.\\n",
+    },
+    {
+      path: "agent/skills/echo/SKILL.md",
+      kind: "markdown" as const,
+      text: "---\\nname: echo\\ndescription: Echo two.\\n---\\nTwo.\\n",
+    },
+  ),
+  reservedTool: compile({
+    path: "agent/tools/load_skill.ts",
+    kind: "tool" as const,
+    declaration: {},
+  }),
+};
+console.log(JSON.stringify(results));
+`);
+
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.equal(output.mismatch.ok, false);
-  assert.deepEqual(output.mismatch.issues, [
-    {
-      kind: "skill_identity_mismatch",
-      path: "skills/echo.md",
-      expectedName: "echo",
-      actualName: "other",
-    },
-  ]);
-  assert.equal(output.duplicateName.ok, false);
-  assert.deepEqual(output.duplicateName.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "skills/echo.md",
-      field: "/frontmatter/name",
-      reason: "frontmatter_field_duplicate",
-    },
-  ]);
-  assert.equal(output.missingDescription.ok, false);
-  assert.deepEqual(output.missingDescription.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "skills/echo.md",
-      field: "/frontmatter/description",
-      reason: "non_empty_string_required",
-    },
-  ]);
-  assert.equal(output.emptyDescription.ok, false);
-  assert.deepEqual(output.emptyDescription.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "skills/echo.md",
-      field: "/frontmatter/description",
-      reason: "non_empty_string_required",
-    },
-  ]);
-  assert.equal(output.oversizedDescription.ok, false);
-  assert.deepEqual(output.oversizedDescription.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "skills/echo.md",
-      field: "/frontmatter/description",
-      reason: "skill_description_too_large",
-    },
-  ]);
-  assert.equal(output.unknownFrontmatter.ok, false);
-  assert.deepEqual(output.unknownFrontmatter.issues, [
-    {
-      kind: "unknown_field",
-      path: "skills/echo.md",
-      field: "allowed-tools",
-    },
-  ]);
-  assert.equal(output.supportWithoutPackage.ok, false);
-  assert.deepEqual(output.supportWithoutPackage.issues, [
-    {
-      kind: "unsupported_path",
-      path: "skills/echo/references/ref.md",
-      reason: "skill_support_requires_packaged_skill",
-    },
-  ]);
-  assert.equal(output.flatSupport.ok, false);
-  assert.deepEqual(output.flatSupport.issues, [
-    {
-      kind: "unsupported_path",
-      path: "skills/echo/references/ref.md",
-      reason: "skill_support_requires_packaged_skill",
-    },
-  ]);
-  assert.equal(output.arbitraryRoot.ok, true);
-  assert.deepEqual(output.arbitraryRoot.value.skills[0].files, [
+  assert.equal(output.validBinary.ok, true, JSON.stringify(output.validBinary));
+  assert.deepEqual(output.validBinary.value.assets.skills[0].files, [
     {
       path: "assets/icon.bin",
       digest: "fnv1a32:f38f4273:3",
@@ -1882,3297 +1510,248 @@ void test("compileAgentTree enforces skill identity and opaque resource package 
       contentBase64: "AP8B",
     },
   ]);
-  assert.equal(output.dotdotPath.ok, false);
-  assert.deepEqual(output.dotdotPath.issues, [
-    {
-      kind: "unsupported_path",
-      path: "agent/skills/echo/references/../secret.md",
-      reason: "path_not_normalized",
-    },
-  ]);
-  assert.equal(output.symlinkSupport.ok, false);
-  assert.deepEqual(output.symlinkSupport.issues, [
-    {
-      kind: "unsupported_path",
-      path: "skills/review/references/ref.md",
-      reason: "symlink_forbidden",
-    },
-  ]);
-  assert.equal(output.invalidUtf8.ok, true);
-  assert.deepEqual(output.invalidUtf8.value.skills[0].files, [
-    {
-      path: "references/ref.md",
-      digest: "fnv1a32:7a0b824e:1",
-      bytes: 1,
-      contentBase64: "/w==",
-    },
-  ]);
-  assert.equal(output.oversizedFile.ok, false);
-  assert.deepEqual(output.oversizedFile.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "skills/review/references/ref.md",
-      field: "/bytes",
-      reason: "skill_file_too_large",
-    },
-  ]);
-  assert.equal(output.tooManyFiles.ok, false);
-  assert.deepEqual(output.tooManyFiles.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "skills/review/references/64.txt",
-      field: "/bytes",
-      reason: "skill_package_too_many_files",
-    },
-  ]);
-  assert.equal(output.packageTooLarge.ok, false);
-  assert.deepEqual(output.packageTooLarge.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "skills/review/references/large-4.txt",
-      field: "/bytes",
-      reason: "skill_package_too_large",
-    },
-  ]);
-  assert.equal(output.duplicate.ok, false);
-  assert.deepEqual(output.duplicate.issues, [
-    {
-      kind: "duplicate_skill",
-      name: "echo",
-      path: "skills/echo/SKILL.md",
-      existingPath: "agent/skills/echo.md",
-    },
-  ]);
-  assert.equal(output.reservedTool.ok, false);
-  assert.deepEqual(output.reservedTool.issues, [
-    {
-      kind: "reserved_tool_name",
-      path: "tools/load_skill.ts",
-      toolId: "load_skill",
-    },
-  ]);
-  assert.equal(output.reservedReadSkillFile.ok, false);
-  assert.deepEqual(output.reservedReadSkillFile.issues, [
-    {
-      kind: "reserved_tool_name",
-      path: "tools/read_skill_file.ts",
-      toolId: "read_skill_file",
-    },
-  ]);
-});
 
-void test("compileAgentTree keeps channels as authoring-only path-stem facts", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree } from "./packages/cli/src/build/agent-authoring.ts";',
-      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
-      "const compile = (file) => compileAgentTree({ files: [instructions, file] });",
-      "const valid = compileAgentTree({ files: [",
-      "  instructions,",
-      '  { path: "agent/channels/github.ts", kind: "channel" },',
-      '  { path: "agent/channels/stripe_events.ts", kind: "channel" },',
-      "] });",
-      "if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }",
-      'const nested = compile({ path: "agent/channels/github/events.ts", kind: "channel" });',
-      'const emptyName = compile({ path: "agent/channels/.ts", kind: "channel" });',
-      'const invalidName = compile({ path: "agent/channels/GitHub.ts", kind: "channel" });',
-      'const symlink = compile({ path: "agent/channels/github.ts", kind: "channel", sourceKind: "symlink" });',
-      "const duplicate = compileAgentTree({ files: [",
-      "  instructions,",
-      '  { path: "agent/channels/github.ts", kind: "channel" },',
-      '  { path: "channels/github.ts", kind: "channel" },',
-      "] });",
-      "console.log(JSON.stringify({",
-      "  valid: {",
-      "    channels: valid.value.channels,",
-      '    manifestHasChannels: Object.hasOwn(valid.value.manifest, "channels"),',
-      '    provenanceChannelKeys: Object.keys(valid.value.provenance).filter((key) => key.includes("channel")),',
-      "  },",
-      "  nested,",
-      "  emptyName,",
-      "  invalidName,",
-      "  symlink,",
-      "  duplicate,",
-      "}));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.valid, {
-    channels: [
-      {
-        name: "github",
-        path: "agent/channels/github.ts",
-        origin: "path:agent/channels/github.ts",
-      },
-      {
-        name: "stripe_events",
-        path: "agent/channels/stripe_events.ts",
-        origin: "path:agent/channels/stripe_events.ts",
-      },
-    ],
-    manifestHasChannels: false,
-    provenanceChannelKeys: [],
-  });
-  assert.equal(output.nested.ok, false);
-  assert.deepEqual(output.nested.issues, [
-    {
-      kind: "unsupported_path",
-      path: "channels/github/events.ts",
-      reason: "channel_path_not_in_grammar",
-    },
-  ]);
-  assert.equal(output.emptyName.ok, false);
-  assert.deepEqual(output.emptyName.issues, [
-    {
-      kind: "unsupported_path",
-      path: "channels/.ts",
-      reason: "empty_path_identity",
-    },
-  ]);
-  assert.equal(output.invalidName.ok, false);
-  assert.deepEqual(output.invalidName.issues, [
-    {
-      kind: "unsupported_path",
-      path: "channels/GitHub.ts",
-      reason: "channel_name_invalid",
-    },
-  ]);
-  assert.equal(output.symlink.ok, false);
-  assert.deepEqual(output.symlink.issues, [
-    {
-      kind: "unsupported_path",
-      path: "channels/github.ts",
-      reason: "symlink_forbidden",
-    },
-  ]);
-  assert.equal(output.duplicate.ok, false);
-  assert.deepEqual(output.duplicate.issues, [
-    {
-      kind: "duplicate_path",
-      path: "channels/github.ts",
-      existingPath: "channels/github.ts",
-    },
-  ]);
-});
-
-void test("compileAgentTree splits workflow lifecycle identity from agent profile", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
-      'const agentJson = { path: "agent/agent.json", kind: "json", value: { agentId: "workflow-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "workflow-fixture" } } };',
-      "const compile = (file) => compileAgentTree({ files: [instructions, file] });",
-      "const valid = compileAgentTree({ files: [",
-      "  instructions,",
-      "  agentJson,",
-      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
-      '  { path: "workflows/deploy.ts", kind: "workflow" },',
-      '  { path: "workflows/reconcile_workspace.ts", kind: "workflow" },',
-      "] });",
-      "if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }",
-      "const baseConfig = {",
-      '  agent: "./agent",',
-      '  deployment: { id: "workflow-fixture" },',
-      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
-      '  client: { kind: "browser-direct@1" },',
-      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-      "};",
-      'const chat = normalizeAgentOsConfig({ ...baseConfig, profile: "chat@1" }, valid.value);',
-      'const workspace = normalizeAgentOsConfig({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } }, valid.value);',
-      "if (!chat.ok) { console.error(JSON.stringify(chat.issues)); process.exit(1); }",
-      "if (!workspace.ok) { console.error(JSON.stringify(workspace.issues)); process.exit(1); }",
-      'const nested = compile({ path: "workflows/deploy/index.ts", kind: "workflow" });',
-      'const emptyName = compile({ path: "workflows/.ts", kind: "workflow" });',
-      'const invalidName = compile({ path: "workflows/Deploy.ts", kind: "workflow" });',
-      'const agentScoped = compile({ path: "agent/workflows/deploy.ts", kind: "workflow" });',
-      'const symlink = compile({ path: "workflows/deploy.ts", kind: "workflow", sourceKind: "symlink" });',
-      "const duplicate = compileAgentTree({ files: [",
-      "  instructions,",
-      '  { path: "workflows/deploy.ts", kind: "workflow" },',
-      '  { path: "workflows/deploy.ts", kind: "workflow" },',
-      "] });",
-      "console.log(JSON.stringify({",
-      "  valid: {",
-      "    workflows: valid.value.workflows,",
-      '    manifestHasWorkflows: Object.hasOwn(valid.value.manifest, "workflows"),',
-      '    provenanceWorkflowKeys: Object.keys(valid.value.provenance).filter((key) => key.includes("workflow")),',
-      "  },",
-      "  normalized: { chat: chat.value.workflows, workspace: workspace.value.workflows },",
-      "  nested,",
-      "  emptyName,",
-      "  invalidName,",
-      "  agentScoped,",
-      "  symlink,",
-      "  duplicate,",
-      "}));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  const workflows = [
-    {
-      name: "deploy",
-      path: "workflows/deploy.ts",
-      origin: "path:workflows/deploy.ts",
-    },
-    {
-      name: "reconcile_workspace",
-      path: "workflows/reconcile_workspace.ts",
-      origin: "path:workflows/reconcile_workspace.ts",
-    },
-  ];
-  assert.deepEqual(output.valid, {
-    workflows,
-    manifestHasWorkflows: false,
-    provenanceWorkflowKeys: [],
-  });
-  assert.deepEqual(output.normalized, { chat: workflows, workspace: workflows });
-  assert.equal(output.nested.ok, false);
-  assert.deepEqual(output.nested.issues, [
-    {
-      kind: "unsupported_path",
-      path: "workflows/deploy/index.ts",
-      reason: "workflow_path_not_in_grammar",
-    },
-  ]);
-  assert.equal(output.emptyName.ok, false);
-  assert.deepEqual(output.emptyName.issues, [
-    {
-      kind: "unsupported_path",
-      path: "workflows/.ts",
-      reason: "empty_path_identity",
-    },
-  ]);
-  assert.equal(output.invalidName.ok, false);
-  assert.deepEqual(output.invalidName.issues, [
-    {
-      kind: "unsupported_path",
-      path: "workflows/Deploy.ts",
-      reason: "workflow_name_invalid",
-    },
-  ]);
-  assert.equal(output.agentScoped.ok, false);
-  assert.deepEqual(output.agentScoped.issues, [
-    {
-      kind: "unsupported_path",
-      path: "agent/workflows/deploy.ts",
-      reason: "workflow_path_not_in_grammar",
-    },
-  ]);
-  assert.equal(output.symlink.ok, false);
-  assert.deepEqual(output.symlink.issues, [
-    {
-      kind: "unsupported_path",
-      path: "workflows/deploy.ts",
-      reason: "symlink_forbidden",
-    },
-  ]);
-  assert.equal(output.duplicate.ok, false);
-  assert.deepEqual(output.duplicate.issues, [
-    {
-      kind: "duplicate_path",
-      path: "workflows/deploy.ts",
-      existingPath: "workflows/deploy.ts",
-    },
-  ]);
-});
-
-void test("compileAgentTree keeps schedules as authoring-only nested path facts", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      'const instructions = { path: "agent/instructions.md", kind: "markdown", text: "Operate." };',
-      'const agentJson = { path: "agent/agent.json", kind: "json", value: { agentId: "schedule-fixture", scope: { kind: "session", idSource: "manifest", stableScopeId: "schedule-fixture" } } };',
-      "const handler = () => undefined;",
-      'const schedule = (path, cron = "0 9 * * 1-5", extra = {}) => ({ path, kind: "schedule", declaration: { cron, handler, ...extra } });',
-      "const compile = (file) => compileAgentTree({ files: [instructions, file] });",
-      "const valid = compileAgentTree({ files: [",
-      "  instructions,",
-      "  agentJson,",
-      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
-      '  schedule("agent/schedules/daily.ts", "0   9 * * 1-5"),',
-      '  schedule("agent/schedules/reports/weekly.ts", "30 8 * * 1"),',
-      "] });",
-      "if (!valid.ok) { console.error(JSON.stringify(valid.issues)); process.exit(1); }",
-      "const baseConfig = {",
-      '  agent: "./agent",',
-      '  deployment: { id: "schedule-fixture" },',
-      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
-      '  client: { kind: "browser-direct@1" },',
-      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-      "};",
-      'const chat = normalizeAgentOsConfig({ ...baseConfig, profile: "chat@1" }, valid.value);',
-      'const workspace = normalizeAgentOsConfig({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } }, valid.value);',
-      "if (!chat.ok) { console.error(JSON.stringify(chat.issues)); process.exit(1); }",
-      "if (!workspace.ok) { console.error(JSON.stringify(workspace.issues)); process.exit(1); }",
-      'const notInGrammar = compile(schedule("agent/schedules.ts"));',
-      'const emptySlug = compile(schedule("agent/schedules/reports/.ts"));',
-      'const invalidSlug = compile(schedule("agent/schedules/Daily.ts"));',
-      'const subagentSchedule = compile(schedule("agent/schedules/subagents/daily.ts"));',
-      'const malformedCron = compile(schedule("agent/schedules/daily.ts", "@daily"));',
-      'const missingHandler = compile({ path: "agent/schedules/daily.ts", kind: "schedule", declaration: { cron: "0 9 * * *" } });',
-      'const identityFields = compile(schedule("agent/schedules/daily.ts", "0 9 * * *", { id: "daily", name: "Daily", kind: "schedule" }));',
-      'const symlink = compile({ ...schedule("agent/schedules/daily.ts"), sourceKind: "symlink" });',
-      'const missingDeclaration = compile({ path: "agent/schedules/daily.ts", kind: "schedule" });',
-      "const duplicate = compileAgentTree({ files: [",
-      "  instructions,",
-      '  schedule("agent/schedules/daily.ts"),',
-      '  schedule("schedules/daily.ts"),',
-      "] });",
-      "console.log(JSON.stringify({",
-      "  valid: {",
-      "    schedules: valid.value.schedules,",
-      '    manifestHasSchedules: Object.hasOwn(valid.value.manifest, "schedules"),',
-      '    provenanceScheduleKeys: Object.keys(valid.value.provenance).filter((key) => key.includes("schedule")),',
-      "  },",
-      "  normalized: { chat: chat.value.schedules, workspace: workspace.value.schedules },",
-      "  notInGrammar,",
-      "  emptySlug,",
-      "  invalidSlug,",
-      "  subagentSchedule,",
-      "  malformedCron,",
-      "  missingHandler,",
-      "  identityFields,",
-      "  symlink,",
-      "  missingDeclaration,",
-      "  duplicate,",
-      "}));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  const schedules = [
-    {
-      scheduleId: "daily",
-      cron: "0 9 * * 1-5",
-      path: "agent/schedules/daily.ts",
-      origin: "path:agent/schedules/daily.ts",
-    },
-    {
-      scheduleId: "reports/weekly",
-      cron: "30 8 * * 1",
-      path: "agent/schedules/reports/weekly.ts",
-      origin: "path:agent/schedules/reports/weekly.ts",
-    },
-  ];
-  assert.deepEqual(output.valid, {
-    schedules,
-    manifestHasSchedules: false,
-    provenanceScheduleKeys: [],
-  });
-  assert.deepEqual(output.normalized, { chat: schedules, workspace: schedules });
-  assert.equal(output.notInGrammar.ok, false);
-  assert.deepEqual(output.notInGrammar.issues, [
-    {
-      kind: "unsupported_path",
-      path: "agent/schedules.ts",
-      reason: "schedule_path_not_in_grammar",
-    },
-  ]);
-  assert.equal(output.emptySlug.ok, false);
-  assert.deepEqual(output.emptySlug.issues, [
-    {
-      kind: "unsupported_path",
-      path: "schedules/reports/.ts",
-      reason: "empty_path_identity",
-    },
-  ]);
-  assert.equal(output.invalidSlug.ok, false);
-  assert.deepEqual(output.invalidSlug.issues, [
-    {
-      kind: "unsupported_path",
-      path: "schedules/Daily.ts",
-      reason: "schedule_slug_invalid",
-    },
-  ]);
-  assert.equal(output.subagentSchedule.ok, false);
-  assert.deepEqual(output.subagentSchedule.issues, [
-    {
-      kind: "unsupported_path",
-      path: "schedules/subagents/daily.ts",
-      reason: "subagent_schedule_directory_forbidden",
-    },
-  ]);
-  assert.equal(output.malformedCron.ok, false);
-  assert.deepEqual(output.malformedCron.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "schedules/daily.ts",
-      field: "/cron",
-      reason: "cron_minute_expression_invalid",
-    },
-  ]);
-  assert.equal(output.missingHandler.ok, false);
-  assert.deepEqual(output.missingHandler.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "schedules/daily.ts",
-      field: "/handler",
-      reason: "schedule_handler_function_required",
-    },
-  ]);
-  assert.equal(output.identityFields.ok, false);
-  assert.deepEqual(output.identityFields.issues, [
-    { kind: "identity_field_forbidden", path: "schedules/daily.ts", field: "id" },
-    { kind: "identity_field_forbidden", path: "schedules/daily.ts", field: "name" },
-    { kind: "identity_field_forbidden", path: "schedules/daily.ts", field: "kind" },
-  ]);
-  assert.equal(output.symlink.ok, false);
-  assert.deepEqual(output.symlink.issues, [
-    {
-      kind: "unsupported_path",
-      path: "schedules/daily.ts",
-      reason: "symlink_forbidden",
-    },
-  ]);
-  assert.equal(output.missingDeclaration.ok, false);
-  assert.deepEqual(output.missingDeclaration.issues, [
-    {
-      kind: "invalid_authored_value",
-      path: "schedules/daily.ts",
-      field: "/",
-      reason: "schedule_declaration_object_required",
-    },
-  ]);
-  assert.equal(output.duplicate.ok, false);
-  assert.deepEqual(output.duplicate.issues, [
-    {
-      kind: "duplicate_path",
-      path: "schedules/daily.ts",
-      existingPath: "schedules/daily.ts",
-    },
-  ]);
-});
-
-void test("agentos build compiles an authored workspace tree into generated files", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-build-"));
-  try {
-    writeCloudflareMaterialResolverFixture(root);
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Operate on the workspace.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "fixture-agent",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "fixture-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "fixture-agent",
-          },
-          materials: {
-            workspace: {
-              kind: "external_resource",
-              provider: "agent-os",
-              resourceKind: "workspace-env",
-              ref: "cloudflare-sandbox:fixture-scope",
-            },
-          },
-          executionDomains: {
-            workspace: { bindingRef: "workspace" },
-          },
-          tools: {
-            write_file: { interaction: "approval" },
-          },
-        },
-        null,
-        2,
+  const issue = (name, kind, reason) => {
+    assert.equal(output[name].ok, false, name);
+    assert.ok(
+      output[name].issues.some(
+        (candidate) =>
+          candidate.kind === kind && (reason === undefined || candidate.reason === reason),
       ),
+      `${name}: ${JSON.stringify(output[name].issues)}`,
     );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "$schema": "./node_modules/@agent-os/config/schema.json",',
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": {',
-        '    "id": "fixture-deployment",',
-        '    "version": "0.1.0", // JSONC comment',
-        "  },",
-        '  "target": {',
-        '    "kind": "cloudflare-do@1",',
-        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" },',
-        "  },",
-        '  "client": { "kind": "svelte-kit-remote@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model",',
-        "  },",
-        '  "workspace": {',
-        '    "binding": "Sandbox",',
-        '    "root": "/workspace",',
-        "  },",
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /generated 11 agentOS files/);
-    const manifest = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/manifest.json"), "utf8"),
-    );
-    assert.equal(manifest.agentId, "fixture-agent");
-    assert.deepEqual(Object.keys(manifest.tools ?? {}).sort(), workspaceDefaultToolNames);
-    assert.deepEqual(manifest.capabilities?.workspaceOperations, {
-      bindingRef: "@agent-os/workspace-op",
-    });
-    assert.equal(manifest.tools.bash.interaction, "never");
-    assert.equal(manifest.tools.write_file.interaction, "approval");
-    const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
-    assert.match(target, /import semanticDeclarations from "\.\/manifest\.json";/);
-    assert.match(target, /from "@agent-os\/runtime\/capability";/);
-    assert.match(target, /resolveRuntimeInstallGraph/);
-    assert.match(target, /workspaceOperations/);
-    assert.match(target, /WORKSPACE_OPERATION_HOST_FACT/);
-    assert.match(
-      target,
-      /\[WORKSPACE_OPERATION_HOST_FACT\]: generatedWorkspaceOperationEnvFor\(env\)/,
-    );
-    assert.doesNotMatch(target, /workspaceOperations\(\{\s*env:/);
-    assert.match(target, /from "@agent-os\/core\/runtime-protocol";/);
-    assert.match(target, /from "@agent-os\/runtime\/run-projector";/);
-    assert.match(target, /from "@agent-os\/core\/tools";/);
-    assert.match(target, /submitSessionTurn\(input: AgentSessionSubmitTurnInput\)/);
-    assert.match(target, /runWorkflow\(input: AgentWorkflowRunInput\)/);
-    assert.match(target, /inspectSession\(input: \{ readonly sessionRef: string \}\)/);
-    assert.match(target, /listWorkflowRuns\(input: \{ readonly workflowId: string \}\)/);
-    assert.match(target, /this\.submitWithBindingsAndProductLink/);
-    assert.match(target, /projectAgentSessions/);
-    assert.match(target, /projectWorkflowRuns/);
-    assert.doesNotMatch(target, /submitAgentEffect/);
-    assert.match(target, /from "@agent-os\/runtime\/workspace-binding";/);
-    assertNoCloudflareLifecycleTargetWiring(target);
-    assert.match(target, /bindWorkspaceToolsForRuntime/);
-    assert.match(target, /createCloudflareSandboxWorkspaceEnvResolver/);
-    assert.match(target, /generatedWorkspaceToolInteractions/);
-    assert.match(target, /toolInteractions: generatedWorkspaceToolInteractions/);
-    assert.match(
-      target,
-      /import generatedMaterialResolverFactory from "\.\.\/\.\.\/agent\/material-resolver";/,
-    );
-    assert.match(target, /const generatedMaterialResolverFor = \(env: AgentOSTargetEnv\)/);
-    assert.match(target, /generatedMaterialResolverFactoryContract\.create\(env\)/);
-    assert.doesNotMatch(target, /AGENTOS_MATERIAL_RESOLVER/);
-    assert.doesNotMatch(target, /readonly AGENTOS_ENDPOINT_OPENROUTER\?: string;/);
-    assert.doesNotMatch(target, /readonly AGENTOS_CREDENTIAL_OPENROUTER_KEY\?: string;/);
-    assert.match(target, /readonly AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL\?: string;/);
-    assert.doesNotMatch(target, /materialEnvValue\(env, "AGENTOS_ENDPOINT_OPENROUTER"\)/);
-    assert.match(target, /refResolver: generatedMaterialResolverFor/);
-    assert.match(target, /preflightOpenAiCompatibleProviderMaterial/);
-    assert.doesNotMatch(target, /readonly OPENROUTER_KEY\?: string;/);
-    assert.doesNotMatch(target, /readonly OPENROUTER_ENDPOINT\?: string;/);
-    assert.doesNotMatch(target, /readonly OPENROUTER_DEFAULT_TEXT_MODEL\?: string;/);
-    assert.doesNotMatch(target, /materialEnvValue\(env, "OPENROUTER_KEY"\)/);
-    assert.doesNotMatch(target, /materialEnvValue\(env, "OPENROUTER_ENDPOINT"\)/);
-    assert.doesNotMatch(target, /materialEnvValue\(env, "OPENROUTER_DEFAULT_TEXT_MODEL"\)/);
-    assert.doesNotMatch(target, /https:\/\/openrouter\.ai\/api\/v1/);
-    assert.doesNotMatch(target, /\.\.\/\.\.\/agent\/tools\/read_file/);
-    assert.doesNotMatch(target, /MountPlan|mountPlan|registry\.get/);
-    const scopeHelper = readFileSync(
-      path.join(root, ".agentos/generated/cloudflare-scope.ts"),
-      "utf8",
-    );
-    assert.match(scopeHelper, /agentOSDurableObjectBinding = "AGENT_OS"/);
-    assert.match(scopeHelper, /agentOSScopeId = agentOSTruthIdentity\.scopeRef\.scopeId/);
-    assert.match(scopeHelper, /agentOSRpcClient/);
-    assert.match(scopeHelper, /DurableObjectRpcClient/);
-    const worker = readFileSync(path.join(root, ".agentos/generated/worker.ts"), "utf8");
-    assert.match(worker, /import \{ Sandbox \} from "@cloudflare\/sandbox";/);
-    assert.match(worker, /import \{ AgentOS \} from "\.\/target";/);
-    assert.match(worker, /export \{ AgentOS, Sandbox \};/);
-    const wrangler = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/wrangler.jsonc"), "utf8"),
-    );
-    assert.equal(wrangler.main, "./worker.ts");
-    assert.deepEqual(wrangler.compatibility_flags, ["nodejs_compat"]);
-    assert.deepEqual(wrangler.containers, [
-      {
-        class_name: "Sandbox",
-        image: "../../Dockerfile",
-        instance_type: "lite",
-        max_instances: 2,
-      },
-    ]);
-    assert.deepEqual(wrangler.durable_objects.bindings, [
-      { class_name: "Sandbox", name: "Sandbox" },
-      { class_name: "AgentOS", name: "AGENT_OS" },
-    ]);
-    assert.deepEqual(wrangler.migrations, [
-      { tag: "v1", new_sqlite_classes: ["Sandbox", "AgentOS"] },
-    ]);
-    const remote = readFileSync(path.join(root, ".agentos/generated/sveltekit.remote.ts"), "utf8");
-    assert.match(
-      remote,
-      /import \{ agentOSRpcClient, agentOSTruthIdentity \} from "\.\/cloudflare-scope";/,
-    );
-    assert.match(remote, /WORKSPACE_AGENT_PRODUCT_COMMAND/);
-    assert.match(
-      remote,
-      /type AgentOSSessionSubmitTurnInput = Parameters<AgentOSRemote\["submitSessionTurn"\]>\[0\];/,
-    );
-    assert.match(
-      remote,
-      /type AgentOSWorkflowRunInput = Parameters<AgentOSRemote\["runWorkflow"\]>\[0\];/,
-    );
-    assert.match(remote, /GeneratedResult<AgentOSSessionSubmitTurnInput>/);
-    assert.match(remote, /GeneratedResult<AgentOSWorkflowRunInput>/);
-    assert.match(remote, /runtime\.submitSessionTurn/);
-    assert.match(remote, /runtime\.inspectSession/);
-    assert.match(remote, /runtime\.listSessions/);
-    assert.match(remote, /runtime\.runWorkflow/);
-    assert.match(remote, /runtime\.inspectWorkflowRun/);
-    assert.match(remote, /runtime\.listWorkflowRuns/);
-    assert.doesNotMatch(remote, /durableObjectRpcClient/);
-    assert.doesNotMatch(remote, /manifestTruthIdentity/);
-    const client = readFileSync(path.join(root, ".agentos/generated/client.ts"), "utf8");
-    assert.match(client, /GeneratedAgentClientProductProjections/);
-    assert.match(client, /WorkspaceAgentProductCommandMap/);
-    assert.match(client, /WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections>/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+  };
+  issue("identityMismatch", "skill_identity_mismatch");
+  issue("supportWithoutPackage", "unsupported_path", "skill_support_requires_packaged_skill");
+  issue("nonNormalizedPath", "unsupported_path", "path_not_normalized");
+  issue("symlink", "unsupported_path", "symlink_forbidden");
+  issue("oversized", "invalid_authored_value", "skill_file_too_large");
+  issue("duplicate", "duplicate_skill");
+  issue("reservedTool", "reserved_tool_name");
 });
 
-void test("workspace submit_scope generation binds every workspace path to authenticated DO scope", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const compiled = compileAgentTree({ files: [",
-      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-      '  { path: "agent/agent.json", kind: "json", value: { agentId: "dynamic-workspace", scope: { kind: "session", idSource: "submit_scope" }, effectAuthorityRef: { authorityClass: "effect", authorityId: "dynamic-workspace" } } },',
-      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
-      "] });",
-      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-      "const base = {",
-      '  profile: "workspace@1",',
-      '  agent: "./agent",',
-      '  deployment: { id: "dynamic-workspace" },',
-      '  client: { kind: "browser-direct@1" },',
-      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-      '  workspace: { binding: "Sandbox", root: "/workspace" },',
-      "};",
-      'const cloudflare = normalizeAgentOsConfig({ ...base, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, compiled.value);',
-      'const node = normalizeAgentOsConfig({ ...base, target: { kind: "node@1" } }, { ...compiled.value, materialResolver: undefined });',
-      'const remote = normalizeAgentOsConfig({ ...base, client: { kind: "svelte-kit-remote@1" }, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, compiled.value);',
-      'const hostPaths = normalizeAgentOsConfig({ ...base, target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } } }, { ...compiled.value, channels: [{ name: "github" }], schedules: [{ scheduleId: "daily" }] });',
-      "if (!cloudflare.ok) { console.error(JSON.stringify(cloudflare.issues)); process.exit(1); }",
-      'const linked = linkWorkspaceStaticTarget(cloudflare.value, { packageScope: "@yansirplus" });',
-      "if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
-      "const file = (path) => linked.value.files.find((entry) => entry.path === path).text;",
-      "console.log(JSON.stringify({",
-      '  target: file(".agentos/generated/target.ts"),',
-      '  scope: file(".agentos/generated/cloudflare-scope.ts"),',
-      '  deployment: JSON.parse(file(".agentos/generated/deployment.json")),',
-      "  moduleGraph: linked.value.moduleGraph,",
-      "  node,",
-      "  remote,",
-      "  hostPaths,",
-      "}));",
-    ].join("\n"),
-  );
+void test("linkStaticTarget lowers product assets into one deterministic generated module graph", () => {
+  const result = runTypeScript(`
+import {
+  compileProductPlan,
+  linkStaticTarget,
+  localHost,
+} from "./packages/cli/src/build/agent-authoring.ts";
+
+const compiled = compileProductPlan({
+  files: [
+    {
+      path: "agent/instructions.md",
+      kind: "markdown" as const,
+      text: "Use the authored product assets.\\n",
+    },
+    {
+      path: "agent/agent.json",
+      kind: "json" as const,
+      value: { agentId: "asset-product", kind: "workspace", tools: ["echo"] },
+    },
+    { path: "agent/tools/echo.ts", kind: "tool" as const, declaration: {} },
+    {
+      path: "agent/skills/review/SKILL.md",
+      kind: "markdown" as const,
+      text: "---\\nname: review\\ndescription: Review facts.\\n---\\nReview carefully.\\n",
+    },
+    {
+      path: "agent/instructions/tone.md",
+      kind: "markdown" as const,
+      text: "Use a terse tone.\\n",
+    },
+    {
+      path: "agent/skills/session.dynamic.ts",
+      kind: "dynamic" as const,
+      declaration: { outputs: { skills: ["review"] } },
+    },
+    { path: "agent/channels/github.ts", kind: "channel" as const },
+    { path: "workflows/report.ts", kind: "workflow" as const },
+    {
+      path: "agent/schedules/daily.ts",
+      kind: "schedule" as const,
+      declaration: { cron: "0 9 * * *", handler: () => undefined },
+    },
+  ],
+});
+const linked = compiled.ok
+  ? linkStaticTarget(compiled.value, localHost("dev", "/tmp/asset-product", {}), {
+      packageScope: "@asset-test",
+    })
+  : compiled;
+if (!linked.ok) {
+  console.log(JSON.stringify(linked));
+  process.exit(0);
+}
+const files = Object.fromEntries(linked.value.files.map((file) => [file.path, file.text]));
+const sourceCounts = Object.fromEntries(
+  [...new Set(linked.value.moduleGraph.map((entry) => entry.source))].map((source) => [
+    source,
+    linked.value.moduleGraph.filter((entry) => entry.source === source).length,
+  ]),
+);
+console.log(
+  JSON.stringify({
+    ok: true,
+    paths: Object.keys(files),
+    sources: linked.value.moduleGraph.map((entry) => entry.source),
+    sourceCounts,
+    skills: JSON.parse(files[".agentos/generated/skill-resources.json"]),
+    markers: {
+      customTool: files[".agentos/generated/local.ts"].includes("../../agent/tools/echo"),
+      loadSkill: files[".agentos/generated/local.ts"].includes("load_skill"),
+      readSkillFile: files[".agentos/generated/local.ts"].includes("read_skill_file"),
+      skillCatalog: files[".agentos/generated/local.ts"].includes('"name":"review"'),
+      dynamicResolver: files[".agentos/generated/local.ts"].includes(
+        "../../agent/skills/session.dynamic",
+      ),
+      channel: files[".agentos/generated/channels.ts"].includes(
+        "../../agent/channels/github",
+      ),
+      schedule: files[".agentos/generated/schedules.ts"].includes(
+        "../../agent/schedules/daily",
+      ),
+    },
+  }),
+);
+`);
+
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.deployment.workspace.scope, {
-    idSource: "submit_scope",
-    kind: "session",
+  assert.equal(output.ok, true, JSON.stringify(output));
+  for (const generated of [
+    ".agentos/generated/skill-resources.json",
+    ".agentos/generated/channels.ts",
+    ".agentos/generated/schedules.ts",
+    ".agentos/generated/local.ts",
+  ]) {
+    assert.ok(output.paths.includes(generated), generated);
+  }
+  assert.deepEqual(output.markers, {
+    customTool: true,
+    loadSkill: true,
+    readSkillFile: true,
+    skillCatalog: true,
+    dynamicResolver: true,
+    channel: true,
+    schedule: true,
   });
-  assert.equal(Object.hasOwn(output.deployment.workspace, "providerResourceId"), false);
-  assert.equal(Object.hasOwn(output.deployment.workspace, "cloudflareSandboxId"), false);
-  assert.deepEqual(output.node, {
-    ok: false,
-    issues: [
-      {
-        kind: "workspace_submit_scope_requires_cloudflare_routing",
-        path: "agent/agent.json#/scope",
-        target: "node@1",
-      },
-    ],
-  });
-  assert.deepEqual(output.remote, {
-    ok: false,
-    issues: [
-      {
-        kind: "workspace_submit_scope_host_path_unsupported",
-        path: "agentos.config.jsonc#/client",
-        hostPath: "svelte-kit-remote",
-      },
-    ],
-  });
-  assert.deepEqual(output.hostPaths, {
-    ok: false,
-    issues: [
-      {
-        kind: "workspace_submit_scope_host_path_unsupported",
-        path: "agent/channels",
-        hostPath: "channel",
-      },
-      {
-        kind: "workspace_submit_scope_host_path_unsupported",
-        path: "agent/schedules",
-        hostPath: "schedule",
-      },
-    ],
-  });
-
-  assert.match(output.target, /createCloudflareSandboxWorkspaceEnvResolver/);
-  assert.match(output.target, /authority: "agentos\.workspace\.capability"/);
-  assert.match(output.target, /admit: \(\) => Effect\.succeed\(\{ ok: true as const \}\)/);
-  assert.match(output.target, /const scope = ctx\.id\.name;/);
-  assert.match(
-    output.target,
-    /cloudflareDefaultTruthIdentityFromRoutingScope\(scopeId, "session"\)/,
-  );
-  assert.doesNotMatch(output.target, /effectAuthorityRef: semanticManifest\.effectAuthorityRef/);
-  assert.match(output.target, /this\.targetTruthIdentity = semanticTruthIdentityFor\(scope\)/);
-  assert.match(output.target, /generatedWorkspaceRefFor\(this\.targetScope\)/);
-  assert.match(output.target, /workspaceSandboxFor\(this\.targetEnv, this\.targetScope\)/);
-  assert.match(
-    output.target,
-    /generatedSubmitBindingsFor\(\s*this\.targetEnv,\s*this\.targetScope,/,
-  );
-  assert.match(output.target, /input\.workspaceRef !== generatedWorkspaceRefFor\(scope\)/);
-  assert.doesNotMatch(output.target, /const generatedWorkspaceSandboxId/);
-  assert.doesNotMatch(output.target, /scopeId: string =/);
-  assert.doesNotMatch(output.target, /input\.(?:tenant|installation|sandboxId)/);
-  assert.match(output.target, /\.\.\.\(input === undefined \? \{\} : \{ input \}\)/);
-  assert.doesNotMatch(output.target, /resolvers: generatedDynamicCapabilityResolvers,\s+input,/);
-  const submitFields = output.target.match(
-    /const submitRunInputFields = \(input: SubmitRunInput\): SubmitRunInput => \(\{[\s\S]*?\n\}\);/,
-  );
-  assert.ok(submitFields);
-  assert.doesNotMatch(submitFields[0], /workspaceRef/);
-
-  assert.match(output.scope, /agentOSTruthIdentityFor/);
-  assert.match(
-    output.scope,
-    /cloudflareDefaultTruthIdentityFromRoutingScope\(scopeId, "session"\)/,
-  );
-  assert.doesNotMatch(
-    output.scope,
-    /effectAuthorityRef: \(manifest as AgentManifest\)\.effectAuthorityRef/,
-  );
-  assert.match(output.scope, /scopeId: string/);
-  assert.doesNotMatch(output.scope, /agentOSScopeId/);
-  assert.doesNotMatch(output.scope, /scopeId: string =/);
-
-  const publicSpecifiers = [
-    ...output.target.matchAll(/from "(@yansirplus\/(?:core|runtime)(?:\/[^"]+)?)"/g),
-  ].map((match) => match[1]);
-  assert.ok(publicSpecifiers.includes("@yansirplus/runtime/cloudflare"));
-  assert.ok(publicSpecifiers.includes("@yansirplus/runtime/workspace-binding"));
-  for (const specifier of publicSpecifiers) {
-    assert.doesNotMatch(specifier, /\/src\//);
-    const [scope, packageName, ...subpath] = specifier.split("/");
-    const packageSpecifier = `${scope}/${packageName}`;
-    const exports = projectedPackedExportsFor(packageSpecifier);
-    const exportKey = subpath.length === 0 ? "." : `./${subpath.join("/")}`;
-    assert.ok(exports?.[exportKey], `packed ${packageSpecifier} does not export ${exportKey}`);
+  assert.deepEqual(output.skills, {});
+  for (const authoredSource of [
+    "../../agent/tools/echo",
+    "../../agent/skills/session.dynamic",
+    "../../agent/channels/github",
+    "../../agent/schedules/daily",
+  ]) {
+    assert.equal(output.sourceCounts[authoredSource], 1, authoredSource);
   }
 });
 
-void test("agentos build emits node local agent app target", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-node-build-"));
+void test("agentos build compiles two-file product intent against an explicit deployment", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-product-build-"));
   try {
-    writeNodeWorkspaceAgentFixture(root);
+    writeWorkspaceProductFixture(root);
+    writeDeploymentIntentFixture(root);
 
-    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /generated 5 agentOS files/);
+    const missingDeployment = await runCli(["build", "--cwd", root]);
+    assert.equal(missingDeployment.status, 1);
+    assert.match(missingDeployment.stderr, /--deployment is required/u);
+    assert.equal(existsSync(path.join(root, ".agentos/generated")), false);
 
-    const deployment = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/deployment.json"), "utf8"),
-    );
+    const args = [
+      "build",
+      "--cwd",
+      root,
+      "--deployment",
+      "agentos.deployment.jsonc",
+      "--package-scope",
+      "@product-test",
+    ];
+    const built = await runCli(args);
+    assert.equal(built.status, 0, built.stderr);
+    assert.match(built.stdout, /^generated \d+ agentOS files\s*$/u);
+
+    const generated = path.join(root, ".agentos/generated");
+    const expectedPaths = [
+      "deployment.json",
+      "fingerprints.json",
+      "local.ts",
+      "manifest.json",
+      "provenance.json",
+    ];
+    for (const relative of expectedPaths) {
+      assert.equal(existsSync(path.join(generated, relative)), true, relative);
+    }
+
+    const manifest = JSON.parse(readFileSync(path.join(generated, "manifest.json"), "utf8"));
+    const deployment = JSON.parse(readFileSync(path.join(generated, "deployment.json"), "utf8"));
+    const local = readFileSync(path.join(generated, "local.ts"), "utf8");
+    assert.equal(manifest.agentId, "node-local-agent");
+    assert.equal(manifest.scope.stableScopeId, "node-local-agent");
+    assert.deepEqual(Object.keys(manifest.tools).sort(), workspaceDefaultToolNames);
+    assert.equal(deployment.deploymentId, "node-local-deployment");
     assert.equal(deployment.backend, "node");
     assert.equal(deployment.adapter, "node@1");
-    assert.equal(Object.hasOwn(deployment.workspace, "cloudflareSandboxId"), false);
+    assert.equal(deployment.workspace.root, "/workspace");
+    assert.match(local, /const session = createAgentSession/u);
+    assert.match(local, /export const createLocalAgentApp/u);
 
-    const local = readFileSync(path.join(root, ".agentos/generated/local.ts"), "utf8");
-    assert.match(local, /from "@agent-os\/runtime\/local";/);
-    assert.match(local, /from "@agent-os\/runtime\/llm-effect-ai\/openai-compatible";/);
-    assert.match(local, /lowerLocalAgentRuntime/);
-    assert.match(local, /OpenAiCompatibleLlmTransportLive/);
-    assert.match(local, /preflightOpenAiCompatibleProviderMaterial/);
-    assert.doesNotMatch(local, /AGENTOS_ENDPOINT_OPENROUTER/);
-    assert.doesNotMatch(local, /AGENTOS_CREDENTIAL_OPENROUTER_KEY/);
-    assert.match(local, /AGENTOS_MODEL_OPENROUTER_DEFAULT_TEXT_MODEL/);
-    assert.match(local, /readonly materialResolver\?: RefResolver;/);
-    assert.match(local, /export interface LocalAgentApp/);
-    assert.match(local, /readonly sessions:/);
-    assert.match(local, /readonly workflows:/);
-    assert.match(local, /export interface LocalAgentAppRuntime extends LocalAgentRuntime/);
-    assert.match(local, /projectAgentSession/);
-    assert.match(local, /projectRunInspection/);
-    assert.match(local, /projectWorkflowRuns/);
-    assert.match(local, /export const createLocalAgentApp/);
-    assert.match(local, /target: "node@1"/);
-    assert.match(
-      local,
-      /options\.llm === undefined[\s\S]*generatedLocalLlmFor\(targetEnv, options\.materialResolver\)/,
+    const first = Object.fromEntries(
+      expectedPaths.map((relative) => [
+        relative,
+        readFileSync(path.join(generated, relative), "utf8"),
+      ]),
     );
-    assert.match(local, /if \(!generatedLlm\.ok\) return rejectTargetFailure\(generatedLlm\)/);
-    assert.match(local, /llm: generatedLlm\.value/);
-    assert.match(local, /workspaceOperations: generatedWorkspaceOperations/);
-    assert.match(local, /toolInteractions: generatedWorkspaceToolInteractions/);
-    assert.match(local, /runtime: LocalAgentAppRuntime/);
-    assert.match(local, /inspectRun: \(runId\) =>/);
-    assert.match(local, /lowered\.submitWithProductLink/);
-    assert.doesNotMatch(local, /resolveRuntime|submitAgentEffect|workspaceOperations\(/);
-    assert.doesNotMatch(local, /cloudflare|createAgentDurableObject|wrangler/i);
-    assert.doesNotMatch(local, /blueprints|target--node|Provider Material Binding/);
-    assert.equal(existsSync(path.join(root, ".agentos/generated/target.ts")), false);
-    assert.equal(existsSync(path.join(root, ".agentos/generated/worker.ts")), false);
-    assert.equal(existsSync(path.join(root, ".agentos/generated/wrangler.jsonc")), false);
+    const rebuilt = await runCli(args);
+    assert.equal(rebuilt.status, 0, rebuilt.stderr);
+    const second = Object.fromEntries(
+      expectedPaths.map((relative) => [
+        relative,
+        readFileSync(path.join(generated, relative), "utf8"),
+      ]),
+    );
+    assert.deepEqual(second, first);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-void test("agentos serve exposes generated node app through public command and event endpoints", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-node-serve-"));
-  let child;
+void test("agentos info binds either LocalHost or DeploymentIntent without writing generated files", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-product-info-"));
   try {
-    writeNodeWorkspaceAgentFixture(root);
-    linkGeneratedTargetSmokeDependencies(root);
-    child = spawn(
-      process.execPath,
-      [
-        cli,
-        "serve",
-        "--cwd",
-        root,
-        "--port",
-        "0",
-        "--llm",
-        "test",
-        "--llm-response",
-        "scripted done",
-        "--json",
-      ],
-      {
-        cwd: root,
-        detached: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    const ready = await waitForJsonLine(child);
-    assert.equal(ready.status, "listening");
-    assert.equal(ready.protocol, "agentos-local-app@1");
-    assert.equal(ready.target, "node@1");
-    assert.equal(ready.llm, "test");
+    writeWorkspaceProductFixture(root);
+    writeDeploymentIntentFixture(root);
 
-    const health = await fetch(ready.endpoints.health).then((response) => response.json());
-    assert.equal(health.ok, true);
-    assert.equal(health.protocol, "agentos-local-app@1");
-    assert.deepEqual(health.diagnostics, []);
-
-    const submitted = await fetch(ready.endpoints.command, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: "submitSessionTurn",
-        input: {
-          intent: "say hello",
-          context: {},
-          sessionRef: "session-1",
-          turnRef: "turn-1",
-        },
-      }),
-    }).then((response) => response.json());
-    assert.equal(submitted.ok, true);
-    assert.equal(submitted.value.ok, true);
-    assert.equal(submitted.value.final, "scripted done");
-
-    const events = await fetch(ready.endpoints.events).then((response) => response.text());
-    assert.match(events, /^id: \d+\nevent: ledger\n/u);
-    assert.match(events, /event: ledger/);
-    assert.match(events, /agent\.run\.completed|runtime\.completed_after_tools/);
-    assert.doesNotMatch(events, /keepalive|connected/u);
-  } finally {
-    if (child !== undefined) {
-      stopProcessGroup(child);
-      await new Promise((resolve) => child.once("close", resolve));
-    }
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos eval discovers eval files and runs local target through public endpoints", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-local-"));
-  try {
-    writeNodeWorkspaceAgentFixture(root);
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "evals/session"), { recursive: true });
-    writeFileSync(
-      path.join(root, "evals/evals.config.ts"),
-      [
-        'import { defineEvalConfig } from "@agent-os/evals";',
-        "export default defineEvalConfig({",
-        '  target: { kind: "local" },',
-        '  providers: [{ id: "scripted", kind: "scripted", purpose: "local smoke" }],',
-        "});",
-        "",
-      ].join("\n"),
-    );
-    writeFileSync(
-      path.join(root, "evals/session/basic.eval.ts"),
-      [
-        'import { defineEval, evalAssertion } from "@agent-os/evals";',
-        "export default defineEval({",
-        "  path: import.meta.url,",
-        '  cases: [{ id: "turn", input: { sessionRef: "session-1", turnRef: "turn-1" } }],',
-        "  assertions: [",
-        "    evalAssertion.completed(),",
-        '    evalAssertion.notCalledTool("write_file"),',
-        "    evalAssertion.usedNoTools(),",
-        '    evalAssertion.check("observed-events", (observation) => observation.events.length > 0),',
-        "  ],",
-        "  run: async (t) => {",
-        "    const input = t.case.input;",
-        "    const result = await t.sessions.submitTurn({",
-        '      intent: "say hello",',
-        "      context: {},",
-        "      sessionRef: input.sessionRef,",
-        "      turnRef: input.turnRef,",
-        "    });",
-        '    if (result.final !== "eval done") throw new Error("unexpected final");',
-        '    const inspection = await t.sessions.projection("inspectRuntimeRun", { runId: result.runId });',
-        '    if (inspection.status?.kind !== "delivered") throw new Error("run inspection did not expose delivered status");',
-        '    if (inspection.lastKnownEvent?.kind !== "agent.run.completed") throw new Error("run inspection did not expose last completed event");',
-        "    const events = await t.sessions.events();",
-        '    if (!events.some((event) => event.kind === "agent.run.completed")) {',
-        '      throw new Error("completion event missing");',
-        "    }",
-        "  },",
-        "});",
-        "",
-      ].join("\n"),
-    );
-
-    const result = await runCli(
-      ["eval", "--cwd", root, "--llm", "test", "--llm-response", "eval done", "--json"],
-      { cwd: root },
-    );
-    assert.equal(result.status, 0, result.stderr);
-    const report = JSON.parse(result.stdout);
-    assert.equal(report.ok, true);
-    assert.equal(report.target.kind, "local");
-    assert.deepEqual(report.files, ["evals/session/basic.eval.ts"]);
-    assert.deepEqual(report.evals, ["session.basic"]);
-    assert.equal(report.total, 1);
-    assert.equal(report.passed, 1);
-    assert.match(report.artifact, /^\.agentos\/eval-results\/.+\.json$/);
-    assert.equal(existsSync(path.join(root, report.artifact)), true);
-    assert.deepEqual(
-      report.results[0].assertions.map((assertion) => assertion.status),
-      ["passed", "passed", "passed", "passed"],
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos eval remote target uses the same public command driver with headers", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-remote-"));
-  let server;
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "evals/workflow"), { recursive: true });
-    writeFileSync(
-      path.join(root, "evals/workflow/remote.eval.ts"),
-      [
-        'import { defineEval, evalAssertion } from "@agent-os/evals";',
-        "export default defineEval({",
-        "  path: import.meta.url,",
-        '  cases: [{ id: "run", input: { workflowId: "wf", workflowRunId: "run-1" } }],',
-        "  assertions: [",
-        "    evalAssertion.completed(),",
-        '    evalAssertion.calledTool("lookup"),',
-        '    evalAssertion.notCalledTool("delete_everything"),',
-        '    evalAssertion.projection("inspectWorkflowRun"),',
-        "  ],",
-        "  run: async (t) => {",
-        "    const result = await t.workflows.run({",
-        '      intent: "run workflow",',
-        "      context: {},",
-        "      workflowId: t.case.input.workflowId,",
-        "      workflowRunId: t.case.input.workflowRunId,",
-        "    });",
-        '    if (result.final !== "remote done") throw new Error("unexpected remote final");',
-        "  },",
-        "});",
-        "",
-      ].join("\n"),
-    );
-    const requests = [];
-    const events = [];
-    server = http.createServer((request, response) => {
-      requests.push({ url: request.url, auth: request.headers.authorization });
-      if (request.url === "/agentos/command" && request.method === "POST") {
-        let body = "";
-        request.setEncoding("utf8");
-        request.on("data", (chunk) => {
-          body += chunk;
-        });
-        request.on("end", () => {
-          const parsed = JSON.parse(body);
-          response.writeHead(200, { "content-type": "application/json" });
-          if (parsed.name === "runWorkflow") {
-            events.push({ id: 1, kind: "tool.executed", payload: { name: "lookup" } });
-            events.push({ id: 2, kind: "agent.run.completed", payload: { tokensUsed: 2 } });
-            response.end(JSON.stringify({ ok: true, value: { ok: true, final: "remote done" } }));
-            return;
-          }
-          if (parsed.name === "inspectWorkflowRun") {
-            response.end(
-              JSON.stringify({ ok: true, value: { workflowRunId: "run-1", status: "done" } }),
-            );
-            return;
-          }
-          response.end(JSON.stringify({ ok: false, value: null }));
-        });
-        return;
-      }
-      if (request.url?.startsWith("/agentos/events") && request.method === "GET") {
-        const url = new URL(request.url, "http://127.0.0.1");
-        const afterId = Number(url.searchParams.get("afterId") ?? 0);
-        response.writeHead(200, { "content-type": "text/event-stream" });
-        response.end(
-          events
-            .filter((event) => event.id > afterId)
-            .map((event) => `event: ledger\ndata: ${JSON.stringify(event)}`)
-            .join("\n\n"),
-        );
-        return;
-      }
-      response.writeHead(404, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: false }));
+    const local = await runCli(["info", "--cwd", root, "--json"]);
+    assert.equal(local.status, 0, local.stderr);
+    const localInfo = JSON.parse(local.stdout);
+    assert.deepEqual(localInfo.compile.agent, {
+      id: "node-local-agent",
+      kind: "workspace",
     });
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    const port = typeof address === "object" && address !== null ? address.port : 0;
-    const result = await runCli(
-      [
-        "eval",
-        "--cwd",
-        root,
-        "--target",
-        "remote",
-        "--base-url",
-        `http://127.0.0.1:${port}`,
-        "--header",
-        "authorization=Bearer eval",
-        "--json",
-      ],
-      { cwd: root },
-    );
-    assert.equal(result.status, 0, result.stderr);
-    const report = JSON.parse(result.stdout);
-    assert.equal(report.ok, true);
-    assert.equal(report.target.kind, "remote");
-    assert.equal(report.passed, 1);
-    assert.match(report.artifact, /^\.agentos\/eval-results\/.+\.json$/);
-    assert.equal(existsSync(path.join(root, report.artifact)), true);
-    assert.deepEqual(
-      report.results[0].assertions.map((assertion) => assertion.status),
-      ["passed", "passed", "passed", "passed"],
-    );
-    assert.deepEqual(
-      requests
-        .filter((request) => request.url?.startsWith("/agentos/events"))
-        .map((request) => request.url),
-      ["/agentos/events", "/agentos/events?afterId=0"],
-    );
-    assert.equal(requests.filter((request) => request.url === "/agentos/command").length, 2);
-    assert.deepEqual(
-      requests.map((request) => request.auth),
-      ["Bearer eval", "Bearer eval", "Bearer eval", "Bearer eval"],
-    );
-  } finally {
-    if (server !== undefined) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+    assert.equal(localInfo.compile.deployment.kind, "local");
+    assert.equal(localInfo.compile.deployment.id, "local-node-local-agent");
+    assert.equal(localInfo.compile.generated.canonicalDeployment.target, "node@1");
+    assert.equal(localInfo.compile.generated.canonicalDeployment.client, "direct");
+    assert.equal(existsSync(path.join(root, ".agentos/generated")), false);
 
-void test("agentos eval scopes assertion observations to the current case event delta", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-event-delta-"));
-  let server;
-  const events = [];
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "evals"), { recursive: true });
-    writeFileSync(
-      path.join(root, "evals/01-tool.eval.ts"),
-      [
-        'import { defineEval, evalAssertion } from "@agent-os/evals";',
-        "export default defineEval({",
-        "  path: import.meta.url,",
-        '  cases: [{ id: "tool", input: {} }],',
-        '  assertions: [evalAssertion.calledTool("lookup")],',
-        '  run: async (t) => { await t.sessions.command("emitTool"); },',
-        "});",
-        "",
-      ].join("\n"),
-    );
-    writeFileSync(
-      path.join(root, "evals/02-no-tool.eval.ts"),
-      [
-        'import { defineEval, evalAssertion } from "@agent-os/evals";',
-        "export default defineEval({",
-        "  path: import.meta.url,",
-        '  cases: [{ id: "no-tool", input: {} }],',
-        "  assertions: [evalAssertion.usedNoTools()],",
-        '  run: async (t) => { await t.sessions.command("emitDone"); },',
-        "});",
-        "",
-      ].join("\n"),
-    );
-    server = http.createServer((request, response) => {
-      if (request.url === "/agentos/command" && request.method === "POST") {
-        let body = "";
-        request.setEncoding("utf8");
-        request.on("data", (chunk) => {
-          body += chunk;
-        });
-        request.on("end", () => {
-          const parsed = JSON.parse(body);
-          if (parsed.name === "emitTool") {
-            events.push({
-              id: events.length + 1,
-              kind: "tool.executed",
-              payload: { name: "lookup" },
-            });
-          }
-          events.push({ id: events.length + 1, kind: "agent.run.completed", payload: {} });
-          response.writeHead(200, { "content-type": "application/json" });
-          response.end(JSON.stringify({ ok: true, value: { ok: true } }));
-        });
-        return;
-      }
-      if (request.url?.startsWith("/agentos/events") && request.method === "GET") {
-        const url = new URL(request.url, "http://127.0.0.1");
-        const afterId = Number(url.searchParams.get("afterId") ?? 0);
-        response.writeHead(200, { "content-type": "text/event-stream" });
-        response.end(
-          events
-            .filter((event) => event.id > afterId)
-            .map((event) => `event: ledger\ndata: ${JSON.stringify(event)}`)
-            .join("\n\n"),
-        );
-        return;
-      }
-      response.writeHead(404, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: false }));
-    });
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    const port = typeof address === "object" && address !== null ? address.port : 0;
-    const result = await runCli(
-      [
-        "eval",
-        "--cwd",
-        root,
-        "--target",
-        "remote",
-        "--base-url",
-        `http://127.0.0.1:${port}`,
-        "--json",
-      ],
-      { cwd: root },
-    );
-
-    assert.equal(result.status, 0, result.stderr);
-    const report = JSON.parse(result.stdout);
-    assert.equal(report.ok, true);
-    assert.deepEqual(report.evals, ["01-tool", "02-no-tool"]);
-    assert.deepEqual(
-      report.results.map((caseResult) => caseResult.status),
-      ["passed", "passed"],
-    );
-    assert.deepEqual(
-      report.results.map((caseResult) => caseResult.observation.events.map((event) => event.kind)),
-      [["tool.executed", "agent.run.completed"], ["agent.run.completed"]],
-    );
-  } finally {
-    if (server !== undefined) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos eval fails cases when public-boundary assertions fail", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-assertion-fail-"));
-  let server;
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "evals/session"), { recursive: true });
-    writeFileSync(
-      path.join(root, "evals/session/tool.eval.ts"),
-      [
-        'import { defineEval, evalAssertion } from "@agent-os/evals";',
-        "export default defineEval({",
-        "  path: import.meta.url,",
-        '  cases: [{ id: "assertion" , input: {} }],',
-        '  assertions: [evalAssertion.calledTool("missing_tool")],',
-        "});",
-        "",
-      ].join("\n"),
-    );
-    server = http.createServer((request, response) => {
-      if (request.url === "/agentos/events" && request.method === "GET") {
-        response.writeHead(200, { "content-type": "text/event-stream" });
-        response.end(
-          'event: ledger\ndata: {"id":1,"kind":"agent.run.completed","payload":{"tokensUsed":1}}\n\n',
-        );
-        return;
-      }
-      response.writeHead(404, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: false }));
-    });
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    const port = typeof address === "object" && address !== null ? address.port : 0;
-    const result = await runCli(
-      [
-        "eval",
-        "--cwd",
-        root,
-        "--target",
-        "remote",
-        "--base-url",
-        `http://127.0.0.1:${port}`,
-        "--json",
-      ],
-      { cwd: root },
-    );
-    assert.equal(result.status, 1);
-    const report = JSON.parse(result.stdout);
-    assert.equal(report.ok, false);
-    assert.equal(report.failed, 1);
-    assert.equal(report.results[0].assertions[0].status, "failed");
-    assert.match(report.results[0].error, /missing tool call missing_tool/u);
-    assert.equal(existsSync(path.join(root, report.artifact)), true);
-  } finally {
-    if (server !== undefined) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos eval derives waiting and failed assertions from public event status", async () => {
-  const runStatusFixture = async ({ name, assertion, event }) => {
-    const root = mkdtempSync(path.join(os.tmpdir(), `agentos-eval-${name}-`));
-    let server;
-    try {
-      writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-      linkGeneratedTargetSmokeDependencies(root);
-      mkdirSync(path.join(root, "evals/status"), { recursive: true });
-      writeFileSync(
-        path.join(root, "evals/status/status.eval.ts"),
-        [
-          'import { defineEval, evalAssertion } from "@agent-os/evals";',
-          "export default defineEval({",
-          "  path: import.meta.url,",
-          '  cases: [{ id: "status", input: {} }],',
-          `  assertions: [${assertion}],`,
-          "});",
-          "",
-        ].join("\n"),
-      );
-      server = http.createServer((request, response) => {
-        if (request.url === "/agentos/events" && request.method === "GET") {
-          response.writeHead(200, { "content-type": "text/event-stream" });
-          response.end(`event: ledger\ndata: ${event}\n\n`);
-          return;
-        }
-        response.writeHead(404, { "content-type": "application/json" });
-        response.end(JSON.stringify({ ok: false }));
-      });
-      await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
-      });
-      const address = server.address();
-      const port = typeof address === "object" && address !== null ? address.port : 0;
-      const result = await runCli(
-        [
-          "eval",
-          "--cwd",
-          root,
-          "--target",
-          "remote",
-          "--base-url",
-          `http://127.0.0.1:${port}`,
-          "--json",
-        ],
-        { cwd: root },
-      );
-      assert.equal(result.status, 0, result.stderr);
-      const report = JSON.parse(result.stdout);
-      assert.equal(report.ok, true);
-      assert.equal(report.results[0].assertions[0].status, "passed");
-    } finally {
-      if (server !== undefined) {
-        await new Promise((resolve) => server.close(resolve));
-      }
-      rmSync(root, { recursive: true, force: true });
-    }
-  };
-
-  await runStatusFixture({
-    name: "waiting",
-    assertion: "evalAssertion.waiting()",
-    event: '{"id":1,"kind":"agent.run.interrupted","payload":{"reason":"decision_required"}}',
-  });
-  await runStatusFixture({
-    name: "failed",
-    assertion: 'evalAssertion.failed("agent.aborted.upstream_failure")',
-    event: '{"id":1,"kind":"agent.aborted.upstream_failure","payload":{"tokensUsed":1}}',
-  });
-});
-
-void test("agentos eval fails closed when public event records omit ids", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-idless-events-"));
-  let server;
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "evals/session"), { recursive: true });
-    writeFileSync(
-      path.join(root, "evals/session/idless.eval.ts"),
-      [
-        'import { defineEval, evalAssertion } from "@agent-os/evals";',
-        "export default defineEval({",
-        "  path: import.meta.url,",
-        '  cases: [{ id: "idless", input: {} }],',
-        "  assertions: [evalAssertion.completed()],",
-        '  run: async (t) => { await t.sessions.command("emit"); },',
-        "});",
-        "",
-      ].join("\n"),
-    );
-    server = http.createServer((request, response) => {
-      if (request.url === "/agentos/command" && request.method === "POST") {
-        response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({ ok: true, value: { ok: true } }));
-        return;
-      }
-      if (request.url?.startsWith("/agentos/events") && request.method === "GET") {
-        response.writeHead(200, { "content-type": "text/event-stream" });
-        response.end('event: ledger\ndata: {"kind":"agent.run.completed"}\n\n');
-        return;
-      }
-      response.writeHead(404, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: false }));
-    });
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    const port = typeof address === "object" && address !== null ? address.port : 0;
-    const result = await runCli(
-      [
-        "eval",
-        "--cwd",
-        root,
-        "--target",
-        "remote",
-        "--base-url",
-        `http://127.0.0.1:${port}`,
-        "--json",
-      ],
-      { cwd: root },
-    );
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /id-less event agent\.run\.completed/u);
-  } finally {
-    if (server !== undefined) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos eval rejects malformed declarations through the eval DSL contract", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-malformed-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "evals/session"), { recursive: true });
-    writeFileSync(
-      path.join(root, "evals/session/malformed.eval.ts"),
-      [
-        "export default {",
-        '  id: "malformed",',
-        '  cases: [{ id: "bad", input: {} }],',
-        '  assertions: [{ kind: "mystery" }],',
-        "};",
-        "",
-      ].join("\n"),
-    );
-    const result = await runCli(
-      ["eval", "--cwd", root, "--target", "remote", "--base-url", "http://127.0.0.1:9", "--json"],
-      { cwd: root },
-    );
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /unknown eval assertion kind mystery/u);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos eval rejects malformed config through the eval DSL contract", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-eval-malformed-config-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "evals/session"), { recursive: true });
-    writeFileSync(
-      path.join(root, "evals/evals.config.ts"),
-      ["export default {", '  target: { kind: "remote" },', "};", ""].join("\n"),
-    );
-    writeFileSync(
-      path.join(root, "evals/session/basic.eval.ts"),
-      [
-        'import { defineEval } from "@agent-os/evals";',
-        "export default defineEval({",
-        "  path: import.meta.url,",
-        '  cases: [{ id: "basic", input: {} }],',
-        "});",
-        "",
-      ].join("\n"),
-    );
-    const result = await runCli(["eval", "--cwd", root, "--json"], { cwd: root });
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /remote eval target baseUrl must be a string/u);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build emits one channel registry for cloudflare and node targets", () => {
-  const writeChannelFixture = (root) => {
-    mkdirSync(path.join(root, "agent/channels"), { recursive: true });
-    writeFileSync(
-      path.join(root, "agent/channels/github.ts"),
-      [
-        'import { defineChannel, post } from "@agent-os/runtime/channel";',
-        "export default defineChannel({",
-        '  verify: async (request) => ({ authority: "github.signature", subject: request.request.headers.get("x-github-delivery") ?? "missing-delivery" }),',
-        "  routes: [",
-        '    post("/events/:eventId", async (request) => new Response(request.params.eventId)),',
-        "  ],",
-        "});",
-        "",
-      ].join("\n"),
-    );
-  };
-
-  const writeBaseAgent = (root, targetLines) => {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Handle inbound channels.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "channel-fixture",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "channel-fixture-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "channel-fixture",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeChannelFixture(root);
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "channel-fixture", "version": "0.1.0" },',
-        ...targetLines,
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-  };
-
-  const cloudflareRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-cloudflare-"));
-  const nodeRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-node-"));
-  try {
-    writeBaseAgent(cloudflareRoot, [
-      '  "target": {',
-      '    "kind": "cloudflare-do@1",',
-      '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
-      "  },",
+    const deployed = await runCli([
+      "info",
+      "--cwd",
+      root,
+      "--deployment",
+      "agentos.deployment.jsonc",
+      "--json",
     ]);
-    writeCloudflareMaterialResolverFixture(cloudflareRoot);
-    const cloudflareResult = spawnSync(process.execPath, [cli, "build", "--cwd", cloudflareRoot], {
-      encoding: "utf8",
-    });
-    assert.equal(cloudflareResult.status, 0, cloudflareResult.stderr);
-    assert.match(cloudflareResult.stdout, /generated 11 agentOS files/);
-    const cloudflareManifest = JSON.parse(
-      readFileSync(path.join(cloudflareRoot, ".agentos/generated/manifest.json"), "utf8"),
-    );
-    assert.equal(Object.hasOwn(cloudflareManifest, "channels"), false);
-    const cloudflareChannels = readFileSync(
-      path.join(cloudflareRoot, ".agentos/generated/channels.ts"),
-      "utf8",
-    );
-    assert.match(cloudflareChannels, /from "\.\.\/\.\.\/agent\/channels\/github"/);
-    assert.match(cloudflareChannels, /from "@agent-os\/runtime\/channel"/);
-    assert.match(cloudflareChannels, /createChannelContext/);
-    assert.match(cloudflareChannels, /name: "github"/);
-    assert.match(cloudflareChannels, /mountedChannelPath/);
-    assert.match(cloudflareChannels, /routePatternsConflict/);
-    assert.match(cloudflareChannels, /route\.channel\.verify\(channelRequest\)/);
-    assert.match(cloudflareChannels, /dispatchGeneratedChannelRequest/);
-    const cloudflareWorker = readFileSync(
-      path.join(cloudflareRoot, ".agentos/generated/worker.ts"),
-      "utf8",
-    );
-    assert.match(cloudflareWorker, /from "\.\/channels"/);
-    assert.match(cloudflareWorker, /agentOSRpcClient/);
-    assert.match(cloudflareWorker, /Pick<AgentRuntimeClient, "events" \| "streamEvents">/);
-    assert.match(cloudflareWorker, /generatedChannelRuntimeFor\(env\)/);
-    assert.doesNotMatch(cloudflareWorker, /dispatchGeneratedChannelRequest\(request, env\)/);
-
-    writeBaseAgent(nodeRoot, ['  "target": { "kind": "node@1" },']);
-    const nodeResult = spawnSync(process.execPath, [cli, "build", "--cwd", nodeRoot], {
-      encoding: "utf8",
-    });
-    assert.equal(nodeResult.status, 0, nodeResult.stderr);
-    assert.match(nodeResult.stdout, /generated 6 agentOS files/);
-    const nodeLocal = readFileSync(path.join(nodeRoot, ".agentos/generated/local.ts"), "utf8");
-    assert.match(nodeLocal, /from "\.\/channels"/);
-    assert.match(nodeLocal, /ChannelRuntime/);
-    assert.match(nodeLocal, /handleLocalAgentChannelRequest/);
-    assert.match(nodeLocal, /dispatchGeneratedChannelRequest\(request, runtime\)/);
-    assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/channels.ts")), true);
-  } finally {
-    rmSync(cloudflareRoot, { recursive: true, force: true });
-    rmSync(nodeRoot, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build emits one schedule registry for cloudflare and node targets", () => {
-  const writeScheduleFixture = (root) => {
-    mkdirSync(path.join(root, "agent/schedules"), { recursive: true });
-    writeFileSync(
-      path.join(root, "agent/schedules/daily.ts"),
-      [
-        "export default {",
-        '  cron: "0 9 * * *",',
-        "  handler: async (context) => {",
-        "    const session = await context.sessions.submitTurn({",
-        '      sessionRef: "daily-session",',
-        "      turnRef: context.fireId,",
-        '      intent: "scheduled session",',
-        "      context: { scheduledAt: context.scheduledAt },",
-        "    });",
-        "    return {",
-        "      contextKeys: Object.keys(context).sort(),",
-        "      fireId: context.fireId,",
-        "      scheduledAt: context.scheduledAt,",
-        "      principal: context.appPrincipal,",
-        "      sessionStatus: session.status,",
-        "    };",
-        "  },",
-        "};",
-        "",
-      ].join("\n"),
-    );
-  };
-
-  const writeBaseAgent = (root, targetLines) => {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Run scheduled ingress.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "schedule-registry-fixture",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "schedule-registry-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "schedule-registry-fixture",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeScheduleFixture(root);
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "schedule-registry-fixture", "version": "0.1.0" },',
-        ...targetLines,
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-  };
-
-  const cloudflareRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-schedule-cloudflare-"));
-  const nodeRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-schedule-node-"));
-  try {
-    writeBaseAgent(cloudflareRoot, [
-      '  "target": {',
-      '    "kind": "cloudflare-do@1",',
-      '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
-      "  },",
-    ]);
-    writeCloudflareMaterialResolverFixture(cloudflareRoot);
-    const cloudflareResult = spawnSync(process.execPath, [cli, "build", "--cwd", cloudflareRoot], {
-      encoding: "utf8",
-    });
-    assert.equal(cloudflareResult.status, 0, cloudflareResult.stderr);
-    assert.match(cloudflareResult.stdout, /generated 11 agentOS files/);
-    const cloudflareManifest = JSON.parse(
-      readFileSync(path.join(cloudflareRoot, ".agentos/generated/manifest.json"), "utf8"),
-    );
-    assert.equal(Object.hasOwn(cloudflareManifest, "schedules"), false);
-    const cloudflareSchedules = readFileSync(
-      path.join(cloudflareRoot, ".agentos/generated/schedules.ts"),
-      "utf8",
-    );
-    assert.match(cloudflareSchedules, /from "\.\.\/\.\.\/agent\/schedules\/daily"/);
-    assert.match(cloudflareSchedules, /from "@agent-os\/runtime\/schedule"/);
-    assert.match(cloudflareSchedules, /generatedSchedules/);
-    assert.match(cloudflareSchedules, /generatedScheduleDefinitions/);
-    assert.match(cloudflareSchedules, /generatedScheduleRegistry/);
-    assert.match(cloudflareSchedules, /dispatchScheduleFire/);
-    assert.doesNotMatch(cloudflareSchedules, /scheduleFireId/);
-    assert.doesNotMatch(cloudflareSchedules, /createScheduleContext/);
-    assert.doesNotMatch(cloudflareSchedules, /readdir|collectFiles/);
-    const cloudflareTarget = readFileSync(
-      path.join(cloudflareRoot, ".agentos/generated/target.ts"),
-      "utf8",
-    );
-    assert.match(cloudflareTarget, /from "\.\/schedules"/);
-    assert.match(cloudflareTarget, /dispatchSchedule\(input: GeneratedScheduleTriggerInput\)/);
-    assert.match(cloudflareTarget, /generatedScheduleRuntimeFor\(this\)/);
-    assert.match(cloudflareTarget, /commitScheduleFireDispatchFull/);
-    assert.doesNotMatch(cloudflareTarget, /agent\/schedules|readdir|collectFiles/);
-    const cloudflareWorker = readFileSync(
-      path.join(cloudflareRoot, ".agentos/generated/worker.ts"),
-      "utf8",
-    );
-    assert.match(cloudflareWorker, /generatedSchedules/);
-    assert.match(cloudflareWorker, /scheduled\(controller: ScheduledController/);
-    assert.match(cloudflareWorker, /entry\.cron === controller\.cron/);
-    assert.match(cloudflareWorker, /scheduledAt: controller\.scheduledTime/);
-    assert.match(cloudflareWorker, /ctx\.waitUntil\(runtime\.dispatchSchedule\(input\)\)/);
-    assert.doesNotMatch(cloudflareWorker, /cron-parser|setInterval|setTimeout/);
-
-    writeBaseAgent(nodeRoot, ['  "target": { "kind": "node@1" },']);
-    const nodeResult = spawnSync(process.execPath, [cli, "build", "--cwd", nodeRoot], {
-      encoding: "utf8",
-    });
-    assert.equal(nodeResult.status, 0, nodeResult.stderr);
-    assert.match(nodeResult.stdout, /generated 6 agentOS files/);
-    const nodeLocal = readFileSync(path.join(nodeRoot, ".agentos/generated/local.ts"), "utf8");
-    assert.match(nodeLocal, /from "\.\/schedules"/);
-    assert.match(nodeLocal, /readonly schedules:/);
-    assert.match(nodeLocal, /ids: generatedScheduleIds/);
-    assert.match(nodeLocal, /list: \(\) => generatedScheduleDefinitions/);
-    assert.match(nodeLocal, /trigger: triggerSchedule/);
-    assert.match(nodeLocal, /history: scheduleHistory/);
-    assert.match(nodeLocal, /projectScheduleFireHistory/);
-    assert.match(nodeLocal, /commitScheduleFireDispatch/);
-    assert.doesNotMatch(nodeLocal, /readonly dispatch/);
-    assert.doesNotMatch(nodeLocal, /agent\/schedules|readdir|collectFiles/);
-    assert.equal(existsSync(path.join(nodeRoot, ".agentos/generated/schedules.ts")), true);
-
-    linkGeneratedTargetSmokeDependencies(nodeRoot);
-    const dispatchResult = runTypeScript(
-      [
-        'import { dispatchGeneratedSchedule, generatedScheduleDefinitions, generatedScheduleIds } from "./.agentos/generated/schedules.ts";',
-        "const calls = [];",
-        "const runtime = Object.freeze({",
-        "  sessions: Object.freeze({",
-        "    submitTurn: async (input) => {",
-        '      calls.push(["session", input]);',
-        '      return { ok: true, status: "delivered", runId: 101, final: "done", eventCount: 4, tokensUsed: 0 };',
-        "    },",
-        "  }),",
-        "  workflows: Object.freeze({",
-        "    run: async (input) => {",
-        '      calls.push(["workflow", input]);',
-        '      return { ok: true, status: "delivered", runId: 202, final: "done", eventCount: 4, tokensUsed: 0 };',
-        "    },",
-        "  }),",
-        "});",
-        "const result = await dispatchGeneratedSchedule({",
-        '  scheduleId: "daily",',
-        '  scheduledAt: "2026-06-26T10:20:42.000Z",',
-        '  appPrincipal: { authority: "app", subject: "tenant" },',
-        '  identity: { scopeRef: { kind: "conversation", scopeId: "schedule-registry-scope" }, effectAuthorityRef: { authorityClass: "effect", authorityId: "schedule-registry-fixture" } },',
-        "  runtime,",
-        "});",
-        "const outcome = result.outcome(500);",
-        "console.log(JSON.stringify({ definitions: generatedScheduleDefinitions, ids: generatedScheduleIds, result: { ok: result.ok, fireId: result.fireId, requested: result.requested, productLink: result.ok ? result.productLink : null, outcome }, calls }));",
-      ].join("\n"),
-      { cwd: nodeRoot, resolveDir: nodeRoot },
-    );
-    assert.equal(dispatchResult.status, 0, dispatchResult.stderr);
-    const output = JSON.parse(dispatchResult.stdout);
-    assert.deepEqual(output.definitions, [
-      { scheduleId: "daily", path: "agent/schedules/daily.ts", cron: "0 9 * * *" },
-    ]);
-    assert.deepEqual(output.ids, ["daily"]);
-    assert.equal(output.result.ok, true);
-    assert.equal(output.result.requested.kind, "schedule.fire_requested");
-    assert.equal(output.result.outcome.kind, "schedule.fire_dispatched");
-    assert.equal(output.result.outcome.payload.requestedEventId, 500);
-    assert.deepEqual(output.result.requested.payload.appPrincipal, {
-      authority: "app",
-      subject: "tenant",
-    });
-    assert.match(
-      output.result.fireId,
-      /^schedule-fire:app:tenant:daily:2026-06-26T10%3A20%3A00\.000Z$/,
-    );
-    assert.deepEqual(output.result.productLink, {
-      kind: "session_turn",
-      sessionRef: "daily-session",
-      turnRef: output.result.fireId,
-      runtimeRunId: 101,
-      idempotencyKey: output.result.fireId,
-    });
-    assert.deepEqual(output.calls, [
-      [
-        "session",
-        {
-          sessionRef: "daily-session",
-          turnRef: output.result.fireId,
-          idempotencyKey: output.result.fireId,
-          intent: "scheduled session",
-          context: { scheduledAt: "2026-06-26T10:20:00.000Z" },
-        },
-      ],
-    ]);
-
-    const deliveryResult = runTypeScript(
-      [
-        'import { dispatchGeneratedScheduleDelivery } from "./.agentos/generated/schedules.ts";',
-        "const calls = [];",
-        'const identity = { scopeRef: { kind: "conversation", scopeId: "schedule-registry-scope" }, effectAuthorityRef: { authorityClass: "effect", authorityId: "schedule-registry-fixture" } };',
-        "const runtime = Object.freeze({",
-        "  sessions: Object.freeze({",
-        "    submitTurn: async (input) => {",
-        '      calls.push(["session", input]);',
-        '      return { ok: true, status: "delivered", runId: 303, final: "done", eventCount: 4, tokensUsed: 0 };',
-        "    },",
-        "  }),",
-        '  workflows: Object.freeze({ run: async () => { throw new Error("workflow not expected"); } }),',
-        "});",
-        "const first = await dispatchGeneratedScheduleDelivery({",
-        '  scheduleId: "daily",',
-        '  scheduledAt: "2026-06-26T10:20:42.000Z",',
-        '  appPrincipal: { authority: "app", subject: "tenant" },',
-        "  identity,",
-        "  runtime,",
-        "  history: [],",
-        "});",
-        'if (first.kind !== "attempt" || !first.schedule.ok) throw new Error("expected first schedule delivery attempt");',
-        'const deliveryRequested = { id: 10, ts: 10, kind: first.delivery.requested.kind, scopeRef: first.delivery.requested.scopeRef, effectAuthorityRef: first.delivery.requested.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: first.delivery.requested.payload };',
-        "const deliveryAcceptedSpec = first.delivery.accept(10);",
-        'const deliveryAccepted = { id: 11, ts: 11, kind: deliveryAcceptedSpec.kind, scopeRef: deliveryAcceptedSpec.scopeRef, effectAuthorityRef: deliveryAcceptedSpec.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: deliveryAcceptedSpec.payload };',
-        'const scheduleRequested = { id: 12, ts: 12, kind: first.schedule.requested.kind, scopeRef: first.schedule.requested.scopeRef, effectAuthorityRef: first.schedule.requested.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: first.schedule.requested.payload };',
-        "const scheduleOutcomeSpec = first.schedule.outcome(12);",
-        'const scheduleOutcome = { id: 13, ts: 13, kind: scheduleOutcomeSpec.kind, scopeRef: scheduleOutcomeSpec.scopeRef, effectAuthorityRef: scheduleOutcomeSpec.effectAuthorityRef, factOwnerRef: "@agent-os/runtime", payload: scheduleOutcomeSpec.payload };',
-        "const second = await dispatchGeneratedScheduleDelivery({",
-        '  scheduleId: "daily",',
-        '  scheduledAt: "2026-06-26T10:20:42.000Z",',
-        '  appPrincipal: { authority: "app", subject: "tenant" },',
-        "  identity,",
-        "  runtime,",
-        "  history: [deliveryRequested, deliveryAccepted, scheduleRequested, scheduleOutcome],",
-        "});",
-        "console.log(JSON.stringify({ first: first.kind, second: second.kind, fireId: first.fireId, replayFireId: second.fireId, calls }));",
-      ].join("\n"),
-      { cwd: nodeRoot, resolveDir: nodeRoot },
-    );
-    assert.equal(deliveryResult.status, 0, deliveryResult.stderr);
-    const deliveryOutput = JSON.parse(deliveryResult.stdout);
-    assert.deepEqual(deliveryOutput, {
-      first: "attempt",
-      second: "replay",
-      fireId: output.result.fireId,
-      replayFireId: output.result.fireId,
-      calls: [
-        [
-          "session",
-          {
-            sessionRef: "daily-session",
-            turnRef: output.result.fireId,
-            idempotencyKey: output.result.fireId,
-            intent: "scheduled session",
-            context: { scheduledAt: "2026-06-26T10:20:00.000Z" },
-          },
-        ],
-      ],
-    });
-  } finally {
-    rmSync(cloudflareRoot, { recursive: true, force: true });
-    rmSync(nodeRoot, { recursive: true, force: true });
-  }
-});
-
-void test("generated channel registry rejects ambiguous channel route conflicts", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-conflict-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent/channels"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Reject ambiguous channel routes.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "channel-conflict",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "channel-conflict-scope",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agent/channels/github.ts"),
-      [
-        'import { defineChannel, post } from "@agent-os/runtime/channel";',
-        "export default defineChannel({",
-        '  verify: () => ({ authority: "github.signature", subject: "installation:42" }),',
-        "  routes: [",
-        '    post("/events/:eventId", async () => new Response("param")),',
-        '    post("/events/static", async () => new Response("literal")),',
-        "  ],",
-        "});",
-        "",
-      ].join("\n"),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "channel-conflict" },',
-        '  "target": { "kind": "node@1" },',
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const buildResult = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(buildResult.status, 0, buildResult.stderr);
-    linkGeneratedTargetSmokeDependencies(root);
-    const importResult = runTypeScript('import "./.agentos/generated/channels.ts";', {
-      cwd: root,
-      resolveDir: root,
-    });
-    assert.notEqual(importResult.status, 0);
-    assert.match(
-      importResult.stderr,
-      /generated channel route conflict: POST \/channels\/github\/events\/:eventId conflicts with \/channels\/github\/events\/static/,
-    );
+    assert.equal(deployed.status, 0, deployed.stderr);
+    const deployedInfo = JSON.parse(deployed.stdout);
+    assert.deepEqual(deployedInfo.compile.agent, localInfo.compile.agent);
+    assert.equal(deployedInfo.compile.deployment.kind, "deployment");
+    assert.equal(deployedInfo.compile.deployment.id, "node-local-deployment");
+    assert.equal(deployedInfo.compile.generated.canonicalDeployment.target, "node@1");
+    assert.equal(existsSync(path.join(root, ".agentos/generated")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
-
-void test("generated channel dispatch preserves raw request and restricts handler context", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-dispatch-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent/channels"), { recursive: true });
-    writeFileSync(
-      path.join(root, "agent/instructions.md"),
-      "Handle provider-native channel input.",
-    );
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "channel-dispatch",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "channel-dispatch-scope",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agent/channels/github.ts"),
-      [
-        'import { defineChannel, post } from "@agent-os/runtime/channel";',
-        "export default defineChannel({",
-        '  verify: async (request) => ({ authority: "github.signature", subject: request.request.headers.get("x-principal") ?? "missing-principal" }),',
-        "  routes: [",
-        '    post("/events/:eventId", async (request, context) => {',
-        "      const raw = await request.request.text();",
-        '      const submitResult = await context.submit({ intent: "channel", context: { eventId: request.params.eventId } });',
-        "      const dispatchResult = await context.dispatch({",
-        '        target: { bindingRef: { kind: "binding", provider: "test", bindingKind: "queue", ref: "outbound" }, scopeRef: { kind: "session", scopeId: "channel-dispatch-scope" }, effectAuthorityRef: { authorityClass: "channel", authorityId: context.principal.authority } },',
-        '        event: "channel.received",',
-        "        data: { eventId: request.params.eventId },",
-        "        idempotencyKey: request.params.eventId,",
-        "      });",
-        "      return Response.json({",
-        "        raw,",
-        "        eventId: request.params.eventId,",
-        "        path: request.path,",
-        "        principal: context.principal,",
-        "        contextKeys: Object.keys(context).sort(),",
-        "        submitStatus: submitResult.status,",
-        "        outboundEventId: dispatchResult.outboundEventId,",
-        "      });",
-        "    }),",
-        "  ],",
-        "});",
-        "",
-      ].join("\n"),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "channel-dispatch" },',
-        '  "target": { "kind": "node@1" },',
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const buildResult = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(buildResult.status, 0, buildResult.stderr);
-    linkGeneratedTargetSmokeDependencies(root);
-    const dispatchResult = runTypeScript(
-      [
-        'import { dispatchGeneratedChannelRequest } from "./.agentos/generated/channels.ts";',
-        "const calls = [];",
-        "const runtime = Object.freeze({",
-        "  submit: async (input) => {",
-        '    calls.push(["submit", input]);',
-        '    return { ok: true, status: "delivered", runId: 1, final: "ok", eventCount: 1, tokensUsed: 0 };',
-        "  },",
-        "  dispatch: async (spec) => {",
-        '    calls.push(["dispatch", spec]);',
-        "    return { outboundEventId: 9 };",
-        "  },",
-        "});",
-        'const request = new Request("http://agent.test/channels/github/events/evt_123", {',
-        '  method: "POST",',
-        '  headers: { "x-principal": "installation:42", "authorization": "secret-token" },',
-        '  body: "raw-provider-body",',
-        "});",
-        "const response = await dispatchGeneratedChannelRequest(request, runtime);",
-        "const body = await response.json();",
-        "console.log(JSON.stringify({ body, calls }));",
-      ].join("\n"),
-      { cwd: root, resolveDir: root },
-    );
-    assert.equal(dispatchResult.status, 0, dispatchResult.stderr);
-    const output = JSON.parse(dispatchResult.stdout);
-    assert.deepEqual(output.body, {
-      raw: "raw-provider-body",
-      eventId: "evt_123",
-      path: "/channels/github/events/evt_123",
-      principal: { authority: "github.signature", subject: "installation:42" },
-      contextKeys: ["dispatch", "principal", "submit"],
-      submitStatus: "delivered",
-      outboundEventId: 9,
-    });
-    assert.deepEqual(output.calls, [
-      ["submit", { intent: "channel", context: { eventId: "evt_123" } }],
-      [
-        "dispatch",
-        {
-          target: {
-            bindingRef: {
-              kind: "binding",
-              provider: "test",
-              bindingKind: "queue",
-              ref: "outbound",
-            },
-            scopeRef: { kind: "session", scopeId: "channel-dispatch-scope" },
-            effectAuthorityRef: { authorityClass: "channel", authorityId: "github.signature" },
-          },
-          event: "channel.received",
-          data: { eventId: "evt_123" },
-          idempotencyKey: "evt_123",
-        },
-      ],
-    ]);
-    assert.doesNotMatch(JSON.stringify(output), /secret-token/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build rejects nested channel files from the filesystem", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-channel-invalid-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent/channels/github"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Reject nested channels.");
-    writeFileSync(path.join(root, "agent/channels/github/events.ts"), "export default {};");
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "channel-invalid" },',
-        '  "target": { "kind": "node@1" },',
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /channel_path_not_in_grammar/);
-    assert.match(result.stderr, /channels\/github\/events\.ts/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build rejects nested workflow files from the filesystem", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-workflow-invalid-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    mkdirSync(path.join(root, "workflows/deploy"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Reject nested workflows.");
-    writeFileSync(path.join(root, "workflows/deploy/index.ts"), "export default {};");
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "workflow-invalid" },',
-        '  "target": { "kind": "node@1" },',
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /workflow_path_not_in_grammar/);
-    assert.match(result.stderr, /workflows\/deploy\/index\.ts/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build rejects dynamic resolver filesystem grammar violations", () => {
-  const makeFixture = (name) => {
-    const root = mkdtempSync(path.join(os.tmpdir(), `agentos-dynamic-${name}-`));
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent/tools"), { recursive: true });
-    mkdirSync(path.join(root, "agent/skills"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Reject invalid dynamic.");
-    writeFileSync(path.join(root, "agent/tools/echo.ts"), "export const declaration = {};");
-    writeFileSync(
-      path.join(root, "agent/skills/review.md"),
-      "---\nname: review\ndescription: Review facts\n---\nReview.",
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "dynamic-invalid" },',
-        '  "target": { "kind": "node@1" },',
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-    return root;
-  };
-
-  const cases = [
-    {
-      name: "forbidden-root",
-      write: (root) => {
-        mkdirSync(path.join(root, "agent/dynamic"), { recursive: true });
-        writeFileSync(path.join(root, "agent/dynamic/session.dynamic.ts"), "");
-      },
-      path: "agent/dynamic/session.dynamic.ts",
-    },
-    {
-      name: "nested-skill",
-      write: (root) => {
-        mkdirSync(path.join(root, "agent/skills/review/scripts"), { recursive: true });
-        writeFileSync(path.join(root, "agent/skills/review/scripts/session.dynamic.ts"), "");
-      },
-      path: "skills/review/scripts/session.dynamic.ts",
-    },
-  ];
-
-  for (const testCase of cases) {
-    const root = makeFixture(testCase.name);
-    try {
-      testCase.write(root);
-      const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-        encoding: "utf8",
-      });
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /dynamic_path_not_in_grammar/);
-      assert.match(result.stderr, new RegExp(testCase.path.replace(/[/.]/gu, "\\$&")));
-      assert.doesNotMatch(result.stderr, /missing exported declaration/);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  }
-});
-
-void test("agentos info emits compile-only inspection without generated writes", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-info-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    mkdirSync(path.join(root, "agent/schedules"), { recursive: true });
-    mkdirSync(path.join(root, "workflows"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Operate.");
-    writeFileSync(path.join(root, "workflows/deploy.ts"), "export default {};");
-    writeFileSync(
-      path.join(root, "agent/schedules/daily.ts"),
-      ['export default { cron: "0 9 * * *", handler: () => undefined };'].join("\n"),
-    );
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "info-agent",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "info-agent-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "info-agent",
-          },
-          tools: {
-            write_file: { interaction: "approval" },
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "workspace@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "info-deployment", "version": "0.1.0" },',
-        '  "target": { "kind": "node@1" },',
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  },",
-        '  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const jsonResult = spawnSync(process.execPath, [cli, "info", "--cwd", root, "--json"], {
-      encoding: "utf8",
-    });
-    assert.equal(jsonResult.status, 0, jsonResult.stderr);
-    const info = JSON.parse(jsonResult.stdout);
-    assert.equal(info.compile.status, "available");
-    assert.equal(info.compile.profile, "workspace@1");
-    assert.equal(info.compile.target, "node@1");
-    assert.equal(info.compile.agent.id, "info-agent");
-    assert.equal(info.compile.deployment.id, "info-deployment");
-    assert.equal(info.compile.deployment.backend, "node");
-    assert.equal(info.compile.deployment.adapter, "node@1");
-    assert.deepEqual(info.compile.manifest.capabilities, ["@agent-os/workspace-op"]);
-    assert.deepEqual(info.compile.manifest.tools, workspaceDefaultToolNames);
-    assert.deepEqual(info.compile.manifest.workflows, ["deploy"]);
-    assert.deepEqual(info.compile.manifest.schedules, ["daily"]);
-    assert.deepEqual(info.resolve, {
-      status: "unavailable",
-      reason: "agentos info is compile-only; resolved install graph is unavailable",
-    });
-    assert.deepEqual(info.runtime, {
-      status: "unavailable",
-      reason: "agentos info does not start a local or Cloudflare runtime",
-    });
-    assert.doesNotMatch(jsonResult.stdout, /\/agentos\/v1\/info/);
-    assert.equal(existsSync(path.join(root, ".agentos")), false);
-
-    const humanResult = spawnSync(process.execPath, [cli, "info", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(humanResult.status, 0, humanResult.stderr);
-    assert.match(humanResult.stdout, /agentOS info/);
-    assert.match(humanResult.stdout, /profile: workspace@1/);
-    assert.match(humanResult.stdout, /target: node@1/);
-    assert.match(humanResult.stdout, /resolve: unavailable/);
-    assert.match(humanResult.stdout, /runtime: unavailable/);
-
-    const runnerSource = readFileSync(
-      path.join(repoRoot, "packages/cli/src/build/build-cli.ts"),
-      "utf8",
-    );
-    assert.doesNotMatch(
-      runnerSource,
-      /resolveRuntime|lowerLocalAgentRuntime|createLocalAgentRuntime|wrangler/i,
-    );
-    const staticTargetSource = readFileSync(
-      path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
-      "utf8",
-    );
-    assert.doesNotMatch(staticTargetSource, /\/agentos\/v1\/info/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build compiles chat profile without workspace surface", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-chat-build-"));
-  try {
-    writeCloudflareMaterialResolverFixture(root);
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent/tools"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Answer in chat.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "chat-fixture",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "chat-fixture-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "chat-fixture",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agent/tools/echo.ts"),
-      [
-        'export const declaration = { interaction: "approval" };',
-        "export default {} as never;",
-        "",
-      ].join("\n"),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "chat@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "chat-fixture", "version": "0.1.0" },',
-        '  "target": {',
-        '    "kind": "cloudflare-do@1",',
-        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
-        "  },",
-        '  "client": { "kind": "svelte-kit-remote@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  }",
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(result.status, 0, result.stderr);
-    const manifest = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/manifest.json"), "utf8"),
-    );
-    assert.deepEqual(Object.keys(manifest.tools ?? {}).sort(), ["echo"]);
-    for (const workspaceTool of workspaceDefaultToolNames) {
-      assert.equal(manifest.tools?.[workspaceTool], undefined);
-    }
-    assert.equal(manifest.materials?.workspace, undefined);
-    assert.equal(manifest.executionDomains?.workspace, undefined);
-
-    const deployment = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/deployment.json"), "utf8"),
-    );
-    assert.equal(deployment.workspace, undefined);
-
-    const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
-    assert.match(target, /customCommand\(input: WorkspaceAgentCustomCommandInput\)/);
-    assert.match(target, /generatedCustomTools/);
-    assert.doesNotMatch(target, /@cloudflare\/sandbox/);
-    assertNoCloudflareLifecycleTargetWiring(target);
-    assert.doesNotMatch(target, /bindWorkspaceToolsForRuntime/);
-    assert.doesNotMatch(target, /makeCloudflareWorkspaceEnv/);
-    assert.doesNotMatch(target, /readWorkspaceState/);
-    assert.doesNotMatch(target, /readWorkspaceFile/);
-    assert.doesNotMatch(target, /resetWorkspace/);
-    assert.doesNotMatch(target, /destroyWorkspace/);
-
-    const worker = readFileSync(path.join(root, ".agentos/generated/worker.ts"), "utf8");
-    assert.doesNotMatch(worker, /Sandbox/);
-    assert.match(worker, /export \{ AgentOS \};/);
-
-    const wrangler = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/wrangler.jsonc"), "utf8"),
-    );
-    assert.equal(wrangler.containers, undefined);
-    assert.deepEqual(wrangler.durable_objects.bindings, [
-      { class_name: "AgentOS", name: "AGENT_OS" },
-    ]);
-    assert.deepEqual(wrangler.migrations, [{ tag: "v1", new_sqlite_classes: ["AgentOS"] }]);
-
-    const remote = readFileSync(path.join(root, ".agentos/generated/sveltekit.remote.ts"), "utf8");
-    assert.match(remote, /WORKSPACE_AGENT_COMMAND\.CUSTOM/);
-    assert.match(remote, /runtime\.customCommand/);
-    assert.doesNotMatch(remote, /WORKSPACE_AGENT_COMMAND\.READ_STATE/);
-    assert.doesNotMatch(remote, /WORKSPACE_AGENT_COMMAND\.READ_FILE/);
-    assert.doesNotMatch(remote, /WORKSPACE_AGENT_COMMAND\.RESET/);
-    assert.doesNotMatch(remote, /WORKSPACE_AGENT_COMMAND\.DESTROY/);
-    assert.doesNotMatch(remote, /readStateInputFromUnknown/);
-    assert.doesNotMatch(remote, /readFileInputFromUnknown/);
-
-    const client = readFileSync(path.join(root, ".agentos/generated/client.ts"), "utf8");
-    assert.match(client, /custom\(/);
-    assert.doesNotMatch(client, /readState\(/);
-    assert.doesNotMatch(client, /readFile\(/);
-    assert.doesNotMatch(client, /reset\(/);
-    assert.doesNotMatch(client, /destroy\(/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("generated command projections derive profile coverage from one typed descriptor", () => {
-  const result = runTypeScript(
-    [
-      'import { WORKSPACE_AGENT_COMMAND, WORKSPACE_AGENT_COMMAND_DESCRIPTOR } from "./packages/core/src/workspace-agent.ts";',
-      'import { generatedCommandProjectionForProfile, renderGeneratedCommandDispatch } from "./packages/cli/src/build/agent-authoring/generated-command-projection.ts";',
-      'const workspace = generatedCommandProjectionForProfile("workspace");',
-      'const chat = generatedCommandProjectionForProfile("chat");',
-      'console.log(JSON.stringify({ commandNames: Object.values(WORKSPACE_AGENT_COMMAND), commandKeys: Object.keys(WORKSPACE_AGENT_COMMAND_DESCRIPTOR), workspaceKeys: workspace.map((entry) => entry.key), chatKeys: chat.map((entry) => entry.key), commonKeys: Object.entries(WORKSPACE_AGENT_COMMAND_DESCRIPTOR).filter(([, descriptor]) => descriptor.surface === "common").map(([key]) => key), dispatch: renderGeneratedCommandDispatch("chat", "chat") }));',
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  assert.equal(output.commandNames.length, output.commandKeys.length);
-  assert.deepEqual(output.workspaceKeys, output.commandKeys);
-  assert.deepEqual(output.chatKeys, output.commonKeys);
-  for (const key of output.chatKeys) {
-    assert.match(output.dispatch, new RegExp(`WORKSPACE_AGENT_COMMAND\\.${key}`));
-  }
-  assert.doesNotMatch(output.dispatch, /WORKSPACE_AGENT_COMMAND\.READ_STATE/u);
-});
-
-void test("static target plan owns the client axis decision", () => {
-  const source = readFileSync(
-    path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
-    "utf8",
-  );
-  const projectionStart = source.indexOf("const staticTargetClientProjectionFor =");
-  const planStart = source.indexOf("const staticTargetPlanFor =");
-  assert.notEqual(projectionStart, -1);
-  assert.notEqual(planStart, -1);
-  const projectionSource = source.slice(projectionStart, planStart);
-  assert.equal(source.match(/normalized\.client\.kind/gu)?.length, 1);
-  assert.match(projectionSource, /if \(client === AGENTOS_CONFIG_CLIENT\.BROWSER_DIRECT_V1\)/);
-  assert.match(source.slice(planStart), /normalized\.client\.kind/);
-  assert.match(projectionSource, /moduleImports:/);
-  assert.match(projectionSource, /files:/);
-  assert.doesNotMatch(
-    source.slice(source.indexOf("const renderWorkspaceSvelteKitRemote ="), projectionStart),
-    /normalized\.client\.kind/,
-  );
-});
-
-void test("static target plan owns the profile axis decision", () => {
-  const source = readFileSync(
-    path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
-    "utf8",
-  );
-  const projectionStart = source.indexOf("const staticTargetProfileProjectionFor =");
-  const clientProjectionStart = source.indexOf("const staticTargetClientProjectionFor =");
-  assert.notEqual(projectionStart, -1);
-  assert.notEqual(clientProjectionStart, -1);
-  const projectionSource = source.slice(projectionStart, clientProjectionStart);
-  assert.equal(source.match(/normalized\.profile/gu)?.length, 1);
-  assert.match(projectionSource, /normalized\.profile/);
-  assert.match(projectionSource, /capabilityImports:/);
-  assert.match(projectionSource, /workspaceHostImports:/);
-  assert.match(projectionSource, /executionDomainImports:/);
-  assert.doesNotMatch(source.slice(0, projectionStart), /normalized\.profile/);
-});
-
-void test("static target plan positively proves the host axis", () => {
-  const source = readFileSync(
-    path.join(repoRoot, "packages/cli/src/build/agent-authoring/static-target.ts"),
-    "utf8",
-  );
-  const hostProjectionStart = source.indexOf("const staticTargetHostProjectionFor =");
-  const planStart = source.indexOf("const staticTargetPlanFor =");
-  const linkStart = source.indexOf("export const linkWorkspaceStaticTarget =");
-  assert.notEqual(hostProjectionStart, -1);
-  assert.notEqual(planStart, -1);
-  assert.notEqual(linkStart, -1);
-  const hostProjection = source.slice(hostProjectionStart, planStart);
-  assert.equal(source.match(/normalized\.target\.kind/gu)?.length, 1);
-  assert.match(hostProjection, /normalized\.target\.kind/);
-  assert.match(hostProjection, /nodeWorkspace === null/);
-  assert.match(hostProjection, /unsupported_static_target/);
-  assert.match(hostProjection, /canonicalDeployment:/);
-  assert.match(hostProjection, /moduleGraph/);
-  assert.doesNotMatch(source.slice(linkStart), /normalized\.target/);
-});
-
-void test("static target injects skill advert and load_skill for workspace and chat profiles", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const utf8 = (text) => new TextEncoder().encode(text);",
-      "const compiled = compileAgentTree({ files: [",
-      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-      '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-skills", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-skills" } } },',
-      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
-      '  { path: "agent/skills/echo.md", kind: "markdown", text: "---\\nname: echo\\ndescription: Echo workspace routing\\n---\\nUse workspace echo skill." },',
-      '  { path: "agent/skills/review/SKILL.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review chat routing\\n---\\nUse chat review skill." },',
-      '  { path: "agent/skills/review/references/checklist.md", kind: "resource", bytes: utf8("Check output.") },',
-      "] });",
-      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-      "const baseConfig = {",
-      '  agent: "./agent",',
-      '  deployment: { id: "target-skills" },',
-      '  target: { kind: "cloudflare-do@1", durableObject: { className: "AgentOS", binding: "AGENT_OS" } },',
-      '  client: { kind: "browser-direct@1" },',
-      "  llm: {",
-      '    route: "openai-chat-compatible",',
-      '    endpointRef: "openrouter",',
-      '    credentialRef: "openrouter-key",',
-      '    modelRef: "openrouter-model",',
-      "    routes: {",
-      '      product_loop: { route: "openai-chat-compatible", endpointRef: "product-loop", credentialRef: "product-loop-key", modelRef: "product-loop-model" },',
-      "    },",
-      "  },",
-      "};",
-      "const targetFor = (config) => {",
-      "  const normalized = normalizeAgentOsConfig(config, compiled.value);",
-      "  if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
-      "  const linked = linkWorkspaceStaticTarget(normalized.value);",
-      "  if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
-      '  return linked.value.files.find((file) => file.path === ".agentos/generated/target.ts").text;',
-      "};",
-      'const workspaceTarget = targetFor({ ...baseConfig, profile: "workspace@1", workspace: { binding: "Sandbox", root: "/workspace" } });',
-      'const chatTarget = targetFor({ ...baseConfig, profile: "chat@1" });',
-      "const markers = (text) => ({",
-      "  defineProductTool: text.includes('defineProductTool'),",
-      "  advert: text.includes('generatedSkillsSystemAdvert'),",
-      "  loadSkill: text.includes('name: \"load_skill\"'),",
-      "  readSkillFile: text.includes('name: \"read_skill_file\"'),",
-      "  system: text.includes('system: generatedSystemPrompt(input.system, dynamicCapabilityProjection)'),",
-      "  echoDescription: text.includes('Echo workspace routing'),",
-      "  reviewDescription: text.includes('Review chat routing'),",
-      "  advertUsesDescription: text.includes('${skill.name}: ${skill.description}'),",
-      "  legacyPathDigestAdvert: text.includes('to load ${skill.path}'),",
-      "  fileCatalog: text.includes('generatedSkillFilePathCatalog'),",
-      "  metadataLoader: text.includes('generatedLoadedSkill'),",
-      "  supportingPath: text.includes('references/checklist.md'),",
-      "  supportingText: text.includes('Check output.'),",
-      "  echoBody: text.includes('Use workspace echo skill.'),",
-      "  reviewBody: text.includes('Use chat review skill.'),",
-      "  frameworkTools: text.includes('...generatedFrameworkTools'),",
-      "  productLoopRoute: text.includes('product_loop'),",
-      "});",
-      "console.log(JSON.stringify({ workspace: markers(workspaceTarget), chat: markers(chatTarget) }));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  for (const profile of ["workspace", "chat"]) {
-    for (const [marker, present] of Object.entries(output[profile])) {
-      if (marker === "legacyPathDigestAdvert" || marker === "supportingText") {
-        assert.equal(present, false, `${profile} target leaked ${marker}`);
-      } else {
-        assert.equal(present, true, `${profile} target missing ${marker}`);
-      }
-    }
-  }
-});
-
-void test("static target wires one dynamic capability registry for cloudflare and node targets", () => {
-  const result = runTypeScript(
-    [
-      'import { compileAgentTree, linkWorkspaceStaticTarget, normalizeAgentOsConfig } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const compiled = compileAgentTree({ files: [",
-      '  { path: "agent/instructions.md", kind: "markdown", text: "Operate." },',
-      '  { path: "agent/agent.json", kind: "json", value: { agentId: "target-dynamic", scope: { kind: "session", idSource: "manifest", stableScopeId: "target-dynamic" } } },',
-      '  { path: "agent/material-resolver.ts", kind: "material-resolver", sourceKind: "regular" },',
-      '  { path: "agent/instructions/tone.md", kind: "markdown", text: "Use a terse tone." },',
-      '  { path: "agent/tools/echo.ts", kind: "tool", declaration: {} },',
-      '  { path: "agent/skills/review.md", kind: "markdown", text: "---\\nname: review\\ndescription: Review facts\\n---\\nReview carefully." },',
-      '  { path: "agent/tools/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { tools: ["echo"] } } },',
-      '  { path: "agent/skills/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { skills: ["review"] } } },',
-      '  { path: "agent/instructions/session.dynamic.ts", kind: "dynamic", declaration: { outputs: { instructions: ["tone"] } } },',
-      "] });",
-      "if (!compiled.ok) { console.error(JSON.stringify(compiled.issues)); process.exit(1); }",
-      "const baseConfig = {",
-      '  agent: "./agent",',
-      '  deployment: { id: "target-dynamic" },',
-      '  client: { kind: "browser-direct@1" },',
-      '  llm: { route: "openai-chat-compatible", endpointRef: "openrouter", credentialRef: "openrouter-key", modelRef: "openrouter-model" },',
-      "};",
-      "const linkedFor = (config, generatedPath) => {",
-      "  const normalized = normalizeAgentOsConfig(config, config.target.kind === 'node@1' ? { ...compiled.value, materialResolver: undefined } : compiled.value);",
-      "  if (!normalized.ok) { console.error(JSON.stringify(normalized.issues)); process.exit(1); }",
-      "  const linked = linkWorkspaceStaticTarget(normalized.value);",
-      "  if (!linked.ok) { console.error(JSON.stringify(linked.issues)); process.exit(1); }",
-      "  return {",
-      "    text: linked.value.files.find((file) => file.path === generatedPath).text,",
-      "    dynamicImports: linked.value.moduleGraph.filter((entry) => entry.kind === 'authored-dynamic-resolver'),",
-      "    toolImports: linked.value.moduleGraph.filter((entry) => entry.kind === 'authored-tool'),",
-      "  };",
-      "};",
-      "const cloudflareTarget = { kind: 'cloudflare-do@1', durableObject: { className: 'AgentOS', binding: 'AGENT_OS' } };",
-      "const workspace = linkedFor({ ...baseConfig, profile: 'workspace@1', target: cloudflareTarget, workspace: { binding: 'Sandbox', root: '/workspace' } }, '.agentos/generated/target.ts');",
-      "const chat = linkedFor({ ...baseConfig, profile: 'chat@1', target: cloudflareTarget }, '.agentos/generated/target.ts');",
-      "const node = linkedFor({ ...baseConfig, profile: 'workspace@1', target: { kind: 'node@1' }, workspace: { binding: 'Sandbox', root: '/workspace' } }, '.agentos/generated/local.ts');",
-      "const count = (text, marker) => text.split(marker).length - 1;",
-      "const commonMarkers = [",
-      "  'const semanticManifest =',",
-      "  'const semanticTruthIdentity =',",
-      "  'const generatedCustomTools =',",
-      "  'const generatedDynamicCapabilityCatalog =',",
-      "  'const generatedDynamicCapabilityResolvers =',",
-      "  'const materialValue =',",
-      "  'const generatedProviderPreflightDiagnosticsFor =',",
-      "  'const generatedLlmRoutesFor =',",
-      "];",
-      "const markers = (target) => ({",
-      "  runResolvers: target.text.includes('runDynamicCapabilityResolvers'),",
-      "  registry: target.text.includes('generatedDynamicCapabilityResolvers'),",
-      "  catalog: target.text.includes('generatedDynamicCapabilityCatalog'),",
-      "  resolverImport: target.text.includes('../../agent/tools/session.dynamic') && target.text.includes('../../agent/skills/session.dynamic') && target.text.includes('../../agent/instructions/session.dynamic'),",
-      "  projectionBinding: target.text.includes('dynamicCapabilityProjection'),",
-      "  fragmentBinding: target.text.includes('instructionFragments'),",
-      "  dynamicRunInputType: target.text.includes('DynamicCapabilityRunInput'),",
-      "  resolverInputPassed: target.text.includes('generatedDynamicSubmitBindingsFor(event, dynamicCapability)') || target.text.includes('generatedDynamicSubmitBindingsFor(event, input.dynamicCapability)'),",
-      "  productInputPassed: target.text.includes('input.dynamicCapability'),",
-      "  productSubmitHelperPreservesDynamicInput: /const submitRunInputFields = \\(input: SubmitRunInput\\): SubmitRunInput => \\(\\{[\\s\\S]*\\.\\.\\.\\(input\\.dynamicCapability === undefined \\? \\{\\} : \\{ dynamicCapability: input\\.dynamicCapability \\}\\),[\\s\\S]*\\}\\);/.test(target.text),",
-      "  skillToolsFromProjection: target.text.includes('generatedFrameworkToolsFor(dynamicCapabilityProjection)'),",
-      "  promptFromProjection: target.text.includes('generatedSystemPrompt(input.system, dynamicCapabilityProjection)'),",
-      "  customToolRegistry: target.text.includes('const generatedCustomTools'),",
-      "  customToolsInSubmit: target.text.includes('...generatedCustomTools'),",
-      "  customToolImport: target.text.includes('../../agent/tools/echo'),",
-      "  moduleGraphDynamicImports: target.dynamicImports.map((entry) => entry.source).sort(),",
-      "  moduleGraphToolImports: target.toolImports.map((entry) => entry.source).sort(),",
-      "  commonCounts: Object.fromEntries(commonMarkers.map((marker) => [marker, count(target.text, marker)])),",
-      "});",
-      "const hostIsolation = {",
-      "  workspace: {",
-      "    workspaceSandbox: workspace.text.includes('createCloudflareSandboxWorkspaceEnvResolver') && workspace.text.includes('generatedWorkspaceRefFor') && workspace.text.includes('workspaceSandboxFor') && workspace.text.includes('@cloudflare/sandbox'),",
-      "    workspaceHostGraph: workspace.text.includes('generatedCapabilityInstallGraphFor'),",
-      "    cloudflareLifecycle: workspace.text.includes('createAgentDurableObject'),",
-      "    excludesNode: !workspace.text.includes('lowerLocalAgentRuntime') && !workspace.text.includes('createLocalAgentApp') && !workspace.text.includes('generatedTargetEnvFor'),",
-      "  },",
-      "  chat: {",
-      "    cloudflareLifecycle: chat.text.includes('createAgentDurableObject'),",
-      "    excludesWorkspace: !chat.text.includes('createCloudflareSandboxWorkspaceEnvResolver') && !chat.text.includes('workspaceSandboxFor') && !chat.text.includes('generatedCapabilityInstallGraphFor') && !chat.text.includes('@cloudflare/sandbox'),",
-      "    excludesNode: !chat.text.includes('lowerLocalAgentRuntime') && !chat.text.includes('createLocalAgentApp') && !chat.text.includes('generatedTargetEnvFor'),",
-      "  },",
-      "  node: {",
-      "    nodeLifecycle: node.text.includes('lowerLocalAgentRuntime') && node.text.includes('createLocalAgentApp') && node.text.includes('generatedTargetEnvFor'),",
-      "    excludesCloudflare: !node.text.includes('createAgentDurableObject') && !node.text.includes('@cloudflare/sandbox') && !node.text.includes('generatedCapabilityInstallGraphFor'),",
-      "  },",
-      "};",
-      "console.log(JSON.stringify({ workspace: markers(workspace), chat: markers(chat), node: markers(node), hostIsolation }));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  for (const profile of ["workspace", "chat", "node"]) {
-    const markers = output[profile];
-    for (const [marker, present] of Object.entries(markers)) {
-      if (marker === "moduleGraphDynamicImports") {
-        assert.deepEqual(
-          present,
-          [
-            "../../agent/instructions/session.dynamic",
-            "../../agent/skills/session.dynamic",
-            "../../agent/tools/session.dynamic",
-          ],
-          `${profile} target dynamic module graph mismatch`,
-        );
-      } else if (marker === "moduleGraphToolImports") {
-        assert.deepEqual(
-          present,
-          ["../../agent/tools/echo"],
-          `${profile} target authored tool module graph mismatch`,
-        );
-      } else if (marker === "commonCounts") {
-        for (const [commonMarker, occurrences] of Object.entries(present)) {
-          assert.equal(
-            occurrences,
-            1,
-            `${profile} target emitted ${occurrences} copies of ${commonMarker}`,
-          );
-        }
-      } else {
-        assert.equal(present, true, `${profile} target missing ${marker}`);
-      }
-    }
-  }
-  for (const [profile, markers] of Object.entries(output.hostIsolation)) {
-    for (const [marker, present] of Object.entries(markers)) {
-      assert.equal(present, true, `${profile} target violated host isolation: ${marker}`);
-    }
-  }
-});
-
-void test("agentos build emits skill artifact and load_skill executes deterministically", () => {
-  const root = mkdtempSync(path.join(repoRoot, ".agentos-skill-smoke-"));
-  try {
-    writeCloudflareMaterialResolverFixture(root);
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    linkGeneratedTargetSmokeDependencies(root);
-    mkdirSync(path.join(root, "agent/skills/echo/references"), { recursive: true });
-    mkdirSync(path.join(root, "agent/skills/echo/scripts"), { recursive: true });
-    mkdirSync(path.join(root, "agent/skills/echo/assets"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
-    writeFileSync(
-      path.join(root, "agent/skills/echo/SKILL.md"),
-      "---\nname: echo\ndescription: Echo marker loader\n---\nECHO_MARKER_560",
-    );
-    writeFileSync(path.join(root, "agent/skills/echo/references/checklist.md"), "CHECK_MARKER_560");
-    writeFileSync(path.join(root, "agent/skills/echo/scripts/audit.sh"), "SCRIPT_MARKER_560");
-    writeFileSync(
-      path.join(root, "agent/skills/echo/assets/icon.bin"),
-      new Uint8Array([0, 255, 1]),
-    );
-    writeFileSync(path.join(root, "agent/skills/echo/assets/empty.dat"), new Uint8Array());
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "skill-smoke-fixture",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "skill-smoke-fixture-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "skill-smoke-fixture",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "chat@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "skill-smoke-fixture", "version": "0.1.0" },',
-        '  "target": {',
-        '    "kind": "cloudflare-do@1",',
-        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
-        "  },",
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-model"',
-        "  }",
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const build = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(build.status, 0, build.stderr);
-    const manifest = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/manifest.json"), "utf8"),
-    );
-    assert.equal(Object.hasOwn(manifest, "skills"), false);
-    const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
-    assert.match(target, /ECHO_MARKER_560/);
-    assert.doesNotMatch(target, /CHECK_MARKER_560/);
-    assert.doesNotMatch(target, /SCRIPT_MARKER_560/);
-    assert.match(target, /name: "load_skill"/);
-    assert.match(target, /name: "read_skill_file"/);
-    const resourceBundle = JSON.parse(
-      readFileSync(path.join(root, ".agentos/generated/skill-resources.json"), "utf8"),
-    );
-    assert.deepEqual(Object.values(resourceBundle).sort(), [
-      "",
-      "AP8B",
-      "Q0hFQ0tfTUFSS0VSXzU2MA==",
-      "U0NSSVBUX01BUktFUl81NjA=",
-    ]);
-
-    let smokeSource = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
-    smokeSource = smokeSource
-      .replace(
-        'import generatedMaterialResolverFactory from "../../agent/material-resolver";',
-        'const generatedMaterialResolverFactory = { create: () => ({ material: () => Effect.die("unused") }) };',
-      )
-      .replace(
-        'import { createAgentDurableObject } from "@agent-os/runtime/cloudflare";',
-        "const createAgentDurableObject = () => class {};",
-      )
-      .replace(
-        /import \{[^}]*OpenAiCompatibleLlmTransportLive[^}]*preflightOpenAiCompatibleProviderMaterial[^}]*\} from "@agent-os\/runtime\/llm-effect-ai\/openai-compatible";/s,
-        "const OpenAiCompatibleLlmTransportLive = {}; const preflightOpenAiCompatibleProviderMaterial = () => [];",
-      );
-    smokeSource += `
-export const __agentosSkillSmoke = async () => {
-  const agent = Object.create(AgentOS.prototype);
-  agent.targetEnv = {
-    MATERIALS: {},
-    AGENTOS_MODEL_OPENROUTER_MODEL: "smoke-model",
-  };
-  agent.submitWithBindings = async (spec, bindings) => {
-    const tools = bindings.tools ?? {};
-    const loaded = await Effect.runPromise(
-      unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "echo" })),
-    );
-    const readReference = await Effect.runPromise(
-      unsafeRunToolByName(
-        tools,
-        deterministicToolInvocation("read_skill_file", {
-          name: "echo",
-          path: "references/checklist.md",
-        }),
-      ),
-    );
-    const readScript = await Effect.runPromise(
-      unsafeRunToolByName(
-        tools,
-        deterministicToolInvocation("read_skill_file", {
-          name: "echo",
-          path: "scripts/audit.sh",
-        }),
-      ),
-    );
-    const readBinary = await Effect.runPromise(
-      unsafeRunToolByName(
-        tools,
-        deterministicToolInvocation("read_skill_file", {
-          name: "echo",
-          path: "assets/icon.bin",
-          encoding: "base64",
-        }),
-      ),
-    );
-    const readEmpty = await Effect.runPromise(
-      unsafeRunToolByName(
-        tools,
-        deterministicToolInvocation("read_skill_file", {
-          name: "echo",
-          path: "assets/empty.dat",
-          encoding: "base64",
-        }),
-      ),
-    );
-    let unknownRejected = false;
-    try {
-      await Effect.runPromise(
-        unsafeRunToolByName(tools, deterministicToolInvocation("load_skill", { name: "missing" })),
-      );
-    } catch {
-      unknownRejected = true;
-    }
-    let unknownFileRejected = false;
-    try {
-      await Effect.runPromise(
-        unsafeRunToolByName(
-          tools,
-          deterministicToolInvocation("read_skill_file", {
-            name: "echo",
-            path: "references/missing.md",
-          }),
-        ),
-      );
-    } catch {
-      unknownFileRejected = true;
-    }
-    return {
-      toolNames: Object.keys(tools).sort(),
-      systemIncludesAdvert: spec.system.includes("Available agent skills"),
-      systemIncludesDescription: spec.system.includes("Echo marker loader"),
-      systemIncludesBody: spec.system.includes("ECHO_MARKER_560"),
-      systemIncludesReference: spec.system.includes("CHECK_MARKER_560"),
-      systemIncludesScript: spec.system.includes("SCRIPT_MARKER_560"),
-      loaded,
-      readReference,
-      readScript,
-      readBinary,
-      readEmpty,
-      unknownRejected,
-      unknownFileRejected,
-    };
-  };
-  return await agent.submitRunInput({ intent: "smoke", context: {} });
-};
-`;
-    writeFileSync(path.join(root, ".agentos/generated/target.smoke.ts"), smokeSource);
-    const smoke = runTypeScript(
-      [
-        'import { __agentosSkillSmoke } from "./.agentos/generated/target.smoke.ts";',
-        "const result = await __agentosSkillSmoke();",
-        "console.log(JSON.stringify(result));",
-      ].join("\n"),
-      { cwd: root, resolveDir: root },
-    );
-    assert.equal(smoke.status, 0, smoke.stderr);
-    const output = JSON.parse(smoke.stdout);
-    assert.deepEqual(output.toolNames, ["load_skill", "read_skill_file"]);
-    assert.equal(output.systemIncludesAdvert, true);
-    assert.equal(output.systemIncludesDescription, true);
-    assert.equal(output.systemIncludesBody, false);
-    assert.equal(output.systemIncludesReference, false);
-    assert.equal(output.systemIncludesScript, false);
-    assert.equal(output.loaded.name, "echo");
-    assert.equal(output.loaded.description, "Echo marker loader");
-    assert.equal(output.loaded.text, "ECHO_MARKER_560");
-    assert.deepEqual(output.loaded.files, [
-      {
-        path: "assets/empty.dat",
-        digest: "fnv1a32:811c9dc5:0",
-        bytes: 0,
-      },
-      {
-        path: "assets/icon.bin",
-        digest: "fnv1a32:f38f4273:3",
-        bytes: 3,
-      },
-      {
-        path: "references/checklist.md",
-        digest: digestText("CHECK_MARKER_560"),
-        bytes: 16,
-      },
-      {
-        path: "scripts/audit.sh",
-        digest: digestText("SCRIPT_MARKER_560"),
-        bytes: 17,
-      },
-    ]);
-    assert.equal(JSON.stringify(output.loaded).includes("CHECK_MARKER_560"), false);
-    assert.equal(JSON.stringify(output.loaded).includes("SCRIPT_MARKER_560"), false);
-    assert.deepEqual(output.readReference, {
-      name: "echo",
-      path: "references/checklist.md",
-      digest: digestText("CHECK_MARKER_560"),
-      bytes: 16,
-      encoding: "utf-8",
-      content: "CHECK_MARKER_560",
-    });
-    assert.deepEqual(output.readScript, {
-      name: "echo",
-      path: "scripts/audit.sh",
-      digest: digestText("SCRIPT_MARKER_560"),
-      bytes: 17,
-      encoding: "utf-8",
-      content: "SCRIPT_MARKER_560",
-    });
-    assert.deepEqual(output.readBinary, {
-      name: "echo",
-      path: "assets/icon.bin",
-      digest: "fnv1a32:f38f4273:3",
-      bytes: 3,
-      encoding: "base64",
-      content: "AP8B",
-    });
-    assert.deepEqual(output.readEmpty, {
-      name: "echo",
-      path: "assets/empty.dat",
-      digest: "fnv1a32:811c9dc5:0",
-      bytes: 0,
-      encoding: "base64",
-      content: "",
-    });
-    assert.equal(output.unknownRejected, true);
-    assert.equal(output.unknownFileRejected, true);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build rejects unsafe packaged skill supporting files from the filesystem", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-skill-package-negative-"));
-  try {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent/skills/review/references"), { recursive: true });
-    mkdirSync(path.join(root, "agent/skills/review/scripts"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Answer with authored skills.");
-    writeFileSync(
-      path.join(root, "agent/skills/review/SKILL.md"),
-      "---\nname: review\ndescription: Review output carefully\n---\nReview carefully.",
-    );
-    writeFileSync(path.join(root, "agent/skills/review/references/checklist.md"), "Check claims.");
-    writeFileSync(path.join(root, "agent/skills/review/scripts/audit.sh"), "echo audit");
-    writeFileSync(path.join(root, "unsafe-target.md"), "Unsafe.");
-    symlinkSync(
-      path.join(root, "unsafe-target.md"),
-      path.join(root, "agent/skills/review/references/link.md"),
-    );
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "skill-package-negative",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "skill-package-negative-scope",
-          },
-          effectAuthorityRef: {
-            authorityId: "skill-package-negative",
-            proofClass: "test",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "chat@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "skill-package-negative", "version": "0.1.0" },',
-        '  "target": {',
-        '    "kind": "cloudflare-do@1",',
-        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
-        "  },",
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  }",
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /symlink_forbidden/);
-    assert.match(result.stderr, /skills\/review\/references\/link\.md/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build omits load_skill support when no skills are authored", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentos-no-skills-build-"));
-  try {
-    writeCloudflareMaterialResolverFixture(root);
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Answer without skills.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "no-skills-fixture",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "no-skills-fixture-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "no-skills-fixture",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        '  "profile": "chat@1",',
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "no-skills-fixture", "version": "0.1.0" },',
-        '  "target": {',
-        '    "kind": "cloudflare-do@1",',
-        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
-        "  },",
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  }",
-        "}",
-        "",
-      ].join("\n"),
-    );
-
-    const result = spawnSync(process.execPath, [cli, "build", "--cwd", root], {
-      encoding: "utf8",
-    });
-    assert.equal(result.status, 0, result.stderr);
-    const target = readFileSync(path.join(root, ".agentos/generated/target.ts"), "utf8");
-    assert.doesNotMatch(target, /defineProductTool/);
-    assert.doesNotMatch(target, /generatedSkillsSystemAdvert/);
-    assert.doesNotMatch(target, /name: "load_skill"/);
-    assert.doesNotMatch(target, /generatedSystemPrompt/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-void test("agentos build keeps workspace and chat profile boundaries closed", () => {
-  const writeFixture = (root, profile, workspaceBlock) => {
-    writeFileSync(path.join(root, "package.json"), JSON.stringify({ type: "module" }, null, 2));
-    mkdirSync(path.join(root, "agent"), { recursive: true });
-    writeFileSync(path.join(root, "agent/instructions.md"), "Operate.");
-    writeFileSync(
-      path.join(root, "agent/agent.json"),
-      JSON.stringify(
-        {
-          agentId: "boundary-fixture",
-          scope: {
-            kind: "session",
-            idSource: "manifest",
-            stableScopeId: "boundary-fixture-scope",
-          },
-          effectAuthorityRef: {
-            authorityClass: "effect",
-            authorityId: "boundary-fixture",
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    writeFileSync(
-      path.join(root, "agentos.config.jsonc"),
-      [
-        "{",
-        `  "profile": "${profile}",`,
-        '  "agent": "./agent",',
-        '  "deployment": { "id": "boundary-fixture", "version": "0.1.0" },',
-        '  "target": {',
-        '    "kind": "cloudflare-do@1",',
-        '    "durableObject": { "className": "AgentOS", "binding": "AGENT_OS" }',
-        "  },",
-        '  "client": { "kind": "browser-direct@1" },',
-        '  "llm": {',
-        '    "route": "openai-chat-compatible",',
-        '    "endpointRef": "openrouter",',
-        '    "credentialRef": "openrouter-key",',
-        '    "modelRef": "openrouter-default-text-model"',
-        "  }" + workspaceBlock,
-        "}",
-        "",
-      ].join("\n"),
-    );
-  };
-
-  const chatRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-chat-negative-"));
-  const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "agentos-workspace-negative-"));
-  try {
-    writeFixture(
-      chatRoot,
-      "chat@1",
-      ',\n  "workspace": { "binding": "Sandbox", "root": "/workspace" }',
-    );
-    const chatResult = spawnSync(process.execPath, [cli, "build", "--cwd", chatRoot], {
-      encoding: "utf8",
-    });
-    assert.notEqual(chatResult.status, 0);
-    assert.match(chatResult.stderr, /workspace_forbidden_for_chat_profile/);
-
-    writeFixture(workspaceRoot, "workspace@1", "");
-    const workspaceResult = spawnSync(process.execPath, [cli, "build", "--cwd", workspaceRoot], {
-      encoding: "utf8",
-    });
-    assert.notEqual(workspaceResult.status, 0);
-    assert.match(workspaceResult.stderr, /object_required/);
-    assert.match(workspaceResult.stderr, /\/workspace/);
-  } finally {
-    rmSync(chatRoot, { recursive: true, force: true });
-    rmSync(workspaceRoot, { recursive: true, force: true });
-  }
-});
-
-void test("llm material env names fail closed on ref folding collisions", () => {
-  const result = runTypeScript(
-    [
-      'import { llmMaterialEnvBindingsForRefs, llmMaterialEnvNameCollisionIssues } from "./packages/cli/src/build/agent-authoring.ts";',
-      "const bindings = llmMaterialEnvBindingsForRefs([",
-      '  { kind: "endpoint", ref: "a.b" },',
-      '  { kind: "endpoint", ref: "a-b" },',
-      "]);",
-      "console.log(JSON.stringify(llmMaterialEnvNameCollisionIssues(bindings)));",
-    ].join("\n"),
-  );
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), [
-    {
-      kind: "llm_material_env_name_collision",
-      path: "agentos.config.jsonc#/llm",
-      envName: "AGENTOS_ENDPOINT_A_B",
-      refs: ["endpoint:a.b", "endpoint:a-b"],
-    },
-  ]);
 });

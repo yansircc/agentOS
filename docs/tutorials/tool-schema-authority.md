@@ -2,12 +2,14 @@
 
 ## Goal
 
-Declare a tool whose authority and effect policy are visible before runtime.
+Declare a tool whose schema, authority requirements, and effect policy are
+visible before runtime without copying host binding maps into product intent.
 
 ## What You Build
 
-An authored `lookup_weather` tool that is effectful, so the compiler requires
-material, execution domain, interaction, and receipt policy declarations.
+An authored `lookup_weather` tool that is effectful, so `compileProductPlan`
+requires symbolic material, execution-domain, interaction, and receipt-policy
+facts. `linkStaticTarget` derives the target manifest from that one declaration.
 
 ## Prerequisites
 
@@ -17,61 +19,97 @@ material, execution domain, interaction, and receipt policy declarations.
 
 ## Steps
 
-1. Add `agent/materials/weather-api.json`:
+1. Select the tool in `agent/agent.json`:
 
    ```json
    {
-     "kind": "credential",
-     "provider": "weather",
-     "purpose": "read",
-     "ref": "weather-api"
+     "agentId": "weather-agent",
+     "kind": "chat",
+     "tools": ["lookup_weather"]
    }
    ```
 
-2. Add `agent/domains/weather-read.json`:
-
-   ```json
-   {
-     "bindingRef": "workspace.readonly"
-   }
-   ```
-
-3. Add `agent/interactions/approval.json`:
-
-   ```json
-   {
-     "bindingRef": "approval.required"
-   }
-   ```
-
-4. Declare the effectful tool in `agent/tools/lookup_weather.ts`:
+2. Declare the effect contract once in
+   `agent/tools/lookup_weather.ts`. The default export remains the tool
+   implementation whose `defineProductTool` input schema and admission logic
+   form the runtime positive contract:
 
    ```ts
+   import lookupWeather from "../../app/tools/lookup-weather";
+
    export const declaration = {
-     bindingRef: "tool.lookup_weather",
      effects: ["material", "network"],
      materialRefs: ["weather-api"],
      executionDomain: "weather-read",
      interaction: "approval",
      receiptPolicy: "external-receipt",
    };
+
+   export default lookupWeather;
    ```
 
-5. Compile the tree and fail closed on missing facts:
+   Tool identity is `lookup_weather` because that is the path stem. There is no
+   second authored tool id or binding ref.
+
+3. Compile the product and link it to an explicit host:
 
    ```ts
-   const result = compileAgentTree(tree);
+   import { compileProductPlan, linkStaticTarget } from "@yansirplus/cli";
 
-   if (!result.ok) {
-     throw new Error(JSON.stringify(result.issues));
-   }
+   const product = compileProductPlan({
+     files: [
+       {
+         path: "agent/agent.json",
+         kind: "json",
+         value: {
+           agentId: "weather-agent",
+           kind: "chat",
+           tools: ["lookup_weather"],
+         },
+       },
+       {
+         path: "agent/instructions.md",
+         kind: "markdown",
+         text: "Answer weather questions with the lookup tool.",
+       },
+       {
+         path: "agent/tools/lookup_weather.ts",
+         kind: "tool",
+         declaration: {
+           effects: ["material", "network"],
+           materialRefs: ["weather-api"],
+           executionDomain: "weather-read",
+           interaction: "approval",
+           receiptPolicy: "external-receipt",
+         },
+       },
+     ],
+   });
+
+   if (!product.ok) throw new Error(JSON.stringify(product.issues));
+
+   const linked = linkStaticTarget(product.value, {
+     kind: "local",
+     mode: "dev",
+     cwd: "/workspace/weather-agent",
+     env: {},
+   });
+
+   if (!linked.ok) throw new Error(JSON.stringify(linked.issues));
    ```
+
+   A deployment host supplies the resolver for `weather-api`; the product plan
+   carries only the symbolic requirement. Resolved credentials never enter the
+   plan, generated manifest, provenance, or ledger.
 
 ## Checkpoint
 
 Removing `interaction`, `executionDomain`, `materialRefs`, or `receiptPolicy`
-from the effectful tool is a compiler error. Pure tools may receive versioned
-defaults with provenance; effectful tools do not get silent authority defaults.
+from the effectful tool is a compiler error. The resulting `ProductPlan`
+contains the model, `weather-api`, `weather-read`, and `approval` symbolic
+requirements. The linker derives the manifest's material, execution-domain,
+interaction, and tool binding entries from the plan and its tool asset. There
+are no separately authored maps that can drift from the tool declaration.
 
 ## Next
 

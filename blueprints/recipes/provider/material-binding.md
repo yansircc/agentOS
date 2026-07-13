@@ -4,8 +4,8 @@
   "id": "provider.material-binding",
   "kind": "provider",
   "title": "Provider Material Binding",
-  "summary": "Bind product-owned provider material without adding runtime provider code.",
-  "primaryFile": "agentos.config.jsonc",
+  "summary": "Bind host-owned provider material without adding runtime provider code.",
+  "primaryFile": "agentos.deployment.jsonc",
   "appliesTo": ["agentos add", "agentos update"],
   "upgradeGuide": "blueprints/UPGRADE.md",
   "lifecycleOwnership": {
@@ -20,7 +20,7 @@
 
 # Provider Material Binding
 
-<!-- agentos:primary-file path="agentos.config.jsonc" -->
+<!-- agentos:primary-file path="agentos.deployment.jsonc" -->
 
 ## Boundary
 
@@ -36,9 +36,10 @@ adapters only; it does not own provider lifecycle policy.
 
 ## Steps
 
-1. Declare the provider material requirement in the app-owned
-   `agentos.config.jsonc`.
-2. Map provider secrets through product-owned material refs.
+1. Declare symbolic provider bindings in the host-owned
+   `agentos.deployment.jsonc`.
+2. Resolve provider secrets from the deployment environment without copying
+   them into ProductIntent or ProductPlan.
 3. Keep provider transport wiring and lifecycle policy in app-owned or generated
    target source.
 

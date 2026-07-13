@@ -1,14 +1,37 @@
-import type { ProviderResourceId } from "@agent-os/core/runtime-protocol";
-import type { AgentScopeIdentityPolicy, HandlerKind } from "@agent-os/core/runtime-protocol";
-import { WORKSPACE_TOOL_EXPOSURE_PROFILES, type WorkspaceToolName } from "@agent-os/runtime";
+import type { MaterialRef } from "@agent-os/core/material-ref";
+import {
+  WORKSPACE_TOPOLOGY,
+  workspaceBindingRef,
+  workspaceProviderResourceId,
+  type AgentCapabilityBindingRef,
+  type AgentExecutionDomainRef,
+  type AgentManifest,
+  type AgentScopeIdentityPolicy,
+  type AgentToolBindingRef,
+  type HandlerKind,
+  type ProviderResourceId,
+  type WorkspaceBindingRef,
+  type WorkspaceTopology,
+} from "@agent-os/core/runtime-protocol";
+import {
+  WORKSPACE_OP_FACT_OWNER,
+  WORKSPACE_TOOL_DEFAULT_DECLARATIONS,
+  WORKSPACE_TOOL_EXPOSURE_PROFILES,
+  type WorkspaceToolDefaultDeclaration,
+  type WorkspaceToolName,
+} from "@agent-os/runtime";
 import {
   digestText,
   GENERATED_LOAD_SKILL_TOOL_NAME,
   GENERATED_READ_SKILL_FILE_TOOL_NAME,
   isWorkspaceToolName,
 } from "./shared";
-import type {
-  AuthoredAgentManifest,
+import {
+  PRODUCT_AGENT_KIND,
+  type ProductAgentKind,
+  type ProductPlan,
+  type ProductPlanToolAsset,
+  verifyProductPlanDigest,
   CompiledAgentChannel,
   CompiledAgentDynamicResolver,
   CompiledAgentInstructionFragment,
@@ -16,23 +39,17 @@ import type {
   CompiledAgentSkill,
 } from "./manifest-compiler";
 import {
-  AGENTOS_CONFIG_CLIENT,
-  AGENTOS_CONFIG_LLM_ROUTE,
-  AGENTOS_CONFIG_PROFILE,
-  AGENTOS_CONFIG_TARGET,
-  llmMaterialEnvBindingsForRoutes,
-  type AgentOsConfigCloudflareDoTarget,
-  type AgentOsConfigClientKind,
-  type AgentOsConfigLlmRouteBinding,
-  type AgentOsConfigLlmRoute,
-  type AgentOsConfigProfile,
-  type AgentOsConfigTarget,
-  type AgentOsConfigTargetKind,
-  type AgentOsConfigWorkspaceTopology,
-  type NormalizedAgentOsConfig,
-  type NormalizedChatAgentOsConfig,
-  type NormalizedWorkspaceAgentOsConfig,
-} from "./config";
+  DEPLOYMENT_TARGET_KIND,
+  DEPLOYMENT_TRANSPORT,
+  PROVIDER_PROTOCOL,
+  type CloudflareDoDeploymentTargetIntent,
+  type DeploymentIntent,
+  type DeploymentTargetKind,
+  type DeploymentTransport,
+  type LocalHost,
+  type ProviderBindingIntent,
+  type StaticTargetBinding,
+} from "./deployment-intent";
 import {
   generatedCommandInputTypesForProfile,
   renderGeneratedClientMethods,
@@ -41,6 +58,47 @@ import {
   renderGeneratedCommandDispatch,
   renderGeneratedCommandRpcType,
 } from "./generated-command-projection";
+
+const STATIC_TARGET_KIND = {
+  NODE: "node@1",
+  CLOUDFLARE_DO: "cloudflare-do@1",
+} as const;
+
+type StaticTargetKind = (typeof STATIC_TARGET_KIND)[keyof typeof STATIC_TARGET_KIND];
+
+const STATIC_CLIENT_KIND = {
+  DIRECT: DEPLOYMENT_TRANSPORT.DIRECT,
+  SVELTE_KIT_REMOTE: DEPLOYMENT_TRANSPORT.SVELTE_KIT_REMOTE,
+} as const;
+
+type StaticClientKind = DeploymentTransport;
+
+interface StaticLlmRouteBinding extends ProviderBindingIntent {
+  readonly route: typeof PROVIDER_PROTOCOL.OPENAI_CHAT_COMPATIBLE;
+}
+
+interface StaticCloudflareTarget {
+  readonly kind: typeof STATIC_TARGET_KIND.CLOUDFLARE_DO;
+  readonly durableObject: {
+    readonly className: string;
+    readonly binding: string;
+  };
+  readonly materialResolver: { readonly path: string };
+}
+
+interface StaticNodeTarget {
+  readonly kind: typeof STATIC_TARGET_KIND.NODE;
+}
+
+type StaticTarget = StaticNodeTarget | StaticCloudflareTarget;
+
+type BoundAgentManifest = AgentManifest;
+
+interface StaticTargetProvenance {
+  readonly manifest: Readonly<Record<string, string>>;
+  readonly deployment: Readonly<Record<string, string>>;
+  readonly exclusions: Readonly<Record<string, string>>;
+}
 
 export type StaticTargetGeneratedFilePath =
   | ".agentos/generated/manifest.json"
@@ -99,11 +157,11 @@ export interface StaticTargetModuleImport {
 }
 
 export interface CanonicalDeploymentIR {
-  readonly profile: AgentOsConfigProfile;
-  readonly target: AgentOsConfigTargetKind;
-  readonly llmRoute: typeof AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE;
-  readonly client: AgentOsConfigClientKind;
-  readonly workspaceTopology?: AgentOsConfigWorkspaceTopology;
+  readonly profile: ProductAgentKind;
+  readonly target: StaticTargetKind;
+  readonly llmRoute: typeof PROVIDER_PROTOCOL.OPENAI_CHAT_COMPATIBLE;
+  readonly client: StaticClientKind;
+  readonly workspaceTopology?: WorkspaceTopology;
   readonly toolNames: ReadonlyArray<string>;
 }
 
@@ -116,7 +174,7 @@ export interface MountIR {
       }
     | {
         readonly kind: "local-node";
-        readonly target: typeof AGENTOS_CONFIG_TARGET.NODE_V1;
+        readonly target: typeof STATIC_TARGET_KIND.NODE;
       };
   readonly projectionSinks: ReadonlyArray<
     | "agent.info"
@@ -138,12 +196,16 @@ export interface StaticTargetLink {
 export type StaticTargetLinkIssue =
   | {
       readonly kind: "unsupported_static_target";
-      readonly target: AgentOsConfigTargetKind;
+      readonly target: DeploymentTargetKind;
     }
   | {
       readonly kind: "unsupported_static_llm_route";
-      readonly route: AgentOsConfigLlmRoute;
+      readonly route: string;
     }
+  | { readonly kind: "product_digest_mismatch" }
+  | { readonly kind: "workspace_binding_required"; readonly host: StaticTargetBinding["kind"] }
+  | { readonly kind: "model_provider_unbound"; readonly logicalId: string }
+  | { readonly kind: "tool_selection_unknown"; readonly toolId: string }
   | {
       readonly kind: "invalid_static_package_scope";
       readonly scope: string;
@@ -180,8 +242,8 @@ interface StaticTargetPlanShared {
     readonly codec: string;
     readonly providerStrategy?: string;
   };
-  readonly manifest: AuthoredAgentManifest;
-  readonly provenance: NormalizedAgentOsConfig<AuthoredAgentManifest>["provenance"];
+  readonly manifest: BoundAgentManifest;
+  readonly provenance: StaticTargetProvenance;
   readonly toolNames: ReadonlyArray<string>;
   readonly authoredManifestToolNames: ReadonlyArray<string>;
   readonly skillResourceBundle: string;
@@ -190,7 +252,7 @@ interface StaticTargetPlanShared {
 }
 
 interface StaticTargetClientProjection {
-  readonly kind: AgentOsConfigClientKind;
+  readonly kind: StaticClientKind;
   readonly moduleImports: ReadonlyArray<StaticTargetModuleImport>;
   readonly files: ReadonlyArray<StaticTargetGeneratedFile>;
 }
@@ -210,41 +272,62 @@ interface StaticTargetProfileProjectionBase {
     readonly baseModuleImports: ReadonlyArray<StaticTargetModuleImport>;
   };
   readonly canonicalDeployment: {
-    readonly profile: AgentOsConfigProfile;
-    readonly workspaceTopology?: AgentOsConfigWorkspaceTopology;
+    readonly profile: ProductAgentKind;
+    readonly workspaceTopology?: WorkspaceTopology;
   };
   readonly mount: Pick<MountIR, "projectionSinks" | "providerResourceId">;
 }
 
+interface StaticTargetBoundDeployment {
+  readonly deploymentId: string;
+  readonly manifest: BoundAgentManifest;
+  readonly backend: "node" | "cloudflare-do";
+  readonly adapter: StaticTargetKind;
+  readonly codec: "agentos-json@1";
+  readonly providerStrategy: typeof PROVIDER_PROTOCOL.OPENAI_CHAT_COMPATIBLE;
+}
+
 interface StaticTargetRenderInput {
-  readonly deployment: NormalizedAgentOsConfig<AuthoredAgentManifest>["deployment"];
+  readonly deployment: StaticTargetBoundDeployment;
   readonly authoredToolNames: ReadonlyArray<string>;
   readonly channels: ReadonlyArray<CompiledAgentChannel>;
   readonly schedules: ReadonlyArray<CompiledAgentSchedule>;
-  readonly llmRoutes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
+  readonly llmRoutes: Readonly<Record<string, StaticLlmRouteBinding>>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
   readonly instructionFragments: ReadonlyArray<CompiledAgentInstructionFragment>;
   readonly dynamicResolvers: ReadonlyArray<CompiledAgentDynamicResolver>;
 }
 
+interface StaticTargetWorkspace {
+  readonly binding: string;
+  readonly bindingRef: WorkspaceBindingRef;
+  readonly root: string;
+  readonly topology: WorkspaceTopology;
+  readonly scope: {
+    readonly idSource: "manifest";
+    readonly scopeRef: { readonly kind: string; readonly scopeId: string };
+  };
+  readonly providerResourceId: ProviderResourceId;
+}
+
 interface StaticTargetWorkspaceRenderInput extends StaticTargetRenderInput {
-  readonly workspace: NormalizedWorkspaceAgentOsConfig<AuthoredAgentManifest>["workspace"];
+  readonly workspace: StaticTargetWorkspace;
 }
 
 type StaticTargetProfileProjection =
   | (StaticTargetProfileProjectionBase & {
-      readonly kind: typeof AGENTOS_CONFIG_PROFILE.WORKSPACE_V1;
+      readonly kind: typeof PRODUCT_AGENT_KIND.WORKSPACE;
       readonly renderInput: StaticTargetWorkspaceRenderInput;
-      readonly nodeWorkspace: ManifestNormalizedWorkspace | null;
+      readonly nodeWorkspace: StaticTargetWorkspace | null;
     })
   | (StaticTargetProfileProjectionBase & {
-      readonly kind: typeof AGENTOS_CONFIG_PROFILE.CHAT_V1;
+      readonly kind: typeof PRODUCT_AGENT_KIND.CHAT;
       readonly renderInput: StaticTargetRenderInput;
       readonly nodeWorkspace: null;
     });
 
 interface StaticTargetHostProjection {
-  readonly kind: AgentOsConfigTargetKind;
+  readonly kind: StaticTargetKind;
   readonly deployment: Readonly<Record<string, unknown>>;
   readonly files: ReadonlyArray<StaticTargetGeneratedFile>;
   readonly moduleGraph: ReadonlyArray<StaticTargetModuleImport>;
@@ -252,14 +335,14 @@ interface StaticTargetHostProjection {
   readonly mount: Pick<MountIR, "driver">;
 }
 
-interface StaticTargetPlan {
+export interface StaticTargetPlan {
   readonly shared: StaticTargetPlanShared;
   readonly profile: StaticTargetProfileProjection;
   readonly host: StaticTargetHostProjection;
   readonly client: StaticTargetClientProjection;
 }
 
-type StaticTargetPlanResult =
+export type StaticTargetPlanResult =
   | { readonly ok: true; readonly value: StaticTargetPlan }
   | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> };
 
@@ -285,15 +368,49 @@ const jsString = (value: string): string => JSON.stringify(value);
 const identifierSuffix = (value: string): string =>
   value.replace(/[^A-Za-z0-9_$]+/g, "_").replace(/^[^A-Za-z_$]+/u, "_$&");
 
+type LlmMaterialKind = "endpoint" | "credential" | "model";
+
+interface LlmMaterialEnvBinding {
+  readonly kind: LlmMaterialKind;
+  readonly ref: string;
+  readonly envName: string;
+}
+
+const materialEnvNameForRef = (kind: LlmMaterialKind, ref: string): string => {
+  const prefix =
+    kind === "endpoint"
+      ? "AGENTOS_ENDPOINT"
+      : kind === "credential"
+        ? "AGENTOS_CREDENTIAL"
+        : "AGENTOS_MODEL";
+  const suffix =
+    ref
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "REF";
+  return `${prefix}_${suffix}`;
+};
+
+const llmMaterialEnvBindingsForRoutes = (
+  routes: Readonly<Record<string, StaticLlmRouteBinding>>,
+): ReadonlyArray<LlmMaterialEnvBinding> =>
+  Object.values(routes).flatMap((route) =>
+    (
+      [
+        ["endpoint", route.endpointRef],
+        ["credential", route.credentialRef],
+        ["model", route.modelRef],
+      ] as const
+    ).map(([kind, ref]) => ({ kind, ref, envName: materialEnvNameForRef(kind, ref) })),
+  );
+
 const routeEntries = (
-  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
-): ReadonlyArray<readonly [string, AgentOsConfigLlmRouteBinding]> =>
+  routes: Readonly<Record<string, StaticLlmRouteBinding>>,
+): ReadonlyArray<readonly [string, StaticLlmRouteBinding]> =>
   Object.entries(routes).sort(([left], [right]) => left.localeCompare(right));
 
-const uniqueLlmMaterialEnvBindings = (
-  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
-) => {
-  const bindings = new Map<string, ReturnType<typeof llmMaterialEnvBindingsForRoutes>[number]>();
+const uniqueLlmMaterialEnvBindings = (routes: Readonly<Record<string, StaticLlmRouteBinding>>) => {
+  const bindings = new Map<string, LlmMaterialEnvBinding>();
   for (const binding of llmMaterialEnvBindingsForRoutes(routes)) {
     bindings.set(`${binding.kind}:${binding.ref}`, binding);
   }
@@ -303,7 +420,7 @@ const uniqueLlmMaterialEnvBindings = (
 };
 
 const renderMaterialValueFunction = (
-  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+  routes: Readonly<Record<string, StaticLlmRouteBinding>>,
 ): string => {
   const bindings = uniqueLlmMaterialEnvBindings(routes).filter(
     (binding) => binding.kind === "model",
@@ -327,7 +444,7 @@ ${cases}
 };
 
 const renderGeneratedProviderPreflight = (
-  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+  routes: Readonly<Record<string, StaticLlmRouteBinding>>,
 ): string => {
   const diagnostics = routeEntries(routes)
     .map(
@@ -360,7 +477,7 @@ ${diagnostics}
 };
 
 const renderGeneratedLlmRoutesFor = (
-  routes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>,
+  routes: Readonly<Record<string, StaticLlmRouteBinding>>,
 ): string => {
   const checks = routeEntries(routes)
     .map(([bindingRef, route]) => {
@@ -399,7 +516,7 @@ ${entries}
 const importToolPath = (toolName: string): string => `../../agent/tools/${toolName}`;
 
 const importMaterialResolverPath = (path: string): string =>
-  `../../agent/${path.replace(/\.ts$/u, "")}`;
+  `../../${path.replace(/^\.\//u, "").replace(/\.ts$/u, "")}`;
 
 const importChannelPath = (path: string): string => `../../${path.replace(/\.ts$/u, "")}`;
 
@@ -422,27 +539,10 @@ const DEFAULT_STATIC_TARGET_PACKAGE_SCOPE = packageScopePattern.test(INJECTED_PU
 
 const publicPackageSpecifier = (scope: string, name: string): string => `${scope}/${name}`;
 
-type NormalizedCloudflareTarget = Extract<
-  NormalizedAgentOsConfig["target"],
-  { readonly kind: typeof AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1 }
->;
-
-const cloudflareTargetFor = (
-  target: NormalizedAgentOsConfig["target"],
-): NormalizedCloudflareTarget => {
-  if (target.kind === AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1) return target;
+const cloudflareTargetFor = (target: StaticTarget): StaticCloudflareTarget => {
+  if (target.kind === STATIC_TARGET_KIND.CLOUDFLARE_DO) return target;
   throw new TypeError(`cloudflare target renderer received ${target.kind}`);
 };
-
-type NormalizedWorkspace = NormalizedWorkspaceAgentOsConfig["workspace"];
-type ManifestNormalizedWorkspace = Extract<
-  NormalizedWorkspace,
-  { readonly scope: { readonly idSource: "manifest" } }
->;
-
-const isManifestNormalizedWorkspace = (
-  workspace: NormalizedWorkspace,
-): workspace is ManifestNormalizedWorkspace => workspace.scope.idSource === "manifest";
 
 const staticTargetModules = (scope: string) => ({
   runtimeCapability: publicPackageSpecifier(scope, "runtime/capability"),
@@ -454,6 +554,7 @@ const staticTargetModules = (scope: string) => ({
   ),
   workspaceAgentHost: publicPackageSpecifier(scope, "runtime/workspace-agent"),
   workspaceAgentClient: publicPackageSpecifier(scope, "client/workspace-agent"),
+  productShellClient: publicPackageSpecifier(scope, "client/product-shell-client"),
   workspaceBinding: publicPackageSpecifier(scope, "runtime/workspace-binding"),
   workspaceEnvCloudflare: publicPackageSpecifier(scope, "runtime/cloudflare"),
   runtimeChannel: publicPackageSpecifier(scope, "runtime/channel"),
@@ -841,25 +942,25 @@ interface StaticRuntimeBootstrapModel {
   readonly toolNames: ReadonlyArray<string>;
   readonly customToolNames: ReadonlyArray<string>;
   readonly manifestTools: StaticTargetRenderInput["deployment"]["manifest"]["tools"];
-  readonly llmRoutes: Readonly<Record<string, AgentOsConfigLlmRouteBinding>>;
+  readonly llmRoutes: Readonly<Record<string, StaticLlmRouteBinding>>;
   readonly skills: ReadonlyArray<CompiledAgentSkill>;
   readonly instructionFragments: ReadonlyArray<CompiledAgentInstructionFragment>;
   readonly dynamicResolvers: ReadonlyArray<CompiledAgentDynamicResolver>;
 }
 
 const staticRuntimeBootstrapModelFor = (
-  normalized: StaticTargetRenderInput,
+  input: StaticTargetRenderInput,
   toolNames: ReadonlyArray<string>,
 ): StaticRuntimeBootstrapModel => {
-  const authoredToolNames = new Set(normalized.authoredToolNames);
+  const authoredToolNames = new Set(input.authoredToolNames);
   return {
     toolNames,
     customToolNames: toolNames.filter((toolName) => authoredToolNames.has(toolName)),
-    manifestTools: normalized.deployment.manifest.tools,
-    llmRoutes: normalized.llmRoutes,
-    skills: normalized.skills,
-    instructionFragments: normalized.instructionFragments,
-    dynamicResolvers: normalized.dynamicResolvers,
+    manifestTools: input.deployment.manifest.tools,
+    llmRoutes: input.llmRoutes,
+    skills: input.skills,
+    instructionFragments: input.instructionFragments,
+    dynamicResolvers: input.dynamicResolvers,
   };
 };
 
@@ -1468,7 +1569,7 @@ const generatedMaterialResolverFor = (env: AgentOSTargetEnv): RefResolver => {
 
 const renderWorkspaceStaticTarget = (
   normalized: StaticTargetWorkspaceRenderInput,
-  target: NormalizedCloudflareTarget,
+  target: StaticCloudflareTarget,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
@@ -1965,7 +2066,7 @@ ${hasSchedules ? renderScheduleDurableObjectMethod("this.targetTruthIdentity") :
 
 const renderChatStaticTarget = (
   normalized: StaticTargetRenderInput,
-  target: NormalizedCloudflareTarget,
+  target: StaticCloudflareTarget,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
@@ -2160,7 +2261,7 @@ ${hasSchedules ? renderScheduleDurableObjectMethod("semanticTruthIdentity") : ""
 };
 
 const renderLocalAgentApp = (
-  normalized: StaticTargetWorkspaceRenderInput,
+  normalized: StaticTargetRenderInput,
   toolNames: ReadonlyArray<string>,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
@@ -2198,6 +2299,8 @@ const renderLocalAgentApp = (
       : []),
     ...(hasSchedules ? [renderTypeImport(["GeneratedScheduleTriggerInput"], "./schedules")] : []),
     renderNamedImport(["lowerLocalAgentRuntime"], modules.localRuntime),
+    renderNamedImport(["createAgentSession"], modules.productShellClient),
+    renderTypeImport(["AgentSession"], modules.productShellClient),
     renderNamedImport(["projectInputRequestSettlement"], modules.runtimeRunProjector),
     ...(hasSchedules
       ? [renderNamedImport(["projectScheduleFireHistory"], modules.runtimeSchedule)]
@@ -2334,6 +2437,7 @@ export interface LocalAgentAppRuntime extends LocalAgentRuntime {
 
 export interface LocalAgentApp {
   readonly runtime: LocalAgentAppRuntime;
+  readonly session: AgentSession;
   readonly sessions: {
     readonly submitTurn: (input: AgentSessionSubmitTurnInput) => Promise<SubmitResult>;
     readonly inspect: (sessionRef: string) => AgentSessionProjection;
@@ -2425,6 +2529,7 @@ export const createLocalAgentApp = async (
     inspect: (sessionRef: string) => projectAgentSession(lowered.runtime.events(), sessionRef),
     list: () => projectAgentSessions(lowered.runtime.events()),
   };
+  const session = createAgentSession({ submitTurn: sessions.submitTurn });
   const workflows = {
     run: (input: AgentWorkflowRunInput) =>
       generatedLocalSubmitInputFromRunInput(submitRunInputFromWorkflowRun(input)).then(
@@ -2496,6 +2601,7 @@ export const createLocalAgentApp = async (
   }
   return {
     runtime,
+    session,
     sessions,
     workflows,
     ${hasChannels ? "channels,\n    " : ""}customCommand,
@@ -2516,7 +2622,7 @@ export const createLocalAgentApp = async (
 
 const renderCloudflareScopeHelper = (
   normalized: StaticTargetRenderInput,
-  target: NormalizedCloudflareTarget,
+  target: StaticCloudflareTarget,
   modules: ReturnType<typeof staticTargetModules>,
 ): string => {
   const submitScope = normalized.deployment.manifest.scope.idSource === "submit_scope";
@@ -2568,7 +2674,7 @@ export const agentOSRpcClient = <
 
 const renderCloudflareWorkerEntry = (
   normalized: StaticTargetRenderInput,
-  target: NormalizedCloudflareTarget,
+  target: StaticCloudflareTarget,
   modules: ReturnType<typeof staticTargetModules>,
   profile: {
     readonly sandboxImport: string;
@@ -2667,14 +2773,14 @@ const renderCloudflareWranglerConfig = (
 };
 
 const generatedProfileClientModuleImports = (
-  profile: AgentOsConfigProfile,
+  profile: ProductAgentKind,
   modules: ReturnType<typeof staticTargetModules>,
 ): ReadonlyArray<StaticTargetModuleImport> => [
   {
     kind: "workspace-client",
     source: modules.workspaceAgentClient,
     imports:
-      profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+      profile === PRODUCT_AGENT_KIND.WORKSPACE
         ? [
             "createWorkspaceAgentClientBridge",
             "CreateWorkspaceAgentClientOptions",
@@ -2693,6 +2799,15 @@ const generatedProfileClientModuleImports = (
             "WorkspaceAgentCommandOutputByName",
           ],
   },
+  ...(profile === PRODUCT_AGENT_KIND.WORKSPACE
+    ? [
+        {
+          kind: "workspace-client" as const,
+          source: modules.productShellClient,
+          imports: ["AgentSession", "createAgentSession"],
+        },
+      ]
+    : []),
 ];
 
 const generatedSvelteKitClientModuleImports = (
@@ -3487,6 +3602,8 @@ export const runEventStream = query.live(optionalAfterIdInput, (input) => {
 const renderWorkspaceBrowserDirectClient = (
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentClient)}
+${renderNamedImport(["createAgentSession"], modules.productShellClient)}
+${renderTypeImport(["AgentSession"], modules.productShellClient)}
 ${renderTypeImport(
   [
     "AgentSessionListProjection",
@@ -3515,16 +3632,27 @@ export interface GeneratedAgentClientProductProjections extends WorkspaceAgentPr
 
 export type GeneratedAgentClientOptions =
   CreateWorkspaceAgentClientOptions<WorkspaceAgentProductCommandMap<GeneratedAgentClientProductProjections>>;
-export type GeneratedAgentClient = WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections>;
+export interface GeneratedAgentClient
+  extends WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections> {
+  readonly session: AgentSession;
+}
 
 export const createAgentOSClient = (
   options: GeneratedAgentClientOptions = {},
-): GeneratedAgentClient => createWorkspaceAgentClientBridge(options);
+): GeneratedAgentClient => {
+  const bridge = createWorkspaceAgentClientBridge(options);
+  return {
+    ...bridge,
+    session: createAgentSession({ submitTurn: bridge.sessions.submitTurn }),
+  };
+};
 `;
 
 const renderWorkspaceSvelteKitClient = (
   modules: ReturnType<typeof staticTargetModules>,
 ): string => `${renderNamedImport(["createWorkspaceAgentClientBridge"], modules.workspaceAgentClient)}
+${renderNamedImport(["createAgentSession"], modules.productShellClient)}
+${renderTypeImport(["AgentSession"], modules.productShellClient)}
 import { invokeAgentCommand, runEventStream } from "./sveltekit.remote";
 ${renderNamedImport(["clientReadable", "selectClientReadable"], modules.clientSvelte)}
 ${renderTypeImport(["AgentClientSnapshot"], modules.clientCore)}
@@ -3561,6 +3689,7 @@ export type GeneratedAgentClientOptions =
 
 export interface GeneratedAgentClient
   extends WorkspaceAgentClientBridge<GeneratedAgentClientProductProjections> {
+  readonly session: AgentSession;
   readonly snapshot: Readable<AgentClientSnapshot>;
   readonly events: Readable<AgentClientSnapshot["events"]>;
   readonly connection: Readable<AgentClientSnapshot["connection"]>;
@@ -3590,6 +3719,7 @@ export const createAgentOSClient = (
   });
   return {
     ...bridge,
+    session: createAgentSession({ submitTurn: bridge.sessions.submitTurn }),
     snapshot: clientReadable(bridge.client),
     events: selectClientReadable(bridge.client, (snapshot) => snapshot.events),
     connection: selectClientReadable(bridge.client, (snapshot) => snapshot.connection),
@@ -3701,35 +3831,304 @@ const renderStaticClientTypes = (): string => `export type {
 export { createAgentOSClient } from "./client";
 `;
 
+interface StaticTargetBindingFacts {
+  readonly deployment: StaticTargetBoundDeployment;
+  readonly target: StaticTarget;
+  readonly client: StaticClientKind;
+  readonly llmRoutes: Readonly<Record<string, StaticLlmRouteBinding>>;
+  readonly workspace?: StaticTargetWorkspace;
+  readonly provenance: StaticTargetProvenance;
+}
+
+const defaultWorkspaceTopology = (): WorkspaceTopology => ({
+  kind: WORKSPACE_TOPOLOGY.PER_SCOPE,
+  allocator: "workspace-per-scope-v1",
+});
+
+const materialRefFor = (ref: string, resourceKind: string): MaterialRef => ({
+  kind: "external_resource",
+  provider: "agent-os",
+  resourceKind,
+  ref,
+});
+
+const toolBindingFromAsset = (tool: ProductPlanToolAsset): AgentToolBindingRef => ({
+  bindingRef: `tool.${tool.name}`,
+  ...(tool.executionDomain === undefined ? {} : { executionDomain: tool.executionDomain }),
+  ...(tool.interaction === undefined ? {} : { interaction: tool.interaction }),
+  ...(tool.materialRefs.length === 0 ? {} : { materialRefs: tool.materialRefs }),
+  ...(tool.effects.length === 0 ? {} : { effects: tool.effects }),
+  ...(tool.receiptPolicy === undefined ? {} : { receiptPolicy: tool.receiptPolicy }),
+});
+
+const defaultWorkspaceToolBinding = (
+  tool: WorkspaceToolDefaultDeclaration,
+): AgentToolBindingRef => ({
+  bindingRef: tool.name,
+  executionDomain: tool.executionDomain,
+  interaction: tool.interaction,
+  materialRefs: tool.materialRefs,
+  effects: tool.effects,
+  receiptPolicy: tool.receiptPolicy,
+});
+
+const sortedRecord = <A>(
+  entries: ReadonlyArray<readonly [string, A]>,
+): Readonly<Record<string, A>> =>
+  Object.fromEntries([...entries].sort(([left], [right]) => left.localeCompare(right)));
+
+const selectedToolsFor = (
+  product: ProductPlan,
+):
+  | { readonly ok: true; readonly tools: Readonly<Record<string, AgentToolBindingRef>> }
+  | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> } => {
+  const custom = new Map(product.assets.tools.map((tool) => [tool.name, tool] as const));
+  const workspaceDefaults = new Map<string, WorkspaceToolDefaultDeclaration>(
+    (product.agent.kind === PRODUCT_AGENT_KIND.WORKSPACE
+      ? WORKSPACE_TOOL_DEFAULT_DECLARATIONS
+      : []
+    ).map((tool) => [tool.name, tool] as const),
+  );
+  const selected =
+    product.toolSelection ??
+    [...workspaceDefaults.keys(), ...custom.keys()].sort((a, b) => a.localeCompare(b));
+  const unknown = selected.find((toolId) => !workspaceDefaults.has(toolId) && !custom.has(toolId));
+  if (unknown !== undefined) {
+    return { ok: false, issues: [{ kind: "tool_selection_unknown", toolId: unknown }] };
+  }
+  return {
+    ok: true,
+    tools: sortedRecord(
+      selected.map((toolId): readonly [string, AgentToolBindingRef] => {
+        const defaultTool = workspaceDefaults.get(toolId);
+        if (defaultTool !== undefined) return [toolId, defaultWorkspaceToolBinding(defaultTool)];
+        return [toolId, toolBindingFromAsset(custom.get(toolId) as ProductPlanToolAsset)];
+      }),
+    ),
+  };
+};
+
+const llmRoutesFor = (
+  product: ProductPlan,
+  binding: StaticTargetBinding,
+):
+  | { readonly ok: true; readonly routes: Readonly<Record<string, StaticLlmRouteBinding>> }
+  | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> } => {
+  const logicalId = product.modelPreference ?? "default";
+  if (binding.kind === "local") {
+    return {
+      ok: true,
+      routes: {
+        default: {
+          protocol: PROVIDER_PROTOCOL.OPENAI_CHAT_COMPATIBLE,
+          route: PROVIDER_PROTOCOL.OPENAI_CHAT_COMPATIBLE,
+          endpointRef: "openai-compatible-endpoint",
+          credentialRef: "openai-compatible-credential",
+          modelRef: logicalId === "default" ? "openai-compatible-model" : logicalId,
+        },
+      },
+    };
+  }
+  const selected = binding.providers[logicalId];
+  if (selected === undefined) {
+    return { ok: false, issues: [{ kind: "model_provider_unbound", logicalId }] };
+  }
+  const routes = Object.entries(binding.providers).map(
+    ([id, provider]): readonly [string, StaticLlmRouteBinding] => [
+      id,
+      { ...provider, route: provider.protocol },
+    ],
+  );
+  return {
+    ok: true,
+    routes: sortedRecord([
+      ["default", { ...selected, route: selected.protocol }],
+      ...routes.filter(([id]) => id !== "default"),
+    ]),
+  };
+};
+
+const deploymentIdentityFor = (product: ProductPlan, binding: StaticTargetBinding) =>
+  binding.kind === "local"
+    ? { id: `local-${product.agent.id}` }
+    : { id: binding.release.id, version: binding.release.version };
+
+const targetForBinding = (binding: StaticTargetBinding): StaticTarget => {
+  if (binding.kind === "local" || binding.target.kind === DEPLOYMENT_TARGET_KIND.NODE) {
+    return { kind: STATIC_TARGET_KIND.NODE };
+  }
+  return {
+    kind: STATIC_TARGET_KIND.CLOUDFLARE_DO,
+    durableObject: {
+      className: binding.target.className,
+      binding: binding.target.binding,
+    },
+    materialResolver: { path: binding.target.materialResolver },
+  };
+};
+
+const workspaceForBinding = (
+  product: ProductPlan,
+  binding: StaticTargetBinding,
+  deploymentId: string,
+): StaticTargetWorkspace | null => {
+  if (product.agent.kind !== PRODUCT_AGENT_KIND.WORKSPACE) return null;
+  const authored = binding.kind === "deployment" ? binding.workspace : undefined;
+  if (binding.kind === "deployment" && authored === undefined) return null;
+  const bindingName = authored?.binding ?? "Workspace";
+  const bindingRef = workspaceBindingRef(bindingName);
+  const topology = authored?.topology ?? defaultWorkspaceTopology();
+  const scopeRef = { kind: "session" as const, scopeId: product.agent.id };
+  const root = binding.kind === "local" ? binding.cwd : binding.workspace?.root;
+  if (root === undefined) return null;
+  return {
+    binding: bindingName,
+    bindingRef,
+    root,
+    topology,
+    scope: { idSource: "manifest", scopeRef },
+    providerResourceId: workspaceProviderResourceId({
+      deploymentNamespace: deploymentId,
+      workspaceBindingRef: bindingRef,
+      topology,
+      scopeRef,
+    }),
+  };
+};
+
+const manifestForBinding = (
+  product: ProductPlan,
+  routes: Readonly<Record<string, StaticLlmRouteBinding>>,
+  workspace: StaticTargetWorkspace | null,
+  tools: Readonly<Record<string, AgentToolBindingRef>>,
+): BoundAgentManifest => {
+  const executionDomainIds = new Set(
+    Object.values(tools).flatMap((tool) =>
+      tool.executionDomain === undefined ? [] : [tool.executionDomain],
+    ),
+  );
+  const interactionIds = new Set(
+    Object.values(tools).flatMap((tool) =>
+      tool.interaction === undefined ? [] : [tool.interaction],
+    ),
+  );
+  const materialIds = new Set(Object.values(tools).flatMap((tool) => tool.materialRefs ?? []));
+  const executionDomains: Readonly<Record<string, AgentExecutionDomainRef>> = sortedRecord(
+    [...executionDomainIds].map((id) => [id, { bindingRef: id }] as const),
+  );
+  const interactions = sortedRecord(
+    [...interactionIds].map((id) => [id, { bindingRef: id }] as const),
+  );
+  const materials = sortedRecord(
+    [...materialIds].map(
+      (id) =>
+        [
+          id,
+          id === "workspace" && workspace !== null
+            ? materialRefFor(workspace.providerResourceId, "workspace-env")
+            : materialRefFor(id, "tool-material"),
+        ] as const,
+    ),
+  );
+  const capabilities: Readonly<Record<string, AgentCapabilityBindingRef>> =
+    workspace === null ? {} : { workspaceOperations: { bindingRef: WORKSPACE_OP_FACT_OWNER } };
+  return {
+    agentId: product.agent.id,
+    scope:
+      product.agent.kind === PRODUCT_AGENT_KIND.WORKSPACE
+        ? { kind: "session", idSource: "manifest", stableScopeId: product.agent.id }
+        : { kind: "conversation", idSource: "manifest", stableScopeId: product.agent.id },
+    effectAuthorityRef: { authorityClass: "agent", authorityId: product.agent.id },
+    handlers: [],
+    instructions: { path: product.instructions.path, digest: product.instructions.digest },
+    llmRoutes: sortedRecord(Object.keys(routes).map((id) => [id, { bindingRef: id }] as const)),
+    ...(Object.keys(capabilities).length === 0 ? {} : { capabilities }),
+    ...(Object.keys(tools).length === 0 ? {} : { tools }),
+    ...(Object.keys(materials).length === 0 ? {} : { materials }),
+    ...(Object.keys(executionDomains).length === 0 ? {} : { executionDomains }),
+    ...(Object.keys(interactions).length === 0 ? {} : { interactions }),
+    ...(product.outputSchema === undefined ? {} : { outputSchema: product.outputSchema }),
+  };
+};
+
+const bindingFactsFor = (
+  product: ProductPlan,
+  binding: StaticTargetBinding,
+):
+  | { readonly ok: true; readonly value: StaticTargetBindingFacts }
+  | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> } => {
+  if (!verifyProductPlanDigest(product))
+    return { ok: false, issues: [{ kind: "product_digest_mismatch" }] };
+  const routes = llmRoutesFor(product, binding);
+  if (!routes.ok) return routes;
+  const identity = deploymentIdentityFor(product, binding);
+  const workspace = workspaceForBinding(product, binding, identity.id);
+  if (product.agent.kind === PRODUCT_AGENT_KIND.WORKSPACE && workspace === null) {
+    return { ok: false, issues: [{ kind: "workspace_binding_required", host: binding.kind }] };
+  }
+  const selectedTools = selectedToolsFor(product);
+  if (!selectedTools.ok) return selectedTools;
+  const target = targetForBinding(binding);
+  const manifest = manifestForBinding(product, routes.routes, workspace, selectedTools.tools);
+  const deployment: StaticTargetBoundDeployment = {
+    deploymentId: identity.id,
+    manifest,
+    backend: target.kind === STATIC_TARGET_KIND.NODE ? "node" : "cloudflare-do",
+    adapter: target.kind,
+    codec: "agentos-json@1",
+    providerStrategy: PROVIDER_PROTOCOL.OPENAI_CHAT_COMPATIBLE,
+  };
+  const deploymentOrigins = {
+    "/deployment/id": binding.kind === "local" ? "host:local#agent-id" : "deployment:/release/id",
+    "/target": binding.kind === "local" ? "host:local#node" : "deployment:/target",
+    "/client": binding.kind === "local" ? "host:local#direct" : "deployment:/transport",
+    "/providers": binding.kind === "local" ? "host:local#environment" : "deployment:/providers",
+  };
+  return {
+    ok: true,
+    value: {
+      deployment,
+      target,
+      client: binding.kind === "local" ? STATIC_CLIENT_KIND.DIRECT : binding.transport,
+      llmRoutes: routes.routes,
+      ...(workspace === null ? {} : { workspace }),
+      provenance: {
+        manifest: product.provenance,
+        deployment: deploymentOrigins,
+        exclusions: {},
+      },
+    },
+  };
+};
+
 const staticTargetProfileProjectionFor = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  product: ProductPlan,
+  facts: StaticTargetBindingFacts,
   modules: ReturnType<typeof staticTargetModules>,
 ): StaticTargetProfileProjection => {
   const renderInput: StaticTargetRenderInput = {
-    deployment: normalized.deployment,
-    authoredToolNames: normalized.authoredToolNames,
-    channels: normalized.channels,
-    schedules: normalized.schedules,
-    llmRoutes: normalized.llmRoutes,
-    skills: normalized.skills,
-    instructionFragments: normalized.instructionFragments,
-    dynamicResolvers: normalized.dynamicResolvers,
+    deployment: facts.deployment,
+    authoredToolNames: product.assets.tools.map((tool) => tool.name),
+    channels: product.assets.channels,
+    schedules: product.assets.schedules,
+    llmRoutes: facts.llmRoutes,
+    skills: product.assets.skills,
+    instructionFragments: product.assets.instructionFragments,
+    dynamicResolvers: product.assets.dynamicResolvers,
   };
   const selected =
-    normalized.profile === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+    product.agent.kind === PRODUCT_AGENT_KIND.WORKSPACE
       ? {
-          kind: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
-          renderInput: { ...renderInput, workspace: normalized.workspace },
+          kind: PRODUCT_AGENT_KIND.WORKSPACE,
+          renderInput: { ...renderInput, workspace: facts.workspace as StaticTargetWorkspace },
           deployment: {
             workspace: {
-              binding: normalized.workspace.binding,
-              bindingRef: normalized.workspace.bindingRef,
-              root: normalized.workspace.root,
-              topology: normalized.workspace.topology,
-              scope: normalized.workspace.scope,
-              ...(isManifestNormalizedWorkspace(normalized.workspace)
-                ? { providerResourceId: normalized.workspace.providerResourceId }
-                : {}),
+              binding: facts.workspace?.binding,
+              bindingRef: facts.workspace?.bindingRef,
+              root: facts.workspace?.root,
+              topology: facts.workspace?.topology,
+              scope: facts.workspace?.scope,
+              providerResourceId: facts.workspace?.providerResourceId,
             },
           },
           capabilityImports: [
@@ -3775,13 +4174,13 @@ const staticTargetProfileProjectionFor = (
             svelteKit: renderWorkspaceSvelteKitClient(modules),
             svelteKitRemote: renderWorkspaceSvelteKitRemote(modules),
             baseModuleImports: generatedProfileClientModuleImports(
-              AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
+              PRODUCT_AGENT_KIND.WORKSPACE,
               modules,
             ),
           },
           canonicalDeployment: {
-            profile: AGENTOS_CONFIG_PROFILE.WORKSPACE_V1,
-            workspaceTopology: normalized.workspace.topology,
+            profile: PRODUCT_AGENT_KIND.WORKSPACE,
+            workspaceTopology: facts.workspace?.topology,
           },
           mount: {
             projectionSinks: [
@@ -3791,16 +4190,12 @@ const staticTargetProfileProjectionFor = (
               "runtime.events",
               "runtime.input_requests",
             ] as const,
-            ...(isManifestNormalizedWorkspace(normalized.workspace)
-              ? { providerResourceId: normalized.workspace.providerResourceId }
-              : {}),
+            providerResourceId: facts.workspace?.providerResourceId,
           },
-          nodeWorkspace: isManifestNormalizedWorkspace(normalized.workspace)
-            ? normalized.workspace
-            : null,
+          nodeWorkspace: facts.workspace as StaticTargetWorkspace,
         }
       : {
-          kind: AGENTOS_CONFIG_PROFILE.CHAT_V1,
+          kind: PRODUCT_AGENT_KIND.CHAT,
           renderInput,
           deployment: {},
           capabilityImports: [
@@ -3824,11 +4219,11 @@ const staticTargetProfileProjectionFor = (
             svelteKit: renderChatSvelteKitClient(modules),
             svelteKitRemote: renderChatSvelteKitRemote(modules),
             baseModuleImports: generatedProfileClientModuleImports(
-              AGENTOS_CONFIG_PROFILE.CHAT_V1,
+              PRODUCT_AGENT_KIND.CHAT,
               modules,
             ),
           },
-          canonicalDeployment: { profile: AGENTOS_CONFIG_PROFILE.CHAT_V1 },
+          canonicalDeployment: { profile: PRODUCT_AGENT_KIND.CHAT },
           mount: {
             projectionSinks: ["agent.info", "runtime.events", "runtime.input_requests"] as const,
           },
@@ -3846,7 +4241,7 @@ const staticTargetProfileProjectionFor = (
     canonicalDeployment: selected.canonicalDeployment,
     mount: selected.mount,
   };
-  return selected.kind === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+  return selected.kind === PRODUCT_AGENT_KIND.WORKSPACE
     ? {
         ...common,
         kind: selected.kind,
@@ -3862,14 +4257,14 @@ const staticTargetProfileProjectionFor = (
 };
 
 const staticTargetClientProjectionFor = (
-  client: AgentOsConfigClientKind,
+  client: StaticClientKind,
   profile: StaticTargetProfileProjection,
   modules: ReturnType<typeof staticTargetModules>,
 ): StaticTargetClientProjection => {
   const candidates = profile.clientCandidates;
-  if (client === AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1) {
+  if (client === STATIC_CLIENT_KIND.DIRECT) {
     return {
-      kind: AGENTOS_CONFIG_CLIENT.BROWSER_DIRECT_V1,
+      kind: STATIC_CLIENT_KIND.DIRECT,
       moduleImports: candidates.baseModuleImports,
       files: [
         generatedPath(".agentos/generated/client.ts", candidates.browserDirect),
@@ -3878,7 +4273,7 @@ const staticTargetClientProjectionFor = (
     };
   }
   return {
-    kind: AGENTOS_CONFIG_CLIENT.SVELTE_KIT_REMOTE_V1,
+    kind: STATIC_CLIENT_KIND.SVELTE_KIT_REMOTE,
     moduleImports: [
       ...candidates.baseModuleImports,
       ...generatedSvelteKitClientModuleImports(modules),
@@ -3892,7 +4287,7 @@ const staticTargetClientProjectionFor = (
 };
 
 const staticTargetHostProjectionFor = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  facts: StaticTargetBindingFacts,
   shared: StaticTargetPlanShared,
   profile: StaticTargetProfileProjection,
   client: StaticTargetClientProjection,
@@ -3900,30 +4295,33 @@ const staticTargetHostProjectionFor = (
 ):
   | { readonly ok: true; readonly value: StaticTargetHostProjection }
   | { readonly ok: false; readonly issues: ReadonlyArray<StaticTargetLinkIssue> } => {
-  if (normalized.target.kind === AGENTOS_CONFIG_TARGET.NODE_V1) {
+  if (facts.target.kind === STATIC_TARGET_KIND.NODE) {
     const nodeWorkspace = profile.nodeWorkspace;
-    if (nodeWorkspace === null) {
-      return {
-        ok: false,
-        issues: [{ kind: "unsupported_static_target", target: AGENTOS_CONFIG_TARGET.NODE_V1 }],
-      };
-    }
     const deployment = {
       ...shared.deployment,
-      backend: normalized.deployment.backend,
-      adapter: normalized.deployment.adapter,
-      workspace: {
-        binding: nodeWorkspace.binding,
-        bindingRef: nodeWorkspace.bindingRef,
-        root: nodeWorkspace.root,
-        topology: nodeWorkspace.topology,
-        providerResourceId: nodeWorkspace.providerResourceId,
-      },
+      backend: facts.deployment.backend,
+      adapter: facts.deployment.adapter,
+      ...(nodeWorkspace === null
+        ? {}
+        : {
+            workspace: {
+              binding: nodeWorkspace.binding,
+              bindingRef: nodeWorkspace.bindingRef,
+              root: nodeWorkspace.root,
+              topology: nodeWorkspace.topology,
+              providerResourceId: nodeWorkspace.providerResourceId,
+            },
+          }),
     };
     const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
       ...shared.moduleInventory.semanticCore,
       ...shared.moduleInventory.skillResources,
       { kind: "local-runtime", source: modules.localRuntime, imports: ["lowerLocalAgentRuntime"] },
+      {
+        kind: "workspace-client",
+        source: modules.productShellClient,
+        imports: ["AgentSession", "createAgentSession"],
+      },
       {
         kind: "capability-runtime",
         source: modules.runtimeCapability,
@@ -3953,7 +4351,7 @@ const staticTargetHostProjectionFor = (
     return {
       ok: true,
       value: {
-        kind: AGENTOS_CONFIG_TARGET.NODE_V1,
+        kind: STATIC_TARGET_KIND.NODE,
         deployment,
         files: [
           ...sharedGeneratedFilesFor(shared, deployment, moduleGraph),
@@ -3963,15 +4361,15 @@ const staticTargetHostProjectionFor = (
           ),
         ],
         moduleGraph,
-        canonicalDeployment: { target: AGENTOS_CONFIG_TARGET.NODE_V1 },
-        mount: { driver: { kind: "local-node", target: AGENTOS_CONFIG_TARGET.NODE_V1 } },
+        canonicalDeployment: { target: STATIC_TARGET_KIND.NODE },
+        mount: { driver: { kind: "local-node", target: STATIC_TARGET_KIND.NODE } },
       },
     };
   }
 
-  const target = normalized.target;
+  const target = cloudflareTargetFor(facts.target);
   const selected =
-    profile.kind === AGENTOS_CONFIG_PROFILE.WORKSPACE_V1
+    profile.kind === PRODUCT_AGENT_KIND.WORKSPACE
       ? {
           targetText: renderWorkspaceStaticTarget(
             profile.renderInput,
@@ -4032,8 +4430,8 @@ const staticTargetHostProjectionFor = (
         };
   const deployment = {
     ...shared.deployment,
-    backend: normalized.deployment.backend,
-    adapter: normalized.deployment.adapter,
+    backend: facts.deployment.backend,
+    adapter: facts.deployment.adapter,
     ...profile.deployment,
   };
   const moduleGraph: ReadonlyArray<StaticTargetModuleImport> = [
@@ -4078,7 +4476,7 @@ const staticTargetHostProjectionFor = (
   return {
     ok: true,
     value: {
-      kind: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1,
+      kind: STATIC_TARGET_KIND.CLOUDFLARE_DO,
       deployment,
       files: [
         ...sharedGeneratedFilesFor(shared, deployment, moduleGraph),
@@ -4098,7 +4496,7 @@ const staticTargetHostProjectionFor = (
         ...client.files,
       ],
       moduleGraph,
-      canonicalDeployment: { target: AGENTOS_CONFIG_TARGET.CLOUDFLARE_DO_V1 },
+      canonicalDeployment: { target: STATIC_TARGET_KIND.CLOUDFLARE_DO },
       mount: {
         driver: {
           kind: "cloudflare-do",
@@ -4111,20 +4509,21 @@ const staticTargetHostProjectionFor = (
 };
 
 const staticTargetPlanFor = (
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest>,
+  product: ProductPlan,
+  facts: StaticTargetBindingFacts,
   modules: ReturnType<typeof staticTargetModules>,
 ): StaticTargetPlanResult => {
-  const manifest = normalized.deployment.manifest;
+  const manifest = facts.deployment.manifest;
   const toolNames = Object.keys(manifest.tools ?? {}).sort();
-  const authoredToolNames = new Set(normalized.authoredToolNames);
+  const authoredToolNames = new Set(product.assets.tools.map((tool) => tool.name));
   const authoredManifestToolNames = toolNames.filter((toolName) => authoredToolNames.has(toolName));
-  const skillResourceBundle = renderSkillResourceBundle(normalized.skills);
+  const skillResourceBundle = renderSkillResourceBundle(product.assets.skills);
   const semanticCore: ReadonlyArray<StaticTargetModuleImport> = [
     { kind: "semantic-json", source: "./manifest.json", imports: ["default as declarations"] },
     { kind: "semantic-json", source: "./deployment.json", imports: ["default as deployment"] },
   ];
   const skillResources: ReadonlyArray<StaticTargetModuleImport> =
-    normalized.skills.length > 0
+    product.assets.skills.length > 0
       ? [
           {
             kind: "semantic-json" as const,
@@ -4134,7 +4533,7 @@ const staticTargetPlanFor = (
         ]
       : [];
   const channels: ReadonlyArray<StaticTargetModuleImport> =
-    normalized.channels.length === 0
+    product.assets.channels.length === 0
       ? []
       : [
           {
@@ -4142,7 +4541,7 @@ const staticTargetPlanFor = (
             source: modules.runtimeChannel,
             imports: ["DefinedChannel"],
           },
-          ...generatedChannelImports(normalized.channels),
+          ...generatedChannelImports(product.assets.channels),
           {
             kind: "channel-registry",
             source: "./channels",
@@ -4150,7 +4549,7 @@ const staticTargetPlanFor = (
           },
         ];
   const schedules: ReadonlyArray<StaticTargetModuleImport> =
-    normalized.schedules.length === 0
+    product.assets.schedules.length === 0
       ? []
       : [
           {
@@ -4158,7 +4557,7 @@ const staticTargetPlanFor = (
             source: modules.runtimeSchedule,
             imports: ["DefinedSchedule"],
           },
-          ...generatedScheduleImports(normalized.schedules),
+          ...generatedScheduleImports(product.assets.schedules),
           {
             kind: "schedule-registry",
             source: "./schedules",
@@ -4172,14 +4571,12 @@ const staticTargetPlanFor = (
         ];
   const shared: StaticTargetPlanShared = {
     deployment: {
-      deploymentId: normalized.deployment.deploymentId,
-      codec: normalized.deployment.codec,
-      ...(normalized.deployment.providerStrategy === undefined
-        ? {}
-        : { providerStrategy: normalized.deployment.providerStrategy }),
+      deploymentId: facts.deployment.deploymentId,
+      codec: facts.deployment.codec,
+      providerStrategy: facts.deployment.providerStrategy,
     },
     manifest,
-    provenance: normalized.provenance,
+    provenance: facts.provenance,
     toolNames,
     authoredManifestToolNames,
     skillResourceBundle,
@@ -4187,17 +4584,14 @@ const staticTargetPlanFor = (
       semanticCore,
       skillResources,
       authoredTools: generatedToolImports(authoredManifestToolNames),
-      dynamicResolvers: generatedDynamicResolverImports(normalized.dynamicResolvers),
+      dynamicResolvers: generatedDynamicResolverImports(product.assets.dynamicResolvers),
       channels,
       schedules,
     },
     files: {
       manifest: generatedPath(".agentos/generated/manifest.json", stableJson(manifest)),
-      provenance: generatedPath(
-        ".agentos/generated/provenance.json",
-        stableJson(normalized.provenance),
-      ),
-      ...(normalized.skills.length === 0
+      provenance: generatedPath(".agentos/generated/provenance.json", stableJson(facts.provenance)),
+      ...(product.assets.skills.length === 0
         ? {}
         : {
             skillResources: generatedPath(
@@ -4205,27 +4599,27 @@ const staticTargetPlanFor = (
               skillResourceBundle,
             ),
           }),
-      ...(normalized.channels.length === 0
+      ...(product.assets.channels.length === 0
         ? {}
         : {
             channels: generatedPath(
               ".agentos/generated/channels.ts",
-              renderChannelRegistry(normalized.channels, modules),
+              renderChannelRegistry(product.assets.channels, modules),
             ),
           }),
-      ...(normalized.schedules.length === 0
+      ...(product.assets.schedules.length === 0
         ? {}
         : {
             schedules: generatedPath(
               ".agentos/generated/schedules.ts",
-              renderScheduleRegistry(normalized.schedules, modules),
+              renderScheduleRegistry(product.assets.schedules, modules),
             ),
           }),
     },
   };
-  const profile = staticTargetProfileProjectionFor(normalized, modules);
-  const client = staticTargetClientProjectionFor(normalized.client.kind, profile, modules);
-  const host = staticTargetHostProjectionFor(normalized, shared, profile, client, modules);
+  const profile = staticTargetProfileProjectionFor(product, facts, modules);
+  const client = staticTargetClientProjectionFor(facts.client, profile, modules);
+  const host = staticTargetHostProjectionFor(facts, shared, profile, client, modules);
   if (!host.ok) return host;
   return {
     ok: true,
@@ -4259,20 +4653,12 @@ function sharedGeneratedFilesFor(
   ];
 }
 
-/**
- * Link normalized workspace authoring intent to a closed-target residual
- * program. Implementation wiring is static imports and factory composition;
- * manifest and deployment JSON remain semantic/provenance data only.
- *
- * @agentosPrimitive primitive.agent-authoring.linkWorkspaceStaticTarget
- * @agentosInvariant invariant.docs.agent-projection
- * @agentosInvariant invariant.algebra.single-code-source
- * @agentosDocs docs/guides/build-natural-language-workspace-agent.md
- */
-export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
-  normalized: NormalizedAgentOsConfig<AuthoredAgentManifest<K>>,
+/** Bind one product plan to one explicit host without reinterpreting product semantics. */
+export const bindStaticTargetPlan = (
+  product: ProductPlan,
+  binding: StaticTargetBinding,
   options: StaticTargetLinkOptions = {},
-): StaticTargetLinkResult => {
+): StaticTargetPlanResult => {
   const packageScope = options.packageScope ?? DEFAULT_STATIC_TARGET_PACKAGE_SCOPE;
   if (!packageScopePattern.test(packageScope)) {
     return {
@@ -4281,34 +4667,34 @@ export const linkWorkspaceStaticTarget = <K extends HandlerKind = HandlerKind>(
     };
   }
   const modules = staticTargetModules(packageScope);
-  if (normalized.llm.route !== AGENTOS_CONFIG_LLM_ROUTE.OPENAI_CHAT_COMPATIBLE) {
-    return {
-      ok: false,
-      issues: [{ kind: "unsupported_static_llm_route", route: normalized.llm.route }],
-    };
-  }
-  const planned = staticTargetPlanFor(
-    normalized as NormalizedAgentOsConfig<AuthoredAgentManifest>,
-    modules,
-  );
+  const facts = bindingFactsFor(product, binding);
+  if (!facts.ok) return facts;
+  return staticTargetPlanFor(product, facts.value, modules);
+};
+
+export const renderStaticTargetPlan = (plan: StaticTargetPlan): StaticTargetLink => ({
+  files: plan.host.files,
+  moduleGraph: plan.host.moduleGraph,
+  canonicalDeployment: {
+    ...plan.profile.canonicalDeployment,
+    ...plan.host.canonicalDeployment,
+    llmRoute: PROVIDER_PROTOCOL.OPENAI_CHAT_COMPATIBLE,
+    client: plan.client.kind,
+    toolNames: plan.shared.toolNames,
+  },
+  mount: {
+    ...plan.host.mount,
+    ...plan.profile.mount,
+  },
+});
+
+/** Compile the explicit product/host pair to the generated residual program. */
+export const linkStaticTarget = (
+  product: ProductPlan,
+  binding: StaticTargetBinding,
+  options: StaticTargetLinkOptions = {},
+): StaticTargetLinkResult => {
+  const planned = bindStaticTargetPlan(product, binding, options);
   if (!planned.ok) return planned;
-  const plan = planned.value;
-  return {
-    ok: true,
-    value: {
-      files: plan.host.files,
-      moduleGraph: plan.host.moduleGraph,
-      canonicalDeployment: {
-        ...plan.profile.canonicalDeployment,
-        ...plan.host.canonicalDeployment,
-        llmRoute: normalized.llm.route,
-        client: plan.client.kind,
-        toolNames: plan.shared.toolNames,
-      },
-      mount: {
-        ...plan.host.mount,
-        ...plan.profile.mount,
-      },
-    },
-  };
+  return { ok: true, value: renderStaticTargetPlan(planned.value) };
 };

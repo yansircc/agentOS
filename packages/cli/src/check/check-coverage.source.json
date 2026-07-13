@@ -1520,8 +1520,8 @@
               {
                 "op": "replace",
                 "path": "docs/agent/primitive-evidence.source.json",
-                "before": "    {\n      \"primitive\": \"primitive.agent-authoring.compileAgentTree\",\n      \"tests\": [\"packages/cli/test/build-command.test.mjs\"]\n    },",
-                "after": "    {\n      \"primitive\": \"primitive.agent-authoring.compileAgentTree\",\n      \"tests\": [\"packages/cli/test/capability-holds.test.mjs\"]\n    },"
+                "before": "    {\n      \"primitive\": \"primitive.agent-authoring.compileProductPlan\",\n      \"tests\": [\"packages/cli/test/product-plan.test.mjs\"]\n    },",
+                "after": "    {\n      \"primitive\": \"primitive.agent-authoring.compileProductPlan\",\n      \"tests\": [\"packages/cli/test/capability-holds.test.mjs\"]\n    },"
               }
             ],
             "expected": {

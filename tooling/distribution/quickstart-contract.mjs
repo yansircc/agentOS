@@ -1,20 +1,24 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const defaultContractPath = path.join(
-  "/Users/yansir/code/52/agentOS",
-  ".cst/artifacts/quickstart-contract-v1/contract.json",
-);
+const contractId = "agentos-ask-quickstart-v1";
+const quickstartDocument = "docs/guides/quickstart-node.md";
+const expectedFilePaths = ["agent/instructions.md", "agent/agent.json"];
+const expectedCommandIds = ["install", "ask"];
+const expectedInstallCommand = [
+  "pnpm init",
+  "pnpm add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect",
+].join("\n");
+const expectedAskCommand =
+  'pnpm exec agentos ask "Say hello" --llm test --llm-response "Hello from agentOS"';
 
 const fail = (message) => {
   throw new Error(`quickstart contract: ${message}`);
 };
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
-const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
 const attributesFrom = (text) =>
   Object.fromEntries(
@@ -61,80 +65,56 @@ export const parseQuickstartBlocks = (markdown) => {
   return { files, commands };
 };
 
-const sourceSpecifier = (specifier, publicScope) => {
-  if (!specifier.startsWith(`${publicScope}/`)) return specifier;
-  return `@agent-os/${specifier.slice(publicScope.length + 1)}`;
-};
+const sameOrderedValues = (actual, expected) =>
+  actual.length === expected.length && actual.every((value, index) => value === expected[index]);
 
-const entrypointFor = (surface, specifier, publicScope) => {
-  const source = sourceSpecifier(specifier, publicScope);
-  const packageRecord = surface.packages.find(
-    (candidate) => source === candidate.name || source.startsWith(`${candidate.name}/`),
-  );
-  if (packageRecord === undefined) return undefined;
-  const suffix = source.slice(packageRecord.name.length);
-  const subpath = suffix.length === 0 ? "." : `.${suffix}`;
-  return packageRecord.entrypoints.find((entrypoint) => entrypoint.subpath === subpath);
-};
-
-const manualImportSpecifiers = (body) =>
-  Array.from(
-    body.matchAll(/(?:from\s+|import\s*\(\s*)["'](@[a-z0-9._-]+\/[a-z0-9._/-]+)["']/giu),
-    (match) => match[1],
-  );
-
-const assertDefaultDirectImports = (blocks, surface, publicScope) => {
-  for (const [filePath, body] of blocks.files) {
-    for (const specifier of manualImportSpecifiers(body)) {
-      const entrypoint = entrypointFor(surface, specifier, publicScope);
-      if (entrypoint === undefined || !entrypoint.audiences.includes("default-direct")) {
-        fail(`${filePath} manually imports non-default surface ${specifier}`);
-      }
-    }
+const assertExactBlockSet = (blocks) => {
+  if (!sameOrderedValues([...blocks.files.keys()], expectedFilePaths)) {
+    fail(`file blocks must be exactly ${expectedFilePaths.join(", ")}`);
   }
-};
-
-const assertRequiredBlocks = (blocks, contract) => {
-  const missingFiles = contract.requiredAuthoredFiles.filter((file) => !blocks.files.has(file));
-  if (missingFiles.length > 0) fail(`missing authored files: ${missingFiles.join(", ")}`);
-  const missingCommands = contract.requiredJourney.filter((id) => !blocks.commands.has(id));
-  if (missingCommands.length > 0) fail(`missing journey commands: ${missingCommands.join(", ")}`);
+  if (!sameOrderedValues([...blocks.commands.keys()], expectedCommandIds)) {
+    fail(`command blocks must be exactly ${expectedCommandIds.join(", ")}`);
+  }
 };
 
 const assertCommandBoundary = (blocks) => {
-  for (const id of ["install", "build", "serve"]) {
-    if (!blocks.commands.get(id)?.startsWith("pnpm ")) fail(`${id} must use pnpm`);
+  if (blocks.commands.get("install") !== expectedInstallCommand) {
+    fail("install command must initialize pnpm and install the canonical package set");
   }
-  for (const [id, command] of blocks.commands) {
-    if (/\b(?:bun|npm|yarn)\s+(?:run|exec|add|install)\b/u.test(command)) {
-      fail(`${id} uses a non-canonical package runner`);
-    }
+  if (blocks.commands.get("ask") !== expectedAskCommand) {
+    fail("ask command must be pnpm exec agentos ask with the canonical local test response");
   }
 };
 
-const assertConfigAxes = (blocks, contract) => {
-  const agent = JSON.parse(blocks.files.get("agent/agent.json"));
+const assertProductIntent = (blocks) => {
+  if (blocks.files.get("agent/instructions.md")?.trim().length === 0) {
+    fail("agent/instructions.md must be non-empty");
+  }
+  let agent;
+  try {
+    agent = JSON.parse(blocks.files.get("agent/agent.json"));
+  } catch {
+    fail("agent/agent.json must be valid JSON");
+  }
+  if (agent === null || typeof agent !== "object" || Array.isArray(agent)) {
+    fail("agent/agent.json must be an object");
+  }
+  if (!sameOrderedValues(Object.keys(agent).sort(), ["agentId", "kind"])) {
+    fail("agent/agent.json fields must be exactly agentId, kind");
+  }
   if (typeof agent.agentId !== "string" || agent.agentId.length === 0) {
     fail("agent/agent.json requires agentId");
   }
-  const config = JSON.parse(blocks.files.get("agentos.config.jsonc"));
-  for (const [axis, expected] of [
-    ["profile", contract.constraints.profile],
-    ["target.kind", contract.constraints.target],
-    ["client.kind", contract.constraints.client],
-  ]) {
-    const actual = axis.split(".").reduce((value, key) => value?.[key], config);
-    if (actual !== expected) fail(`${axis} must be ${expected}, received ${String(actual)}`);
-  }
+  if (agent.kind !== "workspace") fail("agent/agent.json kind must be workspace");
 };
 
-const assertRecipeProjection = (root, contract) => {
+const assertRecipeProjection = (root) => {
   const recipes = readJson(path.join(root, "docs/agent/recipes.source.json"));
   const recipe = recipes.recipes.find(
     (candidate) => candidate.id === "recipe.natural-language-workspace-agent",
   );
-  if (recipe?.tutorial !== contract.tutorial) {
-    fail(`natural-language recipe must route to ${contract.tutorial}`);
+  if (recipe?.tutorial !== quickstartDocument) {
+    fail(`natural-language recipe must route to ${quickstartDocument}`);
   }
   for (const evidence of [
     "tooling/distribution/quickstart-contract.mjs",
@@ -162,55 +142,28 @@ const assertDistributionComposition = (root) => {
   }
 };
 
-export const verifyQuickstartContract = ({
-  root = repoRoot,
-  contractPath = defaultContractPath,
-  markdown,
-} = {}) => {
-  const contractText = fs.readFileSync(contractPath, "utf8");
-  const contract = JSON.parse(contractText);
-  if (contract.schemaVersion !== 1 || contract.id !== "agentos-node-quickstart-v1") {
-    fail("unsupported frozen contract");
-  }
-  const tutorial = markdown ?? fs.readFileSync(path.join(root, contract.tutorial), "utf8");
+export const verifyQuickstartContract = ({ root = repoRoot, markdown } = {}) => {
+  const tutorial = markdown ?? fs.readFileSync(path.join(root, quickstartDocument), "utf8");
   const blocks = parseQuickstartBlocks(tutorial);
-  const surface = readJson(path.join(root, "docs/surface.json"));
-  const publicScope = readJson(path.join(root, "package.json")).agentOsRelease?.npmScope;
-  if (typeof publicScope !== "string") fail("package.json is missing agentOsRelease.npmScope");
 
-  assertRequiredBlocks(blocks, contract);
+  assertExactBlockSet(blocks);
+  assertProductIntent(blocks);
   assertCommandBoundary(blocks);
-  assertConfigAxes(blocks, contract);
-  assertDefaultDirectImports(blocks, surface, publicScope);
-  assertRecipeProjection(root, contract);
+  assertRecipeProjection(root);
   assertDistributionComposition(root);
   if (!tutorial.includes("build-natural-language-workspace-agent.md")) {
     fail("quickstart must link the generated-target authoring reference");
   }
-  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
-  if (/\bbun run (?:check|typecheck|test)\b/u.test(readme)) {
-    fail("README verification commands must use pnpm");
-  }
   return {
-    contractId: contract.id,
-    contractSha256: sha256(contractText),
-    files: Array.from(blocks.files.keys()).sort(),
-    commands: Array.from(blocks.commands.keys()).sort(),
+    contractId,
+    files: Array.from(blocks.files.keys()),
+    commands: Array.from(blocks.commands.keys()),
   };
 };
 
 export const assertQuickstartContract = () => {
   const result = verifyQuickstartContract();
   console.log(
-    `verified executable quickstart ${result.contractId} (${result.files.length} files, ${result.commands.length} commands)`,
+    `verified canonical quickstart ${result.contractId} (${result.files.length} files, ${result.commands.length} commands)`,
   );
 };
-
-const args = process.argv.slice(2);
-if (args[0] === "--contract-lock") {
-  const contractPath = path.resolve(args[1] ?? defaultContractPath);
-  const rootFlag = args.indexOf("--root");
-  const root = rootFlag >= 0 ? path.resolve(args[rootFlag + 1]) : repoRoot;
-  const result = verifyQuickstartContract({ root, contractPath });
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-}

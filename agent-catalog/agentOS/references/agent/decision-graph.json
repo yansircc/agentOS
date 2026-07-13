@@ -148,10 +148,10 @@
       ]
     },
     {
-      "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "primitive": "primitive.agent-authoring.linkStaticTarget",
       "intents": [
-        "compile an authored workspace agent into a static target",
-        "generate a typed client from agentos.config.jsonc"
+        "compile closed product intent into a backend-neutral product plan",
+        "bind a product plan to an explicit local host or deployment intent"
       ],
       "coordinationPackage": "@agent-os/cli",
       "coordinationCapabilityKind": "composer",
@@ -203,8 +203,8 @@
         }
       ],
       "allowedPrimitives": [
-        "primitive.agent-authoring.compileAgentTree",
-        "primitive.agent-authoring.linkWorkspaceStaticTarget"
+        "primitive.agent-authoring.compileProductPlan",
+        "primitive.agent-authoring.linkStaticTarget"
       ],
       "allowedPrimitivePackages": ["@agent-os/cli"],
       "forbiddenWrites": [
@@ -229,14 +229,14 @@
       ],
       "gates": ["convergence-boundary", "public-api", "spike-hygiene"],
       "invariants": ["invariant.algebra.single-code-source", "invariant.docs.agent-projection"],
-      "docs": ["docs/guides/build-natural-language-workspace-agent.md", "docs/verification.md"],
+      "docs": ["docs/guides/quickstart-node.md", "docs/verification.md"],
       "testEvidence": [
         {
-          "primitive": "primitive.agent-authoring.compileAgentTree",
-          "tests": ["packages/cli/test/build-command.test.mjs"]
+          "primitive": "primitive.agent-authoring.compileProductPlan",
+          "tests": ["packages/cli/test/product-plan.test.mjs"]
         },
         {
-          "primitive": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+          "primitive": "primitive.agent-authoring.linkStaticTarget",
           "tests": ["packages/cli/test/build-command.test.mjs"]
         }
       ]
@@ -479,7 +479,7 @@
     "recipes": [
       {
         "id": "recipe.natural-language-workspace-agent",
-        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+        "routePrimitives": ["primitive.agent-authoring.linkStaticTarget"]
       },
       {
         "id": "recipe.hello-ledger-event",
@@ -506,14 +506,14 @@
     ],
     "primitives": [
       {
-        "id": "primitive.agent-authoring.compileAgentTree",
+        "id": "primitive.agent-authoring.compileProductPlan",
         "capabilityKind": "composer",
-        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+        "routePrimitives": ["primitive.agent-authoring.linkStaticTarget"]
       },
       {
-        "id": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+        "id": "primitive.agent-authoring.linkStaticTarget",
         "capabilityKind": "composer",
-        "routePrimitives": ["primitive.agent-authoring.linkWorkspaceStaticTarget"]
+        "routePrimitives": ["primitive.agent-authoring.linkStaticTarget"]
       },
       {
         "id": "primitive.cloudflare-do.createCloudflareLedgerAgUiHistorySseResponse",

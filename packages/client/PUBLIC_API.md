@@ -55,6 +55,12 @@ Status: 0.6.x active development for the canonical agent client package. Root ex
 - `./svelte:clientReadable`
 - `./svelte:selectClientReadable`
 - `./product-shell-client:createProductShellAgentClient`
+- `./product-shell-client:createAgentSession`
+- `./product-shell-client:AgentPromptOptions`
+- `./product-shell-client:AgentSession`
+- `./product-shell-client:AgentSessionCorrelation`
+- `./product-shell-client:AgentSessionTurnInput`
+- `./product-shell-client:CreateAgentSessionOptions`
 - `./product-shell-client:CreateProductShellAgentClientOptions`
 - `./product-shell-client:ProductShellCommandInvoker`
 - `./product-shell-client:ProductShellCommandMap`

@@ -41,34 +41,34 @@
       }
     },
     {
-      "id": "primitive.agent-authoring.compileAgentTree",
+      "id": "primitive.agent-authoring.compileProductPlan",
       "package": "@agent-os/cli",
       "packagePath": "packages/cli",
       "entrypoints": ["."],
-      "symbol": "compileAgentTree",
-      "exportKey": ".:compileAgentTree",
+      "symbol": "compileProductPlan",
+      "exportKey": ".:compileProductPlan",
       "sourceFile": "packages/cli/src/index.ts",
-      "summary": "Compile an authored `agent/` tree into one normalized manifest plus provenance. Runtime facts and provider material are rejected before they can become manifest truth.",
+      "summary": "Compile closed authored product facts into one backend-neutral ProductPlan.",
       "aliases": [],
       "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
-      "docs": "docs/guides/build-natural-language-workspace-agent.md",
+      "docs": "docs/guides/quickstart-node.md",
       "capabilityKind": "composer",
       "testEvidence": {
-        "tests": ["packages/cli/test/build-command.test.mjs"]
+        "tests": ["packages/cli/test/product-plan.test.mjs"]
       }
     },
     {
-      "id": "primitive.agent-authoring.linkWorkspaceStaticTarget",
+      "id": "primitive.agent-authoring.linkStaticTarget",
       "package": "@agent-os/cli",
       "packagePath": "packages/cli",
       "entrypoints": ["."],
-      "symbol": "linkWorkspaceStaticTarget",
-      "exportKey": ".:linkWorkspaceStaticTarget",
+      "symbol": "linkStaticTarget",
+      "exportKey": ".:linkStaticTarget",
       "sourceFile": "packages/cli/src/index.ts",
-      "summary": "Link normalized workspace authoring intent to a closed-target residual program. Implementation wiring is static imports and factory composition; manifest and deployment JSON remain semantic/provenance data only.",
+      "summary": "Bind one ProductPlan to an explicit local host or deployment intent and render the resulting closed static target.",
       "aliases": [],
       "invariants": ["invariant.docs.agent-projection", "invariant.algebra.single-code-source"],
-      "docs": "docs/guides/build-natural-language-workspace-agent.md",
+      "docs": "docs/guides/quickstart-node.md",
       "capabilityKind": "composer",
       "testEvidence": {
         "tests": ["packages/cli/test/build-command.test.mjs"]

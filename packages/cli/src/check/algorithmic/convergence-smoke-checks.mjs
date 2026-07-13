@@ -305,8 +305,9 @@ const blueprintLifecycleOwnershipAxes = Object.keys(blueprintLifecycleOwnership)
 const blueprintRecipePrimaryFiles = new Set([
   "agent/channels/<name>.ts",
   "agent/schedules/<id>.ts",
-  "agentos.config.jsonc",
   "agent/agent.json",
+  "agent/instructions.md",
+  "agentos.deployment.jsonc",
   "package.json",
 ]);
 const blueprintRecipeGuidePath = "blueprints/UPGRADE.md";

@@ -6,24 +6,31 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  compileAgentTree,
-  decodeAgentOsConfig,
-  linkWorkspaceStaticTarget,
-  normalizeAgentOsConfig,
+  compileProductPlan,
+  linkStaticTarget,
   type AuthoredAgentTree,
   type AuthoredDynamicResolverDeclaration,
   type AuthoredScheduleDeclaration,
   type AuthoredToolDeclaration,
-  type NormalizedAgentOsConfig,
+  type ProductPlan,
   type StaticTargetLink,
 } from "./agent-authoring";
 import {
-  llmMaterialEnvBindings,
-  type LlmMaterialEnvBinding,
-  type LlmMaterialEnvKind,
-} from "./agent-authoring/config";
+  decodeDeploymentIntent,
+  localHost,
+  type DeploymentIntent,
+  type LocalHost,
+  type ProviderBindingIntent,
+  type StaticTargetBinding,
+} from "./agent-authoring/deployment-intent";
 import { importBundledModule } from "../lib/ts-module-loader.mjs";
-import { isInputRequestRef } from "@agent-os/core/runtime-protocol";
+import type { MaterialRef } from "@agent-os/core/material-ref";
+import {
+  liveResolvedMaterial,
+  RefResolutionFailed,
+  type RefResolver,
+} from "@agent-os/core/ref-resolver";
+import { isInputRequestRef, type SubmitResult } from "@agent-os/core/runtime-protocol";
 import {
   WORKSPACE_AGENT_COMMAND,
   type WorkspaceAgentInspectInputRequestCommandInput,
@@ -48,22 +55,22 @@ import {
   type EvalObservation,
   type EvalTarget,
 } from "@agent-os/evals";
+import { Effect } from "effect";
 
 interface BuildArgs {
   readonly cwd: string;
-  readonly config: string;
+  readonly deployment: string;
   readonly packageScope?: string;
 }
 
 interface InfoArgs {
   readonly cwd: string;
-  readonly config: string;
+  readonly deployment?: string;
   readonly json: boolean;
 }
 
-interface ServeArgs {
+interface LocalHostArgs {
   readonly cwd: string;
-  readonly config: string;
   readonly packageScope?: string;
   readonly host: string;
   readonly port: number;
@@ -72,9 +79,14 @@ interface ServeArgs {
   readonly json: boolean;
 }
 
+interface AskArgs extends LocalHostArgs {
+  readonly prompt: string;
+}
+
+type DevArgs = LocalHostArgs;
+
 interface EvalArgs {
   readonly cwd: string;
-  readonly config: string;
   readonly packageScope?: string;
   readonly target?: "local" | "remote";
   readonly baseUrl?: string;
@@ -86,7 +98,7 @@ interface EvalArgs {
 
 interface PreflightLlmArgs {
   readonly cwd: string;
-  readonly config: string;
+  readonly deployment: string;
   readonly routeBindingRef: string;
   readonly json: boolean;
 }
@@ -95,18 +107,18 @@ type CliArgs =
   | { readonly command: "help" }
   | { readonly command: "build"; readonly args: BuildArgs }
   | { readonly command: "info"; readonly args: InfoArgs }
-  | { readonly command: "serve" | "dev"; readonly args: ServeArgs }
+  | { readonly command: "ask"; readonly args: AskArgs }
+  | { readonly command: "dev"; readonly args: DevArgs }
   | { readonly command: "eval"; readonly args: EvalArgs }
   | { readonly command: "preflight"; readonly args: PreflightLlmArgs };
 
 const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
   const args: {
     cwd: string;
-    config: string;
+    deployment?: string;
     packageScope?: string;
   } = {
     cwd: process.cwd(),
-    config: "agentos.config.jsonc",
   };
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
@@ -116,9 +128,9 @@ const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
         args.cwd = rawArgs[index + 1];
         index += 1;
         break;
-      case "--config":
-        if (rawArgs[index + 1] === undefined) throw new Error("--config requires a value");
-        args.config = rawArgs[index + 1];
+      case "--deployment":
+        if (rawArgs[index + 1] === undefined) throw new Error("--deployment requires a value");
+        args.deployment = rawArgs[index + 1];
         index += 1;
         break;
       case "--package-scope":
@@ -130,13 +142,14 @@ const parseBuildArgs = (rawArgs: ReadonlyArray<string>): BuildArgs => {
         throw new Error(`unexpected argument ${arg}`);
     }
   }
-  return args;
+  if (args.deployment === undefined) throw new Error("--deployment is required");
+  return { ...args, deployment: args.deployment };
 };
 
 const parseInfoArgs = (rawArgs: ReadonlyArray<string>): InfoArgs => {
   const args = {
     cwd: process.cwd(),
-    config: "agentos.config.jsonc",
+    deployment: undefined as string | undefined,
     json: false,
   };
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -147,9 +160,9 @@ const parseInfoArgs = (rawArgs: ReadonlyArray<string>): InfoArgs => {
         args.cwd = rawArgs[index + 1];
         index += 1;
         break;
-      case "--config":
-        if (rawArgs[index + 1] === undefined) throw new Error("--config requires a value");
-        args.config = rawArgs[index + 1];
+      case "--deployment":
+        if (rawArgs[index + 1] === undefined) throw new Error("--deployment requires a value");
+        args.deployment = rawArgs[index + 1];
         index += 1;
         break;
       case "--json":
@@ -171,10 +184,9 @@ const parsePort = (value: string | undefined): number => {
   return parsed;
 };
 
-const parseServeArgs = (rawArgs: ReadonlyArray<string>): ServeArgs => {
+const parseLocalHostArgs = (rawArgs: ReadonlyArray<string>): LocalHostArgs => {
   const args: {
     cwd: string;
-    config: string;
     packageScope?: string;
     host: string;
     port: number;
@@ -183,7 +195,6 @@ const parseServeArgs = (rawArgs: ReadonlyArray<string>): ServeArgs => {
     json: boolean;
   } = {
     cwd: process.cwd(),
-    config: "agentos.config.jsonc",
     host: "127.0.0.1",
     port: 8787,
     llm: "config",
@@ -196,11 +207,6 @@ const parseServeArgs = (rawArgs: ReadonlyArray<string>): ServeArgs => {
       case "--cwd":
         if (rawArgs[index + 1] === undefined) throw new Error("--cwd requires a value");
         args.cwd = rawArgs[index + 1];
-        index += 1;
-        break;
-      case "--config":
-        if (rawArgs[index + 1] === undefined) throw new Error("--config requires a value");
-        args.config = rawArgs[index + 1];
         index += 1;
         break;
       case "--package-scope":
@@ -241,6 +247,14 @@ const parseServeArgs = (rawArgs: ReadonlyArray<string>): ServeArgs => {
   return args;
 };
 
+const parseAskArgs = (rawArgs: ReadonlyArray<string>): AskArgs => {
+  const [prompt, ...rest] = rawArgs;
+  if (prompt === undefined || prompt.startsWith("--") || prompt.trim().length === 0) {
+    throw new Error("ask requires a non-empty prompt as its first argument");
+  }
+  return { ...parseLocalHostArgs(rest), prompt };
+};
+
 const parseHeader = (value: string | undefined): readonly [string, string] => {
   if (value === undefined) throw new Error("--header requires a value");
   const separator = value.indexOf("=");
@@ -258,7 +272,6 @@ const parseHeader = (value: string | undefined): readonly [string, string] => {
 const parseEvalArgs = (rawArgs: ReadonlyArray<string>): EvalArgs => {
   const args: {
     cwd: string;
-    config: string;
     packageScope?: string;
     target?: "local" | "remote";
     baseUrl?: string;
@@ -268,7 +281,6 @@ const parseEvalArgs = (rawArgs: ReadonlyArray<string>): EvalArgs => {
     json: boolean;
   } = {
     cwd: process.cwd(),
-    config: "agentos.config.jsonc",
     headers: {},
     llm: "config",
     llmResponse: "ok",
@@ -280,11 +292,6 @@ const parseEvalArgs = (rawArgs: ReadonlyArray<string>): EvalArgs => {
       case "--cwd":
         if (rawArgs[index + 1] === undefined) throw new Error("--cwd requires a value");
         args.cwd = rawArgs[index + 1];
-        index += 1;
-        break;
-      case "--config":
-        if (rawArgs[index + 1] === undefined) throw new Error("--config requires a value");
-        args.config = rawArgs[index + 1];
         index += 1;
         break;
       case "--package-scope":
@@ -342,7 +349,7 @@ const parseEvalArgs = (rawArgs: ReadonlyArray<string>): EvalArgs => {
 const parsePreflightLlmArgs = (rawArgs: ReadonlyArray<string>): PreflightLlmArgs => {
   const args = {
     cwd: process.cwd(),
-    config: "agentos.config.jsonc",
+    deployment: undefined as string | undefined,
     routeBindingRef: "default",
     json: false,
   };
@@ -358,9 +365,9 @@ const parsePreflightLlmArgs = (rawArgs: ReadonlyArray<string>): PreflightLlmArgs
         args.cwd = rest[index + 1];
         index += 1;
         break;
-      case "--config":
-        if (rest[index + 1] === undefined) throw new Error("--config requires a value");
-        args.config = rest[index + 1];
+      case "--deployment":
+        if (rest[index + 1] === undefined) throw new Error("--deployment requires a value");
+        args.deployment = rest[index + 1];
         index += 1;
         break;
       case "--route":
@@ -375,7 +382,8 @@ const parsePreflightLlmArgs = (rawArgs: ReadonlyArray<string>): PreflightLlmArgs
         throw new Error(`unexpected argument ${arg}`);
     }
   }
-  return args;
+  if (args.deployment === undefined) throw new Error("preflight llm requires --deployment");
+  return { ...args, deployment: args.deployment };
 };
 
 const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
@@ -384,25 +392,24 @@ const parseArgs = (rawArgs: ReadonlyArray<string>): CliArgs => {
   if (rest.includes("--help") || rest.includes("-h")) return { command: "help" };
   if (command === "build") return { command: "build", args: parseBuildArgs(rest) };
   if (command === "info") return { command: "info", args: parseInfoArgs(rest) };
-  if (command === "serve" || command === "dev") {
-    return { command, args: parseServeArgs(rest) };
-  }
+  if (command === "ask") return { command: "ask", args: parseAskArgs(rest) };
+  if (command === "dev") return { command: "dev", args: parseLocalHostArgs(rest) };
   if (command === "eval") return { command: "eval", args: parseEvalArgs(rest) };
   if (command === "preflight") return { command: "preflight", args: parsePreflightLlmArgs(rest) };
-  throw new Error("choose one of build, info, serve, dev, eval, preflight");
+  throw new Error("choose one of ask, dev, build, info, eval, preflight");
 };
 
 const help = `Usage:
-  agentos build [--cwd <path>] [--config <path>] [--package-scope <scope>]
-  agentos info [--cwd <path>] [--config <path>] [--json]
-  agentos serve [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
-  agentos dev [--cwd <path>] [--config <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
-  agentos eval [--cwd <path>] [--config <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
-  agentos preflight llm [--cwd <path>] [--config <path>] [--route <binding-ref>] [--json]
+  agentos ask <prompt> [--cwd <path>] [--package-scope <scope>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos dev [--cwd <path>] [--package-scope <scope>] [--host <host>] [--port <port>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos build --deployment <path> [--cwd <path>] [--package-scope <scope>]
+  agentos info [--cwd <path>] [--deployment <path>] [--json]
+  agentos eval [--cwd <path>] [--package-scope <scope>] [--target local|remote] [--base-url <url>] [--header <name=value>] [--llm config|test] [--llm-response <text>] [--json]
+  agentos preflight llm --deployment <path> [--cwd <path>] [--route <binding-ref>] [--json]
 
-Compiles agent/ + workflows/ + agent/schedules/ + agentos.config.jsonc into .agentos/generated/.
+Compiles the closed agent product intent and one explicit local or deployment host.
 Prints compile-only agent inspection without starting a runtime.
-Serves the generated local node app through the CLI-owned public command/event protocol.
+Asks once or runs the generated local development host through the product facade.
 Runs evals/**/*.eval.ts against the generated app public command/event/channel protocol.
 Checks configured LLM route material before submit without printing material values.
 `;
@@ -525,16 +532,6 @@ const toAuthoredPath = (cwd: string, file: string): string =>
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const inferPackageScope = (
-  config: unknown,
-  explicitScope: string | undefined,
-): string | undefined => {
-  if (explicitScope !== undefined) return explicitScope;
-  const schema = isRecord(config) && typeof config.$schema === "string" ? config.$schema : "";
-  const match = /(?:^|\/)node_modules\/(@[^/]+)\/config\/schema\.json$/u.exec(schema);
-  return match?.[1];
-};
 
 const loadToolDeclaration = async (file: string): Promise<AuthoredToolDeclaration | undefined> => {
   const mod = await importBundledModule(file, { prefix: "agentos-tool-declaration-" });
@@ -819,93 +816,76 @@ const writeGeneratedFiles = async (
   }
 };
 
-interface CompileFacts {
+interface CompileFacts<Binding extends StaticTargetBinding = StaticTargetBinding> {
   readonly cwd: string;
-  readonly normalized: NormalizedAgentOsConfig;
+  readonly product: ProductPlan;
+  readonly binding: Binding;
   readonly linked: StaticTargetLink;
 }
 
-const loadCompileFacts = async (
-  args: Pick<BuildArgs, "cwd" | "config" | "packageScope">,
-): Promise<CompileFacts> => {
+const loadDeploymentIntent = async (cwd: string, file: string): Promise<DeploymentIntent> => {
+  const value = await readJsonc(path.resolve(cwd, file));
+  const decoded = decodeDeploymentIntent(value);
+  if (!decoded.ok) {
+    throw new Error(`deployment intent invalid: ${JSON.stringify(decoded.issues, null, 2)}`);
+  }
+  return decoded.value;
+};
+
+const loadCompileFacts = async <Binding extends StaticTargetBinding>(
+  args: { readonly cwd: string; readonly packageScope?: string },
+  binding: Binding,
+): Promise<CompileFacts<Binding>> => {
   const cwd = path.resolve(args.cwd);
-  const configPath = path.resolve(cwd, args.config);
-  const configValue = await readJsonc(configPath);
-  const packageScope = inferPackageScope(configValue, args.packageScope);
-  const decodedConfig = decodeAgentOsConfig(configValue);
-  if (!decodedConfig.ok) {
-    throw new Error(
-      `agentos.config.jsonc invalid: ${JSON.stringify(decodedConfig.issues, null, 2)}`,
-    );
-  }
-
-  const agentDir = path.resolve(cwd, decodedConfig.value.agent);
+  const agentDir = path.join(cwd, "agent");
   const tree = await loadAuthoredTree(cwd, agentDir);
-  const compiled = compileAgentTree(tree);
+  const compiled = compileProductPlan(tree);
   if (!compiled.ok) {
-    throw new Error(`agent tree invalid: ${JSON.stringify(compiled.issues, null, 2)}`);
+    throw new Error(`product intent invalid: ${JSON.stringify(compiled.issues, null, 2)}`);
   }
-
-  const normalized = normalizeAgentOsConfig(decodedConfig.value, compiled.value);
-  if (!normalized.ok) {
-    throw new Error(
-      `agentos config normalization failed: ${JSON.stringify(normalized.issues, null, 2)}`,
-    );
-  }
-
-  const linked = linkWorkspaceStaticTarget(
-    normalized.value,
-    packageScope === undefined ? {} : { packageScope },
+  const linked = linkStaticTarget(
+    compiled.value,
+    binding,
+    args.packageScope === undefined ? {} : { packageScope: args.packageScope },
   );
   if (!linked.ok) {
     throw new Error(`static target link failed: ${JSON.stringify(linked.issues, null, 2)}`);
   }
 
-  return { cwd, normalized: normalized.value, linked: linked.value };
+  return { cwd, product: compiled.value, binding, linked: linked.value };
 };
 
 const unavailable = (reason: string) => ({ status: "unavailable" as const, reason });
-
-const manifestCapabilityBindingRefs = (
-  capabilities: NormalizedAgentOsConfig["deployment"]["manifest"]["capabilities"],
-): ReadonlyArray<string> =>
-  Object.values(capabilities ?? {})
-    .map((capability) => capability.bindingRef)
-    .sort((left, right) => left.localeCompare(right));
 
 const projectInfo = (facts: CompileFacts) => ({
   compile: {
     status: "available" as const,
     cwd: facts.cwd,
-    profile: facts.normalized.profile,
-    target: facts.normalized.target.kind,
+    profile: facts.product.agent.kind,
+    target: facts.linked.canonicalDeployment.target,
     agent: {
-      id: facts.normalized.deployment.manifest.agentId,
-      scope: facts.normalized.deployment.manifest.scope,
+      id: facts.product.agent.id,
+      kind: facts.product.agent.kind,
     },
     deployment: {
-      id: facts.normalized.deployment.deploymentId,
-      backend: facts.normalized.deployment.backend,
-      adapter: facts.normalized.deployment.adapter,
-      version: facts.normalized.deploymentVersion,
+      kind: facts.binding.kind,
+      backend: facts.linked.canonicalDeployment.target === "node@1" ? "node" : "cloudflare-do",
+      adapter: facts.linked.canonicalDeployment.target,
+      ...(facts.binding.kind === "deployment"
+        ? { id: facts.binding.release.id, version: facts.binding.release.version }
+        : { id: `local-${facts.product.agent.id}` }),
     },
     manifest: {
-      host: facts.normalized.target.kind,
-      capabilities: manifestCapabilityBindingRefs(
-        facts.normalized.deployment.manifest.capabilities,
-      ),
-      tools: Object.keys(facts.normalized.deployment.manifest.tools ?? {}).sort((left, right) =>
-        left.localeCompare(right),
-      ),
-      workflows: facts.normalized.workflows.map((workflow) => workflow.name),
-      schedules: facts.normalized.schedules.map((schedule) => schedule.scheduleId),
+      tools: facts.product.toolSelection ?? facts.product.assets.tools.map((tool) => tool.name),
+      workflows: facts.product.assets.workflows.map((workflow) => workflow.name),
+      schedules: facts.product.assets.schedules.map((schedule) => schedule.scheduleId),
     },
     generated: {
       files: facts.linked.files.map((file) => file.path),
       mount: facts.linked.mount,
       canonicalDeployment: facts.linked.canonicalDeployment,
     },
-    provenance: facts.normalized.provenance,
+    provenance: facts.product.provenance,
   },
   resolve: unavailable("agentos info is compile-only; resolved install graph is unavailable"),
   runtime: unavailable("agentos info does not start a local or Cloudflare runtime"),
@@ -941,6 +921,98 @@ interface ProviderMaterialDetail {
     readonly status?: string;
   }>;
 }
+
+type LlmMaterialEnvKind = "endpoint" | "credential" | "model";
+
+interface LlmMaterialEnvBinding {
+  readonly kind: LlmMaterialEnvKind;
+  readonly ref: string;
+  readonly envName: string;
+}
+
+const materialEnvNameForRef = (kind: LlmMaterialEnvKind, ref: string): string => {
+  const prefix =
+    kind === "endpoint"
+      ? "AGENTOS_ENDPOINT"
+      : kind === "credential"
+        ? "AGENTOS_CREDENTIAL"
+        : "AGENTOS_MODEL";
+  const suffix =
+    ref
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "REF";
+  return `${prefix}_${suffix}`;
+};
+
+const localHostMaterialResolver = (
+  env: Readonly<Record<string, string | undefined>>,
+): RefResolver => ({
+  material: (request) => {
+    const ref: MaterialRef = request.materialRef;
+    if (ref.kind !== "endpoint" && ref.kind !== "credential") {
+      return Effect.fail(
+        new RefResolutionFailed({
+          kind: ref.kind,
+          ref: ref.ref,
+          reason: "material_missing",
+          ...(request.expectedVersion === undefined
+            ? {}
+            : { expectedVersion: request.expectedVersion }),
+        }),
+      );
+    }
+    const envName = materialEnvNameForRef(ref.kind, ref.ref);
+    const value = env[envName];
+    const endpointValid =
+      ref.kind !== "endpoint" ||
+      (typeof value === "string" &&
+        URL.canParse(value) &&
+        ["http:", "https:"].includes(new URL(value).protocol));
+    if (typeof value !== "string" || value.length === 0 || !endpointValid) {
+      return Effect.fail(
+        new RefResolutionFailed({
+          kind: ref.kind,
+          ref: ref.ref,
+          reason:
+            typeof value === "string" && value.length > 0
+              ? "material_type_mismatch"
+              : "material_missing",
+          ...(request.expectedVersion === undefined
+            ? {}
+            : { expectedVersion: request.expectedVersion }),
+        }),
+      );
+    }
+    return Effect.succeed(
+      liveResolvedMaterial({
+        ref,
+        version: "local-host-env@1",
+        value,
+      }),
+    );
+  },
+});
+
+const llmMaterialEnvBindings = (
+  provider: ProviderBindingIntent,
+): ReadonlyArray<LlmMaterialEnvBinding> => [
+  {
+    kind: "endpoint",
+    ref: provider.endpointRef,
+    envName: materialEnvNameForRef("endpoint", provider.endpointRef),
+  },
+  {
+    kind: "credential",
+    ref: provider.credentialRef,
+    envName: materialEnvNameForRef("credential", provider.credentialRef),
+  },
+  {
+    kind: "model",
+    ref: provider.modelRef,
+    envName: materialEnvNameForRef("model", provider.modelRef),
+  },
+];
 
 const envNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
@@ -1072,11 +1144,12 @@ const preflightDiagnostic = (
 ): PreflightDiagnostic => ({ pass, reason, detail: JSON.stringify(detail) });
 
 const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
-  const facts = await loadCompileFacts({ cwd: args.cwd, config: args.config });
+  const cwd = path.resolve(args.cwd);
+  const deployment = await loadDeploymentIntent(cwd, args.deployment);
   const routeBindingRef = args.routeBindingRef;
-  const availableRoutes = Object.keys(facts.normalized.llmRoutes).sort();
-  const llm = facts.normalized.llmRoutes[routeBindingRef];
-  const env = await readPreflightEnv(facts.cwd);
+  const availableRoutes = Object.keys(deployment.providers).sort();
+  const llm = deployment.providers[routeBindingRef];
+  const env = await readPreflightEnv(cwd);
   const envDiagnostics: PreflightDiagnostic[] = env.issues.map((issue) =>
     preflightDiagnostic("env_file", ".dev.vars is invalid", issue),
   );
@@ -1084,8 +1157,8 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
     const output = {
       protocol: "agentos-preflight-llm@1",
       ok: false,
-      cwd: facts.cwd,
-      config: args.config,
+      cwd,
+      deployment: args.deployment,
       route: {
         bindingRef: routeBindingRef,
         status: "missing",
@@ -1117,7 +1190,7 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
       ? []
       : preflightOpenAiCompatibleProviderMaterial({
           route: {
-            kind: llm.route,
+            kind: llm.protocol,
             endpointRef: llm.endpointRef,
             credentialRef: llm.credentialRef,
             modelId: typeof modelValue === "string" ? modelValue : "",
@@ -1152,12 +1225,12 @@ const runPreflightLlm = async (args: PreflightLlmArgs): Promise<void> => {
   const output = {
     protocol: "agentos-preflight-llm@1",
     ok,
-    cwd: facts.cwd,
-    config: args.config,
+    cwd,
+    deployment: args.deployment,
     route: {
       bindingRef: routeBindingRef,
       status: providerDetail?.routeStatus ?? (ok ? "present" : "invalid"),
-      kind: llm.route,
+      kind: llm.protocol,
     },
     env: {
       sources: env.sources,
@@ -1217,6 +1290,10 @@ interface LocalAgentApp {
     readonly inspectInputRequest?: (
       input: WorkspaceAgentInspectInputRequestCommandInput,
     ) => unknown;
+  };
+  readonly session: {
+    readonly sessionRef: string;
+    readonly prompt: (text: string) => Promise<SubmitResult>;
   };
   readonly sessions?: {
     readonly submitTurn: (input: unknown) => Promise<unknown>;
@@ -1481,9 +1558,14 @@ const invokeLocalAgentCommand = async (
   throw new HttpFailure(501, `unsupported generated app command ${name}`);
 };
 
-const localAppOptionsFor = (args: ServeArgs): Readonly<Record<string, unknown>> => ({
-  cwd: path.resolve(args.cwd),
-  inheritEnv: true,
+const localAppOptionsFor = (
+  args: LocalHostArgs,
+  host: LocalHost,
+): Readonly<Record<string, unknown>> => ({
+  cwd: host.cwd,
+  env: host.env,
+  inheritEnv: false,
+  materialResolver: localHostMaterialResolver(host.env),
   ...(args.llm === "test"
     ? {
         llm: {
@@ -1500,14 +1582,9 @@ const localAppOptionsFor = (args: ServeArgs): Readonly<Record<string, unknown>> 
 });
 
 const loadGeneratedLocalApp = async (
-  args: ServeArgs,
-  facts: CompileFacts,
+  args: LocalHostArgs,
+  facts: CompileFacts<LocalHost>,
 ): Promise<LocalAgentApp> => {
-  if (facts.normalized.target.kind !== "node@1") {
-    throw new Error(
-      `agentos serve requires target kind node@1; observed ${facts.normalized.target.kind}`,
-    );
-  }
   await writeGeneratedFiles(facts.cwd, facts.linked.files);
   const generatedLocal = path.join(facts.cwd, ".agentos", "generated", "local.ts");
   const mod = (await importBundledModule(generatedLocal, {
@@ -1517,7 +1594,20 @@ const loadGeneratedLocalApp = async (
   if (typeof mod.createLocalAgentApp !== "function") {
     throw new Error(".agentos/generated/local.ts must export createLocalAgentApp");
   }
-  return mod.createLocalAgentApp(localAppOptionsFor(args));
+  return mod.createLocalAgentApp(localAppOptionsFor(args, facts.binding));
+};
+
+const loadLocalProductApp = async (
+  mode: LocalHost["mode"],
+  args: LocalHostArgs,
+): Promise<{ readonly facts: CompileFacts<LocalHost>; readonly app: LocalAgentApp }> => {
+  const cwd = path.resolve(args.cwd);
+  const env = await readPreflightEnv(cwd);
+  if (env.issues.length > 0) {
+    throw new Error(`.dev.vars is invalid: ${JSON.stringify(env.issues, null, 2)}`);
+  }
+  const facts = await loadCompileFacts(args, localHost(mode, cwd, env.values));
+  return { facts, app: await loadGeneratedLocalApp(args, facts) };
 };
 
 const parseAfterId = (url: URL): number | undefined => {
@@ -1534,7 +1624,7 @@ interface StartedGeneratedAppServer {
   readonly payload: Readonly<{
     status: "listening";
     protocol: "agentos-local-app@1";
-    mode: "serve" | "dev";
+    mode: "dev";
     target: string;
     llm: "config" | "test";
     url: string;
@@ -1547,12 +1637,8 @@ interface StartedGeneratedAppServer {
   readonly close: () => Promise<void>;
 }
 
-const startGeneratedAppServer = async (
-  command: "serve" | "dev",
-  args: ServeArgs,
-): Promise<StartedGeneratedAppServer> => {
-  const facts = await loadCompileFacts(args);
-  const app = await loadGeneratedLocalApp(args, facts);
+const startGeneratedAppServer = async (args: LocalHostArgs): Promise<StartedGeneratedAppServer> => {
+  const { facts, app } = await loadLocalProductApp("dev", args);
   const server = http.createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
@@ -1560,8 +1646,8 @@ const startGeneratedAppServer = async (
         jsonResponse(response, 200, {
           ok: true,
           protocol: "agentos-local-app@1",
-          mode: command,
-          target: facts.normalized.target.kind,
+          mode: "dev",
+          target: facts.linked.canonicalDeployment.target,
           llm: args.llm,
           diagnostics: app.runtime.diagnostics(),
         });
@@ -1614,8 +1700,8 @@ const startGeneratedAppServer = async (
   const payload = {
     status: "listening" as const,
     protocol: "agentos-local-app@1" as const,
-    mode: command,
-    target: facts.normalized.target.kind,
+    mode: "dev" as const,
+    target: facts.linked.canonicalDeployment.target,
     llm: args.llm,
     url,
     endpoints: {
@@ -1633,12 +1719,12 @@ const startGeneratedAppServer = async (
   };
 };
 
-const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Promise<void> => {
-  const started = await startGeneratedAppServer(command, args);
+const runDev = async (args: DevArgs): Promise<void> => {
+  const started = await startGeneratedAppServer(args);
   process.stdout.write(
     args.json
       ? `${JSON.stringify(started.payload)}\n`
-      : `agentOS ${command} listening on ${started.payload.url} (${started.payload.protocol}, llm=${args.llm})\n`,
+      : `agentOS dev listening on ${started.payload.url} (${started.payload.protocol}, llm=${args.llm})\n`,
   );
 
   await new Promise<void>((resolve) => {
@@ -1648,6 +1734,15 @@ const serveGeneratedApp = async (command: "serve" | "dev", args: ServeArgs): Pro
     process.once("SIGINT", close);
     process.once("SIGTERM", close);
   });
+};
+
+const runAsk = async (args: AskArgs): Promise<void> => {
+  const { app } = await loadLocalProductApp("ask", args);
+  const result = await app.session.prompt(args.prompt);
+  if (!result.ok) {
+    throw new Error(`run ${result.runId} ${result.status}: ${result.reason}`);
+  }
+  process.stdout.write(args.json ? `${JSON.stringify(result)}\n` : `${result.final}\n`);
 };
 
 type EvalDefinitionLike = EvalDefinition;
@@ -2336,9 +2431,8 @@ const runEval = async (args: EvalArgs): Promise<void> => {
     const configuredMode =
       args.target ?? (args.baseUrl !== undefined ? "remote" : config.target?.kind);
     if (configuredMode !== "remote") {
-      started = await startGeneratedAppServer("serve", {
+      started = await startGeneratedAppServer({
         cwd,
-        config: args.config,
         ...(args.packageScope === undefined ? {} : { packageScope: args.packageScope }),
         host: "127.0.0.1",
         port: 0,
@@ -2400,13 +2494,19 @@ const main = async (): Promise<void> => {
     return;
   }
   if (parsed.command === "build") {
-    const facts = await loadCompileFacts(parsed.args);
+    const cwd = path.resolve(parsed.args.cwd);
+    const deployment = await loadDeploymentIntent(cwd, parsed.args.deployment);
+    const facts = await loadCompileFacts(parsed.args, deployment);
     await writeGeneratedFiles(facts.cwd, facts.linked.files);
     console.log(`generated ${facts.linked.files.length} agentOS files`);
     return;
   }
-  if (parsed.command === "serve" || parsed.command === "dev") {
-    await serveGeneratedApp(parsed.command, parsed.args);
+  if (parsed.command === "ask") {
+    await runAsk(parsed.args);
+    return;
+  }
+  if (parsed.command === "dev") {
+    await runDev(parsed.args);
     return;
   }
   if (parsed.command === "eval") {
@@ -2417,7 +2517,12 @@ const main = async (): Promise<void> => {
     await runPreflightLlm(parsed.args);
     return;
   }
-  const facts = await loadCompileFacts({ ...parsed.args, packageScope: undefined });
+  const cwd = path.resolve(parsed.args.cwd);
+  const binding =
+    parsed.args.deployment === undefined
+      ? localHost("dev", cwd, process.env)
+      : await loadDeploymentIntent(cwd, parsed.args.deployment);
+  const facts = await loadCompileFacts({ cwd }, binding);
   const info = projectInfo(facts);
   if (parsed.args.json) {
     process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);
@@ -2435,8 +2540,8 @@ try {
       ? "agentos build"
       : command === "info"
         ? "agentos info"
-        : command === "serve"
-          ? "agentos serve"
+        : command === "ask"
+          ? "agentos ask"
           : command === "dev"
             ? "agentos dev"
             : command === "eval"

@@ -1,3 +1,5 @@
+import ts from "typescript";
+
 export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
   const sliceBetweenMarkers = (source, startMarker, endMarker) => {
     const start = source.indexOf(startMarker);
@@ -16,6 +18,35 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     const workspaceAgentSource = read(workspaceAgentSourcePath);
     const commandProjectionSource = read(commandProjectionSourcePath);
     const surface = readJson("docs/surface.json");
+    const manifestCompilerSource = read(
+      "packages/cli/src/build/agent-authoring/manifest-compiler.ts",
+    );
+    const deploymentIntentSource = read(
+      "packages/cli/src/build/agent-authoring/deployment-intent.ts",
+    );
+    const entrySources = [
+      "packages/cli/src/build/agent-authoring.ts",
+      "packages/cli/src/build/build-cli.ts",
+      "packages/cli/src/index.ts",
+      "packages/cli/src/main.mjs",
+    ].map((path) => ({ path, source: read(path) }));
+    let legacyConfigPresent = false;
+    try {
+      read("packages/cli/src/build/agent-authoring/config.ts");
+      legacyConfigPresent = true;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      // ENOENT is the positive hard-cut contract.
+    }
+    failures.push(
+      ...staticTargetArchitectureFailures({
+        manifestCompilerSource,
+        deploymentIntentSource,
+        staticTargetSource: source,
+        entrySources,
+        legacyConfigPresent,
+      }),
+    );
     const staticRuntimeBootstrapModelSource = sliceBetweenMarkers(
       source,
       "interface StaticRuntimeBootstrapModel",
@@ -66,11 +97,6 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       renderChatStaticTargetSource,
       renderLocalAgentAppSource,
     ].join("\n");
-    const linkWorkspaceStaticTargetSource = sliceBetweenMarkers(
-      source,
-      "export const linkWorkspaceStaticTarget =",
-      "const renderAgentOsConfigSchema =",
-    );
     const renderWorkspaceSvelteKitRemoteSource = sliceBetweenMarkers(
       source,
       "const renderWorkspaceSvelteKitRemote =",
@@ -121,11 +147,6 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
           `${sourcePath}: generated-static-target-linking: missing shared bootstrap surface ${name}`,
         );
       }
-    }
-    if (linkWorkspaceStaticTargetSource.length === 0) {
-      failures.push(
-        `${sourcePath}: generated-static-target-linking: missing linkWorkspaceStaticTarget`,
-      );
     }
     if (renderSvelteKitRemoteSource.length === 0) {
       failures.push(
@@ -250,11 +271,11 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
           "interface StaticRuntimeBootstrapModel",
           "const staticRuntimeBootstrapModelFor =",
           "customToolNames: toolNames.filter",
-          "manifestTools: normalized.deployment.manifest.tools",
-          "llmRoutes: normalized.llmRoutes",
-          "skills: normalized.skills",
-          "instructionFragments: normalized.instructionFragments",
-          "dynamicResolvers: normalized.dynamicResolvers",
+          "manifestTools: input.deployment.manifest.tools",
+          "llmRoutes: input.llmRoutes",
+          "skills: input.skills",
+          "instructionFragments: input.instructionFragments",
+          "dynamicResolvers: input.dynamicResolvers",
         ],
       },
       {
@@ -561,75 +582,15 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
       ["renderStaticClient", renderStaticClientSource],
     ];
     for (const [name, rendererSource] of rendererSurfaces) {
-      if (/\bNormalized(?:Workspace|Chat)?AgentOsConfig\b/u.test(rendererSource)) {
+      if (
+        /\b(?:ProductPlan|ProductIntent|StaticTargetBinding|DeploymentIntent|LocalHost)\b/u.test(
+          rendererSource,
+        )
+      ) {
         failures.push(
-          `${sourcePath}: generated-static-target-linking: ${name} receives raw normalized config`,
+          `${sourcePath}: generated-static-target-linking: ${name} must consume only closed render input`,
         );
       }
-      if (/\bnormalized\s*\.\s*(?:profile|target|client|config)\b/u.test(rendererSource)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${name} reads a deployment axis`,
-        );
-      }
-      if (/\bAGENTOS_CONFIG_(?:PROFILE|TARGET|CLIENT)\b/u.test(rendererSource)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${name} re-branches on an axis constant`,
-        );
-      }
-    }
-
-    const profileProjectionSource = sliceBetweenMarkers(
-      source,
-      "const staticTargetProfileProjectionFor =",
-      "const staticTargetClientProjectionFor =",
-    );
-    const clientProjectionSource = sliceBetweenMarkers(
-      source,
-      "const staticTargetClientProjectionFor =",
-      "const staticTargetHostProjectionFor =",
-    );
-    const hostProjectionSource = sliceBetweenMarkers(
-      source,
-      "const staticTargetHostProjectionFor =",
-      "const staticTargetPlanFor =",
-    );
-    const planSource = sliceBetweenMarkers(
-      source,
-      "const staticTargetPlanFor =",
-      "function sharedGeneratedFilesFor(",
-    );
-    for (const [axis, projectionSource, marker] of [
-      ["profile", profileProjectionSource, "normalized.profile"],
-      ["client", planSource, "normalized.client.kind"],
-      ["host", hostProjectionSource, "normalized.target.kind"],
-    ]) {
-      const count = source.split(marker).length - 1;
-      if (count !== 1 || !projectionSource.includes(marker)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: ${axis} axis must have one plan-construction read; observed ${count}`,
-        );
-      }
-    }
-    for (const marker of [
-      "nodeWorkspace === null",
-      'kind: "unsupported_static_target"',
-      "files: plan.host.files",
-      "moduleGraph: plan.host.moduleGraph",
-      "...plan.profile.canonicalDeployment",
-      "...plan.host.canonicalDeployment",
-      "...plan.host.mount",
-      "...plan.profile.mount",
-    ]) {
-      if (!source.includes(marker)) {
-        failures.push(
-          `${sourcePath}: generated-static-target-linking: StaticTargetPlan closure missing ${marker}`,
-        );
-      }
-    }
-    if (/normalized\.(?:profile|target|client)/u.test(linkWorkspaceStaticTargetSource)) {
-      failures.push(
-        `${sourcePath}: generated-static-target-linking: linker must consume plan projections, not normalized axes`,
-      );
     }
 
     failIfAny("generated static target linking", failures);
@@ -639,4 +600,338 @@ export const createStaticTargetChecks = ({ read, readJson, failIfAny }) => {
     sliceBetweenMarkers,
     checkGeneratedStaticTargetLinking,
   };
+};
+
+const parseSource = (path, source) =>
+  ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    path.endsWith(".mjs") ? ts.ScriptKind.JS : ts.ScriptKind.TS,
+  );
+
+const hasExportModifier = (node) =>
+  node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
+
+const namedInterface = (sourceFile, name) =>
+  sourceFile.statements.find(
+    (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === name,
+  );
+
+const namedTypeAlias = (sourceFile, name) =>
+  sourceFile.statements.find(
+    (statement) => ts.isTypeAliasDeclaration(statement) && statement.name.text === name,
+  );
+
+const exportedCallable = (sourceFile, name) => {
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === name &&
+      hasExportModifier(statement)
+    ) {
+      return statement;
+    }
+    if (!ts.isVariableStatement(statement) || !hasExportModifier(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === name &&
+        declaration.initializer !== undefined &&
+        (ts.isArrowFunction(declaration.initializer) ||
+          ts.isFunctionExpression(declaration.initializer))
+      ) {
+        return declaration.initializer;
+      }
+    }
+  }
+  return undefined;
+};
+
+const propertyName = (name) =>
+  name !== undefined &&
+  (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name))
+    ? name.text
+    : undefined;
+
+const interfaceMemberNames = (declaration) =>
+  declaration.members
+    .map((member) => (ts.isPropertySignature(member) ? propertyName(member.name) : undefined))
+    .filter((name) => name !== undefined);
+
+const normalizedTypeText = (sourceFile, node) =>
+  node?.getText(sourceFile).replace(/\s+/gu, "") ?? "";
+
+const callExpressionsNamed = (root, name) => {
+  const calls = [];
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === name
+    ) {
+      calls.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return calls;
+};
+
+const propertyAccessPath = (node) => {
+  if (ts.isIdentifier(node)) return node.text;
+  if (!ts.isPropertyAccessExpression(node)) return undefined;
+  const parent = propertyAccessPath(node.expression);
+  return parent === undefined ? undefined : `${parent}.${node.name.text}`;
+};
+
+const propertyAccessPaths = (root) => {
+  const paths = new Set();
+  const visit = (node) => {
+    if (ts.isPropertyAccessExpression(node)) {
+      const path = propertyAccessPath(node);
+      if (path !== undefined) paths.add(path);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return paths;
+};
+
+const namedImportNames = (sourceFile, moduleSpecifier) => {
+  const names = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== moduleSpecifier
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) names.add(element.name.text);
+  }
+  return names;
+};
+
+const callableParameterContract = (sourceFile, callable) =>
+  callable.parameters.map((parameter) => ({
+    name: ts.isIdentifier(parameter.name) ? parameter.name.text : "",
+    type: normalizedTypeText(sourceFile, parameter.type),
+  }));
+
+const hasCallWithLeadingArguments = (sourceFile, callable, name, expectedArguments) =>
+  callExpressionsNamed(callable.body, name).some((call) =>
+    expectedArguments.every(
+      (expected, index) => call.arguments[index]?.getText(sourceFile) === expected,
+    ),
+  );
+
+export const staticTargetArchitectureFailures = ({
+  manifestCompilerSource,
+  deploymentIntentSource,
+  staticTargetSource,
+  entrySources = [],
+  legacyConfigPresent = false,
+}) => {
+  const failures = [];
+  const manifestPath = "packages/cli/src/build/agent-authoring/manifest-compiler.ts";
+  const deploymentPath = "packages/cli/src/build/agent-authoring/deployment-intent.ts";
+  const targetPath = "packages/cli/src/build/agent-authoring/static-target.ts";
+  const manifestFile = parseSource(manifestPath, manifestCompilerSource);
+  const deploymentFile = parseSource(deploymentPath, deploymentIntentSource);
+  const targetFile = parseSource(targetPath, staticTargetSource);
+
+  const productPlan = namedInterface(manifestFile, "ProductPlan");
+  if (productPlan === undefined || !hasExportModifier(productPlan)) {
+    failures.push(`${manifestPath}: ProductPlan must be an exported interface`);
+  } else {
+    const fields = interfaceMemberNames(productPlan);
+    for (const required of [
+      "agent",
+      "instructions",
+      "symbolicRequirements",
+      "assets",
+      "provenance",
+      "productDigest",
+    ]) {
+      if (!fields.includes(required)) {
+        failures.push(`${manifestPath}: ProductPlan is missing product field ${required}`);
+      }
+    }
+    const forbiddenField =
+      /(?:scope|authority|target|client|provider|workspace|host|deployment|correlation)/iu;
+    for (const field of fields.filter((name) => forbiddenField.test(name))) {
+      failures.push(`${manifestPath}: ProductPlan leaks binding field ${field}`);
+    }
+    const forbiddenType = /\b(?:StaticTargetBinding|DeploymentIntent|LocalHost|AgentOsConfig)\b/u;
+    if (forbiddenType.test(productPlan.getText(manifestFile))) {
+      failures.push(`${manifestPath}: ProductPlan references a host or deployment type`);
+    }
+  }
+
+  const compiler = exportedCallable(manifestFile, "compileProductPlan");
+  if (compiler === undefined) {
+    failures.push(`${manifestPath}: missing exported compileProductPlan`);
+  } else if (normalizedTypeText(manifestFile, compiler.type) !== "CompileProductPlanResult") {
+    failures.push(`${manifestPath}: compileProductPlan must return CompileProductPlanResult`);
+  }
+
+  const bindingAlias = namedTypeAlias(deploymentFile, "StaticTargetBinding");
+  if (bindingAlias === undefined || !hasExportModifier(bindingAlias)) {
+    failures.push(`${deploymentPath}: StaticTargetBinding must be an exported type alias`);
+  } else {
+    const members = ts.isUnionTypeNode(bindingAlias.type)
+      ? bindingAlias.type.types.map((member) => normalizedTypeText(deploymentFile, member)).sort()
+      : [];
+    if (members.join("|") !== "DeploymentIntent|LocalHost") {
+      failures.push(
+        `${deploymentPath}: StaticTargetBinding must be exactly LocalHost | DeploymentIntent`,
+      );
+    }
+  }
+
+  const productImports = namedImportNames(targetFile, "./manifest-compiler");
+  if (!productImports.has("ProductPlan")) {
+    failures.push(`${targetPath}: binder must import ProductPlan from manifest-compiler`);
+  }
+  const deploymentImports = namedImportNames(targetFile, "./deployment-intent");
+  if (!deploymentImports.has("StaticTargetBinding")) {
+    failures.push(`${targetPath}: binder must import StaticTargetBinding from deployment-intent`);
+  }
+
+  const binder = exportedCallable(targetFile, "bindStaticTargetPlan");
+  if (binder === undefined) {
+    failures.push(`${targetPath}: missing exported bindStaticTargetPlan`);
+  } else {
+    const parameters = callableParameterContract(targetFile, binder);
+    const [product, binding] = parameters;
+    if (product?.type !== "ProductPlan" || binding?.type !== "StaticTargetBinding") {
+      failures.push(
+        `${targetPath}: bindStaticTargetPlan must consume ProductPlan + StaticTargetBinding`,
+      );
+    }
+    if (normalizedTypeText(targetFile, binder.type) !== "StaticTargetPlanResult") {
+      failures.push(`${targetPath}: bindStaticTargetPlan must return StaticTargetPlanResult`);
+    }
+    if (
+      product?.name !== undefined &&
+      binding?.name !== undefined &&
+      !hasCallWithLeadingArguments(targetFile, binder, "bindingFactsFor", [
+        product.name,
+        binding.name,
+      ])
+    ) {
+      failures.push(`${targetPath}: binder must derive binding facts from product + binding`);
+    }
+    if (
+      product?.name !== undefined &&
+      !callExpressionsNamed(binder.body, "staticTargetPlanFor").some(
+        (call) => call.arguments[0]?.getText(targetFile) === product.name,
+      )
+    ) {
+      failures.push(`${targetPath}: binder must close the ProductPlan into StaticTargetPlan`);
+    }
+  }
+
+  const plan = namedInterface(targetFile, "StaticTargetPlan");
+  if (plan === undefined || !hasExportModifier(plan)) {
+    failures.push(`${targetPath}: StaticTargetPlan must be an exported closed plan`);
+  } else {
+    const fields = interfaceMemberNames(plan);
+    for (const required of ["shared", "profile", "host", "client"]) {
+      if (!fields.includes(required)) {
+        failures.push(`${targetPath}: StaticTargetPlan is missing closed projection ${required}`);
+      }
+    }
+  }
+
+  const renderer = exportedCallable(targetFile, "renderStaticTargetPlan");
+  if (renderer === undefined) {
+    failures.push(`${targetPath}: missing exported renderStaticTargetPlan`);
+  } else {
+    const parameters = callableParameterContract(targetFile, renderer);
+    if (parameters.length !== 1 || parameters[0]?.type !== "StaticTargetPlan") {
+      failures.push(`${targetPath}: renderer must consume only one closed StaticTargetPlan`);
+    }
+    if (normalizedTypeText(targetFile, renderer.type) !== "StaticTargetLink") {
+      failures.push(`${targetPath}: renderStaticTargetPlan must return StaticTargetLink`);
+    }
+    const planName = parameters[0]?.name ?? "plan";
+    const paths = propertyAccessPaths(renderer.body);
+    for (const required of [
+      `${planName}.host.files`,
+      `${planName}.host.moduleGraph`,
+      `${planName}.profile.canonicalDeployment`,
+      `${planName}.host.canonicalDeployment`,
+      `${planName}.client.kind`,
+      `${planName}.shared.toolNames`,
+      `${planName}.host.mount`,
+      `${planName}.profile.mount`,
+    ]) {
+      if (!paths.has(required)) {
+        failures.push(`${targetPath}: closed renderer is missing projection ${required}`);
+      }
+    }
+  }
+
+  const linker = exportedCallable(targetFile, "linkStaticTarget");
+  if (linker === undefined) {
+    failures.push(`${targetPath}: missing exported linkStaticTarget`);
+  } else {
+    const parameters = callableParameterContract(targetFile, linker);
+    const [product, binding] = parameters;
+    if (product?.type !== "ProductPlan" || binding?.type !== "StaticTargetBinding") {
+      failures.push(
+        `${targetPath}: linkStaticTarget must consume ProductPlan + StaticTargetBinding`,
+      );
+    }
+    if (normalizedTypeText(targetFile, linker.type) !== "StaticTargetLinkResult") {
+      failures.push(`${targetPath}: linkStaticTarget must return StaticTargetLinkResult`);
+    }
+    if (
+      product?.name !== undefined &&
+      binding?.name !== undefined &&
+      !hasCallWithLeadingArguments(targetFile, linker, "bindStaticTargetPlan", [
+        product.name,
+        binding.name,
+      ])
+    ) {
+      failures.push(`${targetPath}: linkStaticTarget must delegate product binding to the binder`);
+    }
+    if (callExpressionsNamed(linker.body, "renderStaticTargetPlan").length !== 1) {
+      failures.push(`${targetPath}: linkStaticTarget must render exactly one closed plan`);
+    }
+  }
+
+  const legacyMarkers = [
+    "compileAgentTree",
+    "linkWorkspaceStaticTarget",
+    "decodeAgentOsConfig",
+    "normalizeAgentOsConfig",
+    "NormalizedAgentOsConfig",
+    "AGENTOS_CONFIG_",
+    "agentos.config.jsonc",
+  ];
+  for (const { path, source } of [
+    { path: manifestPath, source: manifestCompilerSource },
+    { path: deploymentPath, source: deploymentIntentSource },
+    { path: targetPath, source: staticTargetSource },
+    ...entrySources,
+  ]) {
+    for (const marker of legacyMarkers) {
+      if (source.includes(marker)) {
+        failures.push(`${path}: legacy authoring entry remains reachable through ${marker}`);
+      }
+    }
+  }
+  if (legacyConfigPresent) {
+    failures.push(
+      "packages/cli/src/build/agent-authoring/config.ts: legacy authoring grammar must be deleted",
+    );
+  }
+
+  return failures;
 };
