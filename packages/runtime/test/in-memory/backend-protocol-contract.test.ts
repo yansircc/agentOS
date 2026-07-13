@@ -1,4 +1,4 @@
-import { ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import {
@@ -16,6 +16,7 @@ import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@age
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 import {
+  createBackendConformanceLaws,
   registerBackendConformanceSuite,
   runBackendConformance,
   type ContractDispatchReceiver,
@@ -227,6 +228,18 @@ registerBackendConformanceSuite(
   "in-memory",
   makeInMemoryContractDriver,
   { runtimeFactOwner: RUNTIME_FACT_OWNER },
+);
+
+it.effect(
+  "runs the real resource concurrent serialization law against the in-memory backend",
+  () => {
+    const execution = createBackendConformanceLaws(makeInMemoryContractDriver, {
+      runtimeFactOwner: RUNTIME_FACT_OWNER,
+    }).find(({ lawId }) => lawId === BACKEND_CONFORMANCE_LAW_ID.RESOURCE_CONCURRENT_SERIALIZATION);
+    return execution === undefined
+      ? Effect.die("resource.concurrent-serialization law is absent")
+      : execution.effect();
+  },
 );
 
 const expectBrokenLaw = async (

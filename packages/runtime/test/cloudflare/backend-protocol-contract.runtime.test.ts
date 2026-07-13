@@ -1,7 +1,5 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
-import { Effect } from "effect";
-import { describe, it } from "vite-plus/test";
 import type {
   BackendProtocolEventIdentity,
   DispatchEnvelope,
@@ -17,17 +15,10 @@ import {
 } from "./test-worker";
 import {
   registerBackendConformanceSuite,
-  type BackendConformanceRegistrar,
   type ContractDispatchReceiver,
   type RuntimeBackendContractDriver,
 } from "@agent-os/runtime/testing";
-
-const CLOUDFLARE_BACKEND_CONFORMANCE_REGISTRAR: BackendConformanceRegistrar = {
-  describe,
-  law: (definition, effect) => {
-    it(`${definition.id}: ${definition.title}`, () => Effect.runPromise(effect()));
-  },
-};
+import { VITEST_BACKEND_CONFORMANCE_REGISTRAR } from "../backend-conformance-registrar";
 
 interface TestEnv {
   readonly BACKEND_PROTOCOL_CONTRACT_DO: DurableObjectNamespace<BackendProtocolContractTestDO>;
@@ -184,8 +175,8 @@ const makeCloudflareProductionRuntimeContractDriver = (): RuntimeBackendContract
 };
 
 registerBackendConformanceSuite(
-  CLOUDFLARE_BACKEND_CONFORMANCE_REGISTRAR,
-  "cloudflare-do production runtime",
+  VITEST_BACKEND_CONFORMANCE_REGISTRAR,
+  "cloudflare-do-production",
   makeCloudflareProductionRuntimeContractDriver,
   { runtimeFactOwner: RUNTIME_FACT_OWNER },
 );

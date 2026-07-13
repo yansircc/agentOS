@@ -102,7 +102,7 @@
           "id": "cloudflare-worker",
           "sourcePackageName": "@agent-os/runtime",
           "subpath": "@agent-os/runtime/cloudflare",
-          "contractTest": "packages/runtime/test/cloudflare/backend-protocol-contract.test.ts"
+          "contractTest": "packages/runtime/test/cloudflare/backend-protocol-contract.runtime.test.ts"
         },
         {
           "id": "node",

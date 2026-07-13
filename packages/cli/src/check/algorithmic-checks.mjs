@@ -33,6 +33,7 @@ import { createRepoSurfaceChecks } from "./algorithmic/repo-surface-checks.mjs";
 import { createProjectionBoundaryChecks } from "./algorithmic/projection-boundary-checks.mjs";
 import { createConvergenceSmokeChecks } from "./algorithmic/convergence-smoke-checks.mjs";
 import { createSourceAliasChecks } from "./algorithmic/source-alias-checks.mjs";
+import { createRuntimeProofChecks } from "./algorithmic/runtime-proof-checks.mjs";
 import {
   apiSourceMode,
   exportedNamesForPackage,
@@ -175,6 +176,23 @@ const checkTransactionSync = runtimeStructuralChecks.checkTransactionSync;
 const checkBackendNeutrality = runtimeStructuralChecks.checkBackendNeutrality;
 const checkGateTierGovernance = runtimeStructuralChecks.checkGateTierGovernance;
 const checkSpikeHygiene = runtimeStructuralChecks.checkSpikeHygiene;
+
+const runtimeProofChecks = createRuntimeProofChecks({
+  fs,
+  path,
+  ts,
+  repoRoot,
+  read,
+  readJson,
+  walk,
+  execFileSync,
+  failIfAny,
+});
+const checkBackendProviderAxisBoundary = runtimeProofChecks.checkBackendProviderAxisBoundary;
+const checkBackendNeutralProductionRuntimeProof =
+  runtimeProofChecks.checkBackendNeutralProductionRuntimeProof;
+const checkNodePostgresRuntimeImportBoundary =
+  runtimeProofChecks.checkNodePostgresRuntimeImportBoundary;
 
 const ownerChecks = createOwnerChecks({
   ts,
@@ -384,7 +402,6 @@ const convergenceSmokeChecks = createConvergenceSmokeChecks({
   specifierMatchesPackage,
   projectionFoldBoundaryFailures,
 });
-const checkConvergenceBoundary = convergenceSmokeChecks.checkConvergenceBoundary;
 const checkConvergencePublicSurface = convergenceSmokeChecks.checkConvergencePublicSurface;
 const checkDocsSiteBuild = convergenceSmokeChecks.checkDocsSiteBuild;
 const checkCliSurface = convergenceSmokeChecks.checkCliSurface;
@@ -394,63 +411,232 @@ const checkBlueprintRecipes = convergenceSmokeChecks.checkBlueprintRecipes;
 
 const checkBoundaryProjection = () => runCommand("vp fmt --check", { cwd: repoRoot });
 
+const source = (path, symbol) => ({ path, symbol });
+const checker = (run, options = {}) => ({ run, ...options });
+const convergenceBoundaryComponents = [
+  "client-boundaries",
+  "generated-static-target-linking",
+  "blueprint-recipes",
+  "spike-hygiene",
+];
+const runConvergenceBoundary = async () => {
+  for (const checkerId of convergenceBoundaryComponents) {
+    await Promise.resolve(checkerById.get(checkerId).run([]));
+  }
+  console.log("convergence boundary passed");
+};
+
 const checkerById = new Map([
-  ["architecture-sources", checkArchitectureSources],
-  ["backend-neutrality", checkBackendNeutrality],
-  ["blueprint-recipes", checkBlueprintRecipes],
-  ["boundaries", checkBoundaryProjection],
-  ["cli-surface", checkCliSurface],
-  ["client-boundaries", checkClientBoundaries],
-  ["consumer-imports", checkConsumerImports],
-  ["convergence-boundary", checkConvergenceBoundary],
-  ["convergence-import-dag", checkConvergenceImportDag],
-  ["convergence-public-surface", checkConvergencePublicSurface],
-  ["d12-a155-substrate-absorption", checkBoundaryProjection],
-  ["distribution-units", checkDistributionUnits],
-  ["dogfood-smoke", checkDogfoodSmoke],
-  ["docs-link-integrity", checkDocsLinkIntegrity],
-  ["docs-site-build", checkDocsSiteBuild],
-  ["event-namespaces", checkEventNamespaces],
-  ["eval-result-artifact-boundary", checkEvalResultArtifactBoundary],
-  ["limit-registry", checkLimitRegistry],
-  ["generated-static-target-linking", checkGeneratedStaticTargetLinking],
-  ["gate-tier-governance", checkGateTierGovernance],
-  ["module-graph-oracle", checkModuleGraphOracle],
-  ["module-buckets", checkModuleBuckets],
-  ["no-obsolete-public-packages", checkNoObsoletePublicPackages],
-  ["owner-coupling", checkOwnerCoupling],
-  ["owner-identity-boundary", checkOwnerIdentityBoundary],
-  ["owner-ids", checkOwnerIds],
-  ["profile-verification", checkProfileVerification],
-  ["projection-fold-boundary", checkProjectionFoldBoundary],
-  ["public-api", checkPublicApi],
-  ["repo-tooling-surface", checkRepoToolingSurface],
-  ["source-aliases", checkSourceAliases],
-  ["spike-hygiene", checkSpikeHygiene],
-  ["subpath-no-leak", checkSubpathNoLeak],
-  ["substrate-import-dag", checkSubstrateImportDag],
-  ["transaction-sync", checkTransactionSync],
-]);
-const checkerIdsWithArgs = new Set([
-  "distribution-units",
-  "dogfood-smoke",
-  "consumer-imports",
-  "module-buckets",
-  "owner-coupling",
-  "owner-identity-boundary",
-  "profile-verification",
-  "subpath-no-leak",
+  ["architecture-sources", checker(checkArchitectureSources)],
+  [
+    "backend-neutrality",
+    checker(checkBackendNeutrality, {
+      source: source(
+        "packages/cli/src/check/algorithmic/runtime-structural-checks.mjs",
+        "checkBackendNeutrality",
+      ),
+    }),
+  ],
+  [
+    "backend-neutral-production-runtime-proof",
+    checker(checkBackendNeutralProductionRuntimeProof, {
+      source: source(
+        "packages/cli/src/check/algorithmic/runtime-proof-checks.mjs",
+        "backendNeutralProductionRuntimeProof",
+      ),
+    }),
+  ],
+  [
+    "backend-provider-axis-boundary",
+    checker(checkBackendProviderAxisBoundary, {
+      source: source(
+        "packages/cli/src/check/algorithmic/runtime-proof-checks.mjs",
+        "backendProviderAxisFailures",
+      ),
+    }),
+  ],
+  ["blueprint-recipes", checker(checkBlueprintRecipes)],
+  ["boundaries", checker(checkBoundaryProjection)],
+  ["cli-surface", checker(checkCliSurface)],
+  [
+    "client-boundaries",
+    checker(checkClientBoundaries, {
+      source: source(
+        "packages/cli/src/check/algorithmic/client-boundary-checks.mjs",
+        "checkClientBoundaries",
+      ),
+    }),
+  ],
+  ["consumer-imports", checker(checkConsumerImports, { acceptsArgs: true })],
+  [
+    "convergence-boundary",
+    checker(runConvergenceBoundary, {
+      source: source("packages/cli/src/check/algorithmic-checks.mjs", "runConvergenceBoundary"),
+      components: convergenceBoundaryComponents,
+    }),
+  ],
+  [
+    "convergence-import-dag",
+    checker(checkConvergenceImportDag, {
+      source: source(
+        "packages/cli/src/check/algorithmic/package-boundary-checks.mjs",
+        "checkConvergenceImportDag",
+      ),
+    }),
+  ],
+  [
+    "convergence-public-surface",
+    checker(checkConvergencePublicSurface, {
+      source: source(
+        "packages/cli/src/check/algorithmic/convergence-smoke-checks.mjs",
+        "checkConvergencePublicSurface",
+      ),
+    }),
+  ],
+  ["d12-a155-substrate-absorption", checker(checkBoundaryProjection)],
+  ["distribution-units", checker(checkDistributionUnits, { acceptsArgs: true })],
+  ["dogfood-smoke", checker(checkDogfoodSmoke, { acceptsArgs: true })],
+  [
+    "docs-link-integrity",
+    checker(checkDocsLinkIntegrity, {
+      source: source(
+        "packages/cli/src/check/algorithmic/package-boundary-checks.mjs",
+        "checkDocsLinkIntegrity",
+      ),
+    }),
+  ],
+  [
+    "docs-site-build",
+    checker(checkDocsSiteBuild, {
+      source: source(
+        "packages/cli/src/check/algorithmic/convergence-smoke-checks.mjs",
+        "checkDocsSiteBuild",
+      ),
+    }),
+  ],
+  [
+    "event-namespaces",
+    checker(checkEventNamespaces, {
+      source: source(
+        "packages/cli/src/check/algorithmic/repo-surface-checks.mjs",
+        "checkEventNamespaces",
+      ),
+    }),
+  ],
+  [
+    "eval-result-artifact-boundary",
+    checker(checkEvalResultArtifactBoundary, {
+      source: source(
+        "packages/cli/src/check/algorithmic/repo-surface-checks.mjs",
+        "checkEvalResultArtifactBoundary",
+      ),
+    }),
+  ],
+  [
+    "limit-registry",
+    checker(checkLimitRegistry, {
+      source: source(
+        "packages/cli/src/check/algorithmic/projection-boundary-checks.mjs",
+        "checkLimitRegistry",
+      ),
+    }),
+  ],
+  ["generated-static-target-linking", checker(checkGeneratedStaticTargetLinking)],
+  [
+    "gate-tier-governance",
+    checker(checkGateTierGovernance, {
+      source: source(
+        "packages/cli/src/check/algorithmic/runtime-structural-checks.mjs",
+        "checkGateTierGovernance",
+      ),
+    }),
+  ],
+  ["module-graph-oracle", checker(checkModuleGraphOracle)],
+  ["module-buckets", checker(checkModuleBuckets, { acceptsArgs: true })],
+  [
+    "node-postgres-runtime-import-boundary",
+    checker(checkNodePostgresRuntimeImportBoundary, {
+      source: source(
+        "packages/cli/src/check/algorithmic/runtime-proof-checks.mjs",
+        "nodePostgresRuntimeImportBoundaryFailures",
+      ),
+    }),
+  ],
+  ["no-obsolete-public-packages", checker(checkNoObsoletePublicPackages)],
+  ["owner-coupling", checker(checkOwnerCoupling, { acceptsArgs: true })],
+  ["owner-identity-boundary", checker(checkOwnerIdentityBoundary, { acceptsArgs: true })],
+  ["owner-ids", checker(checkOwnerIds)],
+  ["profile-verification", checker(checkProfileVerification, { acceptsArgs: true })],
+  ["projection-fold-boundary", checker(checkProjectionFoldBoundary)],
+  [
+    "public-api",
+    checker(checkPublicApi, {
+      source: source(
+        "packages/cli/src/check/algorithmic/repo-surface-checks.mjs",
+        "checkPublicApi",
+      ),
+    }),
+  ],
+  [
+    "repo-tooling-surface",
+    checker(checkRepoToolingSurface, {
+      source: source(
+        "packages/cli/src/check/algorithmic/repo-surface-checks.mjs",
+        "checkRepoToolingSurface",
+      ),
+    }),
+  ],
+  [
+    "source-aliases",
+    checker(checkSourceAliases, {
+      source: source(
+        "packages/cli/src/check/algorithmic/source-alias-checks.mjs",
+        "checkSourceAliases",
+      ),
+    }),
+  ],
+  [
+    "spike-hygiene",
+    checker(checkSpikeHygiene, {
+      source: source(
+        "packages/cli/src/check/algorithmic/runtime-structural-checks.mjs",
+        "checkSpikeHygiene",
+      ),
+    }),
+  ],
+  ["subpath-no-leak", checker(checkSubpathNoLeak, { acceptsArgs: true })],
+  [
+    "substrate-import-dag",
+    checker(checkSubstrateImportDag, {
+      source: source(
+        "packages/cli/src/check/algorithmic/package-boundary-checks.mjs",
+        "checkSubstrateImportDag",
+      ),
+    }),
+  ],
+  [
+    "transaction-sync",
+    checker(checkTransactionSync, {
+      source: source(
+        "packages/cli/src/check/algorithmic/runtime-structural-checks.mjs",
+        "checkTransactionSync",
+      ),
+    }),
+  ],
 ]);
 
 export const listAlgorithmicCheckers = () => [...checkerById.keys()].sort(compare);
 export const hasAlgorithmicChecker = (checkerId) => checkerById.has(checkerId);
-export const algorithmicCheckerAcceptsArgs = (checkerId) => checkerIdsWithArgs.has(checkerId);
+export const algorithmicCheckerSource = (checkerId) => checkerById.get(checkerId)?.source;
+export const algorithmicCheckerComponents = (checkerId) => checkerById.get(checkerId)?.components;
+export const algorithmicCheckerAcceptsArgs = (checkerId) =>
+  checkerById.get(checkerId)?.acceptsArgs === true;
 
 export const runAlgorithmicChecker = async (checkerId, args = []) => {
-  const checker = checkerById.get(checkerId);
-  if (checker === undefined) throw new Error(`unknown algorithmic checker ${checkerId}`);
+  const definition = checkerById.get(checkerId);
+  if (definition === undefined) throw new Error(`unknown algorithmic checker ${checkerId}`);
   console.log(`$ agentos algorithmic-check ${checkerId}`);
-  await Promise.resolve(checker(args));
+  await Promise.resolve(definition.run(args));
 };
 
 const isCli =

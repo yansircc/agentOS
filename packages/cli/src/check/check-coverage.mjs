@@ -2,7 +2,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { listAlgorithmicCheckers } from "./algorithmic-checks.mjs";
+import {
+  algorithmicCheckerComponents,
+  algorithmicCheckerSource,
+  hasAlgorithmicChecker,
+  listAlgorithmicCheckers,
+} from "./algorithmic-checks.mjs";
+import { proofRegistryFailures } from "./proof-registry.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 
@@ -19,7 +25,6 @@ const coverage = readJson("packages/cli/src/check/check-coverage.source.json");
 const rulesSource = readJson("docs/agent/boundary-rules.source.json");
 const cliPackage = readJson("packages/cli/package.json");
 
-if (coverage.schemaVersion !== 1) fail("check coverage schemaVersion must be 1");
 if (!Array.isArray(coverage.entries) || coverage.entries.length === 0) {
   fail("check coverage entries must be non-empty");
 }
@@ -190,6 +195,17 @@ for (const dependency of cliDependencies) {
 if (cliPackage.dependencies?.effect === "3.21.2") {
   fail("packages/cli/package.json: Effect v3 CLI dependency returned");
 }
+
+failures.push(
+  ...proofRegistryFailures({
+    coverage,
+    rulesSource,
+    repoRoot,
+    hasAlgorithmicChecker,
+    algorithmicCheckerSource,
+    algorithmicCheckerComponents,
+  }),
+);
 
 if (failures.length > 0) {
   console.error(failures.join("\n"));
