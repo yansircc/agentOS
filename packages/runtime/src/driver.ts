@@ -6,6 +6,7 @@ import {
   type DecisionGateRequestedPayload,
 } from "./decision-gate";
 import type { JsonStringifyError } from "@agent-os/core/errors";
+import type { EffectAuthorityBinding } from "@agent-os/core/material-ref";
 import type { RecordedLedgerEvent } from "@agent-os/core/types";
 import {
   decodeRuntimeLedgerEvent,
@@ -39,6 +40,7 @@ type BoundaryEventAppender = {
     contract: typeof decisionGateBoundaryContract,
     event: string,
     payload: unknown,
+    authorityBinding: EffectAuthorityBinding | undefined,
   ) => Effect.Effect<
     RecordedLedgerEvent,
     BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
@@ -47,6 +49,7 @@ type BoundaryEventAppender = {
     contract: typeof decisionGateBoundaryContract,
     event: string,
     payload: unknown,
+    authorityBinding: EffectAuthorityBinding | undefined,
     runtimeEvents: (
       boundaryEventId: number,
     ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
@@ -113,6 +116,7 @@ type RuntimeCommittedEventForAction<K extends keyof RuntimeEventActionByKind> =
 export type ParkDriverAction = {
   readonly kind: "park";
   readonly request: DecisionGateRequestedPayload;
+  readonly authorityBinding: EffectAuthorityBinding;
   readonly interruption: RuntimeEventCommitSpecByKind<
     typeof RUNTIME_EVENT_KIND.AGENT_RUN_INTERRUPTED
   >;
@@ -121,6 +125,7 @@ export type ParkDriverAction = {
 export type ResumeDriverAction = {
   readonly kind: "resume";
   readonly consumed: DecisionGateConsumedPayload;
+  readonly authorityBinding: EffectAuthorityBinding;
   readonly resumed: (
     consumedEventId: number,
   ) => RuntimeEventCommitSpecByKind<typeof RUNTIME_EVENT_KIND.AGENT_RUN_RESUMED>;
@@ -348,6 +353,7 @@ export const appendNextDriverAction = (
             decisionGateBoundaryContract,
             DECISION_GATE_KIND.REQUESTED,
             action.request,
+            action.authorityBinding,
             () => [action.interruption],
           );
           const request = events[0];
@@ -362,6 +368,7 @@ export const appendNextDriverAction = (
             decisionGateBoundaryContract,
             DECISION_GATE_KIND.CONSUMED,
             action.consumed,
+            action.authorityBinding,
             (consumedEventId) => [action.resumed(consumedEventId)],
           );
           const consumed = events[0];

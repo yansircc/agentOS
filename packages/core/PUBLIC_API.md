@@ -153,7 +153,6 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `.:BoundaryContractValidation`
 - `.:BoundaryModule`
 - `.:BoundaryModuleManifest`
-- `.:BoundaryProjectionContract`
 - `.:buildContextPack`
 - `.:BUILTIN_HANDLER_KINDS`
 - `.:BuiltinHandlerKind`
@@ -311,7 +310,10 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `.:DurableTriggerDrainLimitExceeded`
 - `.:durableTriggerDuePayload`
 - `.:DurableTriggerRetryPolicy`
+- `.:effectAuthorityContractAccepts`
+- `.:EffectAuthorityBinding`
 - `.:EffectAuthorityContract`
+- `.:EffectAuthoritySelector`
 - `.:EffectClaim`
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:emptyResourceProjection`
@@ -436,6 +438,7 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isCoreClaimedEventKind`
+- `.:isEffectAuthorityBinding`
 - `.:isEffectAuthorityContract`
 - `.:isFactOwnerRef`
 - `.:isIndeterminateRef`
@@ -1125,7 +1128,6 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `./boundary-contract:BoundaryEventContract`
 - `./boundary-contract:BoundaryModule`
 - `./boundary-contract:BoundaryModuleManifest`
-- `./boundary-contract:BoundaryProjectionContract`
 - `./boundary-contract:compileBoundaryContract`
 - `./boundary-contract:defineBoundaryContract`
 - `./boundary-contract:validateBoundaryContract`
@@ -1316,13 +1318,17 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `./material-ref:credentialMaterialRef`
 - `./material-ref:CredentialMaterialRef`
 - `./material-ref:CredentialMaterialRequirement`
+- `./material-ref:effectAuthorityContractAccepts`
+- `./material-ref:EffectAuthorityBinding`
 - `./material-ref:EffectAuthorityContract`
+- `./material-ref:EffectAuthoritySelector`
 - `./material-ref:endpointMaterialRef`
 - `./material-ref:EndpointMaterialRef`
 - `./material-ref:EndpointMaterialRequirement`
 - `./material-ref:externalResourceMaterialRef`
 - `./material-ref:ExternalResourceMaterialRef`
 - `./material-ref:ExternalResourceMaterialRequirement`
+- `./material-ref:isEffectAuthorityBinding`
 - `./material-ref:isEffectAuthorityContract`
 - `./material-ref:isMaterialRef`
 - `./material-ref:isMaterialRequirement`

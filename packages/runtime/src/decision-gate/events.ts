@@ -14,7 +14,11 @@ import {
   DECISION_GATE_KIND,
   decisionGateSettlementContract,
 } from "./definition";
-export { DECISION_GATE_EVENTS, DECISION_GATE_KIND } from "./definition";
+export {
+  DECISION_GATE_AUTHORITY_CONTRACT,
+  DECISION_GATE_EVENTS,
+  DECISION_GATE_KIND,
+} from "./definition";
 
 export type DecisionGateDecision = "approved" | "rejected";
 

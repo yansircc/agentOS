@@ -181,7 +181,6 @@ export const registerSubmitAgentToolBoundaryCases = () => {
                     rejectionKinds: ["provider_rejected"],
                     indeterminateKinds: [],
                   }),
-                  projection: { derivedFromLedger: true, shadowState: false },
                 }),
                 "0.2.9",
               ),
@@ -323,6 +322,7 @@ export const registerSubmitAgentToolBoundaryCases = () => {
 
   it.effect("injects the tool pre-claim when emitting a declared intent with a claim slot", () =>
     Effect.gen(function* () {
+      const authorityContractId = "runtime.claimed-intent.invocation";
       const intentModule = compileBoundaryContract(
         defineBoundaryContract({
           ownerId: "@agent-os/runtime-test.claimed-intent",
@@ -337,10 +337,16 @@ export const registerSubmitAgentToolBoundaryCases = () => {
                 required: ["label"],
                 additionalProperties: false,
               },
-              claim: { key: "claim", phase: "pre" },
+              claim: { key: "claim", phase: "pre", authorityContractId },
             },
           },
-          effectAuthorityContracts: [],
+          effectAuthorityContracts: [
+            {
+              authorityContractId,
+              selector: { kind: "bound" },
+              requiredMaterialSlots: [],
+            },
+          ],
           materialRequirements: [],
           settlement: defineSettlementContract({
             settlementId: "runtime.claimed_intent.test",
@@ -348,7 +354,6 @@ export const registerSubmitAgentToolBoundaryCases = () => {
             rejectionKinds: ["validation_failed"],
             indeterminateKinds: [],
           }),
-          projection: { derivedFromLedger: true, shadowState: false },
         }),
         "0.0.0",
       );

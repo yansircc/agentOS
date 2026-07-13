@@ -218,6 +218,30 @@ describe("extension capability P1", () => {
     ).toHaveLength(0);
   });
 
+  it("rejects valid deferred claims until firing can revalidate boundary identity", async () => {
+    const scope = "extension-proof-time-claim";
+    const stub = stubFor(scope);
+    const { events, result } = await runCommand(scope, {
+      op: "scheduleProofFact",
+      at: Date.now() - 1,
+      data: {
+        proofRef: "proof:defer-valid",
+        claim: proofLivedClaimForScope(scope),
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?._tag).toBe("agent_os.boundary_commit_rejected");
+    expect(result.error?.event).toBe("proof.recorded");
+    expect(result.error?.issue).toBe("claim_deferred_unsupported");
+    expect(extensionFacts(events)).toHaveLength(0);
+
+    await runInDurableObject(stub, async (instance) => {
+      await (instance as unknown as { alarm: () => Promise<void> }).alarm();
+    });
+    expect(extensionFacts(await stub.events(testTruthIdentity(scope)))).toHaveLength(0);
+  });
+
   it("rejects positive capability minting for unregistered packages", async () => {
     const { events, result } = await runCommand("extension-missing-package", {
       op: "commitMissingExtension",

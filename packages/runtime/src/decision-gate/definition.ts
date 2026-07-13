@@ -2,6 +2,9 @@ import { Schema } from "effect";
 import { defineCarrier, event, lived, none, pre } from "@agent-os/core/carrier";
 
 export const DECISION_GATE_EVENT_PREFIX = "decision_gate.";
+export const DECISION_GATE_AUTHORITY_CONTRACT = "decision-gate.runtime-identity";
+
+const claimAuthority = { authorityContractId: DECISION_GATE_AUTHORITY_CONTRACT } as const;
 
 const rejectionRefSchema = Schema.Struct({
   rejectionId: Schema.String,
@@ -21,6 +24,14 @@ export const decisionGateCarrier = defineCarrier({
   sourcePackageName: "@agent-os/runtime",
   prefix: DECISION_GATE_EVENT_PREFIX,
   roles: ["admitter", "reader"],
+  effectAuthorityContracts: [
+    {
+      authorityContractId: DECISION_GATE_AUTHORITY_CONTRACT,
+      selector: { kind: "bound" },
+      requiredMaterialSlots: [],
+    },
+  ],
+  materialRequirements: [],
   events: {
     requested: event({
       kind: "requested",
@@ -30,7 +41,7 @@ export const decisionGateCarrier = defineCarrier({
         policyRef: Schema.optional(Schema.String),
         summary: Schema.optional(Schema.String),
       }),
-      claim: pre({ key: "claim" }),
+      claim: pre({ key: "claim", ...claimAuthority }),
     }),
     decided: event({
       kind: "decided",
@@ -51,7 +62,7 @@ export const decisionGateCarrier = defineCarrier({
         decisionRef: Schema.String,
         consumedBy: Schema.String,
       }),
-      claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["ledger_event"] }),
     }),
     cancelled: event({
       kind: "cancelled",

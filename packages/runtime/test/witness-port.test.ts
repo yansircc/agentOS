@@ -1,11 +1,18 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Result } from "effect";
-import { defineBoundaryContract } from "@agent-os/core/boundary-contract";
+import { defineBoundaryContract, type BoundaryContract } from "@agent-os/core/boundary-contract";
 import { makePreClaim } from "@agent-os/core/effect-claim";
+import type { EffectAuthorityBinding } from "@agent-os/core/material-ref";
+import { RUNTIME_FACT_OWNER, type RuntimeEventCommitSpec } from "@agent-os/core/runtime-protocol";
 import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
 import { defineSettlementContract, settleIndeterminate } from "@agent-os/core/settlement-contract";
 import { BoundaryEvents } from "../src/boundary-events";
-import { commitBoundaryEvent } from "../src/boundary-commit";
+import {
+  boundaryCommitIdentity,
+  commitBoundaryEvent,
+  validateBoundaryEventPayload,
+  validateCommittedBoundaryEvent,
+} from "../src/boundary-commit";
 import { WitnessPort, makeWitnessPort } from "../src/witness-port";
 
 const settlement = defineSettlementContract({
@@ -14,6 +21,9 @@ const settlement = defineSettlementContract({
   rejectionKinds: [],
   indeterminateKinds: ["provider_pending"],
 });
+
+const authorityContractId = "witness-test.authority";
+const witnessAuthorityRef = { authorityId: "witness.record", authorityClass: "effect" } as const;
 
 const contract = defineBoundaryContract({
   ownerId: "@agent-os/witness-test",
@@ -30,30 +40,33 @@ const contract = defineBoundaryContract({
       claim: {
         key: "claim",
         phase: "indeterminate",
+        authorityContractId,
         indeterminateKinds: ["provider_pending"],
       },
     },
   },
-  effectAuthorityContracts: [],
+  effectAuthorityContracts: [
+    {
+      authorityContractId,
+      selector: { kind: "exact", authorityRef: witnessAuthorityRef },
+      requiredMaterialSlots: [],
+    },
+  ],
   materialRequirements: [],
   settlement,
-  projection: {
-    derivedFromLedger: true,
-    shadowState: false,
-  },
 });
 
 const claim = makePreClaim({
   operationRef: "witness:op",
   scopeRef: { kind: "conversation", scopeId: "thread:1" },
-  effectAuthorityRef: { authorityId: "witness.record", authorityClass: "effect" },
+  effectAuthorityRef: witnessAuthorityRef,
   originRef: { originId: "witness-test", originKind: "test" },
 });
 
 const commitPending = (payload: unknown) =>
   Effect.gen(function* () {
     const boundaryEvents = yield* BoundaryEvents;
-    return yield* boundaryEvents.commit(contract, "witness.pending", payload);
+    return yield* boundaryEvents.commit(contract, "witness.pending", payload, undefined);
   });
 
 describe("WitnessPort", () => {
@@ -69,8 +82,13 @@ describe("WitnessPort", () => {
         }),
       );
       const boundaryEvents = {
-        commit: (targetContract: typeof contract, event: string, payload: unknown) =>
-          commitBoundaryEvent(targetContract, event, payload, (identity) =>
+        commit: (
+          targetContract: BoundaryContract,
+          event: string,
+          payload: unknown,
+          authorityBinding: EffectAuthorityBinding | undefined,
+        ) =>
+          commitBoundaryEvent(targetContract, event, payload, authorityBinding, (identity) =>
             Effect.sync(() => {
               const row = {
                 id: events.length + 1,
@@ -85,6 +103,60 @@ describe("WitnessPort", () => {
               return decodeRecordedLedgerEvent(row);
             }),
           ),
+        commitWithRuntimeEvents: (
+          targetContract: BoundaryContract,
+          event: string,
+          payload: unknown,
+          authorityBinding: EffectAuthorityBinding | undefined,
+          runtimeEvents: (
+            boundaryEventId: number,
+          ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
+        ) =>
+          Effect.gen(function* () {
+            const rejected = validateBoundaryEventPayload(
+              targetContract,
+              event,
+              payload,
+              authorityBinding,
+            );
+            if (rejected !== null) return yield* Effect.fail(rejected);
+            const objectPayload = payload as Readonly<Record<string, unknown>>;
+            const identity = boundaryCommitIdentity(targetContract, event, objectPayload);
+            const boundaryId = events.length + 1;
+            const boundaryEvent = {
+              id: boundaryId,
+              ts: boundaryId * 10,
+              kind: event,
+              scopeRef: identity.scopeRef ?? claim.scopeRef,
+              effectAuthorityRef: identity.effectAuthorityRef ?? claim.effectAuthorityRef,
+              factOwnerRef: identity.factOwnerRef,
+              payload,
+            } satisfies LedgerEvent;
+            const committedRejected = validateCommittedBoundaryEvent(
+              targetContract,
+              event,
+              objectPayload,
+              boundaryEvent,
+              authorityBinding,
+            );
+            if (committedRejected !== null) return yield* Effect.fail(committedRejected);
+            const committedRuntimeEvents = runtimeEvents(boundaryId).map(
+              (runtimeEvent, index) =>
+                ({
+                  id: boundaryId + index + 1,
+                  ts: runtimeEvent.ts ?? (boundaryId + index + 1) * 10,
+                  kind: runtimeEvent.kind,
+                  scopeRef: runtimeEvent.scopeRef,
+                  effectAuthorityRef: runtimeEvent.effectAuthorityRef,
+                  factOwnerRef: RUNTIME_FACT_OWNER,
+                  payload: runtimeEvent.payload,
+                }) satisfies LedgerEvent,
+            );
+            const committed = [boundaryEvent, ...committedRuntimeEvents];
+            events.push(...committed);
+            const recorded = committed.map(decodeRecordedLedgerEvent);
+            return [recorded[0]!, ...recorded.slice(1)] as const;
+          }),
       };
 
       const ref = yield* Effect.gen(function* () {

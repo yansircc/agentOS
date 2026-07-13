@@ -10,6 +10,15 @@ const claim = makePreClaim({
   effectAuthorityRef: { authorityId: "example.record", authorityClass: "effect" },
   originRef: { originId: "example", originKind: "test" },
 });
+const authorityContractId = "example.authority";
+const claimAuthority = { authorityContractId } as const;
+const effectAuthorityContracts = [
+  {
+    authorityContractId,
+    selector: { kind: "exact" as const, authorityRef: claim.effectAuthorityRef },
+    requiredMaterialSlots: [],
+  },
+];
 
 const exampleCarrier = () =>
   defineCarrier({
@@ -17,13 +26,15 @@ const exampleCarrier = () =>
     sourcePackageName: "@agent-os/example-carrier",
     prefix: "example.",
     roles: ["generator", "reader"],
+    effectAuthorityContracts,
+    materialRequirements: [],
     events: {
       requested: event({
         kind: "requested",
         payload: Schema.Struct({
           subjectRef: Schema.String,
         }),
-        claim: pre({ key: "claim" }),
+        claim: pre({ key: "claim", ...claimAuthority }),
       }),
       decided: event({
         kind: "decided",
@@ -38,21 +49,25 @@ const exampleCarrier = () =>
         payload: Schema.Struct({
           subjectRef: Schema.String,
         }),
-        claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
+        claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["ledger_event"] }),
       }),
       failed: event({
         kind: "failed",
         payload: Schema.Struct({
           subjectRef: Schema.String,
         }),
-        claim: rejected({ key: "claim", rejectionKinds: ["policy_denied"] }),
+        claim: rejected({ key: "claim", ...claimAuthority, rejectionKinds: ["policy_denied"] }),
       }),
       pending: event({
         kind: "pending",
         payload: Schema.Struct({
           subjectRef: Schema.String,
         }),
-        claim: indeterminate({ key: "claim", indeterminateKinds: ["provider_pending"] }),
+        claim: indeterminate({
+          key: "claim",
+          ...claimAuthority,
+          indeterminateKinds: ["provider_pending"],
+        }),
       }),
     },
   });
@@ -74,11 +89,13 @@ describe("defineCarrier", () => {
     expect(carrier.boundaryContract.events["example.requested"]?.claim).toEqual({
       key: "claim",
       phase: "pre",
+      authorityContractId,
     });
     expect(carrier.settlementContract.anchorKinds).toEqual(["ledger_event"]);
     expect(carrier.settlementContract.rejectionKinds).toEqual(["policy_denied"]);
     expect(carrier.settlementContract.indeterminateKinds).toEqual(["provider_pending"]);
     expect("projection" in carrier).toBe(false);
+    expect("projection" in carrier.boundaryContract).toBe(false);
   });
 
   it("decodes none, pre, lived, and rejected claim slots", () => {
@@ -169,36 +186,54 @@ describe("defineCarrier", () => {
       sourcePackageName: "@agent-os/slot-vocab",
       prefix: "slot.",
       roles: ["generator", "reader"],
+      effectAuthorityContracts,
+      materialRequirements: [],
       events: {
         ledgered: event({
           kind: "ledgered",
           payload: Schema.Struct({ subjectRef: Schema.String }),
-          claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
+          claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["ledger_event"] }),
         }),
         proved: event({
           kind: "proved",
           payload: Schema.Struct({ subjectRef: Schema.String }),
-          claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+          claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["carrier_proof"] }),
         }),
         denied: event({
           kind: "denied",
           payload: Schema.Struct({ subjectRef: Schema.String }),
-          claim: rejected({ key: "claim", rejectionKinds: ["policy_denied"] }),
+          claim: rejected({
+            key: "claim",
+            ...claimAuthority,
+            rejectionKinds: ["policy_denied"],
+          }),
         }),
         failed: event({
           kind: "failed",
           payload: Schema.Struct({ subjectRef: Schema.String }),
-          claim: rejected({ key: "claim", rejectionKinds: ["provider_rejected"] }),
+          claim: rejected({
+            key: "claim",
+            ...claimAuthority,
+            rejectionKinds: ["provider_rejected"],
+          }),
         }),
         providerPending: event({
           kind: "provider-pending",
           payload: Schema.Struct({ subjectRef: Schema.String }),
-          claim: indeterminate({ key: "claim", indeterminateKinds: ["provider_pending"] }),
+          claim: indeterminate({
+            key: "claim",
+            ...claimAuthority,
+            indeterminateKinds: ["provider_pending"],
+          }),
         }),
         reconcileRequired: event({
           kind: "reconcile-required",
           payload: Schema.Struct({ subjectRef: Schema.String }),
-          claim: indeterminate({ key: "claim", indeterminateKinds: ["reconcile_required"] }),
+          claim: indeterminate({
+            key: "claim",
+            ...claimAuthority,
+            indeterminateKinds: ["reconcile_required"],
+          }),
         }),
       },
     });
@@ -239,6 +274,8 @@ describe("defineCarrier", () => {
         sourcePackageName: "@agent-os/duplicate",
         prefix: "duplicate.",
         roles: ["reader"],
+        effectAuthorityContracts: [],
+        materialRequirements: [],
         events: {
           one: event({
             kind: "same",
@@ -260,11 +297,13 @@ describe("defineCarrier", () => {
         sourcePackageName: "@agent-os/collision",
         prefix: "collision.",
         roles: ["reader"],
+        effectAuthorityContracts,
+        materialRequirements: [],
         events: {
           recorded: event({
             kind: "recorded",
             payload: Schema.Struct({ claim: Schema.String }),
-            claim: lived({ key: "claim", anchorKinds: ["ledger_event"] }),
+            claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["ledger_event"] }),
           }),
         },
       }),
@@ -278,6 +317,8 @@ describe("defineCarrier", () => {
         sourcePackageName: "@agent-os/unsupported",
         prefix: "unsupported.",
         roles: ["reader"],
+        effectAuthorityContracts: [],
+        materialRequirements: [],
         events: {
           recorded: event({
             kind: "recorded",

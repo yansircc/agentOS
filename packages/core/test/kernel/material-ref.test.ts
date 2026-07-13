@@ -6,9 +6,11 @@ import type { Authored } from "../../src";
 import {
   bindingMaterialRef,
   credentialMaterialRef,
+  effectAuthorityContractAccepts,
   endpointMaterialRef,
   externalResourceMaterialRef,
   isEffectAuthorityContract,
+  isEffectAuthorityBinding,
   isMaterialRef,
   isMaterialRequirement,
   materialRefSatisfiesRequirement,
@@ -189,29 +191,66 @@ describe("MaterialRef algebra", () => {
 
   it("binds required materials to an authority contract", () => {
     const contract = {
-      effectAuthorityRef: {
-        authorityId: "cf.deploy_worker",
-        authorityClass: "deploy",
+      authorityContractId: "cloudflare.deploy",
+      selector: {
+        kind: "exact",
+        authorityRef: {
+          authorityId: "cf.deploy_worker",
+          authorityClass: "deploy",
+        },
       },
-      requiredMaterials: [
-        materialRequirement({
-          slot: "api_token",
-          kind: "credential",
-          provider: "cloudflare",
-          purpose: "deploy",
-        }),
-        materialRequirement({
-          slot: "account",
-          kind: "external_resource",
-          provider: "cloudflare",
-          resourceKind: "account",
-          required: false,
-        }),
-      ],
+      requiredMaterialSlots: ["api_token", "account"],
     };
 
     expect(isEffectAuthorityContract(contract)).toBe(true);
-    expect(isEffectAuthorityContract({ ...contract, requiredMaterials: [{}] })).toBe(false);
+    expect(isEffectAuthorityContract({ ...contract, requiredMaterialSlots: [""] })).toBe(false);
+  });
+
+  it("accepts bound authority only by exact trusted identity", () => {
+    const contract = {
+      authorityContractId: "workspace-op.invocation",
+      selector: { kind: "bound" as const },
+      requiredMaterialSlots: [],
+    };
+    const expectedAuthorityRef = {
+      authorityClass: "tool",
+      authorityId: "write_file",
+      version: "1",
+    };
+    const binding = { authorityContractId: contract.authorityContractId, expectedAuthorityRef };
+
+    expect(isEffectAuthorityBinding(binding)).toBe(true);
+    expect(effectAuthorityContractAccepts(contract, expectedAuthorityRef, binding)).toBe(true);
+    expect(
+      effectAuthorityContractAccepts(
+        contract,
+        { ...expectedAuthorityRef, authorityId: "bash" },
+        binding,
+      ),
+    ).toBe(false);
+    expect(
+      effectAuthorityContractAccepts(contract, { ...expectedAuthorityRef, version: "2" }, binding),
+    ).toBe(false);
+    expect(
+      effectAuthorityContractAccepts(
+        contract,
+        { ...expectedAuthorityRef, authorityClass: "runtime" },
+        binding,
+      ),
+    ).toBe(false);
+    expect(
+      effectAuthorityContractAccepts(contract, expectedAuthorityRef, {
+        ...binding,
+        authorityContractId: "workspace-op.other",
+      }),
+    ).toBe(false);
+    expect(
+      effectAuthorityContractAccepts(contract, expectedAuthorityRef, {
+        ...binding,
+        unexpected: true,
+      } as typeof binding),
+    ).toBe(false);
+    expect(effectAuthorityContractAccepts(contract, expectedAuthorityRef, undefined)).toBe(false);
   });
 
   it("material refs are resolver input, not PreClaim identity", () => {

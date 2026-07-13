@@ -55,10 +55,16 @@ const surfaceEditBoundary = defineBoundaryContract({
         },
         required: ["ops"],
       },
-      claim: { key: "claim", phase: "pre" },
+      claim: { key: "claim", phase: "pre", authorityContractId: "surface-edit.tool" },
     },
   },
-  effectAuthorityContracts: [],
+  effectAuthorityContracts: [
+    {
+      authorityContractId: "surface-edit.tool",
+      selector: { kind: "exact", authorityRef: effectAuthorityRef },
+      requiredMaterialSlots: [],
+    },
+  ],
   materialRequirements: [],
   settlement: {
     settlementId: "surface-edit",
@@ -66,7 +72,6 @@ const surfaceEditBoundary = defineBoundaryContract({
     rejectionKinds: ["validation_failed"],
     indeterminateKinds: [],
   },
-  projection: { derivedFromLedger: true, shadowState: false },
 });
 
 const surfaceEditModule = compileBoundaryContract(surfaceEditBoundary, "0.1.0");

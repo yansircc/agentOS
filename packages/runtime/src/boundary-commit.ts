@@ -1,6 +1,5 @@
 import { Data, Effect, Predicate } from "effect";
 import {
-  authorityRefKey,
   validateEffectClaim,
   type EffectClaim,
   type IndeterminateClaim,
@@ -9,6 +8,10 @@ import {
   type RejectedClaim,
   type ScopeRef,
 } from "@agent-os/core/effect-claim";
+import {
+  effectAuthorityContractAccepts,
+  type EffectAuthorityBinding,
+} from "@agent-os/core/material-ref";
 import {
   validateBoundaryPayload,
   type BoundaryContract,
@@ -31,6 +34,7 @@ type BoundaryCommitIssue =
   | "claim_phase_invalid"
   | "claim_authority_invalid"
   | "claim_settlement_invalid"
+  | "claim_deferred_unsupported"
   | "committed_event_kind_mismatch"
   | "committed_fact_owner_mismatch"
   | "committed_scope_ref_mismatch"
@@ -49,12 +53,22 @@ export class BoundaryCommitRejected extends Data.TaggedError("agent_os.boundary_
   readonly issue: BoundaryCommitIssue;
 }> {}
 
-const contractAuthorityKeys = (contract: BoundaryContract): ReadonlySet<string> =>
-  new Set(
-    contract.effectAuthorityContracts.map(({ effectAuthorityRef }) =>
-      authorityRefKey(effectAuthorityRef),
-    ),
+const contractAcceptsAuthority = (
+  contract: BoundaryContract,
+  eventContract: BoundaryEventContract,
+  effectAuthorityRef: EffectClaim["effectAuthorityRef"],
+  binding: EffectAuthorityBinding | undefined,
+): boolean => {
+  const authorityContractId = eventContract.claim?.authorityContractId;
+  if (authorityContractId === undefined) return false;
+  const authorityContract = contract.effectAuthorityContracts.find(
+    (candidate) => candidate.authorityContractId === authorityContractId,
   );
+  return (
+    authorityContract !== undefined &&
+    effectAuthorityContractAccepts(authorityContract, effectAuthorityRef, binding)
+  );
+};
 
 const reject = (
   contract: BoundaryContract,
@@ -108,6 +122,7 @@ export const validateBoundaryEventPayload = (
   contract: BoundaryContract,
   event: string,
   payload: unknown,
+  authorityBinding: EffectAuthorityBinding | undefined,
 ): BoundaryCommitRejected | null => {
   const eventContract = contract.events[event];
   if (eventContract === undefined) {
@@ -148,10 +163,13 @@ export const validateBoundaryEventPayload = (
       return reject(contract, event, "claim_settlement_invalid");
     }
   }
-  const authorityKeys = contractAuthorityKeys(contract);
   if (
-    authorityKeys.size > 0 &&
-    !authorityKeys.has(authorityRefKey(validation.claim.effectAuthorityRef))
+    !contractAcceptsAuthority(
+      contract,
+      eventContract,
+      validation.claim.effectAuthorityRef,
+      authorityBinding,
+    )
   ) {
     return reject(contract, event, "claim_authority_invalid");
   }
@@ -204,6 +222,7 @@ export const validateCommittedBoundaryEvent = (
   event: string,
   payload: Readonly<Record<string, unknown>>,
   committed: LedgerEvent,
+  authorityBinding: EffectAuthorityBinding | undefined,
 ): BoundaryCommitRejected | null => {
   if (committed.kind !== event) {
     return reject(contract, event, "committed_event_kind_mismatch");
@@ -221,8 +240,17 @@ export const validateCommittedBoundaryEvent = (
   ) {
     return reject(contract, event, "committed_effect_authority_mismatch");
   }
-  const authorityKeys = contractAuthorityKeys(contract);
-  if (authorityKeys.size > 0 && !authorityKeys.has(authorityRefKey(committed.effectAuthorityRef))) {
+  const eventContract = contract.events[event];
+  if (
+    identity.effectAuthorityRef !== undefined &&
+    (eventContract === undefined ||
+      !contractAcceptsAuthority(
+        contract,
+        eventContract,
+        identity.effectAuthorityRef,
+        authorityBinding,
+      ))
+  ) {
     return reject(contract, event, "committed_effect_authority_mismatch");
   }
   return null;
@@ -232,6 +260,7 @@ export const commitBoundaryEvent = (
   contract: BoundaryContract,
   event: string,
   payload: unknown,
+  authorityBinding: EffectAuthorityBinding | undefined,
   commit: (
     identity: BoundaryCommitIdentity,
   ) => Effect.Effect<RecordedLedgerEvent, RuntimeStorageError | JsonStringifyError>,
@@ -241,7 +270,7 @@ export const commitBoundaryEvent = (
 > =>
   Effect.withSpan("agentos.runtime.boundary_commit.commit")(
     Effect.gen(function* () {
-      const rejected = validateBoundaryEventPayload(contract, event, payload);
+      const rejected = validateBoundaryEventPayload(contract, event, payload, authorityBinding);
       if (rejected !== null) {
         return yield* Effect.fail(rejected);
       }
@@ -253,6 +282,7 @@ export const commitBoundaryEvent = (
         event,
         objectPayload,
         committed,
+        authorityBinding,
       );
       if (committedRejected !== null) {
         return yield* Effect.fail(committedRejected);

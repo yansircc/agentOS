@@ -16,7 +16,11 @@
  */
 
 import { Clock, Duration, Effect, Ref } from "effect";
-import { projectDecisionGate, settleDecisionGateConsumed } from "./decision-gate";
+import {
+  DECISION_GATE_AUTHORITY_CONTRACT,
+  projectDecisionGate,
+  settleDecisionGateConsumed,
+} from "./decision-gate";
 import {
   JsonStringifyError,
   safeStringify,
@@ -849,6 +853,10 @@ export const submitAgentEffect = (
             { ledger, boundaryEvents },
             {
               kind: "resume",
+              authorityBinding: {
+                authorityContractId: DECISION_GATE_AUTHORITY_CONTRACT,
+                expectedAuthorityRef: spec.effectAuthorityRef,
+              },
               consumed: {
                 gateRef: resume.gateRef,
                 decisionRef: resume.decisionRef,
@@ -1363,6 +1371,10 @@ export const submitAgentEffect = (
                 { ledger, boundaryEvents },
                 {
                   kind: "park",
+                  authorityBinding: {
+                    authorityContractId: DECISION_GATE_AUTHORITY_CONTRACT,
+                    expectedAuthorityRef: spec.effectAuthorityRef,
+                  },
                   request: {
                     gateRef,
                     subjectRef,

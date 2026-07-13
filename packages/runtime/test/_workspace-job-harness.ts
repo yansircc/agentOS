@@ -10,7 +10,7 @@ import {
   type LlmRoute,
   type LlmWireDescriptor,
 } from "@agent-os/core/llm-protocol";
-import type { MaterialRef } from "@agent-os/core/material-ref";
+import type { EffectAuthorityBinding, MaterialRef } from "@agent-os/core/material-ref";
 import { materialRefKey } from "@agent-os/core/material-ref";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
 import { fixtureRefResolver } from "./_material-resolver-fixture";
@@ -18,7 +18,12 @@ import type { ResolvedMaterial } from "@agent-os/core/ref-resolver";
 import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
 import type { BoundaryContract } from "@agent-os/core/boundary-contract";
 import { defineTool, externalToolExecution, withToolWriteRequirement } from "@agent-os/core/tools";
-import { commitBoundaryEvent } from "../src/boundary-commit";
+import {
+  boundaryCommitIdentity,
+  commitBoundaryEvent,
+  validateBoundaryEventPayload,
+  validateCommittedBoundaryEvent,
+} from "../src/boundary-commit";
 import { Admission } from "../src/admission";
 import { BoundaryEvents } from "../src/boundary-events";
 import { Ledger } from "../src/ledger";
@@ -54,6 +59,7 @@ import {
   RUNTIME_FACT_OWNER,
   agentRunCompletedEvent,
   agentRunStartedEvent,
+  type RuntimeEventCommitSpec,
   type SubmitSpec,
 } from "@agent-os/core/runtime-protocol";
 
@@ -190,8 +196,13 @@ const makeServices = (
     streamSnapshot: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
   };
   const boundaryEvents = {
-    commit: (contract: BoundaryContract, event: string, payload: unknown) =>
-      commitBoundaryEvent(contract, event, payload, (eventIdentity) =>
+    commit: (
+      contract: BoundaryContract,
+      event: string,
+      payload: unknown,
+      authorityBinding: EffectAuthorityBinding | undefined,
+    ) =>
+      commitBoundaryEvent(contract, event, payload, authorityBinding, (eventIdentity) =>
         Effect.sync(() => {
           const id = nextId++;
           const committed = {
@@ -207,6 +218,59 @@ const makeServices = (
           return decodeRecordedLedgerEvent(committed);
         }),
       ),
+    commitWithRuntimeEvents: (
+      contract: BoundaryContract,
+      event: string,
+      payload: unknown,
+      authorityBinding: EffectAuthorityBinding | undefined,
+      runtimeEvents: (
+        boundaryEventId: number,
+      ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
+    ) =>
+      Effect.gen(function* () {
+        const rejected = validateBoundaryEventPayload(contract, event, payload, authorityBinding);
+        if (rejected !== null) {
+          return yield* Effect.fail(rejected);
+        }
+        const objectPayload = payload as Readonly<Record<string, unknown>>;
+        const eventIdentity = boundaryCommitIdentity(contract, event, objectPayload);
+        const boundaryId = nextId++;
+        const boundaryEvent = {
+          id: boundaryId,
+          ts: boundaryId * 10,
+          kind: event,
+          scopeRef: eventIdentity.scopeRef ?? identity.scopeRef,
+          effectAuthorityRef: eventIdentity.effectAuthorityRef ?? identity.effectAuthorityRef,
+          factOwnerRef: eventIdentity.factOwnerRef,
+          payload,
+        } satisfies LedgerEvent;
+        const committedRejected = validateCommittedBoundaryEvent(
+          contract,
+          event,
+          objectPayload,
+          boundaryEvent,
+          authorityBinding,
+        );
+        if (committedRejected !== null) {
+          return yield* Effect.fail(committedRejected);
+        }
+        const committedRuntimeEvents = runtimeEvents(boundaryId).map((runtimeEvent) => {
+          const id = nextId++;
+          return {
+            id,
+            ts: runtimeEvent.ts ?? id * 10,
+            kind: runtimeEvent.kind,
+            scopeRef: runtimeEvent.scopeRef,
+            effectAuthorityRef: runtimeEvent.effectAuthorityRef,
+            factOwnerRef: RUNTIME_FACT_OWNER,
+            payload: runtimeEvent.payload,
+          } satisfies LedgerEvent;
+        });
+        const committed = [boundaryEvent, ...committedRuntimeEvents];
+        events.push(...committed);
+        const recorded = committed.map(decodeRecordedLedgerEvent);
+        return [recorded[0]!, ...recorded.slice(1)] as const;
+      }),
   };
   const llm = {
     resolveRoute: (route: LlmRoute) =>

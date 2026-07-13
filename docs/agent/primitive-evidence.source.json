@@ -34,10 +34,6 @@
       "tests": ["packages/core/test/kernel/boundary-contract.test.ts"]
     },
     {
-      "primitive": "primitive.kernel.BoundaryProjectionContract",
-      "tests": ["packages/core/test/kernel/boundary-contract.test.ts"]
-    },
-    {
       "primitive": "primitive.kernel.defineProductTool",
       "tests": ["packages/core/test/kernel/tools.test.ts"]
     },

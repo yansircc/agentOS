@@ -767,7 +767,6 @@ describe("Cloudflare DO workspace host helpers", () => {
       contract: {
         ownerId: WORKSPACE_OP_FACT_OWNER,
         sourcePackageName: RUNTIME_SOURCE_PACKAGE_NAME,
-        projection: { derivedFromLedger: true, shadowState: false },
       },
       manifest: {
         ownerId: WORKSPACE_OP_FACT_OWNER,

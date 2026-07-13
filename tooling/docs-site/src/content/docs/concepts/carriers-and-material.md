@@ -12,17 +12,20 @@ raw assets, or tenant-specific material.
 
 ## Model
 
-Carriers own symbolic event vocabulary and projections. Material resolvers own
-provider-specific credentials, endpoints, and resource handles. Ledger payloads
-may contain symbolic refs and proof refs; resolved provider material stays at
-execution time.
+Carriers own symbolic event vocabulary, claim settlement, and authority/material
+declarations. Material resolvers own provider-specific credentials, endpoints,
+and resource handles. Ledger payloads may contain symbolic refs and proof refs;
+resolved provider material stays at execution time.
+
+Executable projection readers are owned separately by
+`MaterializedProjectionDefinition`, including their kind, version, source event
+vocabulary, codecs, identity, initial state, and reducer.
 
 Only packages that share the `defineCarrier` generator are carrier packages.
 Similar-looking policy, settlement, or lifecycle shapes do not justify a shared
 carrier abstraction unless they also share event vocabulary, claim settlement,
-authority/material declaration, and derived projection generation. Execution
-domains such as sandbox and WorkspaceEnv are separate locus/actuator surfaces,
-not carriers.
+and authority/material declaration. Execution domains such as sandbox and
+WorkspaceEnv are separate locus/actuator surfaces, not carriers.
 
 ## Non-Goals
 

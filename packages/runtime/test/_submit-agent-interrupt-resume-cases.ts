@@ -86,6 +86,7 @@ export const registerSubmitAgentInterruptResumeCases = () => {
           decision: "approved",
           decidedBy: "operator/alice",
         },
+        undefined,
       );
       const resume = submitResumeDecisionFromInputRequestProjection(
         projectInputRequest(services.events, first.result.inputRequest.ref),
@@ -169,6 +170,7 @@ export const registerSubmitAgentInterruptResumeCases = () => {
           decision: "approved",
           decidedBy: "operator/alice",
         },
+        undefined,
       );
       const resume = submitResumeDecisionFromInputRequestProjection(
         projectInputRequest(services.events, first.result.inputRequest.ref),
@@ -363,6 +365,7 @@ export const registerSubmitAgentInterruptResumeCases = () => {
           decision: "approved",
           decidedBy: "operator/alice",
         },
+        undefined,
       );
 
       const resumed = yield* runSubmitWithServices(
@@ -432,6 +435,86 @@ export const registerSubmitAgentInterruptResumeCases = () => {
     }),
   );
 
+  it.effect("rejects decision resume when runtime authority differs from the request claim", () =>
+    Effect.gen(function* () {
+      let executed = 0;
+      const tool = defineTool({
+        name: "publish",
+        description: "publish",
+        args: Schema.Struct({ title: Schema.String }),
+        execute: () => {
+          executed += 1;
+          return Effect.succeed({ applied: true });
+        },
+        authority: "write",
+        admit: () => Effect.succeed({ ok: true }),
+        execution: deterministicToolExecution(),
+      });
+      const services = makeServices([
+        response({
+          items: [
+            {
+              type: "tool_call",
+              call: {
+                id: "call-authority-mismatch",
+                type: "function",
+                function: { name: "publish", arguments: '{"title":"Hello"}' },
+              },
+            },
+          ],
+        }),
+      ]);
+
+      const first = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { publish: tool },
+          decisionInterrupts: [{ toolName: "publish", reason: "approval_required" }],
+        }),
+        services,
+      );
+      if (first.result.status !== "interrupted" || first.result.inputRequest === undefined) {
+        expect.fail("expected interrupted input request");
+      }
+      yield* services.boundaryEvents.commit(
+        decisionGateBoundaryContract,
+        DECISION_GATE_KIND.DECIDED,
+        {
+          gateRef: first.result.gateRef,
+          decisionRef: "decision/authority-mismatch",
+          decision: "approved",
+          decidedBy: "operator/alice",
+        },
+        undefined,
+      );
+      const resume = submitResumeDecisionFromInputRequestProjection(
+        projectInputRequest(services.events, first.result.inputRequest.ref),
+        { kind: "approval", approved: true },
+      );
+      if (!resume.ok) expect.fail(`expected approved input request: ${resume.reason}`);
+
+      const failure = yield* runSubmitWithServices(
+        baseSpec({
+          tools: { publish: tool },
+          resume: resume.resume,
+          effectAuthorityRef: {
+            authorityClass: "llm_route",
+            authorityId: "other-route",
+          },
+        }),
+        services,
+      ).pipe(Effect.flip);
+
+      expect(failure).toMatchObject({
+        _tag: "agent_os.boundary_commit_rejected",
+        issue: "claim_authority_invalid",
+      });
+      expect(executed).toBe(0);
+      expect(
+        services.events.filter((event) => event.kind === DECISION_GATE_KIND.CONSUMED),
+      ).toHaveLength(0);
+    }),
+  );
+
   it.effect("does not execute a tool when the matching decision is rejected", () =>
     Effect.gen(function* () {
       let executed = 0;
@@ -488,6 +571,7 @@ export const registerSubmitAgentInterruptResumeCases = () => {
             reason: "not allowed",
           },
         },
+        undefined,
       );
 
       const resumed = yield* runSubmitWithServices(
@@ -575,6 +659,7 @@ export const registerSubmitAgentInterruptResumeCases = () => {
           decision: "approved",
           decidedBy: "operator/alice",
         },
+        undefined,
       );
 
       const answer = { kind: "question" as const, answers: { site_style: "clean" } };
@@ -655,6 +740,7 @@ export const registerSubmitAgentInterruptResumeCases = () => {
           decision: "approved",
           decidedBy: "operator/alice",
         },
+        undefined,
       );
 
       const rawSecret = "SECRET_TOKEN";

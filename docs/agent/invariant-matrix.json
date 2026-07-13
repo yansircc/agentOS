@@ -188,7 +188,6 @@
       "primitives": [
         "primitive.kernel.AuthorityRef",
         "primitive.kernel.BoundaryContract",
-        "primitive.kernel.BoundaryProjectionContract",
         "primitive.kernel.EffectAuthorityContract",
         "primitive.kernel.LedgerEvent",
         "primitive.kernel.MaterialRef",

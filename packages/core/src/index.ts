@@ -28,7 +28,6 @@ export type {
   BoundaryContractValidation,
   BoundaryModule,
   BoundaryModuleManifest,
-  BoundaryProjectionContract,
 } from "./boundary-contract";
 export {
   compileBoundaryContract,
@@ -38,7 +37,9 @@ export {
 } from "./boundary-contract";
 export * from "./carrier";
 export type {
+  EffectAuthorityBinding,
   EffectAuthorityContract,
+  EffectAuthoritySelector,
   BindingMaterialRef,
   BindingMaterialRequirement,
   CredentialMaterialRef,
@@ -56,9 +57,11 @@ export type {
 export {
   bindingMaterialRef,
   credentialMaterialRef,
+  effectAuthorityContractAccepts,
   endpointMaterialRef,
   externalResourceMaterialRef,
   isEffectAuthorityContract,
+  isEffectAuthorityBinding,
   isMaterialRef,
   isMaterialRequirement,
   materialRefSatisfiesRequirement,

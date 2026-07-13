@@ -26,42 +26,53 @@ export const BoundaryEventsLive = (
     Effect.gen(function* () {
       const bus = yield* EventBus;
       return {
-        commit: (contract: BoundaryContract, event: string, payload: unknown) =>
-          commitBoundaryEvent(contract, event, payload, (identity: BoundaryCommitIdentity) =>
-            Effect.gen(function* () {
-              const now = yield* Clock.currentTimeMillis;
-              const committed = yield* commitLedgerTransaction(
-                ctx,
-                bus,
-                { factOwnerRef: identity.factOwnerRef },
-                (tx) =>
-                  tx.append({
-                    ts: now,
-                    kind: event,
-                    scopeRef: identity.scopeRef ?? fallbackIdentity.scopeRef,
-                    effectAuthorityRef:
-                      identity.effectAuthorityRef ?? fallbackIdentity.effectAuthorityRef,
-                    payload,
-                  }),
-              ).pipe(
-                Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)),
-              );
-              return yield* recordLedgerPortEvent(
-                "boundary_event",
-                committed.event(committed.value),
-              );
-            }).pipe(Effect.withSpan("agentos.cloudflare_do.boundary_event.commit")),
+        commit: (contract, event, payload, authorityBinding) =>
+          commitBoundaryEvent(
+            contract,
+            event,
+            payload,
+            authorityBinding,
+            (identity: BoundaryCommitIdentity) =>
+              Effect.gen(function* () {
+                const now = yield* Clock.currentTimeMillis;
+                const committed = yield* commitLedgerTransaction(
+                  ctx,
+                  bus,
+                  { factOwnerRef: identity.factOwnerRef },
+                  (tx) =>
+                    tx.append({
+                      ts: now,
+                      kind: event,
+                      scopeRef: identity.scopeRef ?? fallbackIdentity.scopeRef,
+                      effectAuthorityRef:
+                        identity.effectAuthorityRef ?? fallbackIdentity.effectAuthorityRef,
+                      payload,
+                    }),
+                ).pipe(
+                  Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)),
+                );
+                return yield* recordLedgerPortEvent(
+                  "boundary_event",
+                  committed.event(committed.value),
+                );
+              }).pipe(Effect.withSpan("agentos.cloudflare_do.boundary_event.commit")),
           ),
         commitWithRuntimeEvents: (
           contract: BoundaryContract,
           event: string,
           payload: unknown,
+          authorityBinding,
           runtimeEvents: (
             boundaryEventId: number,
           ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
         ) =>
           Effect.gen(function* () {
-            const rejected = validateBoundaryEventPayload(contract, event, payload);
+            const rejected = validateBoundaryEventPayload(
+              contract,
+              event,
+              payload,
+              authorityBinding,
+            );
             if (rejected !== null) {
               return yield* Effect.fail(rejected);
             }
@@ -101,6 +112,7 @@ export const BoundaryEventsLive = (
               event,
               objectPayload,
               boundaryEvent,
+              authorityBinding,
             );
             if (committedRejected !== null) {
               return yield* Effect.fail(committedRejected);

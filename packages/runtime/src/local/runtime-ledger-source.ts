@@ -9,7 +9,7 @@ import {
 import type { TelemetryFanoutDiagnostic } from "@agent-os/core/telemetry-protocol";
 import type { WorkspaceAgentInspectInputRequestCommandInput } from "@agent-os/core/workspace-agent";
 import { validateBoundaryEventPayload, validateCommittedBoundaryEvent } from "../boundary-commit";
-import { decisionGateBoundaryContract } from "../decision-gate";
+import { DECISION_GATE_AUTHORITY_CONTRACT, decisionGateBoundaryContract } from "../decision-gate";
 import { projectInputRequestSettlement } from "../input-request";
 import { projectRunInspection } from "../run-projector";
 
@@ -137,6 +137,7 @@ const validateTruthIdentity = (
 
 const validateDecisionGateEvent = (
   event: LedgerEvent,
+  identity: LedgerTruthIdentity,
 ):
   | { readonly owned: false }
   | { readonly owned: true; readonly error: LocalRuntimeLedgerHydrationError | null } => {
@@ -147,6 +148,10 @@ const validateDecisionGateEvent = (
     decisionGateBoundaryContract,
     event.kind,
     payload.payload,
+    {
+      authorityContractId: DECISION_GATE_AUTHORITY_CONTRACT,
+      expectedAuthorityRef: identity.effectAuthorityRef,
+    },
   );
   if (payloadRejected !== null) {
     return {
@@ -161,6 +166,10 @@ const validateDecisionGateEvent = (
     event.kind,
     payload.payload,
     event,
+    {
+      authorityContractId: DECISION_GATE_AUTHORITY_CONTRACT,
+      expectedAuthorityRef: identity.effectAuthorityRef,
+    },
   );
   if (committedRejected !== null) {
     return {
@@ -195,7 +204,7 @@ export const validateLocalRuntimeLedgerHydrationEvents = (
       }
       continue;
     }
-    const decisionGate = validateDecisionGateEvent(event);
+    const decisionGate = validateDecisionGateEvent(event, identity);
     if (decisionGate.owned) return decisionGate.error;
     return hydrationError(`local runtime ledger hydrate does not own event kind ${event.kind}`);
   }

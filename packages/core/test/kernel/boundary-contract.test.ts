@@ -28,6 +28,8 @@ const recordedPayload = {
 } satisfies BoundaryEventContract["payloadSchema"];
 
 describe("BoundaryContract", () => {
+  const authorityContractId = "example.record";
+  const claimAuthority = { authorityContractId } as const;
   const proofStore = materialRequirement({
     slot: "proof_store",
     kind: "binding",
@@ -48,21 +50,32 @@ describe("BoundaryContract", () => {
     events: {
       "example.requested": {
         payloadSchema: emptyPayload,
-        claim: { key: "claim", phase: "pre" },
+        claim: { key: "claim", phase: "pre", ...claimAuthority },
       },
       "example.recorded": {
         payloadSchema: recordedPayload,
-        claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
+        claim: {
+          key: "claim",
+          phase: "lived",
+          ...claimAuthority,
+          anchorKinds: ["carrier_proof"],
+        },
       },
       "example.failed": {
         payloadSchema: emptyPayload,
-        claim: { key: "claim", phase: "rejected", rejectionKinds: ["policy_denied"] },
+        claim: {
+          key: "claim",
+          phase: "rejected",
+          ...claimAuthority,
+          rejectionKinds: ["policy_denied"],
+        },
       },
       "example.pending": {
         payloadSchema: emptyPayload,
         claim: {
           key: "claim",
           phase: "indeterminate",
+          ...claimAuthority,
           indeterminateKinds: ["provider_pending"],
         },
       },
@@ -72,19 +85,19 @@ describe("BoundaryContract", () => {
     },
     effectAuthorityContracts: [
       {
-        effectAuthorityRef: {
-          authorityId: "@agent-os/example-carrier.record",
-          authorityClass: "effect",
+        authorityContractId,
+        selector: {
+          kind: "exact",
+          authorityRef: {
+            authorityId: "@agent-os/example-carrier.record",
+            authorityClass: "effect",
+          },
         },
-        requiredMaterials: [proofStore],
+        requiredMaterialSlots: [proofStore.slot],
       },
     ],
     materialRequirements: [proofStore],
     settlement,
-    projection: {
-      derivedFromLedger: true,
-      shadowState: false,
-    },
   });
 
   it("declares extension ownership from the boundary contract", () => {
@@ -106,7 +119,6 @@ describe("BoundaryContract", () => {
     expect(module.contract.effectAuthorityContracts).toEqual(contract.effectAuthorityContracts);
     expect(module.contract.materialRequirements).toEqual(contract.materialRequirements);
     expect(module.contract.settlement).toEqual(contract.settlement);
-    expect(module.contract.projection).toEqual(contract.projection);
   });
 
   it("keeps BoundaryModule construction sealed to the compiler", () => {
@@ -128,11 +140,12 @@ describe("BoundaryContract", () => {
       compileBoundaryContract(
         {
           ...contract,
-          projection: { derivedFromLedger: true, shadowState: true },
+          effectAuthorityContracts: [],
+          materialRequirements: [],
         } as unknown as BoundaryContract,
         "0.1.0",
       ),
-    ).toThrow(/projection_invalid/);
+    ).toThrow(/claim_authority_contract_invalid/);
     expect(() => compileBoundaryContract(contract, "")).toThrow(/version/);
   });
 
@@ -150,7 +163,12 @@ describe("BoundaryContract", () => {
         events: {
           "other.recorded": {
             payloadSchema: recordedPayload,
-            claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
+            claim: {
+              key: "claim",
+              phase: "lived",
+              ...claimAuthority,
+              anchorKinds: ["carrier_proof"],
+            },
           },
         },
       }),
@@ -173,7 +191,12 @@ describe("BoundaryContract", () => {
               },
               additionalProperties: false,
             },
-            claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
+            claim: {
+              key: "claim",
+              phase: "lived",
+              ...claimAuthority,
+              anchorKinds: ["carrier_proof"],
+            },
           },
         },
       }),
@@ -202,17 +225,28 @@ describe("BoundaryContract", () => {
         events: {
           "example.recorded": {
             payloadSchema: recordedPayload,
-            claim: { key: "claim", phase: "lived", anchorKinds: ["external_receipt"] },
+            claim: {
+              key: "claim",
+              phase: "lived",
+              ...claimAuthority,
+              anchorKinds: ["external_receipt"],
+            },
           },
           "example.failed": {
             payloadSchema: emptyPayload,
-            claim: { key: "claim", phase: "rejected", rejectionKinds: ["resource_denied"] },
+            claim: {
+              key: "claim",
+              phase: "rejected",
+              ...claimAuthority,
+              rejectionKinds: ["resource_denied"],
+            },
           },
           "example.pending": {
             payloadSchema: emptyPayload,
             claim: {
               key: "claim",
               phase: "indeterminate",
+              ...claimAuthority,
               indeterminateKinds: ["reconcile_required"],
             },
           },
@@ -240,7 +274,12 @@ describe("BoundaryContract", () => {
     expect(
       validateBoundaryContract({
         ...contract,
-        effectAuthorityContracts: [],
+        effectAuthorityContracts: [
+          {
+            ...contract.effectAuthorityContracts[0]!,
+            requiredMaterialSlots: [],
+          },
+        ],
       }),
     ).toEqual({
       ok: false,
@@ -249,6 +288,27 @@ describe("BoundaryContract", () => {
   });
 
   it("allows empty material requirements only as an explicit no-material contract", () => {
+    const noMaterialAuthority = {
+      ...contract.effectAuthorityContracts[0]!,
+      requiredMaterialSlots: [],
+    };
+    expect(
+      validateBoundaryContract({
+        ...contract,
+        effectAuthorityContracts: [noMaterialAuthority],
+        materialRequirements: [],
+      }),
+    ).toEqual({
+      ok: true,
+      contract: {
+        ...contract,
+        effectAuthorityContracts: [noMaterialAuthority],
+        materialRequirements: [],
+      },
+    });
+  });
+
+  it("rejects an empty authority axis for claim-bearing events", () => {
     expect(
       validateBoundaryContract({
         ...contract,
@@ -256,16 +316,12 @@ describe("BoundaryContract", () => {
         materialRequirements: [],
       }),
     ).toEqual({
-      ok: true,
-      contract: {
-        ...contract,
-        effectAuthorityContracts: [],
-        materialRequirements: [],
-      },
+      ok: false,
+      issues: ["claim_authority_contract_invalid"],
     });
   });
 
-  it("requires settlement and ledger projection declarations", () => {
+  it("requires a settlement declaration", () => {
     expect(
       validateBoundaryContract({
         ...contract,
@@ -275,14 +331,10 @@ describe("BoundaryContract", () => {
           rejectionKinds: ["policy_denied"],
           indeterminateKinds: [],
         },
-        projection: {
-          derivedFromLedger: true,
-          shadowState: true,
-        },
       }),
     ).toEqual({
       ok: false,
-      issues: ["settlement_invalid", "projection_invalid"],
+      issues: ["settlement_invalid"],
     });
   });
 

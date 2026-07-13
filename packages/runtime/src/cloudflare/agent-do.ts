@@ -85,6 +85,7 @@ import {
   Dispatch,
   DurableTriggerRegistry,
   BoundaryEvents,
+  BoundaryCommitRejected,
   commitBoundaryEvent,
   Ledger,
   MaterializedProjections,
@@ -519,8 +520,9 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   private makeExtensionCapability(pkg: BoundaryModule): ExtensionCapability {
     return {
       ...pkg.manifest,
-      commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data),
-      time: (spec) => this.extensionTime(pkg, spec.at, spec.event, spec.data),
+      commit: (spec) => this.extensionCommit(pkg, spec.event, spec.data, spec.authorityBinding),
+      time: (spec) =>
+        this.extensionTime(pkg, spec.at, spec.event, spec.data, spec.authorityBinding),
     };
   }
 
@@ -532,6 +534,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     pkg: BoundaryModule,
     event: string,
     data: unknown,
+    authorityBinding: Parameters<typeof validateBoundaryEventPayload>[3],
   ): Promise<{ id: number }> {
     if (!extensionOwnsEvent(pkg, event)) {
       return Promise.reject(
@@ -541,7 +544,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         }),
       );
     }
-    const rejected = validateBoundaryEventPayload(pkg.contract, event, data);
+    const rejected = validateBoundaryEventPayload(pkg.contract, event, data, authorityBinding);
     if (rejected !== null) {
       return Promise.reject(rejected);
     }
@@ -549,29 +552,39 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     return this.runScoped((_scope, runtimeIdentity) =>
       Effect.gen(function* () {
         const bus = yield* EventBus;
-        const ev = yield* commitBoundaryEvent(pkg.contract, event, data, (identity) =>
-          Effect.gen(function* () {
-            const now = yield* Clock.currentTimeMillis;
-            const scopeRef = identity.scopeRef ?? runtimeIdentity.scopeRef;
-            const effectAuthorityRef =
-              identity.effectAuthorityRef ?? runtimeIdentity.effectAuthorityRef;
-            const committed = yield* commitLedgerTransaction(
-              ctx,
-              bus,
-              { factOwnerRef: identity.factOwnerRef },
-              (tx) => {
-                const ref = tx.append({
-                  ts: now,
-                  kind: event,
-                  scopeRef,
-                  effectAuthorityRef,
-                  payload: data,
-                });
-                return ref;
-              },
-            ).pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
-            return yield* recordLedgerPortEvent("boundary_event", committed.event(committed.value));
-          }),
+        const ev = yield* commitBoundaryEvent(
+          pkg.contract,
+          event,
+          data,
+          authorityBinding,
+          (identity) =>
+            Effect.gen(function* () {
+              const now = yield* Clock.currentTimeMillis;
+              const scopeRef = identity.scopeRef ?? runtimeIdentity.scopeRef;
+              const effectAuthorityRef =
+                identity.effectAuthorityRef ?? runtimeIdentity.effectAuthorityRef;
+              const committed = yield* commitLedgerTransaction(
+                ctx,
+                bus,
+                { factOwnerRef: identity.factOwnerRef },
+                (tx) => {
+                  const ref = tx.append({
+                    ts: now,
+                    kind: event,
+                    scopeRef,
+                    effectAuthorityRef,
+                    payload: data,
+                  });
+                  return ref;
+                },
+              ).pipe(
+                Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)),
+              );
+              return yield* recordLedgerPortEvent(
+                "boundary_event",
+                committed.event(committed.value),
+              );
+            }),
         );
         return { id: ev.id };
       }),
@@ -583,6 +596,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
     at: number,
     event: string,
     data: unknown,
+    authorityBinding: Parameters<typeof validateBoundaryEventPayload>[3],
   ): Promise<{ id: number }> {
     if (!Number.isFinite(at)) {
       return Promise.reject(new InvalidScheduleAt({ at }));
@@ -595,9 +609,24 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
         }),
       );
     }
-    const rejected = validateBoundaryEventPayload(pkg.contract, event, data);
+    const rejected = validateBoundaryEventPayload(pkg.contract, event, data, authorityBinding);
     if (rejected !== null) {
       return Promise.reject(rejected);
+    }
+    if (pkg.contract.events[event]?.claim !== undefined) {
+      // Failure model: the generic scheduler persists runtime identity, not the
+      // boundary owner and trusted authority binding, so firing would bypass
+      // committed-event validation. Extending its durable intent with an
+      // arbitrary serialized boundary contract would create a second contract
+      // source. Remove this rejection only when the trigger resolves the
+      // installed BoundaryModule and re-enters commitBoundaryEvent at fire time.
+      return Promise.reject(
+        new BoundaryCommitRejected({
+          ownerId: pkg.contract.ownerId,
+          event,
+          issue: "claim_deferred_unsupported",
+        }),
+      );
     }
     return this.runScoped((_scope) =>
       Effect.gen(function* () {
@@ -708,12 +737,17 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
           const gate = projectDecisionGate(events, spec.ref.gateRef);
           const inputRequest = projectInputRequest(events, spec.ref);
           if (gate.status === "requested" && inputRequest.status === "pending") {
-            yield* boundaryEvents.commit(decisionGateBoundaryContract, DECISION_GATE_KIND.DECIDED, {
-              gateRef: spec.ref.gateRef,
-              decisionRef: spec.answer.decisionRef,
-              decision: "approved",
-              decidedBy: spec.decidedBy,
-            });
+            yield* boundaryEvents.commit(
+              decisionGateBoundaryContract,
+              DECISION_GATE_KIND.DECIDED,
+              {
+                gateRef: spec.ref.gateRef,
+                decisionRef: spec.answer.decisionRef,
+                decision: "approved",
+                decidedBy: spec.decidedBy,
+              },
+              undefined,
+            );
           } else if (
             (gate.status === "approved" || gate.status === "consumed") &&
             gate.decision?.decisionRef === spec.answer.decisionRef
@@ -889,6 +923,7 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
             decisionGateBoundaryContract,
             terminal.event,
             terminal.payload,
+            undefined,
             () => [
               agentRunAbortedEvent({
                 scopeRef: runtimeIdentity.scopeRef,

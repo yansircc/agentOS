@@ -878,12 +878,17 @@ const resumeLocalInputRequest = (
       const gate = projectDecisionGate(events, spec.ref.gateRef);
       const inputRequest = projectInputRequest(events, spec.ref);
       if (gate.status === "requested" && inputRequest.status === "pending") {
-        yield* boundaryEvents.commit(decisionGateBoundaryContract, DECISION_GATE_KIND.DECIDED, {
-          gateRef: spec.ref.gateRef,
-          decisionRef: spec.answer.decisionRef,
-          decision: "approved",
-          decidedBy: spec.decidedBy,
-        });
+        yield* boundaryEvents.commit(
+          decisionGateBoundaryContract,
+          DECISION_GATE_KIND.DECIDED,
+          {
+            gateRef: spec.ref.gateRef,
+            decisionRef: spec.answer.decisionRef,
+            decision: "approved",
+            decidedBy: spec.decidedBy,
+          },
+          undefined,
+        );
       } else if (
         (gate.status === "approved" || gate.status === "consumed") &&
         gate.decision?.decisionRef === spec.answer.decisionRef
@@ -996,6 +1001,7 @@ const closeLocalInputRequest = (
         decisionGateBoundaryContract,
         terminal.event,
         terminal.payload,
+        undefined,
         () => [
           agentRunAbortedEvent({
             scopeRef: input.truthIdentity.scopeRef,

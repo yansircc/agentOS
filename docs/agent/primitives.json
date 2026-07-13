@@ -238,28 +238,11 @@
       "symbol": "BoundaryContract",
       "exportKey": ".:BoundaryContract",
       "sourceFile": "packages/core/src/boundary-contract.ts",
-      "summary": "Five-axis boundary declaration for claim-bearing packages: vocabulary, authority, material, settlement, and projection. Event keys are the vocabulary. Claim slots are event-local so non-claim extension facts do not need to lie as terminal claim events.",
+      "summary": "Four-axis boundary declaration for claim-bearing packages: vocabulary, authority, material, and settlement. Event keys are the vocabulary. Claim slots are event-local so non-claim extension facts do not need to lie as terminal claim events.",
       "aliases": [],
       "invariants": ["invariant.d10.namespace-integrity", "invariant.d10.truth-identity"],
       "docs": "docs/boundary-contract.md",
       "capabilityKind": "kernel",
-      "testEvidence": {
-        "tests": ["packages/core/test/kernel/boundary-contract.test.ts"]
-      }
-    },
-    {
-      "id": "primitive.kernel.BoundaryProjectionContract",
-      "package": "@agent-os/core",
-      "packagePath": "packages/core",
-      "entrypoints": [".", "./boundary-contract"],
-      "symbol": "BoundaryProjectionContract",
-      "exportKey": ".:BoundaryProjectionContract",
-      "sourceFile": "packages/core/src/boundary-contract.ts",
-      "summary": "Boundary axis declaring that observable state is derived from ledger facts.",
-      "aliases": [],
-      "invariants": ["invariant.d10.truth-identity"],
-      "docs": "docs/concepts/materialized-projections.md",
-      "capabilityKind": "projection",
       "testEvidence": {
         "tests": ["packages/core/test/kernel/boundary-contract.test.ts"]
       }

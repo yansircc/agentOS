@@ -33,6 +33,8 @@ const testCarrier = (ownerId: string, prefix: string) =>
     sourcePackageName: ownerId,
     prefix,
     roles: ["generator"],
+    effectAuthorityContracts: [],
+    materialRequirements: [],
     events: {
       requested: event({
         kind: "requested",

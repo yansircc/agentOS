@@ -1,6 +1,7 @@
 import { Data, Duration, Effect, Schedule } from "effect";
 import type { LedgerEvent, RecordedLedgerEvent } from "@agent-os/core/types";
 import type { JsonStringifyError } from "@agent-os/core/errors";
+import type { EffectAuthorityBinding } from "@agent-os/core/material-ref";
 import { RefResolverService } from "@agent-os/core/ref-resolver";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
@@ -17,6 +18,7 @@ import { internalSubmitSpec } from "./internal-submit";
 import { runExternalEffectAttempt } from "./external-effect";
 import {
   WORKSPACE_JOB_KIND,
+  WORKSPACE_JOB_AUTHORITY_CONTRACT,
   projectWorkspaceJob,
   projectWorkspaceJobAttempt,
   projectWorkspaceJobByIdempotencyKey,
@@ -310,6 +312,7 @@ type ContextualBoundaryEvents = {
     contract: typeof workspaceJobBoundaryContract,
     event: string,
     payload: unknown,
+    authorityBinding: EffectAuthorityBinding | undefined,
   ) => Effect.Effect<
     RecordedLedgerEvent,
     BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
@@ -318,12 +321,17 @@ type ContextualBoundaryEvents = {
 
 const commitWorkspaceJob = (
   boundaryEvents: ContextualBoundaryEvents,
+  spec: Pick<RunWorkspaceJobSpec, "identity">,
   event: (typeof WORKSPACE_JOB_KIND)[keyof typeof WORKSPACE_JOB_KIND],
   payload: unknown,
 ): Effect.Effect<
   RecordedLedgerEvent,
   BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
-> => boundaryEvents.commit(workspaceJobBoundaryContract, event, payload);
+> =>
+  boundaryEvents.commit(workspaceJobBoundaryContract, event, payload, {
+    authorityContractId: WORKSPACE_JOB_AUTHORITY_CONTRACT,
+    expectedAuthorityRef: spec.identity.effectAuthorityRef,
+  });
 
 const commitFailed = (
   boundaryEvents: ContextualBoundaryEvents,
@@ -348,6 +356,7 @@ const commitFailed = (
     });
     return commitWorkspaceJob(
       boundaryEvents,
+      spec,
       WORKSPACE_JOB_KIND.RECONCILE_REQUIRED,
       workspaceJobReconcileRequiredPayload({
         requestedEventId,
@@ -365,6 +374,7 @@ const commitFailed = (
   });
   return commitWorkspaceJob(
     boundaryEvents,
+    spec,
     WORKSPACE_JOB_KIND.FAILED,
     workspaceJobFailedPayload({
       requestedEventId,
@@ -396,6 +406,7 @@ const commitSeedWritten = (
   );
   return commitWorkspaceJob(
     boundaryEvents,
+    spec,
     WORKSPACE_JOB_KIND.SEED_WRITTEN,
     workspaceJobSeedWrittenPayload({
       requestedEventId,
@@ -428,6 +439,7 @@ const commitTerminalBuildAttempted = (
   );
   return commitWorkspaceJob(
     boundaryEvents,
+    spec,
     WORKSPACE_JOB_KIND.TERMINAL_BUILD_ATTEMPTED,
     workspaceJobTerminalBuildAttemptedPayload({
       requestedEventId,
@@ -462,6 +474,7 @@ const commitArtifactWritten = (
   );
   return commitWorkspaceJob(
     boundaryEvents,
+    spec,
     WORKSPACE_JOB_KIND.ARTIFACT_WRITTEN,
     workspaceJobArtifactWrittenPayload({
       requestedEventId,
@@ -504,6 +517,7 @@ const commitArtifactReadbackVerified = (
   );
   return commitWorkspaceJob(
     boundaryEvents,
+    spec,
     WORKSPACE_JOB_KIND.ARTIFACT_READBACK_VERIFIED,
     workspaceJobArtifactReadbackVerifiedPayload({
       requestedEventId,
@@ -815,6 +829,7 @@ const runWorkspaceJobAttemptEffect = (
           });
           const requested = yield* commitWorkspaceJob(
             boundaryEvents,
+            activeSpec,
             WORKSPACE_JOB_KIND.REQUESTED,
             workspaceJobRequestedPayload({
               runId: activeSpec.runId,
@@ -1028,6 +1043,7 @@ const runWorkspaceJobAttemptEffect = (
             steps.terminalFinalized === undefined
               ? yield* commitWorkspaceJob(
                   boundaryEvents,
+                  activeSpec,
                   WORKSPACE_JOB_KIND.TERMINAL_FINALIZED,
                   workspaceJobTerminalFinalizedPayload({
                     requestedEventId,
@@ -1059,6 +1075,7 @@ const runWorkspaceJobAttemptEffect = (
             });
             yield* commitWorkspaceJob(
               boundaryEvents,
+              activeSpec,
               WORKSPACE_JOB_KIND.VERIFIED,
               workspaceJobVerifiedPayload({
                 requestedEventId,
@@ -1080,6 +1097,7 @@ const runWorkspaceJobAttemptEffect = (
             });
             yield* commitWorkspaceJob(
               boundaryEvents,
+              activeSpec,
               WORKSPACE_JOB_KIND.VERIFIER_REJECTED,
               workspaceJobVerifierRejectedPayload({
                 requestedEventId,

@@ -154,7 +154,6 @@ slug: "api/core"
 - `.:BoundaryContractValidation`
 - `.:BoundaryModule`
 - `.:BoundaryModuleManifest`
-- `.:BoundaryProjectionContract`
 - `.:buildContextPack`
 - `.:BUILTIN_HANDLER_KINDS`
 - `.:BuiltinHandlerKind`
@@ -312,7 +311,10 @@ slug: "api/core"
 - `.:DurableTriggerDrainLimitExceeded`
 - `.:durableTriggerDuePayload`
 - `.:DurableTriggerRetryPolicy`
+- `.:effectAuthorityContractAccepts`
+- `.:EffectAuthorityBinding`
 - `.:EffectAuthorityContract`
+- `.:EffectAuthoritySelector`
 - `.:EffectClaim`
 - `.:EMPTY_BARRIER_CURSOR`
 - `.:emptyResourceProjection`
@@ -437,6 +439,7 @@ slug: "api/core"
 - `.:isContinuationCause`
 - `.:isContinuationRef`
 - `.:isCoreClaimedEventKind`
+- `.:isEffectAuthorityBinding`
 - `.:isEffectAuthorityContract`
 - `.:isFactOwnerRef`
 - `.:isIndeterminateRef`
@@ -1126,7 +1129,6 @@ slug: "api/core"
 - `./boundary-contract:BoundaryEventContract`
 - `./boundary-contract:BoundaryModule`
 - `./boundary-contract:BoundaryModuleManifest`
-- `./boundary-contract:BoundaryProjectionContract`
 - `./boundary-contract:compileBoundaryContract`
 - `./boundary-contract:defineBoundaryContract`
 - `./boundary-contract:validateBoundaryContract`
@@ -1317,13 +1319,17 @@ slug: "api/core"
 - `./material-ref:credentialMaterialRef`
 - `./material-ref:CredentialMaterialRef`
 - `./material-ref:CredentialMaterialRequirement`
+- `./material-ref:effectAuthorityContractAccepts`
+- `./material-ref:EffectAuthorityBinding`
 - `./material-ref:EffectAuthorityContract`
+- `./material-ref:EffectAuthoritySelector`
 - `./material-ref:endpointMaterialRef`
 - `./material-ref:EndpointMaterialRef`
 - `./material-ref:EndpointMaterialRequirement`
 - `./material-ref:externalResourceMaterialRef`
 - `./material-ref:ExternalResourceMaterialRef`
 - `./material-ref:ExternalResourceMaterialRequirement`
+- `./material-ref:isEffectAuthorityBinding`
 - `./material-ref:isEffectAuthorityContract`
 - `./material-ref:isMaterialRef`
 - `./material-ref:isMaterialRequirement`

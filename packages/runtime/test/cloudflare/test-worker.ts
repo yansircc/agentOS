@@ -622,10 +622,6 @@ const streamOwnerBoundaryContract = defineBoundaryContract({
     },
   },
   settlement: streamOwnerSettlementContract,
-  projection: {
-    derivedFromLedger: true,
-    shadowState: false,
-  },
 });
 
 export const StreamTestDO = createAgentDurableObject<CloudflareAgentEnv>({
@@ -675,12 +671,21 @@ const proofSettlementContract = defineSettlementContract({
   indeterminateKinds: [],
 });
 
+const proofAuthorityContractId = "proof.authority";
+const proofAuthorityRef = { authorityId: "proof.record", authorityClass: "effect" } as const;
+
 const proofBoundaryContract = defineBoundaryContract({
   ownerId: "@agent-os/proof",
   sourcePackageName: "@agent-os/proof",
   kindPrefixes: ["proof."],
   roles: ["generator", "reader"],
-  effectAuthorityContracts: [],
+  effectAuthorityContracts: [
+    {
+      authorityContractId: proofAuthorityContractId,
+      selector: { kind: "exact", authorityRef: proofAuthorityRef },
+      requiredMaterialSlots: [],
+    },
+  ],
   materialRequirements: [],
   events: {
     "proof.recorded": {
@@ -692,21 +697,22 @@ const proofBoundaryContract = defineBoundaryContract({
         required: ["proofRef"],
         additionalProperties: false,
       },
-      claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
+      claim: {
+        key: "claim",
+        phase: "lived",
+        authorityContractId: proofAuthorityContractId,
+        anchorKinds: ["carrier_proof"],
+      },
     },
   },
   settlement: proofSettlementContract,
-  projection: {
-    derivedFromLedger: true,
-    shadowState: false,
-  },
 });
 
 const proofPreClaimForScope = (scopeId: string) =>
   makePreClaim({
     operationRef: "proof:record",
     scopeRef: { kind: "conversation", scopeId },
-    effectAuthorityRef: { authorityId: "proof.record", authorityClass: "effect" },
+    effectAuthorityRef: proofAuthorityRef,
     originRef: { originId: "extension-test", originKind: "test" },
   });
 
@@ -970,7 +976,6 @@ const facadeIntentBoundaryModule = compileBoundaryContract(
       rejectionKinds: ["validation_failed"],
       indeterminateKinds: [],
     }),
-    projection: { derivedFromLedger: true, shadowState: false },
   }),
   "0.0.0",
 );

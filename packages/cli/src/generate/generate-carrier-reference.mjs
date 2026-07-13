@@ -117,25 +117,18 @@ const payloadFields = (schema) => {
 
 const claimSummary = (claim) => {
   if (claim === undefined) return "none";
-  if (claim.phase === "pre") return `pre \`${claim.key}\``;
+  const authority = `authority \`${claim.authorityContractId}\``;
+  if (claim.phase === "pre") return `pre \`${claim.key}\`; ${authority}`;
   if (claim.phase === "lived") {
-    return `lived \`${claim.key}\`; anchors ${list(claim.anchorKinds ?? [])}`;
+    return `lived \`${claim.key}\`; ${authority}; anchors ${list(claim.anchorKinds ?? [])}`;
   }
   if (claim.phase === "rejected") {
-    return `rejected \`${claim.key}\`; rejections ${list(claim.rejectionKinds ?? [])}`;
+    return `rejected \`${claim.key}\`; ${authority}; rejections ${list(claim.rejectionKinds ?? [])}`;
+  }
+  if (claim.phase === "indeterminate") {
+    return `indeterminate \`${claim.key}\`; ${authority}; indeterminate kinds ${list(claim.indeterminateKinds)}`;
   }
   return "unknown";
-};
-
-const materialSummary = (material) => {
-  if (!isRecord(material)) return "unknown";
-  const parts = [`${material.required === false ? "optional" : "required"} ${material.kind}`];
-  if (typeof material.provider === "string") parts.push(`provider=${material.provider}`);
-  if (typeof material.purpose === "string") parts.push(`purpose=${material.purpose}`);
-  if (typeof material.protocol === "string") parts.push(`protocol=${material.protocol}`);
-  if (typeof material.bindingKind === "string") parts.push(`binding=${material.bindingKind}`);
-  if (typeof material.resourceKind === "string") parts.push(`resource=${material.resourceKind}`);
-  return parts.join(", ");
 };
 
 const materialRows = (materials) =>
@@ -154,13 +147,23 @@ const materialRows = (materials) =>
       .join(", ") || "-",
   ]);
 
+const authorityRefSummary = (authorityRef) => {
+  const authorityClass = authorityRef.authorityClass;
+  const authorityId = authorityRef.authorityId;
+  const version = typeof authorityRef.version === "string" ? `@${authorityRef.version}` : "";
+  return `exact \`${authorityClass}:${authorityId}${version}\``;
+};
+
+const authoritySelectorSummary = (selector) => {
+  if (selector.kind === "bound") return "bound at commit";
+  return authorityRefSummary(selector.authorityRef);
+};
+
 const authorityRows = (authorities) =>
   authorities.map((authority) => [
-    `\`${authority.authorityRef?.authorityId ?? "<unknown>"}\``,
-    authority.authorityRef?.authorityClass ?? "unknown",
-    (authority.requiredMaterials ?? [])
-      .map((material) => `\`${material.slot}\`: ${materialSummary(material)}`)
-      .join("<br>") || "None.",
+    `\`${authority.authorityContractId}\``,
+    authoritySelectorSummary(authority.selector),
+    list(authority.requiredMaterialSlots),
   ]);
 
 const validateCarrier = (carrier, pkg) => {
@@ -191,6 +194,30 @@ const validateCarrier = (carrier, pkg) => {
     carrier.boundaryContract.settlement?.settlementId !== carrier.settlementContract.settlementId
   ) {
     failures.push(`${carrier.ownerId}: settlement contract mismatch`);
+  }
+  const authorities = carrier.boundaryContract.effectAuthorityContracts;
+  if (
+    !Array.isArray(authorities) ||
+    !authorities.every(
+      (authority) =>
+        isRecord(authority) &&
+        typeof authority.authorityContractId === "string" &&
+        authority.authorityContractId.length > 0 &&
+        Array.isArray(authority.requiredMaterialSlots) &&
+        authority.requiredMaterialSlots.every(
+          (slot) => typeof slot === "string" && slot.length > 0,
+        ) &&
+        isRecord(authority.selector) &&
+        (authority.selector.kind === "bound" ||
+          (authority.selector.kind === "exact" &&
+            isRecord(authority.selector.authorityRef) &&
+            typeof authority.selector.authorityRef.authorityClass === "string" &&
+            authority.selector.authorityRef.authorityClass.length > 0 &&
+            typeof authority.selector.authorityRef.authorityId === "string" &&
+            authority.selector.authorityRef.authorityId.length > 0)),
+    )
+  ) {
+    failures.push(`${carrier.ownerId}: invalid authority contracts`);
   }
 };
 
@@ -426,7 +453,7 @@ const renderCarrier = ({ pkg, file, exportName, carrier, reserved }) => {
     (boundary.effectAuthorityContracts ?? []).length === 0
       ? "None."
       : table(
-          ["Authority", "Class", "Required materials"],
+          ["Contract id", "Selector", "Required material slots"],
           authorityRows(boundary.effectAuthorityContracts),
         ),
     "",

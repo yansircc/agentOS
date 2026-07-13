@@ -5,7 +5,6 @@ import {
   type BoundaryContract,
   type BoundaryEventContract,
   type BoundaryModule,
-  type BoundaryProjectionContract,
   validateBoundaryContract,
 } from "./boundary-contract";
 import {
@@ -33,20 +32,23 @@ import {
 
 type ClaimSlot =
   | { readonly kind: "none" }
-  | { readonly kind: "pre"; readonly key: string }
+  | { readonly kind: "pre"; readonly key: string; readonly authorityContractId: string }
   | {
       readonly kind: "lived";
       readonly key: string;
+      readonly authorityContractId: string;
       readonly anchorKinds: ReadonlyArray<AnchorRef["anchorKind"]>;
     }
   | {
       readonly kind: "rejected";
       readonly key: string;
+      readonly authorityContractId: string;
       readonly rejectionKinds: ReadonlyArray<RejectionRef["rejectionKind"]>;
     }
   | {
       readonly kind: "indeterminate";
       readonly key: string;
+      readonly authorityContractId: string;
       readonly indeterminateKinds: ReadonlyArray<IndeterminateRef["indeterminateKind"]>;
     };
 
@@ -242,8 +244,8 @@ export interface DefineCarrierSpec<
   readonly prefix: Prefix;
   readonly roles: BoundaryContract["roles"];
   readonly events: Events;
-  readonly effectAuthorityContracts?: ReadonlyArray<EffectAuthorityContract>;
-  readonly materialRequirements?: ReadonlyArray<MaterialRequirement>;
+  readonly effectAuthorityContracts: ReadonlyArray<EffectAuthorityContract>;
+  readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
 }
 
 const failCarrier = (message: string): never =>
@@ -253,9 +255,11 @@ export const none = (): { readonly kind: "none" } => ({ kind: "none" });
 
 export const pre = <const Key extends string>(spec: {
   readonly key: Key;
-}): { readonly kind: "pre"; readonly key: Key } => ({
+  readonly authorityContractId: string;
+}): { readonly kind: "pre"; readonly key: Key; readonly authorityContractId: string } => ({
   kind: "pre",
   key: spec.key,
+  authorityContractId: spec.authorityContractId,
 });
 
 export const lived = <
@@ -263,10 +267,17 @@ export const lived = <
   const Kinds extends ReadonlyArray<AnchorRef["anchorKind"]>,
 >(spec: {
   readonly key: Key;
+  readonly authorityContractId: string;
   readonly anchorKinds: Kinds;
-}): { readonly kind: "lived"; readonly key: Key; readonly anchorKinds: Kinds } => ({
+}): {
+  readonly kind: "lived";
+  readonly key: Key;
+  readonly authorityContractId: string;
+  readonly anchorKinds: Kinds;
+} => ({
   kind: "lived",
   key: spec.key,
+  authorityContractId: spec.authorityContractId,
   anchorKinds: spec.anchorKinds,
 });
 
@@ -275,10 +286,17 @@ export const rejected = <
   const Kinds extends ReadonlyArray<RejectionRef["rejectionKind"]>,
 >(spec: {
   readonly key: Key;
+  readonly authorityContractId: string;
   readonly rejectionKinds: Kinds;
-}): { readonly kind: "rejected"; readonly key: Key; readonly rejectionKinds: Kinds } => ({
+}): {
+  readonly kind: "rejected";
+  readonly key: Key;
+  readonly authorityContractId: string;
+  readonly rejectionKinds: Kinds;
+} => ({
   kind: "rejected",
   key: spec.key,
+  authorityContractId: spec.authorityContractId,
   rejectionKinds: spec.rejectionKinds,
 });
 
@@ -287,14 +305,17 @@ export const indeterminate = <
   const Kinds extends ReadonlyArray<IndeterminateRef["indeterminateKind"]>,
 >(spec: {
   readonly key: Key;
+  readonly authorityContractId: string;
   readonly indeterminateKinds: Kinds;
 }): {
   readonly kind: "indeterminate";
   readonly key: Key;
+  readonly authorityContractId: string;
   readonly indeterminateKinds: Kinds;
 } => ({
   kind: "indeterminate",
   key: spec.key,
+  authorityContractId: spec.authorityContractId,
   indeterminateKinds: spec.indeterminateKinds,
 });
 
@@ -326,15 +347,30 @@ const boundaryClaimFor = (slot: ClaimSlot): BoundaryEventContract["claim"] => {
     case "none":
       return undefined;
     case "pre":
-      return { key: slot.key, phase: "pre" };
+      return {
+        key: slot.key,
+        phase: "pre",
+        authorityContractId: slot.authorityContractId,
+      };
     case "lived":
-      return { key: slot.key, phase: "lived", anchorKinds: slot.anchorKinds };
+      return {
+        key: slot.key,
+        phase: "lived",
+        authorityContractId: slot.authorityContractId,
+        anchorKinds: slot.anchorKinds,
+      };
     case "rejected":
-      return { key: slot.key, phase: "rejected", rejectionKinds: slot.rejectionKinds };
+      return {
+        key: slot.key,
+        phase: "rejected",
+        authorityContractId: slot.authorityContractId,
+        rejectionKinds: slot.rejectionKinds,
+      };
     case "indeterminate":
       return {
         key: slot.key,
         phase: "indeterminate",
+        authorityContractId: slot.authorityContractId,
         indeterminateKinds: slot.indeterminateKinds,
       };
   }
@@ -510,13 +546,9 @@ export const defineCarrier = <
     kindPrefixes: [spec.prefix],
     roles: spec.roles,
     events: boundaryEvents,
-    effectAuthorityContracts: spec.effectAuthorityContracts ?? [],
-    materialRequirements: spec.materialRequirements ?? [],
+    effectAuthorityContracts: spec.effectAuthorityContracts,
+    materialRequirements: spec.materialRequirements,
     settlement: settlementContract,
-    projection: {
-      derivedFromLedger: true,
-      shadowState: false,
-    } satisfies BoundaryProjectionContract,
   } satisfies BoundaryContract;
   const boundaryValidation = validateBoundaryContract(boundaryContract);
   if (!boundaryValidation.ok) {

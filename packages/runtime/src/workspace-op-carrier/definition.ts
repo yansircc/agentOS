@@ -4,6 +4,9 @@ import { defineCarrier, event, lived, pre, rejected } from "@agent-os/core/carri
 export const WORKSPACE_OP_EVENT_PREFIX = "workspace_op.";
 export const WORKSPACE_OP_FACT_OWNER = "@agent-os/workspace-op";
 export const WORKSPACE_OP_PROJECTION_KIND = "workspace_op.status";
+export const WORKSPACE_OP_AUTHORITY_CONTRACT = "workspace-op.invocation";
+
+const claimAuthority = { authorityContractId: WORKSPACE_OP_AUTHORITY_CONTRACT } as const;
 
 const NonEmptyString = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
 
@@ -72,22 +75,31 @@ export const workspaceOpCarrier = defineCarrier({
   sourcePackageName: "@agent-os/runtime",
   prefix: WORKSPACE_OP_EVENT_PREFIX,
   roles: ["generator", "resolver", "reader"],
+  effectAuthorityContracts: [
+    {
+      authorityContractId: WORKSPACE_OP_AUTHORITY_CONTRACT,
+      selector: { kind: "bound" },
+      requiredMaterialSlots: [],
+    },
+  ],
+  materialRequirements: [],
   events: {
     requested: event({
       kind: "requested",
       payload: WorkspaceOperationRequestSchema,
-      claim: pre({ key: "claim" }),
+      claim: pre({ key: "claim", ...claimAuthority }),
     }),
     completed: event({
       kind: "completed",
       payload: WorkspaceOperationResultSchema,
-      claim: lived({ key: "claim", anchorKinds: ["external_receipt"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["external_receipt"] }),
     }),
     rejected: event({
       kind: "rejected",
       payload: WorkspaceOperationRejectedSchema,
       claim: rejected({
         key: "claim",
+        ...claimAuthority,
         rejectionKinds: ["provider_rejected", "validation_failed", "resource_denied"],
       }),
     }),

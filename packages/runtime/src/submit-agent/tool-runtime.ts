@@ -127,21 +127,26 @@ const recordProjectionTimeoutDiagnostic = <State>(
   if (requestedEventId === undefined) return Effect.void;
   const projectionStatus = graphStatus?.projection(timeout.projectionKind);
   return boundaryEvents
-    .commit(runtimeDiagnosticBoundaryContract, RUNTIME_DIAGNOSTIC_KIND.PROJECTION_TIMEOUT, {
-      capabilityId:
-        projectionStatus?.status === "installed"
-          ? projectionStatus.capabilityId
-          : RUNTIME_FACT_OWNER,
-      projectionKind: timeout.projectionKind,
-      waitReason: timeout.reason,
-      maxAttempts: timeout.maxAttempts,
-      operationRef: claim.operationRef,
-      authority: authorityRefLabel(projectionSpec.effectAuthorityRef ?? claim.effectAuthorityRef),
-      requestedEventId,
-      ...(timeout.lastObservedEventId === undefined
-        ? {}
-        : { lastObservedEventId: timeout.lastObservedEventId }),
-    })
+    .commit(
+      runtimeDiagnosticBoundaryContract,
+      RUNTIME_DIAGNOSTIC_KIND.PROJECTION_TIMEOUT,
+      {
+        capabilityId:
+          projectionStatus?.status === "installed"
+            ? projectionStatus.capabilityId
+            : RUNTIME_FACT_OWNER,
+        projectionKind: timeout.projectionKind,
+        waitReason: timeout.reason,
+        maxAttempts: timeout.maxAttempts,
+        operationRef: claim.operationRef,
+        authority: authorityRefLabel(projectionSpec.effectAuthorityRef ?? claim.effectAuthorityRef),
+        requestedEventId,
+        ...(timeout.lastObservedEventId === undefined
+          ? {}
+          : { lastObservedEventId: timeout.lastObservedEventId }),
+      },
+      undefined,
+    )
     .pipe(Effect.asVoid, Effect.ignore);
 };
 
@@ -172,11 +177,19 @@ export const runtimeToolContext = (
                 }),
               );
             }
+            const authorityContractId =
+              declared.boundaryModule.contract.events[kind]?.claim?.authorityContractId;
             return boundaryEvents
               .commit(
                 declared.boundaryModule.contract,
                 kind,
                 payloadWithToolPreClaim(declared.boundaryModule.contract, kind, payload, claim),
+                authorityContractId === undefined
+                  ? undefined
+                  : {
+                      authorityContractId,
+                      expectedAuthorityRef: claim.effectAuthorityRef,
+                    },
               )
               .pipe(
                 Effect.map((event) => ({ id: event.id })),

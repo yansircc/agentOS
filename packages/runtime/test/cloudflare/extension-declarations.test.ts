@@ -41,7 +41,6 @@ describe("extension declarations", () => {
           rejectionKinds: [],
           indeterminateKinds: [],
         },
-        projection: { derivedFromLedger: true, shadowState: false },
       }),
       "0.1.0",
     );

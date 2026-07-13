@@ -1,5 +1,5 @@
 import { Predicate } from "effect";
-import { isAuthorityRef, type AuthorityRef } from "./effect-claim";
+import { authorityRefKey, isAuthorityRef, type AuthorityRef } from "./effect-claim";
 import { isNonEmptyString } from "./string-guards";
 import { authoredValue } from "./value-brands";
 import type { Authored } from "./value-brands";
@@ -98,6 +98,16 @@ export type MaterialRequirementInput =
       readonly required?: boolean;
     });
 
+/** Selects an authored authority or a runtime-bound trusted authority. */
+export type EffectAuthoritySelector =
+  | {
+      readonly kind: "exact";
+      readonly authorityRef: AuthorityRef;
+    }
+  | {
+      readonly kind: "bound";
+    };
+
 /**
  * Effect authority declaration and its required material slots.
  *
@@ -108,8 +118,14 @@ export type MaterialRequirementInput =
  * @public
  */
 export interface EffectAuthorityContract {
-  readonly effectAuthorityRef: AuthorityRef;
-  readonly requiredMaterials: ReadonlyArray<MaterialRequirement>;
+  readonly authorityContractId: string;
+  readonly selector: EffectAuthoritySelector;
+  readonly requiredMaterialSlots: ReadonlyArray<string>;
+}
+
+export interface EffectAuthorityBinding {
+  readonly authorityContractId: string;
+  readonly expectedAuthorityRef: AuthorityRef;
 }
 
 export type MaterialValidationIssue =
@@ -121,7 +137,7 @@ export type MaterialValidationIssue =
   | "authority_contract_invalid";
 
 const optionalString = (value: unknown): value is string | undefined =>
-  value === undefined || typeof value === "string";
+  value === undefined || isNonEmptyString(value);
 
 const hasOnlyKeys = (value: Record<string, unknown>, keys: ReadonlySet<string>): boolean =>
   Object.keys(value).every((key) => keys.has(key));
@@ -263,12 +279,46 @@ export const isMaterialRequirement = (value: unknown): value is MaterialRequirem
   }
 };
 
+const isEffectAuthoritySelector = (value: unknown): value is EffectAuthoritySelector =>
+  Predicate.isObject(value) &&
+  (value.kind === "bound"
+    ? hasOnlyKeys(value, new Set(["kind"]))
+    : value.kind === "exact" &&
+      hasOnlyKeys(value, new Set(["kind", "authorityRef"])) &&
+      isAuthorityRef(value.authorityRef));
+
+const isUniqueNonEmptyStringArray = (value: unknown): value is ReadonlyArray<string> =>
+  Array.isArray(value) &&
+  value.every(isNonEmptyString) &&
+  new Set(value as ReadonlyArray<string>).size === value.length;
+
 export const isEffectAuthorityContract = (value: unknown): value is EffectAuthorityContract =>
   Predicate.isObject(value) &&
-  hasOnlyKeys(value, new Set(["effectAuthorityRef", "requiredMaterials"])) &&
-  isAuthorityRef(value.effectAuthorityRef) &&
-  Array.isArray(value.requiredMaterials) &&
-  value.requiredMaterials.every(isMaterialRequirement);
+  hasOnlyKeys(value, new Set(["authorityContractId", "selector", "requiredMaterialSlots"])) &&
+  isNonEmptyString(value.authorityContractId) &&
+  isEffectAuthoritySelector(value.selector) &&
+  isUniqueNonEmptyStringArray(value.requiredMaterialSlots);
+
+export const isEffectAuthorityBinding = (value: unknown): value is EffectAuthorityBinding =>
+  Predicate.isObject(value) &&
+  hasOnlyKeys(value, new Set(["authorityContractId", "expectedAuthorityRef"])) &&
+  isNonEmptyString(value.authorityContractId) &&
+  isAuthorityRef(value.expectedAuthorityRef);
+
+export const effectAuthorityContractAccepts = (
+  contract: EffectAuthorityContract,
+  actual: AuthorityRef,
+  binding: EffectAuthorityBinding | undefined,
+): boolean => {
+  if (contract.selector.kind === "exact") {
+    return authorityRefKey(actual) === authorityRefKey(contract.selector.authorityRef);
+  }
+  return (
+    isEffectAuthorityBinding(binding) &&
+    binding.authorityContractId === contract.authorityContractId &&
+    authorityRefKey(actual) === authorityRefKey(binding.expectedAuthorityRef)
+  );
+};
 
 export const materialRefSatisfiesRequirement = (
   ref: MaterialRef,

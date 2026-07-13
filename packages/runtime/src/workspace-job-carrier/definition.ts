@@ -4,6 +4,9 @@ import { defineCarrier, event, indeterminate, lived, pre, rejected } from "@agen
 export const WORKSPACE_JOB_EVENT_PREFIX = "workspace_job.";
 export const WORKSPACE_JOB_FACT_OWNER = "@agent-os/workspace-job";
 export const WORKSPACE_JOB_PROJECTION_KIND = "workspace_job.result";
+export const WORKSPACE_JOB_AUTHORITY_CONTRACT = "workspace-job.runtime-identity";
+
+const claimAuthority = { authorityContractId: WORKSPACE_JOB_AUTHORITY_CONTRACT } as const;
 
 const NonEmptyString = Schema.String.pipe(Schema.check(Schema.isMinLength(1)));
 
@@ -141,27 +144,36 @@ export const workspaceJobCarrier = defineCarrier({
   sourcePackageName: "@agent-os/runtime",
   prefix: WORKSPACE_JOB_EVENT_PREFIX,
   roles: ["generator", "reader"],
+  effectAuthorityContracts: [
+    {
+      authorityContractId: WORKSPACE_JOB_AUTHORITY_CONTRACT,
+      selector: { kind: "bound" },
+      requiredMaterialSlots: [],
+    },
+  ],
+  materialRequirements: [],
   events: {
     requested: event({
       kind: "requested",
       payload: RequestedSchema,
-      claim: pre({ key: "claim" }),
+      claim: pre({ key: "claim", ...claimAuthority }),
     }),
     terminal_finalized: event({
       kind: "terminal_finalized",
       payload: TerminalSchema,
-      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["carrier_proof"] }),
     }),
     verified: event({
       kind: "verified",
       payload: TerminalVerdictSchema,
-      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["carrier_proof"] }),
     }),
     verifier_rejected: event({
       kind: "verifier_rejected",
       payload: TerminalVerdictSchema,
       claim: rejected({
         key: "claim",
+        ...claimAuthority,
         rejectionKinds: ["validation_failed", "policy_denied"],
       }),
     }),
@@ -170,6 +182,7 @@ export const workspaceJobCarrier = defineCarrier({
       payload: FailedSchema,
       claim: rejected({
         key: "claim",
+        ...claimAuthority,
         rejectionKinds: ["provider_rejected", "validation_failed", "resource_denied"],
       }),
     }),
@@ -178,28 +191,29 @@ export const workspaceJobCarrier = defineCarrier({
       payload: ReconcileRequiredSchema,
       claim: indeterminate({
         key: "claim",
+        ...claimAuthority,
         indeterminateKinds: ["reconcile_required", "witness_unavailable", "retry_pending"],
       }),
     }),
     seed_written: event({
       kind: "seed_written",
       payload: SeedWrittenSchema,
-      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["carrier_proof"] }),
     }),
     terminal_build_attempted: event({
       kind: "terminal_build_attempted",
       payload: TerminalBuildAttemptedSchema,
-      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["carrier_proof"] }),
     }),
     artifact_written: event({
       kind: "artifact_written",
       payload: ArtifactWrittenSchema,
-      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["carrier_proof"] }),
     }),
     artifact_readback_verified: event({
       kind: "artifact_readback_verified",
       payload: ArtifactReadbackVerifiedSchema,
-      claim: lived({ key: "claim", anchorKinds: ["carrier_proof"] }),
+      claim: lived({ key: "claim", ...claimAuthority, anchorKinds: ["carrier_proof"] }),
     }),
   },
 });

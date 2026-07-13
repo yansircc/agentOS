@@ -146,16 +146,19 @@ Start at [docs/start-here.md](docs/start-here.md). It is the generated route fro
 
 ## BoundaryContract Checklist
 
-Claim-bearing packages declare one `BoundaryContract` with five independent
+Claim-bearing packages declare one `BoundaryContract` with four independent
 axes:
 
 ```text
 vocabulary       owned event kind prefixes
-authority        authority refs and required materials by authority
-material         top-level MaterialRequirement axis
+authority        exact or runtime-bound trusted authority selectors
+material         top-level MaterialRequirement schemas referenced by slot
 settlement       terminal claim vocabulary and symbolic proof constraints
-projection       derived-from-ledger reader contract
 ```
+
+Executable projection contracts are owned separately by
+`MaterializedProjectionDefinition`; do not duplicate reader facts in a
+`BoundaryContract`.
 
 Cleanup is not a sixth axis yet. Release and destruction semantics remain
 settlement vocabulary until multiple packages expose cleanup as an independent

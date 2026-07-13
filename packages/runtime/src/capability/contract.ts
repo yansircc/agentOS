@@ -14,7 +14,7 @@ import type { AnyDurableTrigger } from "../trigger";
 import type { EventHandler } from "@agent-os/core/types";
 import type { CapabilityRequirements } from "./requirements";
 import type { RuntimeDiagnosticApi } from "./diagnostics";
-import type { InstalledCapabilityHandle } from "./install-context";
+import type { CapabilityCommitInput, InstalledCapabilityHandle } from "./install-context";
 import type { ResolvedHostFacts } from "./host";
 
 /**
@@ -40,7 +40,7 @@ export interface CapabilityInstallation {
  * Runtime handle exposed to capability event handler factories.
  */
 export interface CapabilityRuntimeHandle {
-  readonly commit: (input: { readonly event: string; readonly data: unknown }) => Promise<unknown>;
+  readonly commit: (input: CapabilityCommitInput) => Promise<unknown>;
 }
 
 /**

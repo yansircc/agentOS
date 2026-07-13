@@ -77,6 +77,7 @@ import {
   credentialMaterialRef,
   materialRefKey,
   materialRequirement,
+  type EffectAuthorityBinding,
   type MaterialRef,
 } from "@agent-os/core/material-ref";
 import {
@@ -260,8 +261,13 @@ const makeServices = (
     streamSnapshot: () => Effect.succeed(events.map(decodeRecordedLedgerEvent)),
   };
   const boundaryEvents = {
-    commit: (contract: BoundaryContract, event: string, payload: unknown) =>
-      commitBoundaryEvent(contract, event, payload, (identity) =>
+    commit: (
+      contract: BoundaryContract,
+      event: string,
+      payload: unknown,
+      authorityBinding: EffectAuthorityBinding | undefined,
+    ) =>
+      commitBoundaryEvent(contract, event, payload, authorityBinding, (identity) =>
         Effect.sync(() => {
           const id = nextId++;
           const committed = {
@@ -287,6 +293,7 @@ const makeServices = (
       contract: BoundaryContract,
       event: string,
       payload: unknown,
+      authorityBinding: EffectAuthorityBinding | undefined,
       runtimeEvents: (boundaryEventId: number) => ReadonlyArray<{
         readonly kind: string;
         readonly payload: unknown;
@@ -296,7 +303,7 @@ const makeServices = (
       }>,
     ) =>
       Effect.gen(function* () {
-        const rejected = validateBoundaryEventPayload(contract, event, payload);
+        const rejected = validateBoundaryEventPayload(contract, event, payload, authorityBinding);
         if (rejected !== null) {
           return yield* Effect.fail(rejected);
         }
@@ -323,6 +330,7 @@ const makeServices = (
           event,
           objectPayload,
           boundaryEvent,
+          authorityBinding,
         );
         if (committedRejected !== null) {
           return yield* Effect.fail(committedRejected);

@@ -221,7 +221,6 @@ export const registerSubmitAgentMaterialCases = () => {
                       rejectionKinds: ["provider_rejected"],
                       indeterminateKinds: [],
                     }),
-                    projection: { derivedFromLedger: true, shadowState: false },
                   }),
                   "0.2.9",
                 ),
@@ -517,6 +516,7 @@ export const registerSubmitAgentMaterialCases = () => {
           decision: "approved",
           decidedBy: "operator/alice",
         },
+        undefined,
       );
 
       if (first.result.inputRequest === undefined) {
@@ -599,6 +599,7 @@ export const registerSubmitAgentMaterialCases = () => {
           decision: "approved",
           decidedBy: "operator/alice",
         },
+        undefined,
       );
       const resume = submitResumeDecisionFromInputRequestProjection(
         projectInputRequest(services.events, first.result.inputRequest.ref),

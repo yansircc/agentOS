@@ -24,6 +24,7 @@ import {
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
+  WORKSPACE_OP_AUTHORITY_CONTRACT,
   WORKSPACE_OP_PROJECTION_KIND,
   projectWorkspaceOperation,
   workspaceOpBoundaryModule,
@@ -43,6 +44,7 @@ import {
 } from "../workspace-op-local";
 import { defineCapability } from "./contract";
 import type { CapabilityInstallContext } from "./contract";
+import type { CapabilityCommitInput } from "./install-context";
 import { WORKSPACE_OPERATION_HOST_FACT } from "./materialized-host-facts";
 
 export { WORKSPACE_OPERATION_HOST_FACT } from "./materialized-host-facts";
@@ -90,10 +92,7 @@ export interface WorkspaceOperationInstallContext {
   readonly capabilities: ReadonlyMap<
     string,
     {
-      readonly commit: (input: {
-        readonly event: string;
-        readonly data: unknown;
-      }) => Promise<unknown>;
+      readonly commit: (input: CapabilityCommitInput) => Promise<unknown>;
     }
   >;
 }
@@ -371,6 +370,10 @@ export const createWorkspaceOperationInstall = (
           await capability.commit({
             event: result.ok ? WORKSPACE_OP_KIND.COMPLETED : WORKSPACE_OP_KIND.REJECTED,
             data: result.payload,
+            authorityBinding: {
+              authorityContractId: WORKSPACE_OP_AUTHORITY_CONTRACT,
+              expectedAuthorityRef: event.effectAuthorityRef,
+            },
           });
         }) as EventHandler,
       },

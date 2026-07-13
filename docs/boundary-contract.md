@@ -7,16 +7,15 @@ extensions.
 
 ```text
 Vocabulary   owned event kind prefixes and event vocabulary
-Authority    effectAuthorityRef values and per-authority material requirements
-Material     top-level MaterialRequirement declarations
+Authority    exact or runtime-bound trusted authority selectors
+Material     top-level MaterialRequirement schemas referenced by authority slots
 Settlement   terminal claim vocabulary and symbolic proof constraints
-Projection   derived-from-ledger reader contract
 ```
 
 These axes must be independently checkable. Effect authority requirements must
-be subsets of the top-level material axis. `factOwnerRef` is not part of the
-authority axis; it comes from the boundary `ownerId`/explicit fact owner at the
-commit boundary and cannot be set by claim authors.
+reference slots from the top-level material axis. `factOwnerRef` is not part of
+the authority axis; it comes from the boundary `ownerId`/explicit fact owner at
+the commit boundary and cannot be set by claim authors.
 
 ## Invariants
 
@@ -25,11 +24,19 @@ commit boundary and cannot be set by claim authors.
 - Request-time `pre` events are not terminal events.
 - Terminal lived/rejected claims validate against the package settlement
   contract.
-- Claim `effectAuthorityRef` values must be declared by
-  `effectAuthorityContracts`; declaration does not grant fact ownership.
-- Projections are derived from ledger facts and do not write shadow truth.
+- Every claim slot names one authority contract. An `exact` selector matches its
+  authored `AuthorityRef`; a `bound` selector requires a trusted runtime binding
+  supplied outside the claim.
+- A claim-bearing boundary with an empty authority axis, a missing binding, or a
+  mismatched contract ID or authority ref fails closed before ledger append.
+- Every authority material slot is declared by the top-level material axis, and
+  every declared material slot is referenced by an authority contract.
 - Cleanup is settlement vocabulary until release becomes an independent
   cross-package contract axis.
+
+Projection readers are a separate executable contract owned by
+`MaterializedProjectionDefinition`. `BoundaryContract` does not duplicate a
+reader kind, version, schema, event vocabulary, or reducer declaration.
 
 ## Minimal Shape
 
@@ -43,12 +50,24 @@ const settlement = defineSettlementContract({
   rejectionKinds: ["provider_rejected"],
 });
 
+const authorityContractId = "example.runtime";
+const authorityRef = {
+  authorityClass: "runtime",
+  authorityId: "example",
+} as const;
+
 export const boundary = defineBoundaryContract({
   ownerId: "@agent-os/example",
   sourcePackageName: "@agent-os/runtime",
   kindPrefixes: ["example."],
   roles: ["resolver", "reader"],
-  effectAuthorityContracts: [],
+  effectAuthorityContracts: [
+    {
+      authorityContractId,
+      selector: { kind: "exact", authorityRef },
+      requiredMaterialSlots: [],
+    },
+  ],
   materialRequirements: [],
   events: {
     "example.requested": {
@@ -58,7 +77,7 @@ export const boundary = defineBoundaryContract({
         required: ["subjectRef"],
         additionalProperties: false,
       },
-      claim: { key: "claim", phase: "pre" },
+      claim: { key: "claim", phase: "pre", authorityContractId },
     },
     "example.recorded": {
       payloadSchema: {
@@ -67,7 +86,12 @@ export const boundary = defineBoundaryContract({
         required: ["proofRef"],
         additionalProperties: false,
       },
-      claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
+      claim: {
+        key: "claim",
+        phase: "lived",
+        authorityContractId,
+        anchorKinds: ["carrier_proof"],
+      },
     },
     "example.failed": {
       payloadSchema: {
@@ -76,11 +100,15 @@ export const boundary = defineBoundaryContract({
         required: ["reason"],
         additionalProperties: false,
       },
-      claim: { key: "claim", phase: "rejected", rejectionKinds: ["provider_rejected"] },
+      claim: {
+        key: "claim",
+        phase: "rejected",
+        authorityContractId,
+        rejectionKinds: ["provider_rejected"],
+      },
     },
   },
   settlement,
-  projection: { derivedFromLedger: true, shadowState: false },
 });
 ```
 
@@ -97,10 +125,10 @@ import { compileBoundaryContract } from "@agent-os/core/boundary-contract";
 export const boundaryModule = compileBoundaryContract(boundary, "1");
 ```
 
-Compilation validates the five axes and returns an opaque `BoundaryModule`.
+Compilation validates the four axes and returns an opaque `BoundaryModule`.
 `module.contract` preserves the authored vocabulary, authority, material,
-settlement, and projection facts. `module.manifest` contains only the derived
-owner, source package, kind prefixes, and version used by runtime installation.
+and settlement facts. `module.manifest` contains only the derived owner, source
+package, kind prefixes, and version used by runtime installation.
 
 `BoundaryModule` is not independently authored. Core compilation has no host,
 backend, provider, filesystem, environment, time, or install-graph dependency;

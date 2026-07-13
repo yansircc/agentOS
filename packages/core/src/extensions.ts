@@ -5,6 +5,7 @@ import {
   isCoreClaimedEventKind,
 } from "./errors";
 import type { BoundaryModule, BoundaryModuleManifest } from "./boundary-contract";
+import type { EffectAuthorityBinding } from "./material-ref";
 
 export interface EventNamespace {
   readonly ownerId: string;
@@ -18,6 +19,7 @@ export type ExtensionDeclaration = BoundaryModule | EventNamespace;
 export interface ExtensionCommitSpec {
   readonly event: string;
   readonly data: unknown;
+  readonly authorityBinding?: EffectAuthorityBinding;
 }
 
 export interface ExtensionTimeSpec extends ExtensionCommitSpec {

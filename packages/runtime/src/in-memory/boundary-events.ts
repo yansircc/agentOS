@@ -21,34 +21,40 @@ export const InMemoryBoundaryEventsLive = (
   fallbackIdentity: BackendProtocolTruthIdentity,
 ): Layer.Layer<BoundaryEvents> =>
   Layer.succeed(BoundaryEvents, {
-    commit: (contract: BoundaryContract, event: string, payload: unknown) =>
-      commitBoundaryEvent(contract, event, payload, (identity: BoundaryCommitIdentity) =>
-        Effect.gen(function* () {
-          const committed = yield* state
-            .commitProtocolEvents([
-              {
-                kind: event,
-                scopeRef: identity.scopeRef ?? fallbackIdentity.scopeRef,
-                effectAuthorityRef:
-                  identity.effectAuthorityRef ?? fallbackIdentity.effectAuthorityRef,
-                factOwnerRef: identity.factOwnerRef,
-                payload,
-              },
-            ])
-            .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
-          return yield* recordLedgerPortEvent("boundary_event", committed[0]!);
-        }).pipe(Effect.withSpan("agentos.in_memory.boundary_event.commit")),
+    commit: (contract, event, payload, authorityBinding) =>
+      commitBoundaryEvent(
+        contract,
+        event,
+        payload,
+        authorityBinding,
+        (identity: BoundaryCommitIdentity) =>
+          Effect.gen(function* () {
+            const committed = yield* state
+              .commitProtocolEvents([
+                {
+                  kind: event,
+                  scopeRef: identity.scopeRef ?? fallbackIdentity.scopeRef,
+                  effectAuthorityRef:
+                    identity.effectAuthorityRef ?? fallbackIdentity.effectAuthorityRef,
+                  factOwnerRef: identity.factOwnerRef,
+                  payload,
+                },
+              ])
+              .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
+            return yield* recordLedgerPortEvent("boundary_event", committed[0]!);
+          }).pipe(Effect.withSpan("agentos.in_memory.boundary_event.commit")),
       ),
     commitWithRuntimeEvents: (
       contract: BoundaryContract,
       event: string,
       payload: unknown,
+      authorityBinding,
       runtimeEvents: (
         boundaryEventId: number,
       ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
     ) =>
       Effect.gen(function* () {
-        const rejected = validateBoundaryEventPayload(contract, event, payload);
+        const rejected = validateBoundaryEventPayload(contract, event, payload, authorityBinding);
         if (rejected !== null) {
           return yield* Effect.fail(rejected);
         }
@@ -79,6 +85,7 @@ export const InMemoryBoundaryEventsLive = (
           event,
           objectPayload,
           committed[0]!,
+          authorityBinding,
         );
         if (committedRejected !== null) {
           return yield* Effect.fail(committedRejected);

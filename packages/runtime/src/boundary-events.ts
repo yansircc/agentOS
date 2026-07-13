@@ -1,6 +1,7 @@
 import { Context, Effect } from "effect";
 import type { BoundaryContract } from "@agent-os/core/boundary-contract";
 import type { JsonStringifyError } from "@agent-os/core/errors";
+import type { EffectAuthorityBinding } from "@agent-os/core/material-ref";
 import type { RecordedLedgerEvent } from "@agent-os/core/types";
 import type { RuntimeEventCommitSpec } from "@agent-os/core/runtime-protocol";
 import type { BoundaryCommitRejected } from "./boundary-commit";
@@ -22,6 +23,7 @@ export class BoundaryEvents extends Context.Service<
       contract: BoundaryContract,
       event: string,
       payload: unknown,
+      authorityBinding: EffectAuthorityBinding | undefined,
     ) => Effect.Effect<
       RecordedLedgerEvent,
       BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
@@ -30,6 +32,7 @@ export class BoundaryEvents extends Context.Service<
       contract: BoundaryContract,
       event: string,
       payload: unknown,
+      authorityBinding: EffectAuthorityBinding | undefined,
       runtimeEvents: (
         boundaryEventId: number,
       ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],

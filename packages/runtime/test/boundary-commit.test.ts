@@ -8,7 +8,6 @@ import {
 import type { EffectClaim } from "@agent-os/core/effect-claim";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import { decodeRecordedLedgerEvent, type LedgerEvent } from "@agent-os/core/types";
-import { materialRequirement } from "@agent-os/core/material-ref";
 import {
   defineSettlementContract,
   settleIndeterminate,
@@ -29,6 +28,10 @@ const settlement = defineSettlementContract({
   rejectionKinds: ["policy_denied", "provider_rejected"],
   indeterminateKinds: ["provider_pending", "reconcile_required"],
 });
+const authorityContractId = "slot.runtime";
+const expectedAuthorityRef = { authorityId: "slot.record", authorityClass: "effect" } as const;
+const authorityBinding = { authorityContractId, expectedAuthorityRef };
+const claimAuthority = { authorityContractId } as const;
 
 const contract = defineBoundaryContract({
   ownerId: "@agent-os/slot-vocab",
@@ -38,25 +41,36 @@ const contract = defineBoundaryContract({
   events: {
     "slot.ledgered": {
       payloadSchema: emptyPayload,
-      claim: { key: "claim", phase: "lived", anchorKinds: ["ledger_event"] },
+      claim: { key: "claim", phase: "lived", ...claimAuthority, anchorKinds: ["ledger_event"] },
     },
     "slot.proved": {
       payloadSchema: emptyPayload,
-      claim: { key: "claim", phase: "lived", anchorKinds: ["carrier_proof"] },
+      claim: { key: "claim", phase: "lived", ...claimAuthority, anchorKinds: ["carrier_proof"] },
     },
     "slot.denied": {
       payloadSchema: emptyPayload,
-      claim: { key: "claim", phase: "rejected", rejectionKinds: ["policy_denied"] },
+      claim: {
+        key: "claim",
+        phase: "rejected",
+        ...claimAuthority,
+        rejectionKinds: ["policy_denied"],
+      },
     },
     "slot.failed": {
       payloadSchema: emptyPayload,
-      claim: { key: "claim", phase: "rejected", rejectionKinds: ["provider_rejected"] },
+      claim: {
+        key: "claim",
+        phase: "rejected",
+        ...claimAuthority,
+        rejectionKinds: ["provider_rejected"],
+      },
     },
     "slot.pending": {
       payloadSchema: emptyPayload,
       claim: {
         key: "claim",
         phase: "indeterminate",
+        ...claimAuthority,
         indeterminateKinds: ["provider_pending"],
       },
     },
@@ -65,23 +79,26 @@ const contract = defineBoundaryContract({
       claim: {
         key: "claim",
         phase: "indeterminate",
+        ...claimAuthority,
         indeterminateKinds: ["reconcile_required"],
       },
     },
   },
-  effectAuthorityContracts: [],
+  effectAuthorityContracts: [
+    {
+      authorityContractId,
+      selector: { kind: "bound" },
+      requiredMaterialSlots: [],
+    },
+  ],
   materialRequirements: [],
   settlement,
-  projection: {
-    derivedFromLedger: true,
-    shadowState: false,
-  },
 });
 
 const claim = makePreClaim({
   operationRef: "slot:op",
   scopeRef: { kind: "conversation", scopeId: "thread:1" },
-  effectAuthorityRef: { authorityId: "slot.record", authorityClass: "effect" },
+  effectAuthorityRef: expectedAuthorityRef,
   originRef: { originId: "slot-test", originKind: "test" },
 });
 
@@ -135,19 +152,34 @@ describe("boundary commit validation", () => {
     });
 
     expect(
-      validateBoundaryEventPayload(contract, "slot.ledgered", {
-        claim: carrierProofClaim,
-      }),
+      validateBoundaryEventPayload(
+        contract,
+        "slot.ledgered",
+        {
+          claim: carrierProofClaim,
+        },
+        authorityBinding,
+      ),
     ).toMatchObject({ issue: "claim_settlement_invalid" });
     expect(
-      validateBoundaryEventPayload(contract, "slot.denied", {
-        claim: providerRejectedClaim,
-      }),
+      validateBoundaryEventPayload(
+        contract,
+        "slot.denied",
+        {
+          claim: providerRejectedClaim,
+        },
+        authorityBinding,
+      ),
     ).toMatchObject({ issue: "claim_settlement_invalid" });
     expect(
-      validateBoundaryEventPayload(contract, "slot.pending", {
-        claim: reconcileRequiredClaim,
-      }),
+      validateBoundaryEventPayload(
+        contract,
+        "slot.pending",
+        {
+          claim: reconcileRequiredClaim,
+        },
+        authorityBinding,
+      ),
     ).toMatchObject({ issue: "claim_settlement_invalid" });
   });
 
@@ -157,6 +189,7 @@ describe("boundary commit validation", () => {
         contract,
         "slot.ledgered",
         { claim: livedClaim },
+        authorityBinding,
         (identity) => {
           expect(identity).toEqual({
             kind: "slot.ledgered",
@@ -183,6 +216,7 @@ describe("boundary commit validation", () => {
         contract,
         "slot.pending",
         { claim: indeterminateClaim },
+        authorityBinding,
         (identity) => {
           expect(identity).toEqual({
             kind: "slot.pending",
@@ -210,33 +244,54 @@ describe("boundary commit validation", () => {
     () =>
       Effect.gen(function* () {
         const owner = yield* Effect.result(
-          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-            Effect.succeed(recordedEventFor({ claim: livedClaim, factOwnerRef: "@other/package" })),
+          commitBoundaryEvent(
+            contract,
+            "slot.ledgered",
+            { claim: livedClaim },
+            authorityBinding,
+            () =>
+              Effect.succeed(
+                recordedEventFor({ claim: livedClaim, factOwnerRef: "@other/package" }),
+              ),
           ),
         );
         const kind = yield* Effect.result(
-          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-            Effect.succeed(recordedEventFor({ claim: livedClaim, kind: "slot.other" })),
+          commitBoundaryEvent(
+            contract,
+            "slot.ledgered",
+            { claim: livedClaim },
+            authorityBinding,
+            () => Effect.succeed(recordedEventFor({ claim: livedClaim, kind: "slot.other" })),
           ),
         );
         const scope = yield* Effect.result(
-          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-            Effect.succeed(
-              recordedEvent({
-                ...eventFor({ claim: livedClaim }),
-                scopeRef: { kind: "conversation", scopeId: "thread:2" },
-              }),
-            ),
+          commitBoundaryEvent(
+            contract,
+            "slot.ledgered",
+            { claim: livedClaim },
+            authorityBinding,
+            () =>
+              Effect.succeed(
+                recordedEvent({
+                  ...eventFor({ claim: livedClaim }),
+                  scopeRef: { kind: "conversation", scopeId: "thread:2" },
+                }),
+              ),
           ),
         );
         const authority = yield* Effect.result(
-          commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, () =>
-            Effect.succeed(
-              recordedEventFor({
-                claim: livedClaim,
-                effectAuthorityRef: { authorityClass: "effect", authorityId: "other.record" },
-              }),
-            ),
+          commitBoundaryEvent(
+            contract,
+            "slot.ledgered",
+            { claim: livedClaim },
+            authorityBinding,
+            () =>
+              Effect.succeed(
+                recordedEventFor({
+                  claim: livedClaim,
+                  effectAuthorityRef: { authorityClass: "effect", authorityId: "other.record" },
+                }),
+              ),
           ),
         );
 
@@ -257,21 +312,6 @@ describe("boundary commit validation", () => {
 
   it.effect("rejects undeclared claim authority before commit", () =>
     Effect.gen(function* () {
-      const proofStore = materialRequirement({
-        slot: "proof_store",
-        kind: "binding",
-        provider: "example",
-      });
-      const authorityContract = defineBoundaryContract({
-        ...contract,
-        effectAuthorityContracts: [
-          {
-            effectAuthorityRef: claim.effectAuthorityRef,
-            requiredMaterials: [proofStore],
-          },
-        ],
-        materialRequirements: [proofStore],
-      });
       const undeclaredClaim = settleLived(
         settlement,
         {
@@ -288,9 +328,32 @@ describe("boundary commit validation", () => {
       );
       let committed = false;
       const result = yield* Effect.result(
-        commitBoundaryEvent(authorityContract, "slot.ledgered", { claim: undeclaredClaim }, () => {
+        commitBoundaryEvent(
+          contract,
+          "slot.ledgered",
+          { claim: undeclaredClaim },
+          authorityBinding,
+          () => {
+            committed = true;
+            return Effect.succeed(recordedEventFor({ claim: undeclaredClaim }));
+          },
+        ),
+      );
+
+      expect(committed).toBe(false);
+      expect(Result.isFailure(result) ? result.failure : null).toMatchObject({
+        issue: "claim_authority_invalid",
+      });
+    }),
+  );
+
+  it.effect("rejects a bound claim when trusted authority evidence is missing", () =>
+    Effect.gen(function* () {
+      let committed = false;
+      const result = yield* Effect.result(
+        commitBoundaryEvent(contract, "slot.ledgered", { claim: livedClaim }, undefined, () => {
           committed = true;
-          return Effect.succeed(recordedEventFor({ claim: undeclaredClaim }));
+          return Effect.succeed(recordedEventFor({ claim: livedClaim }));
         }),
       );
 

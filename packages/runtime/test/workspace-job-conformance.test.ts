@@ -2,6 +2,7 @@ import { describe } from "@effect/vitest";
 import { validateBoundaryEventPayload } from "../src/boundary-commit";
 import {
   WORKSPACE_JOB_KIND,
+  WORKSPACE_JOB_AUTHORITY_CONTRACT,
   settleWorkspaceJobArtifactReadbackVerified,
   workspaceJobArtifactReadbackVerifiedPayload,
   workspaceJobBoundaryContract,
@@ -117,6 +118,10 @@ describe("workspace-job external-effect conformance", () => {
         sha256: "sha256:readback",
         claim: invalidClaim,
       }),
+      {
+        authorityContractId: WORKSPACE_JOB_AUTHORITY_CONTRACT,
+        expectedAuthorityRef: claim.effectAuthorityRef,
+      },
     );
 
     expect(rejection?.issue).toBe("claim_settlement_invalid");

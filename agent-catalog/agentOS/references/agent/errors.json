@@ -23,6 +23,7 @@
       "fix": "Commit through the owning BoundaryContract with matching event vocabulary, scopeRef, effectAuthorityRef, and claim identity.",
       "sourceFiles": [
         "packages/runtime/src/boundary-commit.ts",
+        "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts",
         "packages/runtime/test/cloudflare/do-rpc.test.ts",
         "packages/runtime/test/cloudflare/extension-capability.runtime.test.ts"
       ]

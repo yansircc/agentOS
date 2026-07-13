@@ -54,10 +54,23 @@ const capability = {
           events: {
             "runtime_protocol.requested": {
               payloadSchema: { type: "object", properties: {}, additionalProperties: true },
-              claim: { key: "claim", phase: "pre" },
+              claim: {
+                key: "claim",
+                phase: "pre",
+                authorityContractId: "runtime-protocol.test",
+              },
             },
           },
-          effectAuthorityContracts: [],
+          effectAuthorityContracts: [
+            {
+              authorityContractId: "runtime-protocol.test",
+              selector: {
+                kind: "exact",
+                authorityRef: { authorityClass: "test", authorityId: "runtime-protocol" },
+              },
+              requiredMaterialSlots: [],
+            },
+          ],
           materialRequirements: [],
           settlement: {
             settlementId: "runtime-protocol.test-capability",
@@ -65,7 +78,6 @@ const capability = {
             rejectionKinds: ["validation_failed"],
             indeterminateKinds: [],
           },
-          projection: { derivedFromLedger: true, shadowState: false },
         }),
         "0.1.0",
       ),

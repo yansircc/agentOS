@@ -68,6 +68,8 @@ export const runtimeDiagnosticCarrier = defineCarrier({
   sourcePackageName: "@agent-os/runtime",
   prefix: RUNTIME_DIAGNOSTIC_EVENT_PREFIX,
   roles: ["generator", "reader"],
+  effectAuthorityContracts: [],
+  materialRequirements: [],
   events: {
     handler_missing: event({
       kind: "handler_missing",

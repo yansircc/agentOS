@@ -19,20 +19,24 @@ export type BoundaryEventClaimContract =
   | {
       readonly key: string;
       readonly phase: "pre";
+      readonly authorityContractId: string;
     }
   | {
       readonly key: string;
       readonly phase: "lived";
+      readonly authorityContractId: string;
       readonly anchorKinds: ReadonlyArray<AnchorRef["anchorKind"]>;
     }
   | {
       readonly key: string;
       readonly phase: "rejected";
+      readonly authorityContractId: string;
       readonly rejectionKinds: ReadonlyArray<RejectionRef["rejectionKind"]>;
     }
   | {
       readonly key: string;
       readonly phase: "indeterminate";
+      readonly authorityContractId: string;
       readonly indeterminateKinds: ReadonlyArray<IndeterminateRef["indeterminateKind"]>;
     };
 
@@ -42,21 +46,8 @@ export interface BoundaryEventContract {
 }
 
 /**
- * Boundary axis declaring that observable state is derived from ledger facts.
- *
- * @agentosPrimitive primitive.kernel.BoundaryProjectionContract
- * @agentosInvariant invariant.d10.truth-identity
- * @agentosDocs docs/concepts/materialized-projections.md
- * @public
- */
-export interface BoundaryProjectionContract {
-  readonly derivedFromLedger: true;
-  readonly shadowState: false;
-}
-
-/**
- * Five-axis boundary declaration for claim-bearing packages:
- * vocabulary, authority, material, settlement, and projection.
+ * Four-axis boundary declaration for claim-bearing packages:
+ * vocabulary, authority, material, and settlement.
  *
  * Event keys are the vocabulary. Claim slots are event-local so non-claim
  * extension facts do not need to lie as terminal claim events.
@@ -76,7 +67,6 @@ export interface BoundaryContract<EventKind extends string = string> {
   readonly effectAuthorityContracts: ReadonlyArray<EffectAuthorityContract>;
   readonly materialRequirements: ReadonlyArray<MaterialRequirement>;
   readonly settlement: SettlementContract;
-  readonly projection: BoundaryProjectionContract;
 }
 
 export interface BoundaryModuleManifest {
@@ -91,7 +81,7 @@ declare const boundaryModuleBrand: unique symbol;
 /**
  * Pure compiled projection of one authored BoundaryContract.
  *
- * The contract remains the only owner of the five boundary axes. The manifest
+ * The contract remains the only owner of the four boundary axes. The manifest
  * contains only installation identity derived from that same contract.
  *
  * @public
@@ -117,8 +107,8 @@ export type BoundaryContractIssue =
   | "material_requirements_invalid"
   | "authority_material_outside_axis"
   | "material_authority_unbound"
-  | "settlement_invalid"
-  | "projection_invalid";
+  | "claim_authority_contract_invalid"
+  | "settlement_invalid";
 
 export type BoundaryContractValidation =
   | { readonly ok: true; readonly contract: BoundaryContract & Authored<BoundaryContract> }
@@ -155,6 +145,7 @@ const isJsonSchemaObject = (value: unknown): value is JsonSchemaObject =>
 const isBoundaryEventClaimContract = (value: unknown): value is BoundaryEventClaimContract =>
   Predicate.isObject(value) &&
   isNonEmptyString(value.key) &&
+  isNonEmptyString(value.authorityContractId) &&
   typeof value.phase === "string" &&
   CLAIM_PHASES.has(value.phase as BoundaryClaimPhase) &&
   (value.phase === "pre"
@@ -225,44 +216,13 @@ const eventClaimVocabularyIsInSettlement = (
     );
   });
 
-const materialRequirementMatches = (
-  left: MaterialRequirement,
-  right: MaterialRequirement,
-): boolean => {
-  if (left.kind !== right.kind || left.slot !== right.slot || left.required !== right.required) {
-    return false;
-  }
-  switch (left.kind) {
-    case "credential":
-      return (
-        right.kind === "credential" &&
-        left.provider === right.provider &&
-        left.purpose === right.purpose
-      );
-    case "endpoint":
-      return right.kind === "endpoint" && left.protocol === right.protocol;
-    case "binding":
-      return (
-        right.kind === "binding" &&
-        left.provider === right.provider &&
-        left.bindingKind === right.bindingKind
-      );
-    case "external_resource":
-      return (
-        right.kind === "external_resource" &&
-        left.provider === right.provider &&
-        left.resourceKind === right.resourceKind
-      );
-  }
-};
-
 const authorityMaterialsAreDeclared = (
   effectAuthorityContracts: ReadonlyArray<EffectAuthorityContract>,
   materialRequirements: ReadonlyArray<MaterialRequirement>,
 ): boolean =>
   effectAuthorityContracts.every((contract) =>
-    contract.requiredMaterials.every((required) =>
-      materialRequirements.some((declared) => materialRequirementMatches(required, declared)),
+    contract.requiredMaterialSlots.every((requiredSlot) =>
+      materialRequirements.some((declared) => declared.slot === requiredSlot),
     ),
   );
 
@@ -272,9 +232,23 @@ const materialRequirementsAreBoundToAuthority = (
 ): boolean =>
   materialRequirements.every((declared) =>
     effectAuthorityContracts.some((contract) =>
-      contract.requiredMaterials.some((required) => materialRequirementMatches(required, declared)),
+      contract.requiredMaterialSlots.includes(declared.slot),
     ),
   );
+
+const authorityContractsAreUnique = (contracts: ReadonlyArray<EffectAuthorityContract>): boolean =>
+  new Set(contracts.map((contract) => contract.authorityContractId)).size === contracts.length;
+
+const eventClaimAuthoritiesAreDeclared = (
+  entries: ReadonlyArray<readonly [string, BoundaryEventContract]>,
+  contracts: ReadonlyArray<EffectAuthorityContract>,
+): boolean => {
+  const declared = new Set(contracts.map((contract) => contract.authorityContractId));
+  return entries.every(([, eventContract]) => {
+    const authorityContractId = eventContract.claim?.authorityContractId;
+    return authorityContractId === undefined || declared.has(authorityContractId);
+  });
+};
 
 export const defineBoundaryContract = <EventKind extends string>(
   contract: BoundaryContract<EventKind>,
@@ -292,8 +266,8 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
         "events_invalid",
         "authority_contract_invalid",
         "material_requirements_invalid",
+        "claim_authority_contract_invalid",
         "settlement_invalid",
-        "projection_invalid",
       ],
     };
   }
@@ -349,16 +323,29 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
 
   if (
     !Array.isArray(value.effectAuthorityContracts) ||
-    !value.effectAuthorityContracts.every(isEffectAuthorityContract)
+    !value.effectAuthorityContracts.every(isEffectAuthorityContract) ||
+    !authorityContractsAreUnique(value.effectAuthorityContracts)
   ) {
     issues.push("authority_contract_invalid");
   }
 
   if (
     !Array.isArray(value.materialRequirements) ||
-    !value.materialRequirements.every(isMaterialRequirement)
+    !value.materialRequirements.every(isMaterialRequirement) ||
+    new Set(value.materialRequirements.map((requirement) => requirement.slot)).size !==
+      value.materialRequirements.length
   ) {
     issues.push("material_requirements_invalid");
+  }
+
+  if (
+    entries !== null &&
+    Array.isArray(value.effectAuthorityContracts) &&
+    value.effectAuthorityContracts.every(isEffectAuthorityContract) &&
+    authorityContractsAreUnique(value.effectAuthorityContracts) &&
+    !eventClaimAuthoritiesAreDeclared(entries, value.effectAuthorityContracts)
+  ) {
+    issues.push("claim_authority_contract_invalid");
   }
 
   if (
@@ -386,14 +373,6 @@ export const validateBoundaryContract = (value: unknown): BoundaryContractValida
 
   if (!settlementValidation.ok) {
     issues.push("settlement_invalid");
-  }
-
-  if (
-    !Predicate.isObject(value.projection) ||
-    value.projection.derivedFromLedger !== true ||
-    value.projection.shadowState !== false
-  ) {
-    issues.push("projection_invalid");
   }
 
   if (issues.length > 0) {

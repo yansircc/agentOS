@@ -848,27 +848,34 @@ export const resolveRuntime = async (
     contract: BoundaryContract,
     event: string,
     data: unknown,
+    authorityBinding: Parameters<typeof commitBoundaryEvent>[3],
   ): Promise<{ readonly id: number }> => {
     const runtimeBackend = backend;
     if (runtimeBackend === undefined) {
       throw new Error(`${owner} cannot commit before runtime backend exists`);
     }
     const committed = await runEffectPromise(
-      commitBoundaryEvent(contract, event, data, (identity: BoundaryCommitIdentity) =>
-        Effect.gen(function* () {
-          const events = yield* runtimeBackend.state
-            .commitProtocolEvents([
-              {
-                kind: event,
-                scopeRef: identity.scopeRef ?? truthIdentity.scopeRef,
-                effectAuthorityRef: identity.effectAuthorityRef ?? truthIdentity.effectAuthorityRef,
-                factOwnerRef: identity.factOwnerRef,
-                payload: data,
-              },
-            ])
-            .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
-          return yield* recordLedgerPortEvent("boundary_event", events[0]!);
-        }),
+      commitBoundaryEvent(
+        contract,
+        event,
+        data,
+        authorityBinding,
+        (identity: BoundaryCommitIdentity) =>
+          Effect.gen(function* () {
+            const events = yield* runtimeBackend.state
+              .commitProtocolEvents([
+                {
+                  kind: event,
+                  scopeRef: identity.scopeRef ?? truthIdentity.scopeRef,
+                  effectAuthorityRef:
+                    identity.effectAuthorityRef ?? truthIdentity.effectAuthorityRef,
+                  factOwnerRef: identity.factOwnerRef,
+                  payload: data,
+                },
+              ])
+              .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
+            return yield* recordLedgerPortEvent("boundary_event", events[0]!);
+          }),
       ),
     );
     return { id: committed.id };
@@ -881,6 +888,7 @@ export const resolveRuntime = async (
         runtimeDiagnosticBoundaryContract,
         event,
         data,
+        undefined,
       ),
   };
   const capabilityHandles = new Map<string, CapabilityRuntimeHandle>([
@@ -888,8 +896,14 @@ export const resolveRuntime = async (
   ]);
   for (const cap of capabilities) {
     capabilityHandles.set(cap.capabilityId, {
-      commit: ({ event, data }) =>
-        commitBoundaryPayload(cap.capabilityId, cap.carrier.boundaryContract, event, data),
+      commit: ({ event, data, authorityBinding }) =>
+        commitBoundaryPayload(
+          cap.capabilityId,
+          cap.carrier.boundaryContract,
+          event,
+          data,
+          authorityBinding,
+        ),
     });
   }
 
