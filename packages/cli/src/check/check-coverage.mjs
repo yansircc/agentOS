@@ -6,7 +6,6 @@ import {
   algorithmicCheckerComponents,
   algorithmicCheckerSource,
   hasAlgorithmicChecker,
-  listAlgorithmicCheckers,
 } from "./algorithmic-checks.mjs";
 import { proofRegistryFailures } from "./proof-registry.mjs";
 
@@ -14,9 +13,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 
 const readJson = (relativePath) =>
   JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), "utf8"));
-
-const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -27,146 +23,6 @@ const cliPackage = readJson("packages/cli/package.json");
 
 if (!Array.isArray(coverage.entries) || coverage.entries.length === 0) {
   fail("check coverage entries must be non-empty");
-}
-
-const rules = new Map((rulesSource.rules ?? []).map((rule) => [rule.id, rule]));
-const algorithmicCheckers = new Set(listAlgorithmicCheckers());
-const coveredRuleIds = new Set();
-const genericPackageNegativeWitness =
-  "package-owned test fails when the owned contract is violated";
-
-const assertProofWitnesses = (label, assertionIndex, assertion) => {
-  const witnesses = assertion.packageWitnesses;
-  if (witnesses === undefined) return;
-  if (!Array.isArray(witnesses) || witnesses.length === 0)
-    fail(`${label}: assertions[${assertionIndex}] packageWitnesses must be non-empty when present`);
-
-  for (const [witnessIndex, witness] of witnesses.entries()) {
-    const witnessLabel = `${label}: assertions[${assertionIndex}].packageWitnesses[${witnessIndex}]`;
-    if (!isRecord(witness)) {
-      fail(`${witnessLabel} must be an object`);
-      continue;
-    }
-    if (typeof witness.file !== "string" || !witness.file.startsWith("packages/")) {
-      fail(`${witnessLabel}.file must be a package test path`);
-      continue;
-    }
-    if (typeof witness.name !== "string" || witness.name.length === 0) {
-      fail(`${witnessLabel}.name must be non-empty`);
-      continue;
-    }
-
-    const absolutePath = path.join(repoRoot, witness.file);
-    if (!fs.existsSync(absolutePath)) {
-      fail(`${witnessLabel}.file does not exist`);
-      continue;
-    }
-    const source = fs.readFileSync(absolutePath, "utf8");
-    const testNamePattern = new RegExp(
-      `\\b(?:describe|it|test)(?:\\.effect)?\\(\\s*(["'\`])${escapeRegExp(witness.name)}\\1`,
-      "u",
-    );
-    if (!testNamePattern.test(source)) {
-      fail(`${witnessLabel}.name was not found as a test or describe name`);
-    }
-  }
-};
-
-for (const [index, entry] of (coverage.entries ?? []).entries()) {
-  const label =
-    isRecord(entry) && typeof entry.ruleId === "string" ? entry.ruleId : `entry[${index}]`;
-  if (!isRecord(entry)) {
-    fail(`${label}: coverage entry must be an object`);
-    continue;
-  }
-  if (!isRecord(entry.source)) fail(`${label}: missing source`);
-  if (!isRecord(entry.target)) fail(`${label}: missing target`);
-  if (!Array.isArray(entry.assertions) || entry.assertions.length === 0) {
-    fail(`${label}: assertions must be non-empty`);
-  } else {
-    for (const [assertionIndex, assertion] of entry.assertions.entries()) {
-      if (!isRecord(assertion)) {
-        fail(`${label}: assertions[${assertionIndex}] must be an object`);
-        continue;
-      }
-      if (
-        typeof assertion.failureCondition !== "string" ||
-        assertion.failureCondition.length === 0
-      ) {
-        fail(`${label}: assertions[${assertionIndex}] missing failureCondition`);
-      }
-      if (typeof assertion.negativeWitness !== "string" || assertion.negativeWitness.length === 0) {
-        fail(`${label}: assertions[${assertionIndex}] missing negativeWitness`);
-      }
-      if (assertion.negativeWitness === genericPackageNegativeWitness) {
-        fail(`${label}: assertions[${assertionIndex}] has generic package negativeWitness`);
-      }
-    }
-  }
-
-  if (typeof entry.ruleId === "string" && entry.ruleId.includes(",")) {
-    for (const ruleId of entry.ruleId.split(",")) coveredRuleIds.add(ruleId);
-  } else if (typeof entry.ruleId === "string") {
-    coveredRuleIds.add(entry.ruleId);
-  }
-
-  if (entry.target?.kind === "algorithmic") {
-    const rule = rules.get(entry.target.ruleId);
-    if (!isRecord(rule)) {
-      fail(`${label}: algorithmic target references unknown rule ${entry.target.ruleId}`);
-    } else if (rule.acceptance?.engine !== "algorithmic") {
-      fail(`${label}: algorithmic target rule must use algorithmic acceptance`);
-    } else if (rule.acceptance.checker !== entry.target.checker) {
-      fail(`${label}: coverage checker ${entry.target.checker} does not match rule acceptance`);
-    }
-    if (!algorithmicCheckers.has(entry.target.checker)) {
-      fail(`${label}: missing algorithmic checker ${entry.target.checker}`);
-    }
-  }
-
-  if (entry.target?.kind === "proofClass") {
-    const rule = rules.get(entry.target.ruleId);
-    if (!isRecord(rule)) {
-      fail(`${label}: proofClass target references unknown rule ${entry.target.ruleId}`);
-    } else if (rule.acceptance?.engine !== "proofClass") {
-      fail(`${label}: proofClass target rule must use proofClass acceptance`);
-    } else {
-      for (const [assertionIndex, assertion] of (entry.assertions ?? []).entries()) {
-        if (isRecord(assertion)) {
-          assertProofWitnesses(label, assertionIndex, assertion);
-        }
-      }
-    }
-  }
-
-  if (entry.target?.kind === "manifestRule") {
-    const rule = rules.get(entry.target.ruleId);
-    if (!isRecord(rule)) {
-      fail(`${label}: manifestRule target references unknown rule ${entry.target.ruleId}`);
-    } else if (rule.acceptance?.engine !== entry.target.engine) {
-      fail(`${label}: manifestRule target engine must match rule acceptance`);
-    }
-  }
-
-  if (typeof entry.ruleId === "string" && !entry.ruleId.includes(",")) {
-    const rule = rules.get(entry.ruleId);
-    if (isRecord(rule) && entry.owner !== rule.owner) {
-      fail(
-        `${label}: coverage owner ${entry.owner} does not match boundary rule owner ${rule.owner}`,
-      );
-    }
-  }
-
-  if (entry.target?.kind === "algorithmic-helper") {
-    for (const checker of entry.target.checkers ?? []) {
-      if (!algorithmicCheckers.has(checker))
-        fail(`${label}: helper references unknown checker ${checker}`);
-    }
-  }
-}
-
-for (const rule of rulesSource.rules ?? []) {
-  if (!coveredRuleIds.has(rule.id)) fail(`${rule.id}: rule lacks check coverage entry`);
 }
 
 const sourceText = fs.readFileSync(

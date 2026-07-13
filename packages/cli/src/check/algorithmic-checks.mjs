@@ -5,7 +5,6 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
-import { runCommand } from "./command-runner.mjs";
 import {
   importSpecifierRecords,
   packageImportCycles as graphPackageImportCycles,
@@ -383,8 +382,6 @@ const convergenceSmokeChecks = createConvergenceSmokeChecks({
   checkPublicApi,
   checkClientBoundaries,
   clientSectionBody,
-  checkGeneratedStaticTargetLinking,
-  checkSpikeHygiene,
   moduleBucketRegistry,
   workspacePackagePatterns: () => workspacePackagePatterns(repoRoot),
   workspacePackageRecords,
@@ -408,8 +405,6 @@ const checkCliSurface = convergenceSmokeChecks.checkCliSurface;
 const checkConsumerImports = convergenceSmokeChecks.checkConsumerImports;
 const checkDogfoodSmoke = convergenceSmokeChecks.checkDogfoodSmoke;
 const checkBlueprintRecipes = convergenceSmokeChecks.checkBlueprintRecipes;
-
-const checkBoundaryProjection = () => runCommand("vp fmt --check", { cwd: repoRoot });
 
 const source = (path, symbol) => ({ path, symbol });
 const checker = (run, options = {}) => ({ run, ...options });
@@ -455,8 +450,15 @@ const checkerById = new Map([
       ),
     }),
   ],
-  ["blueprint-recipes", checker(checkBlueprintRecipes)],
-  ["boundaries", checker(checkBoundaryProjection)],
+  [
+    "blueprint-recipes",
+    checker(checkBlueprintRecipes, {
+      source: source(
+        "packages/cli/src/check/algorithmic/convergence-smoke-checks.mjs",
+        "checkBlueprintRecipes",
+      ),
+    }),
+  ],
   ["cli-surface", checker(checkCliSurface)],
   [
     "client-boundaries",
@@ -493,7 +495,6 @@ const checkerById = new Map([
       ),
     }),
   ],
-  ["d12-a155-substrate-absorption", checker(checkBoundaryProjection)],
   ["distribution-units", checker(checkDistributionUnits, { acceptsArgs: true })],
   ["dogfood-smoke", checker(checkDogfoodSmoke, { acceptsArgs: true })],
   [
@@ -541,7 +542,15 @@ const checkerById = new Map([
       ),
     }),
   ],
-  ["generated-static-target-linking", checker(checkGeneratedStaticTargetLinking)],
+  [
+    "generated-static-target-linking",
+    checker(checkGeneratedStaticTargetLinking, {
+      source: source(
+        "packages/cli/src/check/algorithmic/static-target-checks.mjs",
+        "checkGeneratedStaticTargetLinking",
+      ),
+    }),
+  ],
   [
     "gate-tier-governance",
     checker(checkGateTierGovernance, {

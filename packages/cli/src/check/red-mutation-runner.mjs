@@ -5,17 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  algorithmicCheckerComponents,
-  algorithmicCheckerSource,
-  hasAlgorithmicChecker,
-} from "./algorithmic-checks.mjs";
-import { proofRegistryFailures } from "./proof-registry.mjs";
+  assertProofResult,
+  readValidatedProofRegistry,
+  runPositiveProof,
+  runProofCommand,
+} from "./proof-runner.mjs";
 
 const defaultRepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
-const ansi = /\u001b\[[0-?]*[ -/]*[@-~]/gu;
-
-const cleanOutput = (value) => String(value ?? "").replace(ansi, "");
-const combinedOutput = (result) => `${cleanOutput(result.stdout)}${cleanOutput(result.stderr)}`;
 const git = (root, args, options = {}) =>
   execFileSync("git", args, { cwd: root, encoding: "utf8", ...options });
 
@@ -69,40 +65,6 @@ export const applyExactEdits = ({ root, edits }) => {
   return [...new Set(paths)].sort();
 };
 
-export const runArgv = ({ root, command }) => {
-  const [rawExecutable, ...args] = command.argv;
-  const executable = rawExecutable === "node" ? process.execPath : rawExecutable;
-  return spawnSync(executable, args, {
-    cwd: path.join(root, command.cwd),
-    encoding: "utf8",
-    shell: false,
-    env: {
-      ...process.env,
-      CI: "true",
-      PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false",
-    },
-  });
-};
-
-const assertResult = ({ result, expected, label }) => {
-  if (result.error !== undefined) throw result.error;
-  if (result.status !== expected.exitCode) {
-    throw new Error(
-      `${label}: expected exit ${expected.exitCode}, observed ${String(result.status)}\n${combinedOutput(result)}`,
-    );
-  }
-  const output = combinedOutput(result);
-  if (expected.outputIncludes !== undefined && !output.includes(expected.outputIncludes)) {
-    throw new Error(`${label}: missing diagnostic ${expected.outputIncludes}\n${output}`);
-  }
-  if (expected.minPassedTests !== undefined) {
-    const counts = [...output.matchAll(/Tests\s+(\d+) passed/gu)].map((match) => Number(match[1]));
-    if (counts.length === 0 || Math.max(...counts) < expected.minPassedTests) {
-      throw new Error(`${label}: focused package test did not execute\n${output}`);
-    }
-  }
-};
-
 const statusPaths = (root) =>
   git(root, ["status", "--porcelain=v1", "--untracked-files=all"])
     .split("\n")
@@ -135,7 +97,11 @@ const installDependencies = (worktree) => {
     shell: false,
     env: { ...process.env, CI: "true" },
   });
-  assertResult({ result, expected: { exitCode: 0 }, label: "isolated dependency install" });
+  assertProofResult({
+    result,
+    expected: { exitCode: 0 },
+    label: "isolated dependency install",
+  });
 };
 
 const withDetachedWorktree = ({ sourceRoot, command, run }) => {
@@ -180,13 +146,9 @@ export const runRepositoryMutationCase = ({ sourceRoot, entry, redCase }) =>
     sourceRoot,
     command: entry.proof.command,
     run: (worktree) => {
-      const baseline = runArgv({ root: worktree, command: entry.proof.command });
-      assertResult({
-        result: baseline,
-        expected: {
-          exitCode: entry.proof.positive.expectedExitCode,
-          minPassedTests: entry.proof.positive.minPassedTests,
-        },
+      runPositiveProof({
+        root: worktree,
+        entry,
         label: `${entry.ruleId} positive baseline`,
       });
       const expectedPaths = applyExactEdits({ root: worktree, edits: redCase.edits });
@@ -196,8 +158,8 @@ export const runRepositoryMutationCase = ({ sourceRoot, entry, redCase }) =>
           `${entry.ruleId}/${redCase.id}: mutation paths ${JSON.stringify(observedPaths)} do not match ${JSON.stringify(expectedPaths)}`,
         );
       }
-      const red = runArgv({ root: worktree, command: entry.proof.command });
-      assertResult({
+      const red = runProofCommand({ root: worktree, command: entry.proof.command });
+      assertProofResult({
         result: red,
         expected: redCase.expected,
         label: `${entry.ruleId}/${redCase.id}`,
@@ -208,8 +170,7 @@ export const runRepositoryMutationCase = ({ sourceRoot, entry, redCase }) =>
 
 export const selectRegisteredRedCases = ({ coverage, ruleId, caseKind }) => {
   const entries = coverage.entries.filter(
-    (entry) =>
-      entry.proof?.kind !== "unsupported" && (ruleId === undefined || entry.ruleId === ruleId),
+    (entry) => ruleId === undefined || entry.ruleId === ruleId,
   );
   if (entries.length === 0) throw new Error(`no proof entry matched ${ruleId ?? "selection"}`);
   const selected = entries.flatMap((entry) =>
@@ -223,26 +184,7 @@ export const selectRegisteredRedCases = ({ coverage, ruleId, caseKind }) => {
 };
 
 export const runRegisteredRedMutations = ({ sourceRoot = defaultRepoRoot, ruleId, caseKind }) => {
-  const coverage = JSON.parse(
-    fs.readFileSync(
-      path.join(sourceRoot, "packages/cli/src/check/check-coverage.source.json"),
-      "utf8",
-    ),
-  );
-  const rulesSource = JSON.parse(
-    fs.readFileSync(path.join(sourceRoot, "docs/agent/boundary-rules.source.json"), "utf8"),
-  );
-  const registryFailures = proofRegistryFailures({
-    coverage,
-    rulesSource,
-    repoRoot: sourceRoot,
-    hasAlgorithmicChecker,
-    algorithmicCheckerSource,
-    algorithmicCheckerComponents,
-  });
-  if (registryFailures.length > 0) {
-    throw new Error(`invalid proof registry:\n${registryFailures.join("\n")}`);
-  }
+  const { coverage } = readValidatedProofRegistry(sourceRoot);
   const results = [];
   for (const { entry, redCase } of selectRegisteredRedCases({ coverage, ruleId, caseKind })) {
     results.push(runRepositoryMutationCase({ sourceRoot, entry, redCase }));

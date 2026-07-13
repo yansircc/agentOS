@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import os from "node:os";
 import test from "node:test";
-import { validateRuleAcceptance } from "../src/check/manifest-rules.mjs";
+import { runRuleAcceptance, validateRuleAcceptance } from "../src/check/manifest-rules.mjs";
+import { readValidatedProofRegistry, runRegisteredProof } from "../src/check/proof-runner.mjs";
 
 const validate = (rule) => {
   const failures = [];
@@ -80,5 +82,40 @@ void test("engine set is closed", () => {
       },
     }).join("\n"),
     /acceptance.engine must be one of/u,
+  );
+});
+
+void test("direct guard executes package proof while structural traversal preserves its tier", async () => {
+  const registry = readValidatedProofRegistry();
+  const rule = registry.rulesSource.rules.find((candidate) => candidate.id === "workspace-job");
+
+  const structural = await runRuleAcceptance(rule, {
+    execution: "structural",
+    registry,
+    writeOutput: false,
+  });
+  assert.equal(structural.executed, false);
+
+  const direct = await runRuleAcceptance(rule, { registry, writeOutput: false });
+  assert.equal(direct.executed, true);
+  assert.equal(direct.result.status, 0);
+  assert.match(`${direct.result.stdout}${direct.result.stderr}`, /Tests\s+\d+ passed/u);
+});
+
+void test("validated proof registry is identity- and root-bound", () => {
+  const registry = readValidatedProofRegistry();
+  const forged = { ...registry };
+  assert.throws(
+    () => runRegisteredProof({ ruleId: "workspace-job", registry: forged }),
+    /validated registry for the execution root/u,
+  );
+  assert.throws(
+    () =>
+      runRegisteredProof({
+        root: os.tmpdir(),
+        ruleId: "workspace-job",
+        registry,
+      }),
+    /validated registry for the execution root/u,
   );
 });

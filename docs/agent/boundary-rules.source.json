@@ -142,10 +142,6 @@
       },
       {
         "type": "rule",
-        "id": "d12-a155-substrate-absorption"
-      },
-      {
-        "type": "rule",
         "id": "tool-mutation-boundary"
       },
       {
@@ -225,6 +221,10 @@
         "id": "check-effect-manifests"
       },
       {
+        "type": "group",
+        "id": "guard-coverage"
+      },
+      {
         "type": "rule",
         "id": "repo-tooling-surface"
       },
@@ -295,10 +295,6 @@
       {
         "type": "rule",
         "id": "ag-ui-egress-allowlist"
-      },
-      {
-        "type": "rule",
-        "id": "boundaries"
       },
       {
         "type": "rule",
@@ -524,7 +520,7 @@
       "acceptance": {
         "engine": "algorithmic",
         "checker": "convergence-boundary",
-        "reason": "post-v3 boundary freeze is the conjunction of client/workspace-host boundary, generated static-target linking, and spike hygiene"
+        "reason": "non-semantic composition of registered owner-oriented checkers; it adds no independent acceptance semantics"
       }
     },
     {
@@ -743,20 +739,6 @@
       }
     },
     {
-      "id": "boundaries",
-      "owner": "BoundaryContract checklist",
-      "invariantId": "invariant.d10.namespace-integrity",
-      "kind": "repo-boundary",
-      "diagnostics": ["live edge and boundary contract surfaces stay closed"],
-      "paths": ["packages/core/src", "packages/**/src"],
-      "commandGroup": "all",
-      "acceptance": {
-        "engine": "algorithmic",
-        "checker": "boundaries",
-        "reason": "BoundaryContract surface verification interprets cross-package boundary declarations"
-      }
-    },
-    {
       "id": "backend-neutrality",
       "owner": "package.json agentos.backendNeutrality",
       "invariantId": "invariant.algebra.single-code-source",
@@ -957,8 +939,9 @@
       "paths": ["packages/runtime/src/node"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "proofClass",
-        "proofClasses": ["runtime"]
+        "engine": "algorithmic",
+        "checker": "node-postgres-runtime-import-boundary",
+        "reason": "provider-axis ownership requires canonical profile roots and transitive relative/self-import graph traversal"
       }
     },
     {
@@ -983,8 +966,9 @@
       "paths": ["packages/runtime/src"],
       "commandGroup": "substrate-consumer",
       "acceptance": {
-        "engine": "proofClass",
-        "proofClasses": ["runtime", "test"]
+        "engine": "algorithmic",
+        "checker": "backend-provider-axis-boundary",
+        "reason": "provider-axis ownership requires canonical profile roots and transitive relative/self-import graph traversal"
       }
     },
     {
@@ -997,8 +981,8 @@
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "algorithmic",
-        "checker": "backend-neutrality",
-        "reason": "cross-file source contract requires a projection checker until the assertion is represented by a smaller manifest engine"
+        "checker": "backend-neutral-production-runtime-proof",
+        "reason": "production runtime neutrality executes the complete backend law manifest for every declared production profile"
       }
     },
     {
@@ -1076,7 +1060,7 @@
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
-        "proofClasses": ["test"]
+        "proofClasses": ["runtime"]
       }
     },
     {
@@ -1119,20 +1103,6 @@
       "acceptance": {
         "engine": "proofClass",
         "proofClasses": ["test"]
-      }
-    },
-    {
-      "id": "d12-a155-substrate-absorption",
-      "owner": "D12/A155 substrate absorption contract",
-      "invariantId": "invariant.algebra.single-code-source",
-      "kind": "repo-boundary",
-      "diagnostics": [],
-      "paths": ["packages", "packages/cli/src/check"],
-      "commandGroup": "substrate-consumer",
-      "acceptance": {
-        "engine": "algorithmic",
-        "checker": "d12-a155-substrate-absorption",
-        "reason": "cross-file source contract requires a projection checker until the assertion is represented by a smaller manifest engine"
       }
     },
     {
@@ -1249,7 +1219,7 @@
       "commandGroup": "substrate-consumer",
       "acceptance": {
         "engine": "proofClass",
-        "proofClasses": ["test"]
+        "proofClasses": ["runtime"]
       }
     },
     {

@@ -1,30 +1,6 @@
 {
   "schemaVersion": 2,
   "invariant": "each semantic rule has one owner, one live or immutable historical source, one argv semantic checker, and executable isolated red proof",
-  "transition": {
-    "authority": "legacy-boundary-rules-through-cst-478",
-    "removalCondition": "CST #478 removes legacy assertion prose and obsolete aliases while atomically switching manifest-rule authority to this positive registry",
-    "ruleActions": [
-      {
-        "ruleId": "boundaries",
-        "action": "retire",
-        "cutoverTask": 478,
-        "removalCondition": "CST #478 deletes the formatter-backed aggregate instead of preserving it as semantic proof"
-      },
-      {
-        "ruleId": "d12-a155-substrate-absorption",
-        "action": "retire",
-        "cutoverTask": 478,
-        "removalCondition": "CST #478 deletes the historical formatter alias instead of renaming it"
-      },
-      {
-        "ruleId": "convergence-boundary",
-        "action": "gateComposition",
-        "cutoverTask": 478
-      }
-    ]
-  },
-  "engines": ["manifestRule", "proofClass", "algorithmic", "algorithmic-helper"],
   "entries": [
     {
       "source": {
@@ -37,17 +13,6 @@
       },
       "owner": "root package.json and packages/cli",
       "ruleId": "repo-tooling-surface",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "repo-tooling-surface",
-        "checker": "repo-tooling-surface"
-      },
-      "assertions": [
-        {
-          "failureCondition": "root command surface must stay collapsed to the CLI package and approved distribution/runtime commands; scripts/ must remain reserved for parallel-dev shell helpers; CLI package specifiers must be declared dependencies; CLI must not import packages/* source outside packages/cli",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -85,17 +50,6 @@
     {
       "ruleId": "eval-result-artifact-boundary",
       "owner": "packages/cli/src/build/build-cli.ts",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "eval-result-artifact-boundary",
-        "checker": "eval-result-artifact-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "eval result artifacts are ignored derived observations; only the eval runner writes .agentos/eval-results; build, compile, catalog, runtime, and eval DSL sources must not read eval-results as input",
-          "negativeWitness": "registered semantic red mutations reject the forbidden artifact flow"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "source": {
         "kind": "live",
@@ -187,17 +141,6 @@
       },
       "owner": "docs/agent/gates.source.json",
       "ruleId": "gate-tier-governance",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "gate-tier-governance",
-        "checker": "gate-tier-governance"
-      },
-      "assertions": [
-        {
-          "failureCondition": "gate tier governance must reject runtime suffix, passWithNoTests, proof ownership, and affected graph fidelity violations",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -243,17 +186,6 @@
       },
       "owner": "docs/surface.json",
       "ruleId": "public-api",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "public-api",
-        "checker": "public-api"
-      },
-      "assertions": [
-        {
-          "failureCondition": "public package exports must match generated PUBLIC_API projections",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -301,17 +233,6 @@
       },
       "owner": "packages/cli/src/check/sources/client-workspace-host-boundary.md and docs/surface.json",
       "ruleId": "client-boundaries",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "client-boundaries",
-        "checker": "client-boundaries"
-      },
-      "assertions": [
-        {
-          "failureCondition": "client-boundaries: post-rebase verdict must reject client/workspace-host boundary drift owned by docs/surface.json and the boundary freeze doc",
-          "negativeWitness": "algorithmic projection rejects source mutations to framework imports, framework-local read models, retired AG-UI framework package surfaces, and missing boundary freeze markers"
-        }
-      ],
       "invariantId": "invariant.client.projection-sink-boundary",
       "proof": {
         "kind": "algorithmic",
@@ -357,17 +278,6 @@
       },
       "owner": "CST 418, CST 455, packages/cli/src/check/sources/client-workspace-host-boundary.md, and packages/cli/src/build/agent-authoring/static-target.ts",
       "ruleId": "convergence-boundary",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "convergence-boundary",
-        "checker": "convergence-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "convergence-boundary: post-v3 downstream surfaces must stay outside substrate truth ownership, generated closed targets must not choose implementation wiring from manifest/deployment JSON at runtime, and spikes must remain local-only",
-          "negativeWitness": "algorithmic projection rejects source mutations caught by client-boundaries, generated-static-target-linking, or spike-hygiene"
-        }
-      ],
       "invariantId": "invariant.client.projection-sink-boundary",
       "proof": {
         "kind": "gateComposition",
@@ -400,7 +310,7 @@
           }
         ],
         "blindSpots": [
-          "This is a command-group conjunction, not an independent semantic rule; task #478 must reclassify it outside semantic proof authority."
+          "This is a non-semantic command-group conjunction; its authority is limited to the registered component set."
         ]
       }
     },
@@ -415,17 +325,6 @@
       },
       "owner": "CST 421 and packages/cli/src/check/sources/public-surface-sweep.source.json",
       "ruleId": "convergence-public-surface",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "convergence-public-surface",
-        "checker": "convergence-public-surface"
-      },
-      "assertions": [
-        {
-          "failureCondition": "convergence-public-surface: deprecated exports, retired framework packages, or unowned retained projection vocabulary remain public",
-          "negativeWitness": "algorithmic projection rejects non-empty Deprecated exports sections, retained @agent-os/ag-ui-react/@agent-os/ag-ui-svelte surfaces, and retained projection vocabulary without an existing public export and source-owned reason"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -475,17 +374,6 @@
       },
       "owner": "architecture/module-buckets.json and docs/agent/boundary-rules.source.json",
       "ruleId": "convergence-import-dag",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "convergence-import-dag",
-        "checker": "convergence-import-dag"
-      },
-      "assertions": [
-        {
-          "failureCondition": "convergence-import-dag: workspace package imports become cyclic or module imports violate the source-owned bucket and ambient DAGs",
-          "negativeWitness": "algorithmic projection rejects package import cycles and module import edges outside the bucket and ambient DAGs owned by architecture/module-buckets.json"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -535,17 +423,6 @@
       },
       "owner": "docs/agent/boundary-rules.source.json",
       "ruleId": "substrate-import-dag",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "substrate-import-dag",
-        "checker": "substrate-import-dag"
-      },
-      "assertions": [
-        {
-          "failureCondition": "workspace package imports become cyclic or a foundational substrate package imports a downstream surface forbidden by the source-owned edge constraints",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -591,17 +468,6 @@
       },
       "owner": "BoundaryContract declarations",
       "ruleId": "event-namespaces",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "event-namespaces",
-        "checker": "event-namespaces"
-      },
-      "assertions": [
-        {
-          "failureCondition": "event kind prefixes must have exactly one owner",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.d10.namespace-integrity",
       "proof": {
         "kind": "algorithmic",
@@ -647,17 +513,6 @@
       },
       "owner": "docs source facts and generated docs projections",
       "ruleId": "docs-structure",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "docs-structure",
-        "checker": "docs-link-integrity"
-      },
-      "assertions": [
-        {
-          "failureCondition": "relative Markdown-document links in governed documentation must resolve to an existing Markdown file",
-          "negativeWitness": "docs-link-integrity rejects a relative Markdown link whose target does not exist"
-        }
-      ],
       "invariantId": "invariant.docs.agent-projection",
       "proof": {
         "kind": "algorithmic",
@@ -703,17 +558,6 @@
       },
       "owner": "docs/agent/capability-rules.source.json",
       "ruleId": "agent-routes",
-      "target": {
-        "kind": "manifestRule",
-        "ruleId": "agent-routes",
-        "engine": "generatedProjection"
-      },
-      "assertions": [
-        {
-          "failureCondition": "agent decision graph must derive from primitive and rule sources",
-          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
-        }
-      ],
       "invariantId": "invariant.docs.agent-projection",
       "proof": {
         "kind": "generatedProjection",
@@ -759,17 +603,6 @@
       },
       "owner": "backend protocol transaction contract",
       "ruleId": "transaction-sync",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "transaction-sync",
-        "checker": "transaction-sync"
-      },
-      "assertions": [
-        {
-          "failureCondition": "transactionSync must remain sync-only substrate",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.ledger.single-commit-source",
       "proof": {
         "kind": "algorithmic",
@@ -814,17 +647,6 @@
       },
       "owner": "kernel limit registry",
       "ruleId": "limit-registry",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "limit-registry",
-        "checker": "limit-registry"
-      },
-      "assertions": [
-        {
-          "failureCondition": "limit declarations must use the registry instead of local strings",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -871,26 +693,6 @@
       },
       "owner": "@agent-os/workspace-job",
       "ruleId": "workspace-job",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "workspace-job"
-      },
-      "assertions": [
-        {
-          "failureCondition": "workspace-job terminal vocabulary remains carrier-owned",
-          "negativeWitness": "packages/runtime/test/_workspace-job-data-plane-cases.ts: \"commits verifier_rejected as a product verdict distinct from failed\"; packages/runtime/test/_workspace-job-data-plane-cases.ts: \"verifies finalized bytes and commits a verified projection digest for delivery bytes\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/_workspace-job-data-plane-cases.ts",
-              "name": "commits verifier_rejected as a product verdict distinct from failed"
-            },
-            {
-              "file": "packages/runtime/test/_workspace-job-data-plane-cases.ts",
-              "name": "verifies finalized bytes and commits a verified projection digest for delivery bytes"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.workspace-job.verified-terminal",
       "proof": {
         "kind": "packageTest",
@@ -947,26 +749,6 @@
       },
       "owner": "@agent-os/runtime",
       "ruleId": "observability",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "observability"
-      },
-      "assertions": [
-        {
-          "failureCondition": "workspace-job failure explanation must be a runtime join",
-          "negativeWitness": "packages/runtime/test/_workspace-job-idempotency-cases.ts: \"joins exact submit run diagnostics without leaking submitRunId to consumers\"; packages/runtime/test/_workspace-job-failure-reconcile-cases.ts: \"keeps pre-submit seed failures uncorrelated and still observable\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/_workspace-job-idempotency-cases.ts",
-              "name": "joins exact submit run diagnostics without leaking submitRunId to consumers"
-            },
-            {
-              "file": "packages/runtime/test/_workspace-job-failure-reconcile-cases.ts",
-              "name": "keeps pre-submit seed failures uncorrelated and still observable"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.workspace-job.failure-observability-join",
       "proof": {
         "kind": "packageTest",
@@ -1023,26 +805,6 @@
       },
       "owner": "@agent-os/runtime/cloudflare",
       "ruleId": "cloudflare-profile",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "cloudflare-profile"
-      },
-      "assertions": [
-        {
-          "failureCondition": "Cloudflare profile composes host helpers without taking carrier truth",
-          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"installs a workspace-job profile over sanitized projection and existing host helpers\"; packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"creates workspace-job responses only from the projection reader\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-              "name": "installs a workspace-job profile over sanitized projection and existing host helpers"
-            },
-            {
-              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-              "name": "creates workspace-job responses only from the projection reader"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.workspace-job.host-workspace-lifecycle",
       "proof": {
         "kind": "packageTest",
@@ -1099,26 +861,6 @@
       },
       "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "ag-ui-egress-allowlist",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "ag-ui-egress-allowlist"
-      },
-      "assertions": [
-        {
-          "failureCondition": "AG-UI egress exposes only owner-safe envelope and frame facts",
-          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"keeps sse-http generic while host helper materializes AG-UI SSE responses\"; packages/client/test/react/client-react.test.ts: \"does not import AG-UI or declare local UI read-models\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-              "name": "keeps sse-http generic while host helper materializes AG-UI SSE responses"
-            },
-            {
-              "file": "packages/client/test/react/client-react.test.ts",
-              "name": "does not import AG-UI or declare local UI read-models"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "proof": {
         "kind": "packageTest",
@@ -1166,34 +908,6 @@
     {
       "source": {
         "kind": "live",
-        "path": "docs/agent/boundary-rules.source.json",
-        "selector": {
-          "kind": "jsonPointer",
-          "value": "/rules/18"
-        }
-      },
-      "owner": "BoundaryContract checklist",
-      "ruleId": "boundaries",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "boundaries",
-        "checker": "boundaries"
-      },
-      "assertions": [
-        {
-          "failureCondition": "live edge and boundary contract surfaces stay closed",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
-      "invariantId": "invariant.d10.namespace-integrity",
-      "proof": {
-        "kind": "unsupported",
-        "reason": "formatter-backed aggregate aliases are not semantic architecture proof"
-      }
-    },
-    {
-      "source": {
-        "kind": "live",
         "path": "packages/cli/src/check/algorithmic/runtime-structural-checks.mjs",
         "selector": {
           "kind": "symbol",
@@ -1202,17 +916,6 @@
       },
       "owner": "package.json agentos.backendNeutrality",
       "ruleId": "backend-neutrality",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "backend-neutrality",
-        "checker": "backend-neutrality"
-      },
-      "assertions": [
-        {
-          "failureCondition": "production backend set must stay declared once",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -1258,17 +961,6 @@
       },
       "owner": "tooling/vitest-config/source-aliases.ts",
       "ruleId": "source-aliases",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "source-aliases",
-        "checker": "source-aliases"
-      },
-      "assertions": [
-        {
-          "failureCondition": "source alias declarations must not fork package ownership",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -1314,17 +1006,6 @@
       },
       "owner": "AGENTS.md Repo Surface",
       "ruleId": "spike-hygiene",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "spike-hygiene",
-        "checker": "spike-hygiene"
-      },
-      "assertions": [
-        {
-          "failureCondition": "spikes must remain an ignored local namespace with zero tracked files",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -1371,26 +1052,6 @@
       },
       "owner": "@agent-os/runtime-protocol",
       "ruleId": "failure-diagnostics-envelope",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "failure-diagnostics-envelope"
-      },
-      "assertions": [
-        {
-          "failureCondition": "failure diagnostics are projected from protocol categories, not SubmitResult",
-          "negativeWitness": "packages/core/test/runtime-protocol/failure-diagnostics.test.ts: \"folds structured tool rejection diagnostics without exposing raw args\"; packages/core/test/runtime-protocol/failure-diagnostics.test.ts: \"classifies missing receipt-backed execution path without hard-coded consumer owner\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/runtime-protocol/failure-diagnostics.test.ts",
-              "name": "folds structured tool rejection diagnostics without exposing raw args"
-            },
-            {
-              "file": "packages/core/test/runtime-protocol/failure-diagnostics.test.ts",
-              "name": "classifies missing receipt-backed execution path without hard-coded consumer owner"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "proof": {
         "kind": "packageTest",
@@ -1447,26 +1108,6 @@
       },
       "owner": "@agent-os/core",
       "ruleId": "tool-witness-single-source",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "tool-witness-single-source"
-      },
-      "assertions": [
-        {
-          "failureCondition": "tool replay witness is derived from execution domain law",
-          "negativeWitness": "packages/core/test/kernel/tools.test.ts: \"resolves replay witness only from the domain law\"; packages/core/test/runtime-protocol/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/kernel/tools.test.ts",
-              "name": "resolves replay witness only from the domain law"
-            },
-            {
-              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
-              "name": "validates receipt-backed bridge results before runtime logs tool.executed"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "proof": {
         "kind": "packageTest",
@@ -1523,26 +1164,6 @@
       },
       "owner": "@agent-os/runtime",
       "ruleId": "workspace-tool-exposure-policy",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "workspace-tool-exposure-policy"
-      },
-      "assertions": [
-        {
-          "failureCondition": "workspace tool exposure defaults to read-only and opts in to receipt-backed mutations",
-          "negativeWitness": "packages/runtime/test/_submit-agent-tool-boundary-cases.ts: \"does not execute an external tool without a receipt-backed terminal contract\"; packages/runtime/test/_submit-agent-tool-boundary-cases.ts: \"records receipt-backed external tool execution from a declared bridge result\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/_submit-agent-tool-boundary-cases.ts",
-              "name": "does not execute an external tool without a receipt-backed terminal contract"
-            },
-            {
-              "file": "packages/runtime/test/_submit-agent-tool-boundary-cases.ts",
-              "name": "records receipt-backed external tool execution from a declared bridge result"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "proof": {
         "kind": "packageTest",
@@ -1599,22 +1220,6 @@
       },
       "owner": "@agent-os/workspace-op",
       "ruleId": "workspace-op-receipt-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "workspace-op-receipt-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "workspace-op terminals are carrier receipts, not inline runtime tool facts",
-          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"installs workspace-op provider handlers that commit only through boundary capability\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-              "name": "installs workspace-op provider handlers that commit only through boundary capability"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.workspace-op.carrier-single-writer",
       "proof": {
         "kind": "packageTest",
@@ -1671,22 +1276,6 @@
       },
       "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "workspace-agui-integration-fixture",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "workspace-agui-integration-fixture"
-      },
-      "assertions": [
-        {
-          "failureCondition": "workspace AG-UI integration consumes owner-safe projections",
-          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"installs a workspace-job profile over sanitized projection and existing host helpers\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-              "name": "installs a workspace-job profile over sanitized projection and existing host helpers"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "proof": {
         "kind": "packageTest",
@@ -1743,22 +1332,6 @@
       },
       "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "ag-ui-resume-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "ag-ui-resume-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "ag-ui-resume-boundary: post-migration verdict must reject violations owned by @agent-os/runtime/ag-ui",
-          "negativeWitness": "packages/core/test/runtime-protocol/input-request.test.ts: \"does not derive a request ref without decision binding or supported reason\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/runtime-protocol/input-request.test.ts",
-              "name": "does not derive a request ref without decision binding or supported reason"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "proof": {
         "kind": "packageTest",
@@ -1815,22 +1388,6 @@
       },
       "owner": "@agent-os/runtime/ag-ui",
       "ruleId": "ag-ui-sse-axis",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "ag-ui-sse-axis"
-      },
-      "assertions": [
-        {
-          "failureCondition": "ag-ui-sse-axis: post-migration verdict must reject violations owned by @agent-os/runtime/ag-ui",
-          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"keeps sse-http generic while host helper materializes AG-UI SSE responses\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts",
-              "name": "keeps sse-http generic while host helper materializes AG-UI SSE responses"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.ag-ui.sse-axis",
       "proof": {
         "kind": "packageTest",
@@ -1887,26 +1444,6 @@
       },
       "owner": "@agent-os/runtime/cloudflare",
       "ruleId": "facade-handler-capability-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "facade-handler-capability-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "facade-handler-capability-boundary: post-migration verdict must reject violations owned by @agent-os/runtime/cloudflare",
-          "negativeWitness": "packages/runtime/test/cloudflare/facade.test.ts: \"fails before submit when external tools reference undeclared domains\"; packages/runtime/test/cloudflare/facade.test.ts: \"passes lowering when external tool domains are declared\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/facade.test.ts",
-              "name": "fails before submit when external tools reference undeclared domains"
-            },
-            {
-              "file": "packages/runtime/test/cloudflare/facade.test.ts",
-              "name": "passes lowering when external tool domains are declared"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -1962,17 +1499,6 @@
       },
       "owner": "docs/agent/primitive-evidence.source.json",
       "ruleId": "agent-doc-primitive-evidence",
-      "target": {
-        "kind": "manifestRule",
-        "ruleId": "agent-doc-primitive-evidence",
-        "engine": "generatedProjection"
-      },
-      "assertions": [
-        {
-          "failureCondition": "agent-doc-primitive-evidence: post-migration verdict must reject violations owned by docs/agent/primitive-evidence.source.json",
-          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
-        }
-      ],
       "invariantId": "invariant.docs.agent-projection",
       "proof": {
         "kind": "generatedProjection",
@@ -2019,22 +1545,6 @@
       },
       "owner": "@agent-os/backend-protocol",
       "ruleId": "resource-quota-protocol-ownership",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "resource-quota-protocol-ownership"
-      },
-      "assertions": [
-        {
-          "failureCondition": "resource-quota-protocol-ownership: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"owns quota payload codecs, idempotent grant usage, and malformed fact failure\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
-              "name": "owns quota payload codecs, idempotent grant usage, and malformed fact failure"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -2091,22 +1601,6 @@
       },
       "owner": "@agent-os/backend-protocol",
       "ruleId": "resource-reservation-concurrency",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "resource-reservation-concurrency"
-      },
-      "assertions": [
-        {
-          "failureCondition": "resource-reservation-concurrency: concurrent reservations must serialize and cannot over-reserve one pool",
-          "negativeWitness": "packages/runtime/test/in-memory/backend-protocol-contract.test.ts: \"runs the real resource concurrent serialization law against the in-memory backend\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/in-memory/backend-protocol-contract.test.ts",
-              "name": "runs the real resource concurrent serialization law against the in-memory backend"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -2162,22 +1656,6 @@
       },
       "owner": "@agent-os/runtime/node",
       "ruleId": "node-postgres-runtime-import-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "node-postgres-runtime-import-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "node-postgres-runtime-import-boundary: post-migration verdict must reject violations owned by @agent-os/runtime/node",
-          "negativeWitness": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"node-postgres backend protocol driver\"; packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"rolls back scheduled intent event when due-work insert fails\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts",
-              "name": "node-postgres event+due atomicity"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -2213,19 +1691,7 @@
             }
           }
         ],
-        "blindSpots": [],
-        "targetTransition": {
-          "from": {
-            "kind": "proofClass",
-            "ruleId": "node-postgres-runtime-import-boundary"
-          },
-          "to": {
-            "kind": "algorithmic",
-            "ruleId": "node-postgres-runtime-import-boundary",
-            "checker": "node-postgres-runtime-import-boundary"
-          },
-          "cutoverTask": 478
-        }
+        "blindSpots": []
       }
     },
     {
@@ -2240,22 +1706,6 @@
       },
       "owner": "@agent-os/runtime/node",
       "ruleId": "node-postgres-effect-governance",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "node-postgres-effect-governance"
-      },
-      "assertions": [
-        {
-          "failureCondition": "node-postgres-effect-governance: post-migration verdict must reject violations owned by @agent-os/runtime/node",
-          "negativeWitness": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"node-postgres event+due atomicity\"; packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"rolls back outbound dispatch event when delivery due-work insert fails\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/node/backend-protocol-contract.runtime.test.ts",
-              "name": "rolls back outbound dispatch event when delivery due-work insert fails"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "packageTest",
@@ -2313,22 +1763,6 @@
       },
       "owner": "packages/runtime/src",
       "ruleId": "backend-provider-axis-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "backend-provider-axis-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "backend-provider-axis-boundary: post-migration verdict must reject violations owned by packages/runtime/src",
-          "negativeWitness": "packages/runtime/test/in-memory/backend-protocol-contract.test.ts: \"in-memory backend protocol driver\"; packages/runtime/test/cloudflare/backend-protocol-contract.runtime.test.ts: \"cloudflare-do-production backend conformance\"; packages/runtime/test/node/backend-protocol-contract.runtime.test.ts: \"node-postgres backend conformance\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/in-memory/backend-protocol-contract.test.ts",
-              "name": "rejects a backend that lies about page limits"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -2575,19 +2009,7 @@
           "The checker proves production profile identity, canonical export conditions, and transitive neutral/sibling isolation in TypeScript's static/preprocessed dependency graph; optional non-production integration subpaths remain governed by package exports.",
           "Dynamic loader capabilities such as createRequire, process.getBuiltinModule, eval, or Function-generated modules are outside TypeScript's static/preprocessed graph and are not machine-proven here. A capability-level loader policy becomes required before runtime source uses loader APIs or supports plugins or dynamic modules.",
           "Compiler-resolved dependencies outside this repository, including node_modules, are an external trust boundary and are not traversed. A dependency-closure policy becomes required before linked or third-party packages may re-enter workspace source."
-        ],
-        "targetTransition": {
-          "from": {
-            "kind": "proofClass",
-            "ruleId": "backend-provider-axis-boundary"
-          },
-          "to": {
-            "kind": "algorithmic",
-            "ruleId": "backend-provider-axis-boundary",
-            "checker": "backend-provider-axis-boundary"
-          },
-          "cutoverTask": 478
-        }
+        ]
       }
     },
     {
@@ -2601,17 +2023,6 @@
       },
       "owner": "package.json agentos.backendNeutrality",
       "ruleId": "backend-neutral-production-runtime-proof",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "backend-neutral-production-runtime-proof",
-        "checker": "backend-neutrality"
-      },
-      "assertions": [
-        {
-          "failureCondition": "backend-neutral-production-runtime-proof: post-migration verdict must reject violations owned by package.json agentos.backendNeutrality",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "algorithmic",
@@ -2768,20 +2179,7 @@
         ],
         "blindSpots": [
           "The canonical runtime proof module is trusted proof code: its author can delegate to another conformant backend, so implementation provenance is not machine-proven. CST #476 is additive proof preparation, owns no runtime/src factory boundary, and the current Cloudflare/Postgres adapters require harness-owned inputs. An explicit profile-owned contract-driver factory boundary becomes required before canonical profile tests are independently authored or implementation provenance is claimed as machine-verified."
-        ],
-        "targetTransition": {
-          "from": {
-            "kind": "algorithmic",
-            "ruleId": "backend-neutral-production-runtime-proof",
-            "checker": "backend-neutrality"
-          },
-          "to": {
-            "kind": "algorithmic",
-            "ruleId": "backend-neutral-production-runtime-proof",
-            "checker": "backend-neutral-production-runtime-proof"
-          },
-          "cutoverTask": 478
-        }
+        ]
       }
     },
     {
@@ -2796,26 +2194,6 @@
       },
       "owner": "@agent-os/runtime",
       "ruleId": "run-scoped-material-bindings",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "run-scoped-material-bindings"
-      },
-      "assertions": [
-        {
-          "failureCondition": "run-scoped-material-bindings: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "packages/runtime/test/_submit-agent-material-cases.ts: \"rejects non-symbolic material values before resolver lookup\"; packages/runtime/test/_submit-agent-material-cases.ts: \"ignores smuggled submit-scoped resolved material values and uses the resolver\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/_submit-agent-material-cases.ts",
-              "name": "rejects non-symbolic material values before resolver lookup"
-            },
-            {
-              "file": "packages/runtime/test/_submit-agent-material-cases.ts",
-              "name": "ignores smuggled submit-scoped resolved material values and uses the resolver"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -2872,26 +2250,6 @@
       },
       "owner": "@agent-os/runtime-protocol",
       "ruleId": "effectful-tool-replay-receipt",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "effectful-tool-replay-receipt"
-      },
-      "assertions": [
-        {
-          "failureCondition": "effectful-tool-replay-receipt: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/test/runtime-protocol/runtime-events.test.ts: \"replays receipt-backed external tool execution from the receipt artifact\"; packages/core/test/runtime-protocol/runtime-events.test.ts: \"validates receipt-backed bridge results before runtime logs tool.executed\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
-              "name": "replays receipt-backed external tool execution from the receipt artifact"
-            },
-            {
-              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
-              "name": "validates receipt-backed bridge results before runtime logs tool.executed"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "proof": {
         "kind": "packageTest",
@@ -2948,22 +2306,6 @@
       },
       "owner": "@agent-os/backend-protocol",
       "ruleId": "dispatch-delivery-receipt-authority",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "dispatch-delivery-receipt-authority"
-      },
-      "assertions": [
-        {
-          "failureCondition": "dispatch-delivery-receipt-authority: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"settles outbound delivery against target-owned receipts\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
-              "name": "settles outbound delivery against target-owned receipts"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.ledger.single-commit-source",
       "proof": {
         "kind": "packageTest",
@@ -3020,26 +2362,6 @@
       },
       "owner": "@agent-os/runtime/telemetry-otlp",
       "ruleId": "telemetry-otlp-tree-parity",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "telemetry-otlp-tree-parity"
-      },
-      "assertions": [
-        {
-          "failureCondition": "telemetry-otlp-tree-parity: post-migration verdict must reject violations owned by @agent-os/runtime/telemetry-otlp",
-          "negativeWitness": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"projects extension telemetry kinds from the protocol tree\"; packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"fails closed before the OTLP adapter boundary on malformed source trace context\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts",
-              "name": "projects extension telemetry kinds from the protocol tree"
-            },
-            {
-              "file": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts",
-              "name": "fails closed before the OTLP adapter boundary on malformed source trace context"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "packageTest",
@@ -3095,17 +2417,6 @@
       },
       "owner": "runtime carrier declarations",
       "ruleId": "carrier-projection-source-truth",
-      "target": {
-        "kind": "manifestRule",
-        "ruleId": "carrier-projection-source-truth",
-        "engine": "generatedProjection"
-      },
-      "assertions": [
-        {
-          "failureCondition": "carrier-projection-source-truth: post-migration verdict must reject violations owned by defineCarrier declarations",
-          "negativeWitness": "manifest rule fails closed when its source projection is stale or invalid"
-        }
-      ],
       "invariantId": "invariant.d10.namespace-integrity",
       "proof": {
         "kind": "generatedProjection",
@@ -3152,26 +2463,6 @@
       },
       "owner": "@agent-os/runtime",
       "ruleId": "turn-stream-provider-wire-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "turn-stream-provider-wire-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "turn-stream-provider-wire-boundary: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "packages/runtime/test/cloudflare/attached-stream.runtime.test.ts: \"runs an output-only SSE attached stream\"; packages/runtime/test/attached-stream.test.ts: \"closes with a failed terminal frame when terminal commit is not acknowledged\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/attached-stream.runtime.test.ts",
-              "name": "runs an output-only SSE attached stream"
-            },
-            {
-              "file": "packages/runtime/test/attached-stream.test.ts",
-              "name": "closes with a failed terminal frame when terminal commit is not acknowledged"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.owner-owned-safe-projection",
       "proof": {
         "kind": "packageTest",
@@ -3230,26 +2521,6 @@
       },
       "owner": "@agent-os/decision-gate",
       "ruleId": "decision-gate-lifecycle-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "decision-gate-lifecycle-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "decision-gate-lifecycle-boundary: post-migration verdict must reject violations owned by @agent-os/decision-gate",
-          "negativeWitness": "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts: \"does not execute a tool when the matching decision is rejected\"; packages/runtime/test/_submit-agent-interrupt-resume-cases.ts: \"consumes an approved decision exactly once before resuming tool execution\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts",
-              "name": "does not execute a tool when the matching decision is rejected"
-            },
-            {
-              "file": "packages/runtime/test/_submit-agent-interrupt-resume-cases.ts",
-              "name": "consumes an approved decision exactly once before resuming tool execution"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -3306,26 +2577,6 @@
       },
       "owner": "@agent-os/runtime",
       "ruleId": "workspace-exec-material-ref-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "workspace-exec-material-ref-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "workspace-exec-material-ref-boundary: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"resolves one Cloudflare WorkspaceEnv lease per scope/run and validates bindings\"; packages/runtime/test/cloudflare/workspace-host-helpers.test.ts: \"allows hosts to declare the WorkspaceEnv ref carried by workspace operations\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/testing/workspace-env.test.ts",
-              "name": "rejects symbolic refs instead of resolving host environment or material state"
-            },
-            {
-              "file": "packages/runtime/test/local/workspace-env.test.ts",
-              "name": "fails closed for symbolic env and material refs"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "proof": {
         "kind": "packageTest",
@@ -3382,26 +2633,6 @@
       },
       "owner": "@agent-os/core",
       "ruleId": "tool-execution-access-requirements",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "tool-execution-access-requirements"
-      },
-      "assertions": [
-        {
-          "failureCondition": "tool-execution-access-requirements: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "packages/core/test/kernel/tools.test.ts: \"rejects access-mismatched and write snapshot replay laws\"; packages/core/test/kernel/tools.test.ts: \"rejects host declarations without an env allowlist\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/kernel/tools.test.ts",
-              "name": "rejects access-mismatched and write snapshot replay laws"
-            },
-            {
-              "file": "packages/core/test/kernel/tools.test.ts",
-              "name": "rejects host declarations without an env allowlist"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "proof": {
         "kind": "packageTest",
@@ -3449,34 +2680,6 @@
     {
       "source": {
         "kind": "live",
-        "path": "docs/agent/boundary-rules.source.json",
-        "selector": {
-          "kind": "jsonPointer",
-          "value": "/rules/46"
-        }
-      },
-      "owner": "D12/A155 substrate absorption contract",
-      "ruleId": "d12-a155-substrate-absorption",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "d12-a155-substrate-absorption",
-        "checker": "d12-a155-substrate-absorption"
-      },
-      "assertions": [
-        {
-          "failureCondition": "d12-a155-substrate-absorption: post-migration verdict must reject violations owned by D12/A155 substrate absorption contract",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
-      "invariantId": "invariant.algebra.single-code-source",
-      "proof": {
-        "kind": "unsupported",
-        "reason": "formatter-backed aggregate aliases are not semantic architecture proof"
-      }
-    },
-    {
-      "source": {
-        "kind": "live",
         "path": "packages/core/test/kernel/tools.test.ts",
         "selector": {
           "kind": "test",
@@ -3486,26 +2689,6 @@
       },
       "owner": "@agent-os/core",
       "ruleId": "tool-mutation-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "tool-mutation-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "tool-mutation-boundary: post-migration verdict must reject violations owned by @agent-os/kernel",
-          "negativeWitness": "packages/core/test/kernel/tools.test.ts: \"keeps execution out of the claim contract\"; packages/core/test/kernel/tools.test.ts: \"rejects LLM tool-call envelopes at type level\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/kernel/tools.test.ts",
-              "name": "keeps execution out of the claim contract"
-            },
-            {
-              "file": "packages/core/test/kernel/tools.test.ts",
-              "name": "rejects LLM tool-call envelopes at type level"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.type-or-boot-proof",
       "proof": {
         "kind": "packageTest",
@@ -3562,26 +2745,6 @@
       },
       "owner": "@agent-os/runtime-protocol",
       "ruleId": "agent-manifest-intent-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "agent-manifest-intent-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "agent-manifest-intent-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/test/runtime-protocol/manifest.test.ts: \"rejects function-valued fields in AgentManifest at mount time\"; packages/core/test/runtime-protocol/manifest.test.ts: \"keeps extension handler kinds closed by manifest extension declarations\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/runtime-protocol/manifest.test.ts",
-              "name": "rejects function-valued fields in AgentManifest at mount time"
-            },
-            {
-              "file": "packages/core/test/runtime-protocol/manifest.test.ts",
-              "name": "keeps extension handler kinds closed by manifest extension declarations"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "proof": {
         "kind": "packageTest",
@@ -3638,26 +2801,6 @@
       },
       "owner": "@agent-os/runtime-protocol",
       "ruleId": "intent-settlement-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "intent-settlement-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "intent-settlement-boundary: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/test/runtime-protocol/intent.test.ts: \"detects overlap between intent and settlement vocabularies\"; packages/core/test/runtime-protocol/intent.test.ts: \"rejects fake-generic mutation and state lifecycle names\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/runtime-protocol/intent.test.ts",
-              "name": "detects overlap between intent and settlement vocabularies"
-            },
-            {
-              "file": "packages/core/test/runtime-protocol/intent.test.ts",
-              "name": "rejects fake-generic mutation and state lifecycle names"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "proof": {
         "kind": "packageTest",
@@ -3714,26 +2857,6 @@
       },
       "owner": "@agent-os/runtime/cloudflare",
       "ruleId": "facade-run-scoped-bindings",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "facade-run-scoped-bindings"
-      },
-      "assertions": [
-        {
-          "failureCondition": "facade-run-scoped-bindings: post-migration verdict must reject violations owned by @agent-os/runtime/cloudflare",
-          "negativeWitness": "packages/runtime/test/cloudflare/facade.test.ts: \"lowers bindings into RefResolver and dispatch targets by MaterialRef shape\"; packages/runtime/test/cloudflare/facade.test.ts: \"preserves non-default LLM routes for submit lowering\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/facade.test.ts",
-              "name": "lowers bindings into RefResolver and dispatch targets by MaterialRef shape"
-            },
-            {
-              "file": "packages/runtime/test/cloudflare/facade.test.ts",
-              "name": "preserves non-default LLM routes for submit lowering"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -3790,22 +2913,6 @@
       },
       "owner": "@agent-os/backend-protocol",
       "ruleId": "replay-dispatch-snapshot",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "replay-dispatch-snapshot"
-      },
-      "assertions": [
-        {
-          "failureCondition": "replay-dispatch-snapshot: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
-              "name": "replay mode DispatchTargetAdapter not called: dispatch delivery replays from receipt snapshot"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -3862,26 +2969,6 @@
       },
       "owner": "@agent-os/llm-protocol",
       "ruleId": "replay-llm-snapshot",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "replay-llm-snapshot"
-      },
-      "assertions": [
-        {
-          "failureCondition": "replay-llm-snapshot: post-migration verdict must reject violations owned by @agent-os/llm-protocol",
-          "negativeWitness": "packages/core/test/llm-protocol/llm-protocol.test.ts: \"replay mode live LLM provider adapter not called when call snapshot is present\"; packages/core/test/llm-protocol/llm-protocol.test.ts: \"snapshots an LLM call without route fields and replays the response\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/llm-protocol/llm-protocol.test.ts",
-              "name": "replay mode live LLM provider adapter not called when call snapshot is present"
-            },
-            {
-              "file": "packages/core/test/llm-protocol/llm-protocol.test.ts",
-              "name": "snapshots an LLM call without route fields and replays the response"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "proof": {
         "kind": "packageTest",
@@ -3938,26 +3025,6 @@
       },
       "owner": "@agent-os/runtime-protocol",
       "ruleId": "replay-tool-snapshot",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "replay-tool-snapshot"
-      },
-      "assertions": [
-        {
-          "failureCondition": "replay-tool-snapshot: post-migration verdict must reject violations owned by @agent-os/runtime-protocol",
-          "negativeWitness": "packages/core/test/runtime-protocol/runtime-events.test.ts: \"replay mode tool execute not called: deterministic tool result replays from snapshot\"; packages/core/test/runtime-protocol/runtime-events.test.ts: \"does not build a raw result snapshot for an external tool without a receipt\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
-              "name": "replay mode tool execute not called: deterministic tool result replays from snapshot"
-            },
-            {
-              "file": "packages/core/test/runtime-protocol/runtime-events.test.ts",
-              "name": "does not build a raw result snapshot for an external tool without a receipt"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.boundary.runtime-validation-external-only",
       "proof": {
         "kind": "packageTest",
@@ -4014,26 +3081,6 @@
       },
       "owner": "@agent-os/telemetry-protocol",
       "ruleId": "telemetry-neutral",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "telemetry-neutral"
-      },
-      "assertions": [
-        {
-          "failureCondition": "telemetry-neutral: post-migration verdict must reject violations owned by @agent-os/telemetry-protocol",
-          "negativeWitness": "packages/core/test/telemetry-protocol/telemetry-event-tree.test.ts: \"canonicalizes timing, generated ids, and backend host ids while preserving semantics\"; packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts: \"maps telemetry trees without reading ledger payloads\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/telemetry-protocol/telemetry-event-tree.test.ts",
-              "name": "canonicalizes timing, generated ids, and backend host ids while preserving semantics"
-            },
-            {
-              "file": "packages/runtime/test/telemetry-otlp/telemetry-otlp.test.ts",
-              "name": "maps telemetry trees without reading ledger payloads"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.algebra.single-code-source",
       "proof": {
         "kind": "packageTest",
@@ -4090,26 +3137,6 @@
       },
       "owner": "@agent-os/runtime",
       "ruleId": "product-resource-boundary",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "product-resource-boundary"
-      },
-      "assertions": [
-        {
-          "failureCondition": "product-resource-boundary: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts: \"reserve rejects without writing resource_pool.reserved when insufficient\"; packages/runtime/test/cloudflare/resource-contract.runtime.test.ts: \"consume and release are mutually exclusive\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts",
-              "name": "reserve rejects without writing resource_pool.reserved when insufficient"
-            },
-            {
-              "file": "packages/runtime/test/cloudflare/resource-contract.runtime.test.ts",
-              "name": "consume and release are mutually exclusive"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.namespace-integrity",
       "proof": {
         "kind": "packageTest",
@@ -4168,22 +3195,6 @@
       },
       "owner": "@agent-os/runtime",
       "ruleId": "projection-wait-primitive",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "projection-wait-primitive"
-      },
-      "assertions": [
-        {
-          "failureCondition": "projection-wait-primitive: post-migration verdict must reject violations owned by @agent-os/runtime",
-          "negativeWitness": "packages/runtime/test/projection.test.ts: \"waits until the ready predicate matches and fails with a typed timeout\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/runtime/test/projection.test.ts",
-              "name": "waits until the ready predicate matches and fails with a typed timeout"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.d10.truth-identity",
       "proof": {
         "kind": "packageTest",
@@ -4240,22 +3251,6 @@
       },
       "owner": "@agent-os/backend-protocol",
       "ruleId": "dispatch-idempotency-receipt",
-      "target": {
-        "kind": "proofClass",
-        "ruleId": "dispatch-idempotency-receipt"
-      },
-      "assertions": [
-        {
-          "failureCondition": "dispatch-idempotency-receipt: post-migration verdict must reject violations owned by @agent-os/backend-protocol",
-          "negativeWitness": "packages/core/test/backend-protocol/dispatch-payload.test.ts: \"receipt-before-terminal proof ties terminal delivery to idempotency receipt\"",
-          "packageWitnesses": [
-            {
-              "file": "packages/core/test/backend-protocol/dispatch-payload.test.ts",
-              "name": "receipt-before-terminal proof ties terminal delivery to idempotency receipt"
-            }
-          ]
-        }
-      ],
       "invariantId": "invariant.ledger.single-commit-source",
       "proof": {
         "kind": "packageTest",
@@ -4311,17 +3306,6 @@
       },
       "owner": "tooling/docs-site build projection",
       "ruleId": "docs-site-build",
-      "target": {
-        "kind": "algorithmic",
-        "ruleId": "docs-site-build",
-        "checker": "docs-site-build"
-      },
-      "assertions": [
-        {
-          "failureCondition": "docs site build output must contain generated content artifacts",
-          "negativeWitness": "algorithmic projection rejects the source mutation described by this rule diagnostic"
-        }
-      ],
       "invariantId": "invariant.docs.agent-projection",
       "proof": {
         "kind": "algorithmic",

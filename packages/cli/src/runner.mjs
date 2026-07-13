@@ -89,7 +89,7 @@ const validateBoundaryRules = (value) => {
 
 const ruleById = (manifest, id) => manifest.rules.find((rule) => rule.id === id);
 
-const runSteps = async (manifest, steps, stack = []) => {
+const runSteps = async (manifest, steps, context, stack = []) => {
   for (const step of steps) {
     if (step.type === "command") {
       runCommand(step.command, { cwd: repoRoot });
@@ -101,11 +101,18 @@ const runSteps = async (manifest, steps, stack = []) => {
       }
       const group = manifest.commandGroups[step.id];
       if (group === undefined) throw new Error(`unknown command group ${step.id}`);
-      await runSteps(manifest, group, [...stack, step.id]);
+      await runSteps(manifest, group, context, [...stack, step.id]);
       continue;
     }
     if (step.type === "rule") {
-      await runGuard(step.id, manifest);
+      if (context.registry === undefined) {
+        const { readValidatedProofRegistry } = await import("./check/proof-runner.mjs");
+        context.registry = readValidatedProofRegistry(repoRoot);
+      }
+      await runGuard(step.id, manifest, {
+        execution: "structural",
+        registry: context.registry,
+      });
       continue;
     }
   }
@@ -114,13 +121,13 @@ const runSteps = async (manifest, steps, stack = []) => {
 export const runGroup = async (id, manifest = loadBoundaryRules()) => {
   const steps = manifest.commandGroups[id];
   if (steps === undefined) throw new Error(`unknown command group ${id}`);
-  await runSteps(manifest, steps, [id]);
+  await runSteps(manifest, steps, {}, [id]);
 };
 
-export const runGuard = async (id, manifest = loadBoundaryRules()) => {
+export const runGuard = async (id, manifest = loadBoundaryRules(), options = {}) => {
   const rule = ruleById(manifest, id);
   if (rule === undefined) throw new Error(`unknown boundary rule ${id}`);
-  await runRuleAcceptance(rule);
+  await runRuleAcceptance(rule, options);
 };
 
 export const listGuards = (manifest = loadBoundaryRules()) =>

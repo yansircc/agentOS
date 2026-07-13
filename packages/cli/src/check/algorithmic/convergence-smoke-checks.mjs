@@ -616,8 +616,6 @@ export const createConvergenceSmokeChecks = ({
   checkPublicApi,
   checkClientBoundaries,
   clientSectionBody,
-  checkGeneratedStaticTargetLinking,
-  checkSpikeHygiene,
   moduleBucketRegistry,
   workspacePackagePatterns,
   workspacePackageRecords,
@@ -635,14 +633,6 @@ export const createConvergenceSmokeChecks = ({
   specifierMatchesPackage,
   projectionFoldBoundaryFailures,
 }) => {
-  const checkConvergenceBoundary = () => {
-    checkClientBoundaries();
-    checkGeneratedStaticTargetLinking();
-    checkBlueprintRecipes();
-    checkSpikeHygiene();
-    console.log("convergence boundary passed");
-  };
-
   const checkBlueprintRecipes = () => {
     const recipeRoot = "blueprints/recipes";
     const recipeFiles = walk(recipeRoot).filter((file) => file.endsWith(".md"));
@@ -1243,7 +1233,6 @@ export const createConvergenceSmokeChecks = ({
   };
 
   return {
-    checkConvergenceBoundary,
     checkConvergencePublicSurface,
     checkDocsSiteBuild,
     checkCliSurface,

@@ -1,22 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { isDeepStrictEqual } from "node:util";
 import ts from "typescript";
 
-const proofKinds = new Set([
-  "algorithmic",
-  "generatedProjection",
-  "packageTest",
-  "gateComposition",
-]);
-
-// CST #478 deletes this freeze while atomically cutting authority to the positive registry.
-const phaseOTransitionActions = new Map([
-  ["boundaries", "retire"],
-  ["d12-a155-substrate-absorption", "retire"],
-  ["convergence-boundary", "gateComposition"],
-]);
+const proofKinds = new Set(["algorithmic", "generatedProjection", "packageTest"]);
+const gateCompositionKind = "gateComposition";
+const coverageFields = new Set(["schemaVersion", "invariant", "entries"]);
+const entryFields = new Set(["ruleId", "owner", "invariantId", "source", "proof"]);
+const proofFields = new Set(["kind", "command", "positive", "redCases", "blindSpots"]);
+const liveSourceFields = new Set(["kind", "path", "selector", "entrypoint"]);
+const historicalSourceFields = new Set(["kind", "commit", "path", "supersededBy"]);
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const nonEmpty = (value) => typeof value === "string" && value.trim().length > 0;
@@ -26,6 +19,52 @@ const safeRelativePath = (value) =>
   !value.split(/[\\/]/u).some((part) => part === ".." || part.length === 0);
 
 const repoPath = (...segments) => path.posix.normalize(path.posix.join(...segments));
+
+const unexpectedFieldFailures = ({ value, allowed, label }) =>
+  isRecord(value)
+    ? Object.keys(value)
+        .filter((key) => !allowed.has(key))
+        .map((key) => `${label}: unexpected field ${key}`)
+    : [];
+
+const astSelectorExists = ({ sourcePath, content, selector }) => {
+  const ast = ts.createSourceFile(sourcePath, content, ts.ScriptTarget.Latest, true);
+  let found = false;
+  const visit = (node) => {
+    if (selector.kind === "symbol") {
+      if (
+        (ts.isVariableDeclaration(node) ||
+          ts.isFunctionDeclaration(node) ||
+          ts.isClassDeclaration(node) ||
+          ts.isInterfaceDeclaration(node) ||
+          ts.isTypeAliasDeclaration(node) ||
+          ts.isEnumDeclaration(node)) &&
+        node.name !== undefined &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === selector.value
+      ) {
+        found = true;
+      }
+    } else if (ts.isCallExpression(node) && node.arguments.length > 0) {
+      const expression = node.expression;
+      const testName = ts.isIdentifier(expression)
+        ? expression.text
+        : ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
+          ? expression.expression.text
+          : undefined;
+      if (
+        (testName === "describe" || testName === "it" || testName === "test") &&
+        ts.isStringLiteralLike(node.arguments[0]) &&
+        node.arguments[0].text === selector.value
+      ) {
+        found = true;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return found;
+};
 
 const resolvedRelativeModule = (repoRoot, importerPath, specifier) => {
   if (!specifier.startsWith(".")) return undefined;
@@ -83,140 +122,101 @@ const importClosureContains = ({ repoRoot, entrypoint, target }) => {
   return false;
 };
 
-const parseJsonPointer = (value) => {
-  if (typeof value !== "string") return undefined;
-  if (value === "") return [];
-  if (!value.startsWith("/")) return undefined;
-  const tokens = value.slice(1).split("/");
-  if (tokens.some((token) => /~(?:[^01]|$)/u.test(token))) return undefined;
-  return tokens.map((token) => token.replaceAll("~1", "/").replaceAll("~0", "~"));
-};
-
-const resolveJsonPointer = (document, tokens) => {
-  let current = document;
-  for (const token of tokens) {
-    if (Array.isArray(current)) {
-      if (!/^(?:0|[1-9][0-9]*)$/u.test(token) || !Object.hasOwn(current, token)) {
-        return { found: false };
-      }
-    } else if (!isRecord(current) || !Object.hasOwn(current, token)) {
-      return { found: false };
+const importClosureContainsTest = ({ repoRoot, entrypoint, selector }) => {
+  const pending = [entrypoint];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || visited.has(current)) continue;
+    visited.add(current);
+    const content = fs.readFileSync(path.join(repoRoot, current), "utf8");
+    if (
+      astSelectorExists({
+        sourcePath: current,
+        content,
+        selector: { kind: "test", value: selector },
+      })
+    ) {
+      return true;
     }
-    current = current[token];
+    pending.push(...importedRelativeModules({ repoRoot, sourcePath: current }));
   }
-  return { found: true, value: current };
+  return false;
 };
 
-const sourceSelectorFailures = ({ source, absolute, label, expectedJsonPointerId }) => {
+const sourceSelectorFailures = ({ source, absolute, label }) => {
   const selector = source.selector;
-  const valueIsValid =
-    isRecord(selector) &&
-    (selector.kind === "jsonPointer"
-      ? typeof selector.value === "string"
-      : nonEmpty(selector.value));
-  if (!isRecord(selector) || !nonEmpty(selector.kind) || !valueIsValid) {
+  if (!isRecord(selector) || !nonEmpty(selector.kind) || !nonEmpty(selector.value)) {
     return [`${label}: live source requires a positive selector`];
   }
   if (selector.kind === "module") return [];
   const content = fs.readFileSync(absolute, "utf8");
-  if (selector.kind === "jsonPointer") {
-    let document;
-    try {
-      document = JSON.parse(content);
-    } catch {
-      return [`${label}: JSON pointer selector requires JSON source`];
-    }
-    const tokens = parseJsonPointer(selector.value);
-    if (tokens === undefined) return [`${label}: invalid JSON pointer selector syntax`];
-    const resolved = resolveJsonPointer(document, tokens);
-    if (!resolved.found) return [`${label}: JSON pointer selector is absent`];
-    if (
-      expectedJsonPointerId !== undefined &&
-      (!isRecord(resolved.value) || resolved.value.id !== expectedJsonPointerId)
-    ) {
-      return [`${label}: JSON pointer selector must resolve to rule ${expectedJsonPointerId}`];
-    }
-    return [];
-  }
   if (selector.kind !== "symbol" && selector.kind !== "test") {
     return [`${label}: unknown live source selector kind ${selector.kind}`];
   }
 
-  const ast = ts.createSourceFile(source.path, content, ts.ScriptTarget.Latest, true);
-  let found = false;
-  const visit = (node) => {
-    if (selector.kind === "symbol") {
-      if (
-        (ts.isVariableDeclaration(node) ||
-          ts.isFunctionDeclaration(node) ||
-          ts.isClassDeclaration(node) ||
-          ts.isInterfaceDeclaration(node) ||
-          ts.isTypeAliasDeclaration(node) ||
-          ts.isEnumDeclaration(node)) &&
-        node.name !== undefined &&
-        ts.isIdentifier(node.name) &&
-        node.name.text === selector.value
-      ) {
-        found = true;
-      }
-    } else if (ts.isCallExpression(node) && node.arguments.length > 0) {
-      const expression = node.expression;
-      const testName = ts.isIdentifier(expression)
-        ? expression.text
-        : ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
-          ? expression.expression.text
-          : undefined;
-      if (
-        (testName === "describe" || testName === "it" || testName === "test") &&
-        ts.isStringLiteralLike(node.arguments[0]) &&
-        node.arguments[0].text === selector.value
-      ) {
-        found = true;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+  const found = astSelectorExists({ sourcePath: source.path, content, selector });
   return found ? [] : [`${label}: live source selector is absent: ${selector.value}`];
 };
 
-const sourceFailures = ({ source, label, repoRoot, expectedJsonPointerId }) => {
+const sourceFailures = ({ source, label, repoRoot }) => {
   if (!isRecord(source)) return [`${label}: source must be an object`];
-  if (
-    expectedJsonPointerId !== undefined &&
-    (source.kind !== "live" ||
-      source.path !== "docs/agent/boundary-rules.source.json" ||
-      source.selector?.kind !== "jsonPointer")
-  ) {
-    return [
-      `${label}: retiring rule source must be its matching docs/agent/boundary-rules.source.json object via JSON Pointer`,
-    ];
-  }
   if (source.kind === "live") {
-    if (!safeRelativePath(source.path)) return [`${label}: live source path must be repo-relative`];
+    const failures = unexpectedFieldFailures({
+      value: source,
+      allowed: liveSourceFields,
+      label: `${label}.source`,
+    });
+    if (!safeRelativePath(source.path)) {
+      failures.push(`${label}: live source path must be repo-relative`);
+      return failures;
+    }
     const absolute = path.join(repoRoot, source.path);
     if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
-      return [`${label}: live proof source does not exist: ${source.path}`];
+      failures.push(`${label}: live proof source does not exist: ${source.path}`);
+      return failures;
     }
-    return sourceSelectorFailures({ source, absolute, label, expectedJsonPointerId });
+    failures.push(...sourceSelectorFailures({ source, absolute, label }));
+    return failures;
   }
   if (source.kind === "historical") {
-    const failures = [];
+    const failures = unexpectedFieldFailures({
+      value: source,
+      allowed: historicalSourceFields,
+      label: `${label}.source`,
+    });
     if (!/^[0-9a-f]{40}$/u.test(source.commit ?? "")) {
       failures.push(`${label}: historical source commit must be a full SHA`);
     }
     if (!safeRelativePath(source.path)) {
       failures.push(`${label}: historical source path must be repo-relative`);
     }
-    if (!nonEmpty(source.supersededBy)) {
-      failures.push(`${label}: historical source requires supersededBy`);
+    if (source.supersededBy !== label) {
+      failures.push(`${label}: historical source supersededBy must equal the current rule id`);
     }
     if (failures.length === 0) {
       try {
-        execFileSync("git", ["cat-file", "-e", `${source.commit}:${source.path}`], {
+        const commitType = execFileSync("git", ["cat-file", "-t", source.commit], {
           cwd: repoRoot,
-          stdio: "ignore",
-        });
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
+        if (commitType !== "commit") {
+          failures.push(`${label}: historical source commit must be an immutable commit object`);
+          return failures;
+        }
+        const sourceType = execFileSync(
+          "git",
+          ["cat-file", "-t", `${source.commit}:${source.path}`],
+          {
+            cwd: repoRoot,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+          },
+        ).trim();
+        if (sourceType !== "blob") {
+          failures.push(`${label}: historical proof source must be an immutable file blob`);
+        }
       } catch {
         failures.push(`${label}: historical proof source does not exist at ${source.commit}`);
       }
@@ -235,10 +235,12 @@ const parsePackageTestCommand = ({ command, label }) => {
     return { failures: [`${label}: package test proof must use the focused vp runner`] };
   }
   let rest = command.argv.slice(prefix.length);
+  let config;
   if (rest[0] === "--config") {
     if (!safeRelativePath(rest[1])) {
       return { failures: [`${label}: package test config must be repo-relative`] };
     }
+    config = rest[1];
     rest = rest.slice(2);
   }
   if (
@@ -252,10 +254,36 @@ const parsePackageTestCommand = ({ command, label }) => {
       failures: [`${label}: package test proof must bind one test entrypoint and exact selector`],
     };
   }
+  let proofClass;
+  if (config === undefined) {
+    if (rest[0].endsWith(".runtime.test.ts")) {
+      return { failures: [`${label}: runtime test proof requires a canonical runtime config`] };
+    }
+    proofClass = "test";
+  } else {
+    const runtimePathByConfig = new Map([
+      ["vitest.cloudflare.config.ts", /^test\/cloudflare\/.+\.runtime\.test\.ts$/u],
+      ["vitest.node.config.ts", /^test\/node\/.+\.runtime\.test\.ts$/u],
+    ]);
+    const runtimePath = runtimePathByConfig.get(config);
+    if (
+      command.cwd !== "packages/runtime" ||
+      runtimePath === undefined ||
+      !runtimePath.test(rest[0])
+    ) {
+      return {
+        failures: [
+          `${label}: package test config and entrypoint must select one canonical runtime tier`,
+        ],
+      };
+    }
+    proofClass = "runtime";
+  }
   return {
     failures: [],
     entrypoint: repoPath(command.cwd, rest[0]),
     selector: rest[2],
+    proofClass,
   };
 };
 
@@ -328,21 +356,38 @@ const sourceCommandCongruenceFailures = ({
   if (proof.kind === "algorithmic" || proof.kind === "gateComposition") {
     const checkerId = proof.command.argv?.[2];
     const expected = algorithmicCheckerSource(checkerId);
+    if (expected === undefined) {
+      return [`${label}: algorithmic checker requires live source metadata`];
+    }
+    const checkerFailures = sourceFailures({
+      source: {
+        kind: "live",
+        path: expected.path,
+        selector: { kind: "symbol", value: expected.symbol },
+      },
+      label: `${label}.checker`,
+      repoRoot,
+    });
+    if (source.kind === "historical") return checkerFailures;
     if (
-      expected === undefined ||
       source.kind !== "live" ||
       source.path !== expected.path ||
       source.selector?.kind !== "symbol" ||
       source.selector.value !== expected.symbol
     ) {
-      return [`${label}: algorithmic source must match the registered checker path and symbol`];
+      checkerFailures.push(
+        `${label}: algorithmic source must match the registered checker path and symbol`,
+      );
     }
     if (source.entrypoint !== undefined) {
-      return [`${label}: algorithmic source must not declare a package-test entrypoint`];
+      checkerFailures.push(
+        `${label}: algorithmic source must not declare a package-test entrypoint`,
+      );
     }
-    return [];
+    return checkerFailures;
   }
   if (proof.kind === "generatedProjection") {
+    if (source.kind === "historical") return [];
     if (
       source.kind !== "live" ||
       source.path !== proof.command.argv?.[1] ||
@@ -357,6 +402,19 @@ const sourceCommandCongruenceFailures = ({
     const parsed = parsePackageTestCommand({ command: proof.command, label });
     if (parsed.failures.length > 0) return [];
     const failures = [];
+    const commandEntrypoint = path.join(repoRoot, parsed.entrypoint);
+    if (!fs.existsSync(commandEntrypoint) || !fs.statSync(commandEntrypoint).isFile()) {
+      failures.push(`${label}: package command test entrypoint does not exist`);
+    } else if (
+      !importClosureContainsTest({
+        repoRoot,
+        entrypoint: parsed.entrypoint,
+        selector: parsed.selector,
+      })
+    ) {
+      failures.push(`${label}: package command selector is absent from the test import closure`);
+    }
+    if (source.kind === "historical") return failures;
     if (
       source.kind !== "live" ||
       !safeRelativePath(source.entrypoint) ||
@@ -435,10 +493,94 @@ const redCaseFailures = ({ redCase, label, proofKind, packageRoot }) => {
   return failures;
 };
 
+const ruleAcceptanceFailures = ({ rule, proof, label }) => {
+  const acceptance = rule.acceptance;
+  if (!isRecord(acceptance)) return [`${label}: boundary rule requires acceptance`];
+  if (proof.kind === "algorithmic" || proof.kind === gateCompositionKind) {
+    const checkerId = proof.command?.argv?.[2];
+    return acceptance.engine === "algorithmic" && acceptance.checker === checkerId
+      ? []
+      : [`${label}: boundary rule acceptance must match algorithmic proof checker ${checkerId}`];
+  }
+  if (proof.kind === "generatedProjection") {
+    const command = Array.isArray(proof.command?.argv) ? proof.command.argv.join(" ") : undefined;
+    return acceptance.engine === "generatedProjection" && acceptance.command === command
+      ? []
+      : [`${label}: boundary rule acceptance must match generated projection command`];
+  }
+  if (proof.kind === "packageTest") {
+    if (acceptance.engine !== "proofClass") {
+      return [`${label}: boundary rule acceptance must use proofClass for packageTest proof`];
+    }
+    const parsed = parsePackageTestCommand({ command: proof.command, label });
+    if (parsed.failures.length > 0) return [];
+    return Array.isArray(acceptance.proofClasses) &&
+      acceptance.proofClasses.length === 1 &&
+      acceptance.proofClasses[0] === parsed.proofClass
+      ? []
+      : [
+          `${label}: boundary rule proofClasses must equal derived package test tier ${parsed.proofClass}`,
+        ];
+  }
+  return [];
+};
+
+const compositionFailures = ({
+  proof,
+  label,
+  repoRoot,
+  hasAlgorithmicChecker,
+  algorithmicCheckerSource,
+  algorithmicCheckerComponents,
+}) => {
+  const checkerId = proof.command?.argv?.[2];
+  const components = algorithmicCheckerComponents(checkerId);
+  const hasComponentMetadata = components !== undefined;
+  if (proof.kind !== gateCompositionKind) {
+    return hasComponentMetadata
+      ? [`${label}: component-bearing checker requires gateComposition proof`]
+      : [];
+  }
+  if (!Array.isArray(components) || components.length === 0) {
+    return [`${label}: gateComposition proof requires a non-empty component-bearing checker`];
+  }
+  const failures = [];
+  if (new Set(components).size !== components.length) {
+    failures.push(`${label}: gate composition components must be unique`);
+  }
+  for (const component of components) {
+    if (!nonEmpty(component) || !hasAlgorithmicChecker(component)) {
+      failures.push(`${label}: gate composition component is not registered: ${String(component)}`);
+      continue;
+    }
+    const componentSource = algorithmicCheckerSource(component);
+    if (
+      !isRecord(componentSource) ||
+      !nonEmpty(componentSource.path) ||
+      !nonEmpty(componentSource.symbol)
+    ) {
+      failures.push(`${label}: gate composition component lacks source metadata: ${component}`);
+      continue;
+    }
+    failures.push(
+      ...sourceFailures({
+        source: {
+          kind: "live",
+          path: componentSource.path,
+          selector: { kind: "symbol", value: componentSource.symbol },
+        },
+        label: `${label}.components.${component}`,
+        repoRoot,
+      }),
+    );
+  }
+  return failures;
+};
+
 const proofFailures = ({
   proof,
   source,
-  target,
+  rule,
   label,
   repoRoot,
   hasAlgorithmicChecker,
@@ -446,21 +588,24 @@ const proofFailures = ({
   algorithmicCheckerComponents,
 }) => {
   if (!isRecord(proof)) return [`${label}: missing proof`];
-  if (proof.kind === "unsupported") {
-    if (!nonEmpty(proof.reason)) {
-      return [`${label}: unsupported proof requires a reason`];
-    }
-    return [];
-  }
-  if (!proofKinds.has(proof.kind))
-    return [`${label}: unsupported proof kind ${String(proof.kind)}`];
-  const failures = commandFailures({
-    command: proof.command,
-    kind: proof.kind,
-    label,
-    repoRoot,
-    hasAlgorithmicChecker,
+  const failures = unexpectedFieldFailures({
+    value: proof,
+    allowed: proofFields,
+    label: `${label}.proof`,
   });
+  if (!proofKinds.has(proof.kind) && proof.kind !== gateCompositionKind) {
+    failures.push(`${label}: unsupported proof kind ${String(proof.kind)}`);
+    return failures;
+  }
+  failures.push(
+    ...commandFailures({
+      command: proof.command,
+      kind: proof.kind,
+      label,
+      repoRoot,
+      hasAlgorithmicChecker,
+    }),
+  );
   failures.push(
     ...sourceCommandCongruenceFailures({
       source,
@@ -470,28 +615,17 @@ const proofFailures = ({
       algorithmicCheckerSource,
     }),
   );
-  const checkerId = proof.command?.argv?.[2];
-  const proofTarget =
-    proof.kind === "algorithmic" || proof.kind === "gateComposition"
-      ? { kind: "algorithmic", ruleId: label, checker: checkerId }
-      : proof.kind === "generatedProjection"
-        ? { kind: "manifestRule", ruleId: label, engine: "generatedProjection" }
-        : proof.kind === "packageTest"
-          ? { kind: "proofClass", ruleId: label }
-          : undefined;
-  const targetMatches = proofTarget !== undefined && isDeepStrictEqual(target, proofTarget);
-  if (!targetMatches) {
-    if (
-      !isRecord(proof.targetTransition) ||
-      !isDeepStrictEqual(proof.targetTransition.from, target) ||
-      !isDeepStrictEqual(proof.targetTransition.to, proofTarget) ||
-      proof.targetTransition.cutoverTask !== 478
-    ) {
-      failures.push(`${label}: target transition must bind exact from/to targets at CST #478`);
-    }
-  } else if (proof.targetTransition !== undefined) {
-    failures.push(`${label}: targetTransition is allowed only for a real legacy target mismatch`);
-  }
+  failures.push(...ruleAcceptanceFailures({ rule, proof, label }));
+  failures.push(
+    ...compositionFailures({
+      proof,
+      label,
+      repoRoot,
+      hasAlgorithmicChecker,
+      algorithmicCheckerSource,
+      algorithmicCheckerComponents,
+    }),
+  );
   if (!isRecord(proof.positive) || !nonEmpty(proof.positive.contract)) {
     failures.push(`${label}: proof requires a positive consumer contract`);
   }
@@ -524,6 +658,28 @@ const proofFailures = ({
   return failures;
 };
 
+const guardCoverageWiringFailures = (rulesSource) => {
+  const failures = [];
+  const allSteps = rulesSource.commandGroups?.all;
+  const guardSteps = rulesSource.commandGroups?.["guard-coverage"];
+  const allReferences = Array.isArray(allSteps)
+    ? allSteps.filter((step) => step?.type === "group" && step.id === "guard-coverage")
+    : [];
+  if (allReferences.length !== 1) {
+    failures.push("commandGroups.all must include guard-coverage exactly once");
+  }
+  if (
+    !Array.isArray(guardSteps) ||
+    guardSteps.length !== 1 ||
+    guardSteps[0]?.type !== "command" ||
+    guardSteps[0]?.command !== "node packages/cli/src/check/check-coverage.mjs" ||
+    Object.keys(guardSteps[0] ?? {}).some((key) => key !== "type" && key !== "command")
+  ) {
+    failures.push("commandGroups.guard-coverage must own the positive registry command");
+  }
+  return failures;
+};
+
 export const proofRegistryFailures = ({
   coverage,
   rulesSource,
@@ -532,55 +688,26 @@ export const proofRegistryFailures = ({
   algorithmicCheckerSource,
   algorithmicCheckerComponents,
 }) => {
-  const failures = [];
+  if (!isRecord(coverage)) return ["check coverage must be an object"];
+  if (!isRecord(rulesSource)) return ["boundary rules source must be an object"];
+  const failures = unexpectedFieldFailures({
+    value: coverage,
+    allowed: coverageFields,
+    label: "check coverage",
+  });
   if (coverage.schemaVersion !== 2) failures.push("check coverage schemaVersion must be 2");
-  if (
-    coverage.transition?.authority !== "legacy-boundary-rules-through-cst-478" ||
-    !nonEmpty(coverage.transition?.removalCondition)
-  ) {
-    failures.push("check coverage transition must bind the #478 authority cut");
-  }
-  const ruleActions = Array.isArray(coverage.transition?.ruleActions)
-    ? coverage.transition.ruleActions
-    : [];
-  const actionByRuleId = new Map();
-  for (const [index, action] of ruleActions.entries()) {
-    const actionLabel = `transition.ruleActions[${index}]`;
-    if (
-      !isRecord(action) ||
-      !nonEmpty(action.ruleId) ||
-      (action.action !== "retire" && action.action !== "gateComposition") ||
-      action.cutoverTask !== 478
-    ) {
-      failures.push(
-        `${actionLabel}: action must bind one rule to retire or gateComposition at #478`,
-      );
-      continue;
-    }
-    if (action.action === "retire" && !nonEmpty(action.removalCondition)) {
-      failures.push(`${actionLabel}: retiring rule requires a removal condition`);
-    }
-    if (actionByRuleId.has(action.ruleId)) {
-      failures.push(`${actionLabel}: duplicate rule transition ${action.ruleId}`);
-    }
-    actionByRuleId.set(action.ruleId, action);
-  }
-  for (const [ruleId, expectedAction] of phaseOTransitionActions) {
-    if (actionByRuleId.get(ruleId)?.action !== expectedAction) {
-      failures.push(
-        `${ruleId}: Phase O transition action must remain ${expectedAction} through CST #478`,
-      );
-    }
-  }
-  for (const ruleId of actionByRuleId.keys()) {
-    if (!phaseOTransitionActions.has(ruleId)) {
-      failures.push(`${ruleId}: Phase O transition action is not authorized before CST #478`);
-    }
-  }
+  failures.push(...guardCoverageWiringFailures(rulesSource));
   const rules = Array.isArray(rulesSource.rules) ? rulesSource.rules : [];
   const entries = Array.isArray(coverage.entries) ? coverage.entries : [];
   const byRuleId = new Map();
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
+    failures.push(
+      ...unexpectedFieldFailures({
+        value: entry,
+        allowed: entryFields,
+        label: isRecord(entry) && nonEmpty(entry.ruleId) ? entry.ruleId : `entry[${index}]`,
+      }),
+    );
     const list = byRuleId.get(entry?.ruleId) ?? [];
     list.push(entry);
     byRuleId.set(entry?.ruleId, list);
@@ -591,7 +718,18 @@ export const proofRegistryFailures = ({
     );
   }
 
+  const ruleIds = new Set();
   for (const rule of rules) {
+    if (!nonEmpty(rule?.id)) {
+      failures.push("boundary rule requires an id");
+      continue;
+    }
+    if (ruleIds.has(rule.id)) failures.push(`${rule.id}: duplicate boundary rule`);
+    ruleIds.add(rule.id);
+  }
+
+  for (const rule of rules) {
+    if (!nonEmpty(rule?.id)) continue;
     const matches = byRuleId.get(rule.id) ?? [];
     if (matches.length !== 1) {
       failures.push(`${rule.id}: expected exactly one coverage entry`);
@@ -601,47 +739,28 @@ export const proofRegistryFailures = ({
     if (entry.owner !== rule.owner || entry.invariantId !== rule.invariantId) {
       failures.push(`${rule.id}: coverage owner and invariant must match the rule source`);
     }
-    const action = phaseOTransitionActions.get(rule.id);
     failures.push(
       ...sourceFailures({
         source: entry.source,
         label: rule.id,
         repoRoot,
-        expectedJsonPointerId: action === "retire" ? rule.id : undefined,
       }),
     );
     failures.push(
       ...proofFailures({
         proof: entry.proof,
         source: entry.source,
-        target: entry.target,
+        rule,
         label: rule.id,
         repoRoot,
         hasAlgorithmicChecker,
         algorithmicCheckerSource,
+        algorithmicCheckerComponents,
       }),
     );
-    if ((action === "retire") !== (entry.proof?.kind === "unsupported")) {
-      failures.push(`${rule.id}: unsupported proof must derive from a retiring rule transition`);
-    }
-    if ((action === "gateComposition") !== (entry.proof?.kind === "gateComposition")) {
-      failures.push(`${rule.id}: gate composition proof must derive from its rule transition`);
-    }
-    if (
-      entry.proof?.kind === "gateComposition" &&
-      !Array.isArray(algorithmicCheckerComponents(entry.proof.command?.argv?.[2]))
-    ) {
-      failures.push(`${rule.id}: gate composition checker must own its component list`);
-    }
   }
   for (const ruleId of byRuleId.keys()) {
-    if (!rules.some((rule) => rule.id === ruleId))
-      failures.push(`${String(ruleId)}: unknown coverage rule`);
-  }
-  for (const ruleId of actionByRuleId.keys()) {
-    if (!rules.some((rule) => rule.id === ruleId)) {
-      failures.push(`${ruleId}: transition references unknown rule`);
-    }
+    if (!ruleIds.has(ruleId)) failures.push(`${String(ruleId)}: unknown coverage rule`);
   }
   return failures;
 };
