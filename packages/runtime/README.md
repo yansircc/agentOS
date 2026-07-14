@@ -72,8 +72,15 @@ APIs.
 
 The `./testing` subpath executes the core-owned backend conformance manifest against
 an adapter-provided driver. The public programmatic runner has no Vitest dependency,
-creates and disposes one driver per law, and returns a core-validated report. Repo
-test runners register those same law bodies through an injected registrar.
+creates and disposes one driver per law, and returns an Effect program producing a
+core-validated report. The concrete test or process host owns terminal execution.
+Repo test runners register those same law bodies through an injected registrar.
+
+The `./capability` subpath owns backend-neutral declarations and install-graph
+resolution. The `./in-memory` subpath owns in-memory materialization and requires an
+explicit terminal execution port from its concrete host. The `./local` subpath is the
+ordinary Promise/Response facade; product code does not inject Effect runners or
+reconstruct in-memory assembly.
 
 `LedgerArchive` performs verified physical relocation only. A receipt is emitted
 after archive write and exact readback; eviction revalidates the stored receipt and

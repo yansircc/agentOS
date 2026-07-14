@@ -98,8 +98,12 @@ Backend or substrate authors may import explicit runtime adapter subpaths:
 import { createAgentDurableObject } from "@yansirplus/runtime/cloudflare";
 ```
 
-In-memory runtime assembly is resolver-owned. Consumers should enter through
-`resolveRuntime` instead of hand-writing state, handler, or projection wiring.
+Backend substrate authors may import `resolveRuntime` from
+`@yansirplus/runtime/in-memory`; they must supply its terminal execution port at
+the concrete host boundary instead of putting a runner in shared capability
+logic. Ordinary consumers should enter through the generated app or
+`@yansirplus/runtime/local`, which owns the Promise/Response facade and the
+in-memory wiring.
 
 Do not import submit-loop internals from `@yansirplus/runtime`. The runtime root
 does not export `internalSubmitSpec`, `InternalSubmitSpec`, `submitAgentEffect`,

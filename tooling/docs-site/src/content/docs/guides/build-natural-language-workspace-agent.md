@@ -286,8 +286,9 @@ the same `sessions.submitTurn` boundary used by generated remote clients. The
 app also exposes `sessions.*`, `workflows.*`, channel dispatch, schedule fire
 handoff, dynamic capability wiring, generated target identity, and
 `submitWithProductLink`. Product code should not copy
-`resolveRuntime + submitAgentEffect + workspaceOperations` assembly; it should
-use the generated app or the lowerer boundary.
+the host-level `@agent-os/runtime/in-memory` `resolveRuntime` plus
+`submitAgentEffect + workspaceOperations` assembly; it should use the generated
+app or the lowerer boundary.
 
 ## Client Boundary
 

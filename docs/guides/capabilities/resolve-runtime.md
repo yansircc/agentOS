@@ -1,20 +1,41 @@
 # resolveRuntime
 
-`resolveRuntime` assembles `CapabilityContract` installs into one preflighted runtime graph.
+`resolveRuntime` is the advanced in-memory adapter assembler. It consumes
+backend-neutral `CapabilityContract` installs and requires the concrete host to
+supply terminal Effect execution. Ordinary applications should use
+`createLocalAgentRuntime`, `lowerLocalAgentRuntime`, or a generated app instead.
 
 ## Invariant
 
-`invariant.resolve.single-assembly-point`: For `CapabilityContract` inputs, `resolveRuntime()` runs requirement checks before install, globally validates install outputs before backend construction, and does not expose backend state to capability install functions.
+`invariant.resolve.single-assembly-point`: For `CapabilityContract` inputs,
+`resolveRuntime()` runs requirement checks before install, globally validates
+install outputs before backend construction, and does not expose backend state
+or terminal execution to capability install functions.
+
+## Boundary Split
+
+- `@agent-os/runtime/capability` owns declarations and the backend-neutral
+  `resolveRuntimeInstallGraph`.
+- `@agent-os/runtime/in-memory` owns in-memory materialization through
+  `resolveRuntime`.
+- The concrete host owns `InMemoryRuntimeExecution`; shared capability and
+  in-memory assembly code do not select a global Effect runtime.
+- `@agent-os/runtime/local` owns the ordinary Promise/Response facade and keeps
+  Effect execution out of product code.
 
 ## Usage
 
 ```ts
+import { Effect } from "effect";
 import {
   WORKSPACE_OPERATION_HOST_FACT,
   defineHost,
-  resolveRuntime,
   workspaceOperations,
 } from "@agent-os/runtime/capability";
+import {
+  resolveRuntime,
+  type InMemoryRuntimeExecution,
+} from "@agent-os/runtime/in-memory";
 
 const host = defineHost({
   target: "custom-node@1",
@@ -24,11 +45,20 @@ const host = defineHost({
   }),
 });
 
-const runtime = await resolveRuntime(host, [workspaceOperations({ toolNames: ["read_file"] })], {
-  identity: "my-agent",
-  config: {},
-  secrets: {},
-});
+const execution: InMemoryRuntimeExecution = {
+  runPromise: (effect) => Effect.runPromise(effect),
+};
+
+const runtime = resolveRuntime(
+  host,
+  [workspaceOperations({ toolNames: ["read_file"] })],
+  {
+    identity: "my-agent",
+    config: {},
+    secrets: {},
+  },
+  execution,
+);
 if (!runtime.ok) {
   throw new Error(JSON.stringify(runtime.diagnostics));
 }
@@ -47,4 +77,7 @@ const { layer, bindings } = runtime.resolved;
 8.  **install**: Converts capability install or handler-registration exceptions into structured diagnostics
 9.  **diagnostic_sink**: Fails closed when a configured diagnostic sink cannot commit a preflight diagnostic
 
-Failed preflight returns `{ ok: false, diagnostics }` before the backend layer is constructed or ledger facts are accepted. Install runs only after requirement checks pass; install output is then globally validated before backend construction.
+Failed preflight returns `{ ok: false, diagnostics }` before the backend layer
+is constructed or ledger facts are accepted. Install runs only after
+requirement checks pass; install output is then globally validated before
+backend construction.

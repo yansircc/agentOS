@@ -50,8 +50,8 @@
     },
     {
       "path": "docs/agent/gates.source.json",
-      "sha256": "b4f7144c626ecc0192abc84d3122d327a27e1b64b24888a19a4f6709a301a055",
-      "byteSize": 2765
+      "sha256": "cc6b6e583cd1be92833cb656982a9a41d994f679702b7df0bf5b179da56923f6",
+      "byteSize": 2790
     },
     {
       "path": "docs/agent/invariant-matrix.json",
@@ -70,8 +70,8 @@
     },
     {
       "path": "docs/agent/primitives.json",
-      "sha256": "72c00872276f672d5e224a72ce435605ecbd307bf32a052b14323475da99e030",
-      "byteSize": 43321
+      "sha256": "73058246b29ee953472ef2b161b976e8ee117a0699f39c642c9c8ee2c390ac55",
+      "byteSize": 43466
     },
     {
       "path": "docs/agent/recipes.json",
@@ -125,8 +125,8 @@
     },
     {
       "path": "docs/api/runtime.md",
-      "sha256": "8fb432875c8cc5fbe6691b60fecd55e9f7c5e4000b22bc665e498e813613f256",
-      "byteSize": 42057
+      "sha256": "62913f868af98879fb682b95cbc8f1566d5a3e9d8df0c702561bea48979a5ef0",
+      "byteSize": 42953
     },
     {
       "path": "docs/runtime-packages.md",
@@ -197,8 +197,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/runtime.md",
-      "sha256": "6c3ab6ded67f3fba25b458217bcc8f6e367d0321d2ed774f8e4c46d3b53ba860",
-      "byteSize": 42059
+      "sha256": "17515d3162c0eda8feff21cde795d65c5b1811d14ce898cba76e9d92f1cb6dc7",
+      "byteSize": 42955
     },
     {
       "path": "agent-catalog/agentOS/references/public-api/client.md",
@@ -222,8 +222,8 @@
     },
     {
       "path": "agent-catalog/agentOS/references/agent/primitives.json",
-      "sha256": "72c00872276f672d5e224a72ce435605ecbd307bf32a052b14323475da99e030",
-      "byteSize": 43321
+      "sha256": "73058246b29ee953472ef2b161b976e8ee117a0699f39c642c9c8ee2c390ac55",
+      "byteSize": 43466
     },
     {
       "path": "agent-catalog/agentOS/references/agent/decision-graph.json",

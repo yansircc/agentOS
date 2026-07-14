@@ -87,6 +87,20 @@ terminal runtime status, tool events, diagnostics, and evidence correlation.
 Product applications own product control-plane facts such as Change, Candidate,
 Grant, Intent, Receipt, approval, deployment, and product receipt records.
 
+## In-Memory Assembly Boundary
+
+`./capability:resolveRuntimeInstallGraph` is the backend-neutral capability
+resolver. It validates declarations and install output without constructing an
+in-memory backend or selecting terminal Effect execution.
+
+`./in-memory:resolveRuntime` materializes that graph into the in-memory adapter.
+It requires an explicit `InMemoryRuntimeExecution` supplied by the concrete
+host; the in-memory assembler does not own a global Effect runtime. This is an
+advanced host-composition surface, not the ordinary product entrypoint. Local
+products use `./local:createLocalAgentRuntime`,
+`./local:lowerLocalAgentRuntime`, or a generated app and continue to receive
+Promise/Response facades.
+
 ## Decision Gate Boundary
 
 `./decision-gate` owns the public constructor/projection surface for
@@ -136,9 +150,11 @@ durable-operation vocabulary.
 
 `./testing` also exposes the executable backend conformance harness. Core owns the
 ordered law manifest and report contract; runtime/testing owns only driver execution.
-`runBackendConformance` runs every required law with a fresh driver and validates the
-result through the core protocol. `registerBackendConformanceSuite` maps the same law
-bodies into a caller-provided test registrar without importing a test framework.
+`runBackendConformance` returns the Effect program that evaluates every required law
+with a fresh driver and validates the result through the core protocol. The concrete
+test or process host owns terminal execution. `registerBackendConformanceSuite` maps
+the same law bodies into a caller-provided test registrar without importing a test
+framework.
 
 The scenario set is partitioned by executable owner. Runner-owned join
 scenarios are limited to `request_before_effect`,
@@ -292,12 +308,9 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./capability:ResolvedCapabilityEventHandlerFactory`
 - `./capability:ResolvedCapabilityInstallGraph`
 - `./capability:ResolvedHostFacts`
-- `./capability:ResolvedRuntime`
-- `./capability:resolveRuntime`
 - `./capability:resolveRuntimeInstallGraph`
+- `./capability:ResolveRuntimeInstallGraphOptions`
 - `./capability:ResolveRuntimeInstallGraphResult`
-- `./capability:ResolveRuntimeOptions`
-- `./capability:ResolveRuntimeResult`
 - `./capability:runDynamicCapabilityResolvers`
 - `./capability:WORKSPACE_OPERATION_HOST_FACT`
 - `./capability:WorkspaceOperationBindingEnvResolverInput`
@@ -480,10 +493,15 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./in-memory:InMemoryQuotaLive`
 - `./in-memory:InMemoryResourcesLive`
 - `./in-memory:InMemoryRuntimeBackend`
+- `./in-memory:InMemoryRuntimeExecution`
 - `./in-memory:InMemoryRuntimeServices`
 - `./in-memory:InMemorySchedulerLive`
 - `./in-memory:makeInMemoryRuntimeLayer`
+- `./in-memory:ResolvedRuntime`
 - `./in-memory:ResolvedRuntimeInstallGraph`
+- `./in-memory:resolveRuntime`
+- `./in-memory:ResolveRuntimeOptions`
+- `./in-memory:ResolveRuntimeResult`
 - `./input-request:InputRequestDecisionResumeResult`
 - `./input-request:InputRequestProjection`
 - `./input-request:InputRequestResumeDecisionResult`
