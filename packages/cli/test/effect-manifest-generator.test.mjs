@@ -113,7 +113,7 @@ void test("effect manifest generator projects package path and descriptor facts 
   }
 });
 
-void test("effect manifest generator keeps string arrays within formatter print width", () => {
+void test("effect manifest generator delegates short and long string arrays to the repo formatter", () => {
   const fixture = makeFixture([]);
   try {
     const sourcePath = path.join(fixture.root, "docs/effect-skill.json");
@@ -127,13 +127,17 @@ void test("effect manifest generator keeps string arrays within formatter print 
 
     const result = runGenerator(fixture.root);
     assert.equal(result.status, 0, result.stderr);
-    const rootText = fs.readFileSync(path.join(fixture.root, ".effect-skill.json"), "utf8");
-    const packageText = fs.readFileSync(
-      path.join(fixture.root, "packages/core/.effect-skill.json"),
-      "utf8",
-    );
+    const rootManifestPath = path.join(fixture.root, ".effect-skill.json");
+    const packageManifestPath = path.join(fixture.root, "packages/core/.effect-skill.json");
+    const rootText = fs.readFileSync(rootManifestPath, "utf8");
+    const packageText = fs.readFileSync(packageManifestPath, "utf8");
     assert.match(rootText, /"testGlobs": \[\n/u);
     assert.match(packageText, /"shape": \["library"\]/u);
+    const formatCheck = spawnSync("vp", ["fmt", "--check", rootManifestPath, packageManifestPath], {
+      cwd: fixture.root,
+      encoding: "utf8",
+    });
+    assert.equal(formatCheck.status, 0, `${formatCheck.stdout}${formatCheck.stderr}`);
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }

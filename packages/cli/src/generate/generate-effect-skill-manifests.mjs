@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { workspacePackagePaths } from "../lib/workspace-manifest.mjs";
 
@@ -75,33 +77,37 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-const formatterPrintWidth = 100;
-
-const stableJson = (value) =>
-  `${JSON.stringify(value, null, 2).replace(
-    /\[\n((?:\s+"(?:\\.|[^"\\])*",?\n)+)\s+\]/gu,
-    (match, body, offset, source) => {
-      const items = body
-        .trim()
-        .split("\n")
-        .map((line) => line.trim().replace(/,$/u, ""));
-      if (!items.every((item) => item.startsWith('"') && item.endsWith('"'))) return match;
-      const compact = `[${items.join(", ")}]`;
-      const lineStart = source.lastIndexOf("\n", offset) + 1;
-      const column = offset - lineStart;
-      return column + compact.length <= formatterPrintWidth ? compact : match;
-    },
-  )}\n`;
-
 const writeJson = (file, value) => {
-  const target = path.join(root, file);
-  const expected = stableJson(value);
-  if (check) {
-    const actual = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
-    if (actual !== expected) failures.push(`${file} is stale`);
-    return;
+  pendingWrites.push({ file, target: path.join(root, file), value });
+};
+
+const formatPendingWrites = () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-effect-manifests-"));
+  try {
+    const tmpTargets = pendingWrites.map(({ file, value }) => {
+      const target = path.join(tmpDir, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `${JSON.stringify(value, null, 2)}\n`);
+      return target;
+    });
+    const result = spawnSync("vp", ["fmt", "--write", ...tmpTargets], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    if (result.status !== 0) {
+      const detail =
+        result.error?.message || result.stderr || result.stdout || String(result.status);
+      failures.push(`effect manifest formatting failed: ${detail}`);
+      return [];
+    }
+    return pendingWrites.map(({ file, target }) => ({
+      file,
+      target,
+      expected: fs.readFileSync(path.join(tmpDir, file), "utf8"),
+    }));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-  pendingWrites.push({ target, expected });
 };
 
 const validateKnownFields = ({ label, value, allowed }) => {
@@ -435,9 +441,26 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-for (const { target, expected } of pendingWrites) {
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, expected);
+const formattedWrites = formatPendingWrites();
+
+if (failures.length > 0) {
+  console.error(failures.join("\n"));
+  process.exit(1);
+}
+
+for (const { file, target, expected } of formattedWrites) {
+  if (check) {
+    const actual = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
+    if (actual !== expected) failures.push(`${file} is stale`);
+  } else {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, expected);
+  }
+}
+
+if (failures.length > 0) {
+  console.error(failures.join("\n"));
+  process.exit(1);
 }
 
 console.log(check ? "effect skill manifests are current" : "effect skill manifests updated");
