@@ -5,12 +5,12 @@ import {
   ResourceReservationClosed,
   ResourceReservationNotFound,
 } from "@agent-os/core/errors";
+import { Resources } from "../resources";
 import {
-  Resources,
   runtimeStorageError,
   runtimeStorageOrJsonError,
   type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../ledger";
 import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import {
   emptyResourceProjection,

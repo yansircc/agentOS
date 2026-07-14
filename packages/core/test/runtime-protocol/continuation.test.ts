@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import type { Recorded } from "@agent-os/core";
+import type { Recorded } from "@agent-os/core/value-domain";
 import type { LedgerEvent } from "@agent-os/core/types";
 import {
   agentRunInterruptedEvent,

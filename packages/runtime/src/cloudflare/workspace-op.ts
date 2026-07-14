@@ -1,6 +1,6 @@
-import type { EventHandler } from "@agent-os/core";
+import type { EventHandler } from "@agent-os/core/types";
 import type { ExtensionDeclaration } from "@agent-os/core/extensions";
-import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
+import type { AnyMaterializedProjectionDefinition } from "../projection";
 import {
   createWorkspaceOperationInstall,
   type WorkspaceOperationInstallContext,

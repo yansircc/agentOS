@@ -4,12 +4,8 @@ import {
   type BackendProtocolEventIdentity,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/core/backend-protocol";
-import {
-  MaterializedProjections,
-  UnregisteredProjectionKind,
-  runtimeStorageError,
-  type RuntimeStorageError,
-} from "@agent-os/runtime";
+import { MaterializedProjections, UnregisteredProjectionKind } from "../projection";
+import { runtimeStorageError, type RuntimeStorageError } from "../ledger";
 import type { InMemoryBackendState } from "./state";
 
 const projectionStorageError = (cause: unknown): RuntimeStorageError | UnregisteredProjectionKind =>

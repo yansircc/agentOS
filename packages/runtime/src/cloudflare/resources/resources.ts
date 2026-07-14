@@ -19,7 +19,8 @@ import {
   ResourceReservationNotFound,
 } from "@agent-os/core/errors";
 import { EventBus } from "../ledger/event-bus";
-import { Resources, runtimeStorageError, runtimeStorageOrJsonError } from "@agent-os/runtime";
+import { Resources } from "../../resources";
+import { runtimeStorageError, runtimeStorageOrJsonError } from "../../ledger";
 import { commitLedgerTransaction } from "../ledger/commit";
 import {
   RESOURCE_EVENT_KIND,

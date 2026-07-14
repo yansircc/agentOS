@@ -1,6 +1,10 @@
 import { Predicate } from "effect";
-import type { SafeLedgerEvent, SafeLedgerPayloadShape, SafeLedgerValue } from "@agent-os/core";
-import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/core";
+import type {
+  SafeLedgerEvent,
+  SafeLedgerPayloadShape,
+  SafeLedgerValue,
+} from "@agent-os/core/safe-ledger-event";
+import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/core/safe-ledger-event";
 import type { LedgerEvent } from "@agent-os/core/types";
 import { WORKSPACE_JOB_FACT_OWNER, WORKSPACE_JOB_KIND } from "./definition";
 

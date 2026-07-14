@@ -6,7 +6,8 @@ import {
   dispatchTargetDelivered,
   type DispatchReceiver,
 } from "@agent-os/core/backend-protocol";
-import { Dispatch, defineProjection, projectionFail, projectionIdentity } from "@agent-os/runtime";
+import { Dispatch } from "../../src/dispatch";
+import { defineProjection, projectionFail, projectionIdentity } from "../../src/projection";
 import { truthIdentity } from "./identity";
 import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 

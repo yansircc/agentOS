@@ -11,21 +11,21 @@ import {
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
 } from "@agent-os/core/errors";
+import { Admission } from "../../src/admission";
+import { Dispatch } from "../../src/dispatch";
 import {
-  Admission,
-  Dispatch,
   DurableTriggerRegistry,
-  Ledger,
-  Quota,
-  Resources,
-  Scheduler,
   TriggerPump,
   makeDurableTriggerRegistry,
   scheduledEventTrigger,
   triggerParseFail,
   triggerParseOk,
   type DurableTrigger,
-} from "@agent-os/runtime";
+} from "../../src/trigger";
+import { Ledger } from "../../src/ledger";
+import { Quota } from "../../src/quota-service";
+import { Resources } from "../../src/resources";
+import { Scheduler } from "../../src/scheduler";
 import {
   agentRunInterruptedEvent,
   agentRunResumedEvent,

@@ -3,7 +3,7 @@ import type { LedgerEvent } from "@agent-os/core/types";
 import type { LivedClaim } from "@agent-os/core/effect-claim";
 import { ABORT } from "@agent-os/core/abort";
 import { Effect } from "effect";
-import { projectTelemetryEventTree } from "@agent-os/runtime";
+import { projectTelemetryEventTree } from "../../src/telemetry-tree";
 import { OTLP_GENAI_SEMCONV_MAPPING_VERSION, projectOtlpSpans } from "../../src/telemetry-otlp";
 import {
   agentRunAbortedEvent,

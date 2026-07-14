@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vite-plus/test";
-import type { Recorded } from "@agent-os/core";
+import type { Recorded } from "@agent-os/core/value-domain";
 
 import {
   type AttemptKey,

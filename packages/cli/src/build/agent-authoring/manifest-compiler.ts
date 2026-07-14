@@ -1,6 +1,6 @@
 import { isAgentSchema } from "@agent-os/core/agent-schema";
 import type { AgentSchemaSpec } from "@agent-os/core/agent-schema";
-import { WORKSPACE_TOOL_DEFAULT_DECLARATIONS } from "@agent-os/runtime";
+import { WORKSPACE_TOOL_DEFAULT_DECLARATIONS } from "@agent-os/runtime/workspace-env";
 import { cronMinuteExpression } from "@agent-os/runtime/schedule";
 import {
   digestBytes,

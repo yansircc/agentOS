@@ -1,11 +1,7 @@
 import { Effect, ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import {
-  DurableTriggerRegistry,
-  Ledger,
-  TriggerPump,
-  type AnyDurableTrigger,
-} from "@agent-os/runtime";
+import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "../../src/trigger";
+import { Ledger } from "../../src/ledger";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 import {

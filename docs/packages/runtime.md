@@ -172,7 +172,8 @@ registered through a backend facade; they should not import backend SQL helpers,
 due-work storage helpers, inserted-event helpers, or backend state classes.
 
 ```ts
-import type { DurableTrigger, Ledger } from "@agent-os/runtime";
+import type { Ledger } from "@agent-os/runtime";
+import type { DurableTrigger } from "@agent-os/runtime/trigger";
 ```
 
 Serializable submit, admission, and runtime event DTOs live in
@@ -181,13 +182,13 @@ Serializable submit, admission, and runtime event DTOs live in
 Attached stream handlers use the same runtime package:
 
 ```ts
-import type { AttachedStreamHandler } from "@agent-os/runtime";
+import type { AttachedStreamHandler } from "@agent-os/runtime/attached-stream";
 ```
 
 Materialized projections are registered through the backend facade:
 
 ```ts
-import { defineProjection, type MaterializedProjections } from "@agent-os/runtime";
+import { defineProjection, type MaterializedProjections } from "@agent-os/runtime/projection";
 ```
 
 Workspace-job consumers that need user-visible failure explanation should read
@@ -195,7 +196,7 @@ the runtime observability projection instead of calling
 `projectFailureDiagnostics(events, runId)` themselves:
 
 ```ts
-import { projectWorkspaceJobObservability } from "@agent-os/runtime";
+import { projectWorkspaceJobObservability } from "@agent-os/runtime/workspace-job-observability";
 ```
 
 Deterministic product-side tool actions use `unsafeRunToolByName`. The `unsafe`

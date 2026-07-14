@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { bindWorkspaceToolsForRuntime, createWorkspaceEnv } from "../src";
+import { bindWorkspaceToolsForRuntime } from "../src/workspace-binding";
+import { createWorkspaceEnv } from "../src/workspace-env-core";
 
 const env = createWorkspaceEnv({
   domain: { kind: "workspace", ref: "workspace:test" },

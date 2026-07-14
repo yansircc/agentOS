@@ -1,14 +1,16 @@
 import { Clock, Effect, Layer } from "effect";
 import { JsonStringifyError, UpstreamFailure } from "@agent-os/core/errors";
+import { Admission } from "../admission";
 import {
-  Admission,
   classifyStructuredCallFailure,
   decodeStructuredOutputFromItems,
+  structuredOutputRequest,
+} from "../structured-output";
+import {
   runtimeStorageError,
   runtimeStorageOrJsonError,
-  structuredOutputRequest,
   type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../ledger";
 import {
   decideTier,
   LLM_STRUCTURED_EVIDENCE_EVENT,

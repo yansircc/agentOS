@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { makePreClaim } from "../../src/effect-claim";
-import type { Authored, Live, Recordable, Untrusted } from "../../src";
+import type { Authored, Live, Recordable, Untrusted } from "../../src/value-domain";
 import { captureLive } from "../../src/live-edge";
 import {
   defineSettlementContract,

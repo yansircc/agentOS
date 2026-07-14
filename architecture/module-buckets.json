@@ -133,6 +133,12 @@
       "bucket": "adapter"
     },
     {
+      "id": "runtime-public-entrypoint-adapters",
+      "match": "prefix",
+      "value": "packages/runtime/src/entrypoints/",
+      "bucket": "adapter"
+    },
+    {
       "id": "runtime-folded-projection-files",
       "match": "regex",
       "value": "^packages/runtime/src/(ag-ui|attached-stream-protocol|sse-http)\\.ts$",

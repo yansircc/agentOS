@@ -15,13 +15,15 @@ import {
   decisionGateDecidedEvent,
   decisionGateExpiredEvent,
   decisionGateRequestedEvent,
+  settleDecisionGateConsumed,
+} from "../src/decision-gate";
+import {
   prepareInputRequestDecisionResume,
   projectInputRequest,
   projectInputRequestSettlement,
   projectInputRequests,
-  settleDecisionGateConsumed,
   submitResumeDecisionFromInputRequestProjection,
-} from "../src";
+} from "../src/input-request";
 
 const scope = "input-request-runtime-test";
 const identity = {

@@ -9,7 +9,7 @@
 ## Usage
 
 ```ts
-import { defineCapability } from "@agent-os/runtime";
+import { defineCapability } from "@agent-os/runtime/capability";
 export const myCapability = defineCapability({
   capabilityId: "@your-org/my-capability",
   version: "1",

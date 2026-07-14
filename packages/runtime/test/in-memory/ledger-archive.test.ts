@@ -1,6 +1,7 @@
 import { ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { Ledger, LedgerArchive } from "@agent-os/runtime";
+import { Ledger } from "../../src/ledger";
+import { LedgerArchive } from "../../src/ledger-archive";
 import { truthIdentity } from "./identity";
 import { createTestInMemoryRuntimeBackend } from "./runtime-helper";
 

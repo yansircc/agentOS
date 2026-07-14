@@ -8,7 +8,7 @@ import {
   defineBoundaryContract,
   validateBoundaryContract,
 } from "../../src/boundary-contract";
-import type { Authored } from "../../src";
+import type { Authored } from "../../src/value-domain";
 import { materialRequirement } from "../../src/material-ref";
 import { defineSettlementContract } from "../../src/settlement-contract";
 

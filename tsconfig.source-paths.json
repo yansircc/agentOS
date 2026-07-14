@@ -2,6 +2,12 @@
   "compilerOptions": {
     "tsBuildInfoFile": ".cache/tsbuildinfo/tsconfig-source-paths-json.tsbuildinfo",
     "paths": {
+      "@agent-os/cli": ["./packages/cli/src/index.ts"],
+      "@agent-os/client": ["./packages/client/src/index.ts"],
+      "@agent-os/client/product-shell-client": ["./packages/client/src/product-shell-client.ts"],
+      "@agent-os/client/react": ["./packages/client/src/react/index.ts"],
+      "@agent-os/client/svelte": ["./packages/client/src/svelte/index.ts"],
+      "@agent-os/client/workspace-agent": ["./packages/client/src/workspace-agent.ts"],
       "@agent-os/core": ["./packages/core/src/index.ts"],
       "@agent-os/core/abort": ["./packages/core/src/abort.ts"],
       "@agent-os/core/agent-schema": ["./packages/core/src/agent-schema.ts"],
@@ -25,37 +31,36 @@
       "@agent-os/core/ref-resolver": ["./packages/core/src/ref-resolver.ts"],
       "@agent-os/core/runtime-protocol": ["./packages/core/src/runtime-protocol/index.ts"],
       "@agent-os/core/runtime-scope": ["./packages/core/src/runtime-scope.ts"],
+      "@agent-os/core/safe-ledger-event": ["./packages/core/src/safe-ledger-event.ts"],
       "@agent-os/core/settlement-contract": ["./packages/core/src/settlement-contract.ts"],
       "@agent-os/core/telemetry-protocol": ["./packages/core/src/telemetry-protocol/index.ts"],
       "@agent-os/core/tools": ["./packages/core/src/tools.ts"],
       "@agent-os/core/types": ["./packages/core/src/types.ts"],
+      "@agent-os/core/value-domain": ["./packages/core/src/value-domain.ts"],
       "@agent-os/core/workspace-agent": ["./packages/core/src/workspace-agent.ts"],
-      "@agent-os/cli": ["./packages/cli/src/index.ts"],
+      "@agent-os/evals": ["./packages/evals/src/index.ts"],
       "@agent-os/runtime": ["./packages/runtime/src/index.ts"],
       "@agent-os/runtime/admission": ["./packages/runtime/src/admission.ts"],
       "@agent-os/runtime/ag-ui": ["./packages/runtime/src/ag-ui.ts"],
+      "@agent-os/runtime/attached-stream": ["./packages/runtime/src/attached-stream.ts"],
+      "@agent-os/runtime/boundary-commit": ["./packages/runtime/src/boundary-commit.ts"],
+      "@agent-os/runtime/boundary-events": ["./packages/runtime/src/boundary-events.ts"],
       "@agent-os/runtime/capability": ["./packages/runtime/src/capability/index.ts"],
       "@agent-os/runtime/channel": ["./packages/runtime/src/channel/index.ts"],
-      "@agent-os/runtime/external-effect": ["./packages/runtime/src/external-effect/index.ts"],
-      "@agent-os/runtime/run-projector": ["./packages/runtime/src/run-projector.ts"],
-      "@agent-os/runtime/schedule": ["./packages/runtime/src/schedule/index.ts"],
-      "@agent-os/runtime/sse-http": ["./packages/runtime/src/sse-http.ts"],
-      "@agent-os/runtime/workspace-agent": ["./packages/runtime/src/workspace-agent.ts"],
-      "@agent-os/runtime/workspace-binding": ["./packages/runtime/src/workspace-binding.ts"],
+      "@agent-os/runtime/cloudflare": ["./packages/runtime/src/cloudflare/index.ts"],
+      "@agent-os/runtime/cloudflare/do-rpc": ["./packages/runtime/src/cloudflare/do-rpc.ts"],
       "@agent-os/runtime/cloudflare/ops-api": [
         "./packages/runtime/src/cloudflare/ops-api/index.ts"
       ],
-      "@agent-os/client": ["./packages/client/src/index.ts"],
-      "@agent-os/client/product-shell-client": ["./packages/client/src/product-shell-client.ts"],
-      "@agent-os/client/react": ["./packages/client/src/react/index.ts"],
-      "@agent-os/client/svelte": ["./packages/client/src/svelte/index.ts"],
-      "@agent-os/client/workspace-agent": ["./packages/client/src/workspace-agent.ts"],
-      "@agent-os/evals": ["./packages/evals/src/index.ts"],
-      "@agent-os/runtime/cloudflare": ["./packages/runtime/src/cloudflare/index.ts"],
-      "@agent-os/runtime/cloudflare/do-rpc": ["./packages/runtime/src/cloudflare/do-rpc.ts"],
+      "@agent-os/runtime/continuation": ["./packages/runtime/src/continuation.ts"],
+      "@agent-os/runtime/decision-gate": ["./packages/runtime/src/entrypoints/decision-gate.ts"],
+      "@agent-os/runtime/dispatch": ["./packages/runtime/src/dispatch.ts"],
+      "@agent-os/runtime/external-effect": ["./packages/runtime/src/external-effect/index.ts"],
       "@agent-os/runtime/in-memory": ["./packages/runtime/src/in-memory/index.ts"],
-      "@agent-os/runtime/local": ["./packages/runtime/src/local/index.ts"],
-      "@agent-os/runtime/node": ["./packages/runtime/src/node/index.ts"],
+      "@agent-os/runtime/input-request": ["./packages/runtime/src/entrypoints/input-request.ts"],
+      "@agent-os/runtime/inspection": ["./packages/runtime/src/inspection.ts"],
+      "@agent-os/runtime/ledger": ["./packages/runtime/src/entrypoints/ledger.ts"],
+      "@agent-os/runtime/ledger-archive": ["./packages/runtime/src/entrypoints/ledger-archive.ts"],
       "@agent-os/runtime/llm-effect-ai": ["./packages/runtime/src/llm-effect-ai/index.ts"],
       "@agent-os/runtime/llm-effect-ai/anthropic": [
         "./packages/runtime/src/llm-effect-ai/anthropic.ts"
@@ -63,8 +68,36 @@
       "@agent-os/runtime/llm-effect-ai/openai-compatible": [
         "./packages/runtime/src/llm-effect-ai/openai-compatible.ts"
       ],
+      "@agent-os/runtime/local": ["./packages/runtime/src/local/index.ts"],
+      "@agent-os/runtime/node": ["./packages/runtime/src/node/index.ts"],
+      "@agent-os/runtime/projection": ["./packages/runtime/src/projection.ts"],
+      "@agent-os/runtime/quota": ["./packages/runtime/src/quota-service.ts"],
+      "@agent-os/runtime/resources": ["./packages/runtime/src/resources.ts"],
+      "@agent-os/runtime/run-projector": ["./packages/runtime/src/run-projector.ts"],
+      "@agent-os/runtime/runtime-diagnostic": [
+        "./packages/runtime/src/entrypoints/runtime-diagnostic.ts"
+      ],
+      "@agent-os/runtime/schedule": ["./packages/runtime/src/schedule/index.ts"],
+      "@agent-os/runtime/scheduler": ["./packages/runtime/src/scheduler.ts"],
+      "@agent-os/runtime/sse-http": ["./packages/runtime/src/sse-http.ts"],
+      "@agent-os/runtime/structured-output": ["./packages/runtime/src/structured-output.ts"],
+      "@agent-os/runtime/submit-live": ["./packages/runtime/src/submit-live.ts"],
       "@agent-os/runtime/telemetry-otlp": ["./packages/runtime/src/telemetry-otlp/index.ts"],
-      "@agent-os/runtime/testing": ["./packages/runtime/src/testing/index.ts"]
+      "@agent-os/runtime/telemetry-tree": ["./packages/runtime/src/telemetry-tree.ts"],
+      "@agent-os/runtime/testing": ["./packages/runtime/src/testing/index.ts"],
+      "@agent-os/runtime/tool-settlement": [
+        "./packages/runtime/src/entrypoints/tool-settlement.ts"
+      ],
+      "@agent-os/runtime/trigger": ["./packages/runtime/src/trigger.ts"],
+      "@agent-os/runtime/witness-port": ["./packages/runtime/src/witness-port.ts"],
+      "@agent-os/runtime/workspace-agent": ["./packages/runtime/src/workspace-agent.ts"],
+      "@agent-os/runtime/workspace-binding": ["./packages/runtime/src/workspace-binding.ts"],
+      "@agent-os/runtime/workspace-env": ["./packages/runtime/src/workspace-env-core.ts"],
+      "@agent-os/runtime/workspace-job": ["./packages/runtime/src/workspace-job.ts"],
+      "@agent-os/runtime/workspace-job-observability": [
+        "./packages/runtime/src/workspace-job-observability.ts"
+      ],
+      "@agent-os/runtime/workspace-op": ["./packages/runtime/src/entrypoints/workspace-op.ts"]
     }
   }
 }

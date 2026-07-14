@@ -1,6 +1,6 @@
 import { Predicate } from "effect";
-import type { SafeLedgerEvent, SafeLedgerPayloadShape } from "@agent-os/core";
-import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/core";
+import type { SafeLedgerEvent, SafeLedgerPayloadShape } from "@agent-os/core/safe-ledger-event";
+import { safeLedgerEvent, safeValueFromUnknown } from "@agent-os/core/safe-ledger-event";
 import type { LedgerEvent } from "@agent-os/core/types";
 import { validateTerminalClaim } from "@agent-os/core/settlement-contract";
 import {

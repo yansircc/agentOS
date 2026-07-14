@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
-import { decodeSubmitLiveFrame } from "@agent-os/runtime";
+import { decodeSubmitLiveFrame } from "../../src/submit-live";
 import type { FacadeSubmitTestDO } from "./test-worker";
 
 interface TestEnv {

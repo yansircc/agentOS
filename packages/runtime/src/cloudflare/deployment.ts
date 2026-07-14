@@ -6,7 +6,7 @@ import {
 } from "@agent-os/core/ref-resolver";
 import type { EventHandler } from "@agent-os/core/types";
 import type { LlmTransport } from "@agent-os/core/llm-protocol";
-import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
+import type { AnyMaterializedProjectionDefinition } from "../projection";
 import type { AgentManifest, DeploymentSpec } from "@agent-os/core/runtime-protocol";
 import { Layer } from "effect";
 import { MissingLlmTransportLive } from "./llm";

@@ -156,6 +156,16 @@
           "moduleBuckets": ["axioms"],
           "targetProfiles": ["neutral"],
           "optionalPeers": []
+        },
+        {
+          "subpath": "./safe-ledger-event",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./value-domain",
+          "moduleBuckets": ["axioms"],
+          "optionalPeers": []
         }
       ]
     },
@@ -181,7 +191,7 @@
       "publicSubpaths": [
         {
           "subpath": ".",
-          "moduleBuckets": ["ledger", "projection"],
+          "moduleBuckets": ["ledger"],
           "targetProfiles": ["neutral"],
           "optionalPeers": []
         },
@@ -308,6 +318,156 @@
         {
           "subpath": "./testing",
           "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./attached-stream",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./boundary-events",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./boundary-commit",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./continuation",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./dispatch",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./ledger",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./ledger-archive",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./input-request",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./decision-gate",
+          "moduleBuckets": ["ledger", "projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./projection",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./quota",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./resources",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./scheduler",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./submit-live",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./structured-output",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./inspection",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./telemetry-tree",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./trigger",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./witness-port",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./runtime-diagnostic",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-op",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-env",
+          "moduleBuckets": ["adapter"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-job",
+          "moduleBuckets": ["ledger"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./workspace-job-observability",
+          "moduleBuckets": ["projection"],
+          "targetProfiles": ["neutral"],
+          "optionalPeers": []
+        },
+        {
+          "subpath": "./tool-settlement",
+          "moduleBuckets": ["ledger"],
           "targetProfiles": ["neutral"],
           "optionalPeers": []
         }

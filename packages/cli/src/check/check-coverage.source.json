@@ -195,10 +195,27 @@
           "dependencyMode": "linked"
         },
         "positive": {
-          "contract": "public package exports must match generated PUBLIC_API projections",
+          "contract": "public package exports must match API intent, and every core/runtime root symbol must have one positively proven non-root owner with compatible kind and audience",
           "expectedExitCode": 0
         },
         "redCases": [
+          {
+            "id": "reject-core-root-export-star",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/core/src/index.ts",
+                "before": "export { ABORT, type AbortKind, reasonOf } from \"./abort\";\n",
+                "after": "export { ABORT, type AbortKind, reasonOf } from \"./abort\";\nexport * from \"./agent-schema\";\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "root facade export-star is forbidden"
+            }
+          },
           {
             "id": "reject-runtime-root-export-star",
             "kind": "repositoryMutation",
@@ -207,19 +224,323 @@
               {
                 "op": "replace",
                 "path": "packages/runtime/src/index.ts",
-                "before": "export type { Tool, ToolDefinition } from \"@agent-os/core/tools\";\n",
-                "after": "export type { Tool, ToolDefinition } from \"@agent-os/core/tools\";\nexport * from \"./workspace-env-core\";\n"
+                "before": "export { Admission } from \"./admission\";\n",
+                "after": "export { Admission } from \"./admission\";\nexport * from \"./workspace-env-core\";\n"
               }
             ],
             "expected": {
               "exitCode": 1,
-              "outputIncludes": "runtime root barrel must use explicit named exports; export-star syntax is forbidden"
+              "outputIncludes": "root facade export-star is forbidden"
+            }
+          },
+          {
+            "id": "reject-root-owner-kind-mismatch",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/core/src/index.ts",
+                "before": "export type {\n  EventNamespace,",
+                "after": "export {\n  EventNamespace,"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "root EventNamespace requests value from ./extensions:EventNamespace, but owner capabilities are type"
+            }
+          },
+          {
+            "id": "reject-type-only-star-root-owner-value",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "create",
+                "path": "packages/core/src/abort-type-only-red.ts",
+                "content": "export type * from \"./abort\";\n"
+              },
+              {
+                "op": "replace",
+                "path": "packages/core/src/index.ts",
+                "before": "export { ABORT, type AbortKind, reasonOf } from \"./abort\";\n",
+                "after": "export { ABORT, type AbortKind, reasonOf } from \"./abort-type-only-red\";\n"
+              },
+              {
+                "op": "replace",
+                "path": "packages/core/package.json",
+                "before": "    \"./abort\": {\n      \"types\": \"./src/abort.ts\",\n      \"default\": \"./src/abort.ts\"\n    },\n",
+                "after": "    \"./abort\": {\n      \"types\": \"./src/abort-type-only-red.ts\",\n      \"default\": \"./src/abort-type-only-red.ts\"\n    },\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "root ABORT requests value from ./abort:ABORT, but owner capabilities are"
+            }
+          },
+          {
+            "id": "reject-root-owner-audience-mismatch",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "docs/surface.json",
+                "before": "          \"subpath\": \"./extensions\",\n          \"audiences\": [\"advanced\"],\n",
+                "after": "          \"subpath\": \"./extensions\",\n          \"audiences\": [\"generated-only\"],\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "root audiences [advanced] are not a subset of owner ./extensions audiences [generated-only]; missing advanced"
+            }
+          },
+          {
+            "id": "reject-missing-root-owner-intent",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "docs/api/core.md",
+                "before": "- `./extensions:EventNamespace`\n",
+                "after": ""
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "must declare exactly one owner intent ./extensions:EventNamespace; observed 0"
+            }
+          },
+          {
+            "id": "reject-prose-root-owner-intent",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "docs/api/core.md",
+                "before": "- `./extensions:EventNamespace`\n",
+                "after": "This example mentions `./extensions:EventNamespace`, but declares nothing.\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "must declare exactly one owner intent ./extensions:EventNamespace; observed 0"
+            }
+          },
+          {
+            "id": "reject-ambiguous-root-owner",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/core/package.json",
+                "before": "    \"./extensions\": {\n      \"types\": \"./src/extensions.ts\",\n      \"default\": \"./src/extensions.ts\"\n    },\n",
+                "after": "    \"./extensions\": {\n      \"types\": \"./src/extensions.ts\",\n      \"default\": \"./src/extensions.ts\"\n    },\n    \"./extensions-alias\": {\n      \"types\": \"./src/extensions.ts\",\n      \"default\": \"./src/extensions.ts\"\n    },\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "must resolve to exactly one non-root package owner; observed 2"
+            }
+          },
+          {
+            "id": "reject-divergent-root-owner-conditions",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/core/package.json",
+                "before": "    \"./extensions\": {\n      \"types\": \"./src/extensions.ts\",\n      \"default\": \"./src/extensions.ts\"\n    },\n",
+                "after": "    \"./extensions\": {\n      \"types\": \"./src/extensions.ts\",\n      \"default\": \"./src/material-ref.ts\"\n    },\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "package owner ./extensions conditions must converge to exactly one source module; observed 2"
+            }
+          },
+          {
+            "id": "reject-fenced-comment-root-owner-intent",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "docs/api/core.md",
+                "before": "- `./extensions:EventNamespace`\n",
+                "after": "```md\n- `./extensions:EventNamespace`\n```\n<!--\n- `./extensions:EventNamespace`\n-->\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "must declare exactly one owner intent ./extensions:EventNamespace; observed 0"
+            }
+          },
+          {
+            "id": "reject-raw-html-root-owner-intent",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "docs/api/core.md",
+                "before": "- `./extensions:EventNamespace`\n",
+                "after": "<pre>\n- `./extensions:EventNamespace`\n</pre>\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "raw HTML is outside the API intent grammar"
+            }
+          },
+          {
+            "id": "reject-bom-raw-html-root-owner-intent",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "docs/api/core.md",
+                "before": "# @agent-os/core Public API Intent\n",
+                "after": "\uFEFF<pre>\n# @agent-os/core Public API Intent\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "raw HTML is outside the API intent grammar"
+            }
+          },
+          {
+            "id": "reject-semantic-invalid-root-owner",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/core/src/extensions.ts",
+                "before": "export interface EventNamespace {\n  readonly ownerId: string;\n",
+                "after": "export interface EventNamespace {\n  readonly ownerId: MissingRootOwnerType;\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "owner export closure is semantically invalid"
+            }
+          },
+          {
+            "id": "reject-tsconfig-nocheck-semantic-owner",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/core/tsconfig.json",
+                "before": "    \"noEmit\": true,\n    \"esModuleInterop\": true,\n",
+                "after": "    \"noEmit\": true,\n    \"noCheck\": true,\n    \"esModuleInterop\": true,\n"
+              },
+              {
+                "op": "replace",
+                "path": "packages/core/src/extensions.ts",
+                "before": "export interface EventNamespace {\n  readonly ownerId: string;\n",
+                "after": "export interface EventNamespace {\n  readonly ownerId: MissingRootOwnerType;\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "owner export closure is semantically invalid"
+            }
+          },
+          {
+            "id": "reject-root-owner-triple-slash-reference",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "create",
+                "path": "packages/core/src/root-owner-ambient-red.d.ts",
+                "content": "interface RootOwnerAmbientRed { readonly ambient: true }\n"
+              },
+              {
+                "op": "replace",
+                "path": "packages/core/src/extensions.ts",
+                "before": "import { Data } from \"effect\";\n",
+                "after": "/// <reference path=\"./root-owner-ambient-red.d.ts\" />\nimport { Data } from \"effect\";\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "owner export closure triple-slash path directive is forbidden"
+            }
+          },
+          {
+            "id": "reject-root-owner-relative-dependency-escape",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "create",
+                "path": "root-owner-escape-red.ts",
+                "content": "export interface RootOwnerEscapeRed { readonly escaped: true }\n"
+              },
+              {
+                "op": "replace",
+                "path": "packages/core/src/extensions.ts",
+                "before": "import { Data } from \"effect\";\n",
+                "after": "import { Data } from \"effect\";\nimport type { RootOwnerEscapeRed } from \"../../../root-owner-escape-red\";\n"
+              },
+              {
+                "op": "replace",
+                "path": "packages/core/src/extensions.ts",
+                "before": "export interface EventNamespace {\n  readonly ownerId: string;\n",
+                "after": "export interface EventNamespace {\n  readonly ownerId: RootOwnerEscapeRed;\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "relative dependency escapes its package"
+            }
+          },
+          {
+            "id": "reject-root-owner-ultimate-alias-duplicate",
+            "kind": "repositoryMutation",
+            "isolation": "detachedWorktree",
+            "edits": [
+              {
+                "op": "replace",
+                "path": "packages/core/src/index.ts",
+                "before": "  EventNamespace,\n  ExtensionCapability,",
+                "after": "  EventNamespace,\n  EventNamespaceAlias,\n  ExtensionCapability,"
+              },
+              {
+                "op": "replace",
+                "path": "packages/core/src/extensions.ts",
+                "before": "  readonly version: string;\n}\n\nexport type ExtensionDeclaration",
+                "after": "  readonly version: string;\n}\n\nexport type { EventNamespace as EventNamespaceAlias };\n\nexport type ExtensionDeclaration"
+              },
+              {
+                "op": "replace",
+                "path": "docs/api/core.md",
+                "before": "- `.:EventNamespace`\n",
+                "after": "- `.:EventNamespace`\n- `.:EventNamespaceAlias`\n"
+              },
+              {
+                "op": "replace",
+                "path": "docs/api/core.md",
+                "before": "- `./extensions:EventNamespace`\n",
+                "after": "- `./extensions:EventNamespace`\n- `./extensions:EventNamespaceAlias`\n"
+              }
+            ],
+            "expected": {
+              "exitCode": 1,
+              "outputIncludes": "owner source symbol ./extensions:EventNamespace maps to multiple root names EventNamespace, EventNamespaceAlias"
             }
           }
         ],
-        "blindSpots": [
-          "The current checker rejects export-star at the runtime root; task #486 must extend the same owner proof to the core root."
-        ]
+        "blindSpots": []
       }
     },
     {

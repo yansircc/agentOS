@@ -5,7 +5,7 @@ import {
   DurableTriggerDrainLimitExceeded,
   UnregisteredDurableTriggerKind,
   type JsonStringifyError,
-} from "@agent-os/core";
+} from "@agent-os/core/errors";
 import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import {
   DURABLE_TRIGGER_SCHEDULED_CANCELLED,

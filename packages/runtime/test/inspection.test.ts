@@ -6,13 +6,12 @@ import {
   defineCapability,
   defineHost,
   nodeHost,
-  projectInspectionSnapshot,
   resolveRuntime,
   workspaceOperations,
   type CapabilityContract,
-  type InspectionSnapshot,
   type WorkspaceOperationEnvResolverInput,
-} from "../src";
+} from "../src/capability";
+import { projectInspectionSnapshot, type InspectionSnapshot } from "../src/inspection";
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,

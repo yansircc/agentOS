@@ -1,6 +1,4 @@
 export { ABORT, type AbortKind, reasonOf } from "./abort";
-export * from "./agent-schema";
-export * from "./backend-protocol";
 export type {
   EventNamespace,
   ExtensionCapability,
@@ -35,7 +33,6 @@ export {
   validateBoundaryPayload,
   validateBoundaryContract,
 } from "./boundary-contract";
-export * from "./carrier";
 export type {
   EffectAuthorityBinding,
   EffectAuthorityContract,
@@ -68,21 +65,6 @@ export {
   materialRefKey,
   materialRequirement,
 } from "./material-ref";
-export * from "./context";
-export * from "./effect-claim";
-export * from "./errors";
-export * from "./llm-protocol";
-export * from "./quota";
-export * from "./projection";
-export * from "./ref-resolver";
-export * from "./runtime-protocol";
-export * from "./runtime-scope";
-export * from "./safe-ledger-event";
-export * from "./settlement-contract";
-export * from "./telemetry-protocol";
-export * from "./tools";
-export * from "./types";
-export * from "./workspace-agent";
 export type {
   Authored,
   Derived,
@@ -93,4 +75,4 @@ export type {
   RecordedPayload,
   RecordedPayloadValue,
   Untrusted,
-} from "./value-brands";
+} from "./value-domain";

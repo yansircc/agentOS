@@ -11,7 +11,7 @@
  */
 
 import type { LlmRoute } from "@agent-os/core/llm-protocol";
-import type { Recorded } from "@agent-os/core";
+import type { Recorded } from "../value-domain";
 import { recordRuntimeProtocolValue } from "./recorded";
 
 export type Strategy = "forced-tool-call";

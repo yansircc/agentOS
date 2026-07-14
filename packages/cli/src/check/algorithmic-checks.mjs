@@ -33,6 +33,7 @@ import { createProjectionBoundaryChecks } from "./algorithmic/projection-boundar
 import { createConvergenceSmokeChecks } from "./algorithmic/convergence-smoke-checks.mjs";
 import { createSourceAliasChecks } from "./algorithmic/source-alias-checks.mjs";
 import { createRuntimeProofChecks } from "./algorithmic/runtime-proof-checks.mjs";
+import { createRootOwnerChecks } from "./algorithmic/root-owner-checks.mjs";
 import {
   apiSourceMode,
   exportedNamesForPackage,
@@ -59,6 +60,9 @@ const failIfAny = (label, failures) => {
   throw new Error(failures.join("\n"));
 };
 
+const rootOwnerChecks = createRootOwnerChecks({ fs, path, ts, repoRoot, readJson });
+const rootOwnerProofFailures = rootOwnerChecks.rootOwnerProofFailures;
+
 const repoSurfaceChecks = createRepoSurfaceChecks({
   fs,
   path,
@@ -77,6 +81,7 @@ const repoSurfaceChecks = createRepoSurfaceChecks({
   sourceTsdocModes,
   sourceTsdocRecordsForPackage,
   validateSourceTsdocRecords,
+  rootOwnerProofFailures,
 });
 const manifestNames = repoSurfaceChecks.manifestNames;
 const ruleConstraints = repoSurfaceChecks.ruleConstraints;

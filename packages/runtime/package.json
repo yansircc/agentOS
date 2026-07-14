@@ -14,9 +14,61 @@
       "types": "./src/admission.ts",
       "default": "./src/admission.ts"
     },
+    "./attached-stream": {
+      "types": "./src/attached-stream.ts",
+      "default": "./src/attached-stream.ts"
+    },
+    "./boundary-events": {
+      "types": "./src/boundary-events.ts",
+      "default": "./src/boundary-events.ts"
+    },
+    "./boundary-commit": {
+      "types": "./src/boundary-commit.ts",
+      "default": "./src/boundary-commit.ts"
+    },
+    "./continuation": {
+      "types": "./src/continuation.ts",
+      "default": "./src/continuation.ts"
+    },
+    "./dispatch": {
+      "types": "./src/dispatch.ts",
+      "default": "./src/dispatch.ts"
+    },
+    "./ledger": {
+      "types": "./src/entrypoints/ledger.ts",
+      "default": "./src/entrypoints/ledger.ts"
+    },
+    "./ledger-archive": {
+      "types": "./src/entrypoints/ledger-archive.ts",
+      "default": "./src/entrypoints/ledger-archive.ts"
+    },
+    "./input-request": {
+      "types": "./src/entrypoints/input-request.ts",
+      "default": "./src/entrypoints/input-request.ts"
+    },
+    "./decision-gate": {
+      "types": "./src/entrypoints/decision-gate.ts",
+      "default": "./src/entrypoints/decision-gate.ts"
+    },
+    "./projection": {
+      "types": "./src/projection.ts",
+      "default": "./src/projection.ts"
+    },
+    "./quota": {
+      "types": "./src/quota-service.ts",
+      "default": "./src/quota-service.ts"
+    },
+    "./resources": {
+      "types": "./src/resources.ts",
+      "default": "./src/resources.ts"
+    },
     "./run-projector": {
       "types": "./src/run-projector.ts",
       "default": "./src/run-projector.ts"
+    },
+    "./scheduler": {
+      "types": "./src/scheduler.ts",
+      "default": "./src/scheduler.ts"
     },
     "./ag-ui": {
       "types": "./src/ag-ui.ts",
@@ -25,6 +77,30 @@
     "./sse-http": {
       "types": "./src/sse-http.ts",
       "default": "./src/sse-http.ts"
+    },
+    "./submit-live": {
+      "types": "./src/submit-live.ts",
+      "default": "./src/submit-live.ts"
+    },
+    "./structured-output": {
+      "types": "./src/structured-output.ts",
+      "default": "./src/structured-output.ts"
+    },
+    "./inspection": {
+      "types": "./src/inspection.ts",
+      "default": "./src/inspection.ts"
+    },
+    "./telemetry-tree": {
+      "types": "./src/telemetry-tree.ts",
+      "default": "./src/telemetry-tree.ts"
+    },
+    "./trigger": {
+      "types": "./src/trigger.ts",
+      "default": "./src/trigger.ts"
+    },
+    "./witness-port": {
+      "types": "./src/witness-port.ts",
+      "default": "./src/witness-port.ts"
     },
     "./workspace-agent": {
       "types": "./src/workspace-agent.ts",
@@ -49,6 +125,30 @@
     "./workspace-binding": {
       "types": "./src/workspace-binding.ts",
       "default": "./src/workspace-binding.ts"
+    },
+    "./runtime-diagnostic": {
+      "types": "./src/entrypoints/runtime-diagnostic.ts",
+      "default": "./src/entrypoints/runtime-diagnostic.ts"
+    },
+    "./workspace-op": {
+      "types": "./src/entrypoints/workspace-op.ts",
+      "default": "./src/entrypoints/workspace-op.ts"
+    },
+    "./workspace-env": {
+      "types": "./src/workspace-env-core.ts",
+      "default": "./src/workspace-env-core.ts"
+    },
+    "./workspace-job": {
+      "types": "./src/workspace-job.ts",
+      "default": "./src/workspace-job.ts"
+    },
+    "./workspace-job-observability": {
+      "types": "./src/workspace-job-observability.ts",
+      "default": "./src/workspace-job-observability.ts"
+    },
+    "./tool-settlement": {
+      "types": "./src/entrypoints/tool-settlement.ts",
+      "default": "./src/entrypoints/tool-settlement.ts"
     },
     "./cloudflare": {
       "types": "./src/cloudflare/index.ts",

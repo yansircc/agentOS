@@ -2,17 +2,16 @@ import { Effect, Schema } from "effect";
 import {
   defineTool,
   externalToolExecution,
-  materialRequirement,
-  ToolError,
   validateToolRegistry,
   withToolReadRequirement,
   withToolWriteRequirement,
   type ExecutionDomain,
-  type MaterialRequirement,
   type Tool,
   type ToolAccess,
   type ToolAdmitter,
-} from "@agent-os/core";
+} from "@agent-os/core/tools";
+import { materialRequirement, type MaterialRequirement } from "@agent-os/core/material-ref";
+import { ToolError } from "@agent-os/core/errors";
 import {
   DEFAULT_EXEC_TIMEOUT_MS,
   DEFAULT_MAX_COMMAND_CHARS,

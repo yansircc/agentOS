@@ -11,31 +11,34 @@ import {
   type RefResolver,
   RefResolverService,
 } from "@agent-os/core/ref-resolver";
+import { Admission } from "../admission";
 import {
-  Admission,
   AttachedStreamRegistry,
   AttachedStreams,
-  BoundaryEvents,
-  Dispatch,
+  makeAttachedStreamRegistry,
+  type AnyAttachedStreamHandler,
+} from "../attached-stream";
+import { BoundaryEvents } from "../boundary-events";
+import { Dispatch } from "../dispatch";
+import {
   DurableTriggerRegistry,
-  Ledger,
-  LedgerArchive,
+  TriggerPump,
+  makeDurableTriggerRegistry,
+  scheduledEventTrigger,
+  type AnyDurableTrigger,
+} from "../trigger";
+import { Ledger, type RuntimeStorageError } from "../ledger";
+import { LedgerArchive } from "../ledger-archive";
+import {
   MaterializedProjectionRegistry,
   MaterializedProjections,
-  Quota,
-  Resources,
-  Scheduler,
-  TriggerPump,
   makeProjectionRegistry,
   makeProjectionRegistryResult,
-  makeDurableTriggerRegistry,
-  makeAttachedStreamRegistry,
-  scheduledEventTrigger,
-  type AnyAttachedStreamHandler,
-  type AnyDurableTrigger,
   type AnyMaterializedProjectionDefinition,
-  type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../projection";
+import { Quota } from "../quota-service";
+import { Resources } from "../resources";
+import { Scheduler } from "../scheduler";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {
   createInMemoryBackendState,

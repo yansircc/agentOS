@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import * as kernel from "../../src";
+import * as valueDomain from "../../src/value-domain";
 import type {
   Authored,
   Derived,
@@ -8,11 +8,15 @@ import type {
   Live,
   Recordable,
   Recorded,
-  RecordedLedgerEvent,
   RecordedPayload,
-  SafeLedgerPayload,
   Untrusted,
-} from "../../src";
+} from "../../src/value-domain";
+import type { SafeLedgerPayload } from "../../src/safe-ledger-event";
+import {
+  decodeRecordedLedgerEvent,
+  decodeRecordedLedgerEventOption,
+  type RecordedLedgerEvent,
+} from "../../src/types";
 import {
   authoredValue,
   derivedValue,
@@ -187,7 +191,7 @@ describe("value domain brands", () => {
   });
 
   it("decodes ledger rows into Recorded ledger facts", () => {
-    const fact = kernel.decodeRecordedLedgerEvent({
+    const fact = decodeRecordedLedgerEvent({
       id: 1,
       ts: 10,
       kind: "agent.run.started",
@@ -201,27 +205,27 @@ describe("value domain brands", () => {
     expect(recorded.value.id).toBe(1);
     expect(Object.prototype.propertyIsEnumerable.call(fact, "value")).toBe(false);
     expect(JSON.stringify(fact)).not.toContain('"value"');
-    expect(() => kernel.decodeRecordedLedgerEvent({ id: "1", payload: {} })).toThrow();
-    expect(JSON.stringify(kernel.decodeRecordedLedgerEventOption({ id: "1", payload: {} }))).toBe(
+    expect(() => decodeRecordedLedgerEvent({ id: "1", payload: {} })).toThrow();
+    expect(JSON.stringify(decodeRecordedLedgerEventOption({ id: "1", payload: {} }))).toBe(
       '{"_id":"Option","_tag":"None"}',
     );
   });
 
-  it("does not expose generic runtime constructors for value-domain brands", () => {
-    expect("Authored" in kernel).toBe(false);
-    expect("Derived" in kernel).toBe(false);
-    expect("LedgerSafe" in kernel).toBe(false);
-    expect("Recorded" in kernel).toBe(false);
-    expect("Recordable" in kernel).toBe(false);
-    expect("Live" in kernel).toBe(false);
-    expect("RecordedPayload" in kernel).toBe(false);
-    expect("Untrusted" in kernel).toBe(false);
-    expect("authoredValue" in kernel).toBe(false);
-    expect("derivedValue" in kernel).toBe(false);
-    expect("ledgerSafeValue" in kernel).toBe(false);
-    expect("recordedValue" in kernel).toBe(false);
-    expect("recordableValue" in kernel).toBe(false);
-    expect("recordedPayload" in kernel).toBe(false);
-    expect("untrustedValue" in kernel).toBe(false);
+  it("does not expose runtime constructors from the value-domain owner", () => {
+    expect("Authored" in valueDomain).toBe(false);
+    expect("Derived" in valueDomain).toBe(false);
+    expect("LedgerSafe" in valueDomain).toBe(false);
+    expect("Recorded" in valueDomain).toBe(false);
+    expect("Recordable" in valueDomain).toBe(false);
+    expect("Live" in valueDomain).toBe(false);
+    expect("RecordedPayload" in valueDomain).toBe(false);
+    expect("Untrusted" in valueDomain).toBe(false);
+    expect("authoredValue" in valueDomain).toBe(false);
+    expect("derivedValue" in valueDomain).toBe(false);
+    expect("ledgerSafeValue" in valueDomain).toBe(false);
+    expect("recordedValue" in valueDomain).toBe(false);
+    expect("recordableValue" in valueDomain).toBe(false);
+    expect("recordedPayload" in valueDomain).toBe(false);
+    expect("untrustedValue" in valueDomain).toBe(false);
   });
 });

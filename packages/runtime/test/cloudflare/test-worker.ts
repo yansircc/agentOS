@@ -17,32 +17,33 @@ import {
 import { credential, defineAgentDO, endpoint, openAIChat } from "../../src/cloudflare/facade";
 import { withAgentDOTestingDrain } from "./_testing-drain";
 import { testTruthIdentity } from "./_identity";
+import { Dispatch } from "../../src/dispatch";
 import {
-  Dispatch,
   defineProjection,
-  Ledger,
-  LedgerArchive,
   makeProjectionRegistryResult,
   MaterializedProjectionRegistry,
   MaterializedProjections,
-  Quota,
-  Resources,
-  Scheduler,
-  TriggerPump,
-  triggerParseFail,
-  attachedStreamParseOk,
   projectionFail,
   projectionIdentity,
   projectionMalformed,
   projectionPut,
   projectionSkip,
+  type MaterializedProjectionRebuildResult,
+} from "../../src/projection";
+import { Ledger } from "../../src/ledger";
+import { LedgerArchive } from "../../src/ledger-archive";
+import { Quota } from "../../src/quota-service";
+import { Resources } from "../../src/resources";
+import { Scheduler } from "../../src/scheduler";
+import {
+  TriggerPump,
+  triggerParseFail,
   triggerParseOk,
-  type AttachedStreamHandler,
   type DurableTrigger,
   type TriggerCancellation,
   type TriggerTx,
-  type MaterializedProjectionRebuildResult,
-} from "@agent-os/runtime";
+} from "../../src/trigger";
+import { attachedStreamParseOk, type AttachedStreamHandler } from "../../src/attached-stream";
 import {
   CapabilityRejected,
   DurableTriggerAcquireCancelled,

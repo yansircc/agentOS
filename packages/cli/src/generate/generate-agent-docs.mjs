@@ -280,6 +280,15 @@ const startHere = [
 
 const agentNavigationStart = "<!-- agent-docs-navigation:start -->";
 const agentNavigationEnd = "<!-- agent-docs-navigation:end -->";
+
+const primitiveExportReference = (primitive) => {
+  const separator = primitive.exportKey.lastIndexOf(":");
+  const subpath = primitive.exportKey.slice(0, separator);
+  const symbol = primitive.exportKey.slice(separator + 1);
+  const specifier =
+    subpath === "." ? primitive.package : `${primitive.package}/${subpath.slice(2)}`;
+  return `${specifier}:${symbol}`;
+};
 const agentNavigation = [
   agentNavigationStart,
   generatedNotice("docs/agent/*.source.json and exported TSDoc @agentosPrimitive tags"),
@@ -316,7 +325,7 @@ const primitivesMd = [
     primitives.map((primitive) => [
       `\`${primitive.id}\``,
       `\`${primitive.capabilityKind}\``,
-      `\`${primitive.package}:${primitive.symbol}\``,
+      `\`${primitiveExportReference(primitive)}\``,
       primitive.invariants.map((invariant) => `\`${invariant}\``).join(", "),
       mdLink("docs/agent/primitives.md", path.posix.basename(primitive.docs), primitive.docs),
       primitive.testEvidence.tests === undefined

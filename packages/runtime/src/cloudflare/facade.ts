@@ -1,6 +1,7 @@
 import type { ExtensionDeclaration } from "@agent-os/core/extensions";
 import type { DispatchToScopeResult, DispatchToScopeSpec } from "@agent-os/core/types";
-import type { AttachedStreamCancelResult, TriggerCancelResult } from "@agent-os/runtime";
+import type { AttachedStreamCancelResult } from "../attached-stream";
+import type { TriggerCancelResult } from "../trigger";
 import {
   type AgentManifest,
   type InputRequestSettlement,

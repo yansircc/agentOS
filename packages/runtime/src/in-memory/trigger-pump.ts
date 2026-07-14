@@ -11,12 +11,14 @@ import {
   TriggerPump,
   drainTriggerPumpUntilQuiet,
   runSynchronousTriggerCommit,
+  type AnyDurableTrigger,
+  type TriggerCancellation,
+} from "../trigger";
+import {
   runtimeStorageError,
   runtimeStorageOrJsonError,
   type RuntimeStorageError,
-  type AnyDurableTrigger,
-  type TriggerCancellation,
-} from "@agent-os/runtime";
+} from "../ledger";
 import type {
   BackendProtocolEventIdentity,
   BackendProtocolTruthIdentity,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import * as kernel from "../../src";
-import type { Live, ProjectionContext, ProjectionSink, ProjectionSpec } from "../../src";
+import type { Live } from "../../src/value-domain";
 import {
   ProjectionResult,
   checkProjectionSink,
@@ -9,6 +8,9 @@ import {
   project,
   projectionOutputOrFail,
   runProjectionSink,
+  type ProjectionContext,
+  type ProjectionSink,
+  type ProjectionSpec,
 } from "../../src/projection";
 
 type WordSummary = {
@@ -337,7 +339,5 @@ describe("projection engine", () => {
     };
 
     expect(typeof assertTypeErrors).toBe("function");
-    expect("openLive" in kernel).toBe(false);
-    expect("captureLive" in kernel).toBe(false);
   });
 });

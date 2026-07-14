@@ -40,10 +40,12 @@ adapter, target ambient implementation, or disputed event-projection fold.
 | `@agent-os/core/ref-resolver`               | `advanced`, `generated-only` | material ref resolution                                                                           |
 | `@agent-os/core/runtime-protocol`           | `generated-only`             | runtime DTOs emitted by generated targets                                                         |
 | `@agent-os/core/runtime-scope`              | `advanced`                   | runtime scope helpers                                                                             |
+| `@agent-os/core/safe-ledger-event`          | `advanced`                   | ledger-safe diagnostic and projection values                                                      |
 | `@agent-os/core/settlement-contract`        | `advanced`                   | settlement contract algebra                                                                       |
 | `@agent-os/core/telemetry-protocol`         | `advanced`                   | telemetry protocol DTOs                                                                           |
 | `@agent-os/core/tools`                      | `generated-only`             | tool definitions emitted by generated targets                                                     |
 | `@agent-os/core/types`                      | `advanced`                   | shared type helpers                                                                               |
+| `@agent-os/core/value-domain`               | `advanced`                   | durable value-domain brand types                                                                  |
 | `@agent-os/core/workspace-agent`            | `advanced`                   | workspace agent command/projection vocabulary                                                     |
 
 ## Invariant

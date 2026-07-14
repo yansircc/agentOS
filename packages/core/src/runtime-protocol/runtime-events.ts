@@ -18,7 +18,7 @@ import {
 } from "@agent-os/core/effect-claim";
 import type { AgentSchemaIssue } from "@agent-os/core/agent-schema";
 import type { ExecutionDomain, ResolvedToolExecution, ToolExecution } from "@agent-os/core/tools";
-import type { Recorded } from "@agent-os/core";
+import type { Recorded } from "../value-domain";
 import { TraceContextSchema, type TraceContext } from "@agent-os/core/telemetry-protocol";
 import { ABORT, type AbortKind } from "@agent-os/core/abort";
 import { recordRuntimeProtocolValue } from "./recorded";

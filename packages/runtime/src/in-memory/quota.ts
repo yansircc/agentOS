@@ -1,5 +1,6 @@
 import { Clock, Effect, Layer } from "effect";
-import { Quota, runtimeStorageError, runtimeStorageOrJsonError } from "@agent-os/runtime";
+import { Quota } from "../quota-service";
+import { runtimeStorageError, runtimeStorageOrJsonError } from "../ledger";
 import {
   projectQuotaGrantUsage,
   QUOTA_EVENT_KIND,

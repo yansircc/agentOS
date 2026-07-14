@@ -19,7 +19,7 @@ import {
   type Tool,
 } from "../../src/tools";
 import { credentialMaterialRef, isMaterialRef, materialRequirement } from "../../src/material-ref";
-import type { Authored, Recorded } from "../../src";
+import type { Authored, Recorded } from "../../src/value-domain";
 
 const allowToolAdmitter = () => Effect.succeed({ ok: true as const });
 

@@ -4,11 +4,11 @@ import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref"
 import { UnregisteredDurableTriggerKind } from "@agent-os/core/errors";
 import {
   DurableTriggerRegistry,
-  Dispatch,
   TriggerPump,
   makeDurableTriggerRegistry,
   scheduledEventTrigger,
-} from "@agent-os/runtime";
+} from "../../src/trigger";
+import { Dispatch } from "../../src/dispatch";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import {
   DISPATCH_MAX_ATTEMPTS,

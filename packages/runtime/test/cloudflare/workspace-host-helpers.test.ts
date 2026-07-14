@@ -5,7 +5,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { makePreClaim } from "@agent-os/core/effect-claim";
 import type { LedgerEvent, LedgerEventRpc } from "@agent-os/core/types";
 import { eventNamespace, type ExtensionCapability } from "@agent-os/core/extensions";
-import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
+import type { WorkspaceJobObservabilityProjection } from "../../src/workspace-job-observability";
 import { agentRunStartedEvent, RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { createSseHttpTextResponse, decodeSseHttpEvents } from "../../src/sse-http";
 import {

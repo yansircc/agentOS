@@ -166,7 +166,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { compileProductPlan } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { Effect } from "effect";`,
-      `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime/trigger")}";`,
       `import { defineExternalEffectAttempt, runExternalEffectAttempt, type DefinedExternalEffectAttempt, type RunExternalEffectAttemptSpec } from "${publicSpecifier("@agent-os/runtime/external-effect")}";`,
       `import { bindWorkspaceToolsForRuntime } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
       `import { createLocalAgentRuntime } from "${publicSpecifier("@agent-os/runtime/local")}";`,
@@ -226,8 +226,9 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { compileProductPlan } from "${publicSpecifier("@agent-os/cli")}";`,
       `import { ABORT } from "${publicSpecifier("@agent-os/core")}";`,
+      `import { Admission, BoundaryEvents, Dispatch, Ledger, LedgerArchive, Quota, Resources } from "${publicSpecifier("@agent-os/runtime")}";`,
       `import { Effect } from "effect";`,
-      `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { triggerParseOk } from "${publicSpecifier("@agent-os/runtime/trigger")}";`,
       `import { defineExternalEffectAttempt, runExternalEffectAttempt } from "${publicSpecifier("@agent-os/runtime/external-effect")}";`,
       `import { AG_UI_WIRE_COMPATIBILITY } from "${publicSpecifier("@agent-os/runtime/ag-ui")}";`,
       `import { workspaceEnvMaterialRef } from "${publicSpecifier("@agent-os/runtime/workspace-binding")}";`,
@@ -270,7 +271,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "const backendReport = await runBackendConformance('packed-broken-backend', brokenBackendFactory, { runtimeFactOwner: '@agent-os/packed-consumer' });",
       "if (backendReport.results.length !== BACKEND_CONFORMANCE_LAWS.length || backendReport.results.find((result) => result.lawId === BACKEND_CONFORMANCE_LAW_ID.LEDGER_READ_PREFIX)?.status !== 'failed') throw new Error('backend conformance did not identify the broken law');",
       "if (validateBackendConformanceReport(backendReport).ok !== true) throw new Error('backend conformance report failed core validation');",
-      "if (!compileProductPlan || !ABORT || !triggerParseOk || !defineExternalEffectAttempt || !runExternalEffectAttempt || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !externalEffectConformance || !runBackendConformance || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
+      "if (!compileProductPlan || !ABORT || !Admission || !BoundaryEvents || !Dispatch || !Ledger || !LedgerArchive || !Quota || !Resources || !triggerParseOk || !defineExternalEffectAttempt || !runExternalEffectAttempt || !AG_UI_WIRE_COMPATIBILITY || !workspaceEnvMaterialRef || !createInMemoryWorkspaceEnv || !externalEffectConformance || !runBackendConformance || !deterministicToolExecution || !mountOpsApi) throw new Error('missing import');",
     ].join("\n") + "\n",
   );
   fs.writeFileSync(
@@ -280,7 +281,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
       "import { tmpdir } from 'node:os';",
       "import path from 'node:path';",
       `import { createLocalAgentRuntime } from "${publicSpecifier("@agent-os/runtime/local")}";`,
-      `import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND, WORKSPACE_OP_PROJECTION_KIND } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND, WORKSPACE_OP_PROJECTION_KIND } from "${publicSpecifier("@agent-os/runtime/workspace-op")}";`,
       "const root = await mkdtemp(path.join(tmpdir(), 'agentos-packed-local-'));",
       "try {",
       "  const runtime = await createLocalAgentRuntime({",
@@ -385,7 +386,7 @@ export const writeConsumerApp = (dir, extraDeps = {}) => {
     [
       `import { createAgentDurableObject, createCloudflareSandboxWorkspaceEnvResolver, createCloudflareWorkspaceEnvResolver, createCloudflareWorkspaceJobResponse, makeCloudflareWorkspaceEnv } from "${publicSpecifier("@agent-os/runtime/cloudflare")}";`,
       `import { OpenAiCompatibleLlmTransportLive } from "${publicSpecifier("@agent-os/runtime/llm-effect-ai/openai-compatible")}";`,
-      `import { defineAgentBindings, defineAgentManifest } from "${publicSpecifier("@agent-os/core")}";`,
+      `import { defineAgentBindings, defineAgentManifest } from "${publicSpecifier("@agent-os/core/runtime-protocol")}";`,
       "void createCloudflareWorkspaceJobResponse;",
       "void makeCloudflareWorkspaceEnv;",
       "void createCloudflareWorkspaceEnvResolver;",
@@ -1075,7 +1076,7 @@ export const writeGeneratedLocalTargetConsumerApp = (dir) => {
       "import { tmpdir } from 'node:os';",
       "import path from 'node:path';",
       "import { createLocalAgentApp } from './.agentos/generated/local';",
-      `import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND, WORKSPACE_OP_PROJECTION_KIND } from "${publicSpecifier("@agent-os/runtime")}";`,
+      `import { WORKSPACE_OP_FACT_OWNER, WORKSPACE_OP_KIND, WORKSPACE_OP_PROJECTION_KIND } from "${publicSpecifier("@agent-os/runtime/workspace-op")}";`,
       "const root = await mkdtemp(path.join(tmpdir(), 'agentos-generated-local-'));",
       "try {",
       "  const providerApp = await createLocalAgentApp({",
@@ -1435,11 +1436,11 @@ export const assertPeerFailure = () => {
   });
   fs.writeFileSync(
     path.join(dir, "index.ts"),
-    `import { makePreClaim } from "${publicSpecifier("@agent-os/core")}";\nvoid makePreClaim;\n`,
+    `import { makePreClaim } from "${publicSpecifier("@agent-os/core/effect-claim")}";\nvoid makePreClaim;\n`,
   );
   fs.writeFileSync(
     path.join(dir, "smoke.mjs"),
-    `import { makePreClaim } from "${publicSpecifier("@agent-os/core")}";\nvoid makePreClaim;\n`,
+    `import { makePreClaim } from "${publicSpecifier("@agent-os/core/effect-claim")}";\nvoid makePreClaim;\n`,
   );
   writeJson(path.join(dir, "tsconfig.json"), {
     compilerOptions: {

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { TriggerFactoryError } from "@agent-os/core/errors";
-import type { AnyAttachedStreamHandler } from "@agent-os/runtime";
+import type { AnyAttachedStreamHandler } from "../attached-stream";
 
 export interface CloudflareAttachedStreamFactoryContext<Env> {
   readonly env: Env;

@@ -14,7 +14,7 @@ slug: "advanced/capability-authoring/define-host"
 ## Usage
 
 ```ts
-import { WORKSPACE_OPERATION_HOST_FACT, defineHost } from "@agent-os/runtime";
+import { WORKSPACE_OPERATION_HOST_FACT, defineHost } from "@agent-os/runtime/capability";
 export const customHost = defineHost({
   target: "custom-host@1",
   provides: ["storage.ledger", WORKSPACE_OPERATION_HOST_FACT],

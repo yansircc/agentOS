@@ -13,7 +13,7 @@ import {
   type DurableProcessLifecycleState,
   type IntentPointerDuePayload,
 } from "@agent-os/core/backend-protocol";
-import { getDurableTrigger, type TriggerRegistry } from "@agent-os/runtime";
+import { getDurableTrigger, type TriggerRegistry } from "../trigger";
 import {
   commitLedgerTransaction,
   type LedgerEventRef,

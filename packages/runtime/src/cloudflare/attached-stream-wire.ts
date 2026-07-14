@@ -3,7 +3,7 @@ import {
   encodeAttachedStreamMessage,
   isAttachedStreamInboundFrame,
 } from "../attached-stream-protocol";
-import type { AttachedStreamSession } from "@agent-os/runtime";
+import type { AttachedStreamSession } from "../attached-stream";
 import { createAttachedStreamSseResponse } from "../sse-http";
 import type { Effect as EffectType } from "effect";
 

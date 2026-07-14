@@ -90,6 +90,10 @@
       "types": "./src/runtime-scope.ts",
       "default": "./src/runtime-scope.ts"
     },
+    "./safe-ledger-event": {
+      "types": "./src/safe-ledger-event.ts",
+      "default": "./src/safe-ledger-event.ts"
+    },
     "./settlement-contract": {
       "types": "./src/settlement-contract.ts",
       "default": "./src/settlement-contract.ts"
@@ -105,6 +109,10 @@
     "./types": {
       "types": "./src/types.ts",
       "default": "./src/types.ts"
+    },
+    "./value-domain": {
+      "types": "./src/value-domain.ts",
+      "default": "./src/value-domain.ts"
     },
     "./workspace-agent": {
       "types": "./src/workspace-agent.ts",

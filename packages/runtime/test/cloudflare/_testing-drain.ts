@@ -4,7 +4,7 @@ import {
   type AgentDrainUntilQuietTestingOptions,
 } from "../../src/cloudflare/agent-do";
 import type { CloudflareAgentEnv } from "../../src/cloudflare/deployment";
-import type { TriggerDrainResult, TriggerDrainUntilQuietResult } from "@agent-os/runtime";
+import type { TriggerDrainResult, TriggerDrainUntilQuietResult } from "../../src/trigger";
 
 export type {
   AgentDrainDueTestingOptions,

@@ -18,26 +18,51 @@ algebra, durable trigger authoring, and ledger-derived projections.
 | --------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `@agent-os/runtime`                                 | `advanced`                   | backend-neutral runtime service algebra                                                                    |
 | `@agent-os/runtime/admission`                       | `advanced`                   | admission service contract                                                                                 |
+| `@agent-os/runtime/attached-stream`                 | `advanced`                   | attached-stream lifecycle service                                                                          |
 | `@agent-os/runtime/ag-ui`                           | `advanced`                   | AG-UI wire projection                                                                                      |
+| `@agent-os/runtime/boundary-commit`                 | `advanced`                   | boundary settlement commit                                                                                 |
+| `@agent-os/runtime/boundary-events`                 | `advanced`                   | boundary event service contract                                                                            |
 | `@agent-os/runtime/cloudflare`                      | `generated-only`, `advanced` | Cloudflare Durable Object runtime adapter                                                                  |
 | `@agent-os/runtime/cloudflare/do-rpc`               | `advanced`                   | Cloudflare DO RPC bridge                                                                                   |
 | `@agent-os/runtime/cloudflare/ops-api`              | `advanced`                   | Cloudflare ops API bridge                                                                                  |
 | `@agent-os/runtime/capability`                      | `generated-only`, `advanced` | capability contract declarations and install graph resolver                                                |
 | `@agent-os/runtime/channel`                         | `generated-only`, `advanced` | pure verified inbound channel contract for generated targets                                               |
+| `@agent-os/runtime/continuation`                    | `advanced`                   | runtime continuation lifecycle projection                                                                  |
+| `@agent-os/runtime/decision-gate`                   | `advanced`                   | generic decision-gate settlement lifecycle                                                                 |
+| `@agent-os/runtime/dispatch`                        | `advanced`                   | dispatch service contract                                                                                  |
 | `@agent-os/runtime/external-effect`                 | `advanced`                   | vocabulary-neutral idempotent external-effect attempt runner and attempt projection                        |
 | `@agent-os/runtime/schedule`                        | `generated-only`, `advanced` | pure UTC time ingress contract and schedule fire history projection for generated targets                  |
 | `@agent-os/runtime/in-memory`                       | `advanced`                   | in-memory runtime adapter                                                                                  |
+| `@agent-os/runtime/input-request`                   | `advanced`                   | input-request lifecycle projection                                                                         |
+| `@agent-os/runtime/inspection`                      | `advanced`                   | runtime inspection projection                                                                              |
+| `@agent-os/runtime/ledger`                          | `advanced`                   | ledger service contract                                                                                    |
+| `@agent-os/runtime/ledger-archive`                  | `advanced`                   | ledger archive service and proof helpers                                                                   |
 | `@agent-os/runtime/local`                           | `generated-only`, `advanced` | local node workspace runtime lowerer and dev/test facade                                                   |
 | `@agent-os/runtime/llm-effect-ai`                   | `advanced`                   | provider-neutral Effect AI LLM transport adapter                                                           |
 | `@agent-os/runtime/llm-effect-ai/openai-compatible` | `generated-only`, `advanced` | OpenAI-compatible chat-completions transport adapter                                                       |
 | `@agent-os/runtime/llm-effect-ai/anthropic`         | `advanced`                   | Anthropic Effect AI provider adapter                                                                       |
 | `@agent-os/runtime/node`                            | `advanced`                   | Node runtime adapter                                                                                       |
+| `@agent-os/runtime/projection`                      | `advanced`                   | materialized projection service algebra                                                                    |
+| `@agent-os/runtime/quota`                           | `advanced`                   | quota service contract                                                                                     |
+| `@agent-os/runtime/resources`                       | `advanced`                   | resource service contract                                                                                  |
 | `@agent-os/runtime/run-projector`                   | `generated-only`, `advanced` | runtime run projection helpers                                                                             |
+| `@agent-os/runtime/runtime-diagnostic`              | `advanced`                   | runtime diagnostic carrier                                                                                 |
+| `@agent-os/runtime/scheduler`                       | `advanced`                   | scheduler service contract                                                                                 |
 | `@agent-os/runtime/sse-http`                        | `generated-only`, `advanced` | SSE HTTP helpers                                                                                           |
+| `@agent-os/runtime/structured-output`               | `advanced`                   | structured LLM output decoding                                                                             |
+| `@agent-os/runtime/submit-live`                     | `advanced`                   | live submit wire lifecycle                                                                                 |
+| `@agent-os/runtime/telemetry-tree`                  | `advanced`                   | runtime telemetry tree projection                                                                          |
 | `@agent-os/runtime/telemetry-otlp`                  | `advanced`                   | OTLP telemetry projection                                                                                  |
 | `@agent-os/runtime/testing`                         | `advanced`                   | deterministic in-memory WorkspaceEnv fixture plus reusable backend and external-effect conformance runners |
+| `@agent-os/runtime/tool-settlement`                 | `advanced`                   | tool settlement lifecycle                                                                                  |
+| `@agent-os/runtime/trigger`                         | `advanced`                   | durable trigger lifecycle service                                                                          |
+| `@agent-os/runtime/witness-port`                    | `advanced`                   | runtime witness port                                                                                       |
 | `@agent-os/runtime/workspace-agent`                 | `generated-only`             | generated workspace agent host types                                                                       |
 | `@agent-os/runtime/workspace-binding`               | `generated-only`             | generated workspace tool binding                                                                           |
+| `@agent-os/runtime/workspace-env`                   | `advanced`                   | workspace environment service algebra                                                                      |
+| `@agent-os/runtime/workspace-job`                   | `advanced`                   | workspace job lifecycle and carrier                                                                        |
+| `@agent-os/runtime/workspace-job-observability`     | `advanced`                   | workspace job observability projection                                                                     |
+| `@agent-os/runtime/workspace-op`                    | `advanced`                   | workspace operation carrier                                                                                |
 
 ## Invariant
 
@@ -205,7 +230,8 @@ registered through a backend facade; they should not import backend SQL helpers,
 due-work storage helpers, inserted-event helpers, or backend state classes.
 
 ```ts
-import type { DurableTrigger, Ledger } from "@agent-os/runtime";
+import type { Ledger } from "@agent-os/runtime";
+import type { DurableTrigger } from "@agent-os/runtime/trigger";
 ```
 
 Serializable submit, admission, and runtime event DTOs live in
@@ -214,13 +240,13 @@ Serializable submit, admission, and runtime event DTOs live in
 Attached stream handlers use the same runtime package:
 
 ```ts
-import type { AttachedStreamHandler } from "@agent-os/runtime";
+import type { AttachedStreamHandler } from "@agent-os/runtime/attached-stream";
 ```
 
 Materialized projections are registered through the backend facade:
 
 ```ts
-import { defineProjection, type MaterializedProjections } from "@agent-os/runtime";
+import { defineProjection, type MaterializedProjections } from "@agent-os/runtime/projection";
 ```
 
 Workspace-job consumers that need user-visible failure explanation should read
@@ -228,7 +254,7 @@ the runtime observability projection instead of calling
 `projectFailureDiagnostics(events, runId)` themselves:
 
 ```ts
-import { projectWorkspaceJobObservability } from "@agent-os/runtime";
+import { projectWorkspaceJobObservability } from "@agent-os/runtime/workspace-job-observability";
 ```
 
 Deterministic product-side tool actions use `unsafeRunToolByName`. The `unsafe`

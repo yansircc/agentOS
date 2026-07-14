@@ -30,7 +30,7 @@ import {
   projectQuotaState as projectProtocolQuotaState,
   projectResourceState as projectProtocolResourceState,
 } from "@agent-os/core/backend-protocol";
-import { toolSettlementContract } from "@agent-os/runtime";
+import { toolSettlementContract } from "../tool-settlement";
 import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 
 const abortKinds = new Set<string>(Object.values(ABORT));

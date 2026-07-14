@@ -41,7 +41,10 @@ Use this skill to integrate agentOS without re-inventing its substrate.
      `ToolContract`;
    - durable truth -> ledger events and projections;
    - execution means -> facade `bindings` backed by `MaterialRef`;
-   - token progress and run projections -> `@agent-os/runtime`;
+   - token progress and run projections -> resolve the exact owner from the
+     installed package `PUBLIC_API.md` or the installed catalog's
+     `references/agent/primitives.json` `exportKey`; never infer the runtime
+     package root;
    - consumer run stream -> `@agent-os/client` or `@agent-os/runtime/ag-ui`;
    - resource facts -> `@agent-os/core` boundary contracts plus `@agent-os/runtime`;
    - Cloudflare resource materialization -> `@agent-os/runtime/cloudflare`;

@@ -5,7 +5,7 @@ import {
   TriggerPump,
   triggerParseOk,
   type DurableTrigger,
-} from "@agent-os/runtime";
+} from "../../src/trigger";
 import { runtimeEventIdentity, truthIdentity } from "./identity";
 import { createTestInMemoryRuntimeBackend } from "./runtime-helper";
 

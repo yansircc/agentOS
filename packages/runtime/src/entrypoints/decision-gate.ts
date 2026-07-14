@@ -1,0 +1,27 @@
+export {
+  DECISION_GATE_EVENTS,
+  DECISION_GATE_KIND,
+  decisionGateCancelledEvent,
+  decisionGateConsumedEvent,
+  decisionGateDecidedEvent,
+  decisionGateExpiredEvent,
+  decisionGateRequestedEvent,
+  decisionGateSettlementRef,
+  settleDecisionGateConsumed,
+} from "../decision-gate";
+export type {
+  DecisionGateCancelledPayload,
+  DecisionGateClosedEventSpec,
+  DecisionGateConsumedEventSpec,
+  DecisionGateConsumedPayload,
+  DecisionGateDecidedEventSpec,
+  DecisionGateDecidedPayload,
+  DecisionGateDecision,
+  DecisionGateEventIdentitySpec,
+  DecisionGateEventKind,
+  DecisionGateExpiredPayload,
+  DecisionGateLedgerEvent,
+  DecisionGateProjection,
+  DecisionGateRequestedEventSpec,
+  DecisionGateRequestedPayload,
+} from "../decision-gate";

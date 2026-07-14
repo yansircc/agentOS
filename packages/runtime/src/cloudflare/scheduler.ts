@@ -1,18 +1,18 @@
 import { Clock, Effect, Layer } from "effect";
 import { UnregisteredDurableTriggerKind } from "@agent-os/core/errors";
 import { SCHEDULED_EVENT_TRIGGER_KIND } from "@agent-os/core/backend-protocol";
+import { DurableTriggerRegistry } from "../trigger";
+import { Scheduler } from "../scheduler";
 import {
-  DurableTriggerRegistry,
-  Scheduler,
   runtimeStorageError,
   runtimeStorageOrJsonError,
   type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../ledger";
 import { EventBus } from "./ledger/event-bus";
 import { enqueueScheduledEvent, ensureDueWorkSchema } from "./due-work";
 import type { BackendProtocolEventIdentity } from "@agent-os/core/backend-protocol";
 
-export { Scheduler } from "@agent-os/runtime";
+export { Scheduler } from "../scheduler";
 
 export const SchedulerLive = (
   ctx: DurableObjectState,

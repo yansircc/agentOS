@@ -3,7 +3,8 @@
  */
 
 import { Effect, Option, Predicate, Schema } from "effect";
-import { CapabilityRejected, type EventHandler, type LedgerEventRpc } from "@agent-os/core";
+import { CapabilityRejected } from "@agent-os/core/errors";
+import { type EventHandler, type LedgerEventRpc } from "@agent-os/core/types";
 import type { BoundaryModule } from "@agent-os/core/boundary-contract";
 import type { ToolAdmitter } from "@agent-os/core/tools";
 import {

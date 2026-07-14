@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { createLocalAgentRuntime } from "@agent-os/runtime/local";
-import { decodeSubmitLiveFrame } from "@agent-os/runtime";
+import { decodeSubmitLiveFrame } from "../../src/submit-live";
 
 const decodeSse = (text: string) =>
   text

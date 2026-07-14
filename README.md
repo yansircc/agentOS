@@ -48,13 +48,13 @@ state to make a product flow appear complete.
 
 <!-- agentos:generated package-map:start -->
 
-| Package             | Role                                                                                                                                                                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@agent-os/core`    | neutral substrate axioms, owner identity helpers, value brands, protocol schemas, shared errors, material refs, AgentSchema, tool algebra, and backend/runtime/LLM/telemetry vocabulary                                                           |
-| `@agent-os/runtime` | Effect Tag runtime programs, backend-neutral runtime services, projections, workspace-job observability joins, deterministic testing fixtures, and optional-peer subpath adapters for Cloudflare, in-memory, Node, Effect AI, and OTLP telemetry. |
-| `@agent-os/client`  | transport-neutral agent client store, decoded runtime ledger stream adapter, typed command surface, product-shell composition helper, and optional framework subpath bridges                                                                      |
-| `@agent-os/evals`   | eval authoring DSL, symbolic eval configuration, deterministic assertion declarations, and runner-facing case/context types for generated app behavior checks                                                                                     |
-| `@agent-os/cli`     | closed product-intent compiler, explicit local or deployment target binder, developer command surface, structural checks, and distribution gates                                                                                                  |
+| Package             | Role                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@agent-os/core`    | narrow durable substrate algebra at the root plus explicit owner subpaths for schemas, protocols, claims, projections, tools, and workspace vocabulary                          |
+| `@agent-os/runtime` | seven backend-neutral runtime Service Tags at the root plus explicit lifecycle, projection, diagnostic, settlement, workspace, wire, host, provider, and testing owner subpaths |
+| `@agent-os/client`  | transport-neutral agent client store, decoded runtime ledger stream adapter, typed command surface, product-shell composition helper, and optional framework subpath bridges    |
+| `@agent-os/evals`   | eval authoring DSL, symbolic eval configuration, deterministic assertion declarations, and runner-facing case/context types for generated app behavior checks                   |
+| `@agent-os/cli`     | closed product-intent compiler, explicit local or deployment target binder, developer command surface, structural checks, and distribution gates                                |
 
 <!-- agentos:generated package-map:end -->
 

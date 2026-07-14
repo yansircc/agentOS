@@ -3,10 +3,9 @@ import {
   AttachedStreamRegistry,
   AttachedStreams,
   makeAttachedStreamService,
-  runtimeStorageOrJsonError,
   runSynchronousAttachedStreamCommit,
-  type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../attached-stream";
+import { runtimeStorageOrJsonError, type RuntimeStorageError } from "../ledger";
 import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 

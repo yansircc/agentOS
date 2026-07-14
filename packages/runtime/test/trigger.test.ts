@@ -1,6 +1,6 @@
 import { Effect, Exit } from "effect";
 import { describe, expect, it } from "@effect/vitest";
-import { DurableTriggerCommitReturnedThenable } from "@agent-os/core";
+import { DurableTriggerCommitReturnedThenable } from "@agent-os/core/errors";
 import {
   DURABLE_TRIGGER_SCHEDULED_REQUESTED,
   DURABLE_TRIGGER_SCHEDULED_CANCELLED,

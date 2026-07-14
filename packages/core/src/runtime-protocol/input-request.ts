@@ -1,7 +1,7 @@
 import { Predicate } from "effect";
 import { isScopeRef } from "@agent-os/core/effect-claim";
 import { isMaterialRef, type MaterialRef } from "@agent-os/core/material-ref";
-import type { Recorded } from "@agent-os/core";
+import type { Recorded } from "../value-domain";
 import type { LedgerWitnessedScopedRef } from "./continuation";
 import type { RuntimeLedgerEventByKind } from "./runtime-events";
 import { RUNTIME_EVENT_KIND } from "./runtime-events";

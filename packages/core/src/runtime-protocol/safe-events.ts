@@ -1,5 +1,5 @@
-import type { SafeLedgerEvent, SafeLedgerValue } from "@agent-os/core";
-import { redactedSafeSummary, safeLedgerEvent, safeValueFromUnknown } from "@agent-os/core";
+import type { SafeLedgerEvent, SafeLedgerValue } from "../safe-ledger-event";
+import { redactedSafeSummary, safeLedgerEvent, safeValueFromUnknown } from "../safe-ledger-event";
 import type { LedgerEvent } from "@agent-os/core/types";
 import { validateEffectClaim } from "@agent-os/core/effect-claim";
 import { ABORT } from "@agent-os/core/abort";

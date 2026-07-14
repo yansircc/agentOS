@@ -10,7 +10,7 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import type {} from "@effect/vitest";
 
-import { Ledger } from "@agent-os/runtime";
+import { Ledger } from "../../src/ledger";
 import { EventBusLive } from "../../src/cloudflare/ledger/event-bus";
 import { LedgerLive } from "../../src/cloudflare/ledger/ledger";
 import {

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { TriggerFactoryError } from "@agent-os/core/errors";
-import type { AnyDurableTrigger } from "@agent-os/runtime";
+import type { AnyDurableTrigger } from "../trigger";
 
 export interface CloudflareTriggerFactoryContext<Env> {
   readonly env: Env;

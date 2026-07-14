@@ -28,16 +28,15 @@ import {
 } from "@agent-os/core/telemetry-protocol";
 import { EventBus } from "../ledger/event-bus";
 import { materialRefKey } from "@agent-os/core/material-ref";
+import { Dispatch } from "../../dispatch";
 import {
-  Dispatch,
   DurableTriggerRegistry,
-  RuntimeStorageError,
   TriggerPump,
-  runtimeStorageError,
   triggerParseFail,
   triggerParseOk,
-} from "@agent-os/runtime";
-import type { DurableTrigger } from "@agent-os/runtime";
+} from "../../trigger";
+import { RuntimeStorageError, runtimeStorageError } from "../../ledger";
+import type { DurableTrigger } from "../../trigger";
 import {
   makeOperationRef,
   makePreClaim,

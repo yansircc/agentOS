@@ -1,5 +1,5 @@
 import { isScopeRef, type ScopeRef } from "@agent-os/core/effect-claim";
-import type { Recorded } from "@agent-os/core";
+import type { Recorded } from "../value-domain";
 import type { RuntimeLedgerEventByKind } from "./runtime-events";
 import { RUNTIME_EVENT_KIND } from "./runtime-events";
 import type { SubmitResumeDecision, TurnRef } from "./submit";

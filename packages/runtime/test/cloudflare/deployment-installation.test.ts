@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, ManagedRuntime } from "effect";
 import { endpointMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
 import { openLive } from "@agent-os/core/live-edge";
-import { Ledger } from "@agent-os/runtime";
+import { Ledger } from "../../src/ledger";
 import {
   defineAgentBindings,
   defineAgentManifest,

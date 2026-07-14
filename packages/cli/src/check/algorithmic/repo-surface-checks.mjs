@@ -1,3 +1,9 @@
+import {
+  allApiIntentSections,
+  parseApiIntentSource,
+  publicApiIntentSections,
+} from "./public-api-intent.mjs";
+
 export const createRepoSurfaceChecks = ({
   fs,
   path,
@@ -16,20 +22,25 @@ export const createRepoSurfaceChecks = ({
   sourceTsdocModes,
   sourceTsdocRecordsForPackage,
   validateSourceTsdocRecords,
+  rootOwnerProofFailures,
 }) => {
-  const manifestEntries = (file, section) => {
-    const source = fs.readFileSync(file, "utf8");
-    const start = source.indexOf(`## ${section}`);
-    if (start === -1) return [];
-    const rest = source.slice(start + section.length + 3);
-    const next = rest.search(/^## /mu);
-    const body = next === -1 ? rest : rest.slice(0, next);
-    return [...body.matchAll(/`([^`:]+):([^`]+)`/gu)].map((match) => ({
-      name: match[0].slice(1, -1),
-      section,
-      line: source.slice(0, start + section.length + 3 + match.index).split("\n").length,
-    }));
+  const intentDocuments = new Map();
+  const intentDocument = (file) => {
+    if (!intentDocuments.has(file)) {
+      intentDocuments.set(
+        file,
+        parseApiIntentSource({
+          source: fs.readFileSync(file, "utf8"),
+          sections: allApiIntentSections,
+          file: path.relative(repoRoot, file),
+        }),
+      );
+    }
+    return intentDocuments.get(file);
   };
+
+  const manifestEntries = (file, section) =>
+    intentDocument(file).entries.filter((entry) => entry.section === section);
 
   const manifestNames = (file, section) =>
     new Set(manifestEntries(file, section).map((entry) => entry.name));
@@ -58,28 +69,7 @@ export const createRepoSurfaceChecks = ({
   };
 
   const checkPublicApi = () => {
-    const failures = [];
-    const runtimeRoot = "packages/runtime/src/index.ts";
-    const runtimeRootSource = read(runtimeRoot);
-    const runtimeRootAst = ts.createSourceFile(
-      path.join(repoRoot, runtimeRoot),
-      runtimeRootSource,
-      ts.ScriptTarget.Latest,
-      true,
-    );
-    for (const statement of runtimeRootAst.statements) {
-      if (
-        ts.isExportDeclaration(statement) &&
-        (statement.exportClause === undefined || ts.isNamespaceExport(statement.exportClause))
-      ) {
-        const { line, character } = runtimeRootAst.getLineAndCharacterOfPosition(
-          statement.getStart(runtimeRootAst),
-        );
-        failures.push(
-          `${runtimeRoot}:${line + 1}:${character + 1}: runtime root barrel must use explicit named exports; export-star syntax is forbidden`,
-        );
-      }
-    }
+    const failures = rootOwnerProofFailures();
     for (const target of targetPackages()) {
       if (target.apiSource === undefined) {
         failures.push(
@@ -92,6 +82,7 @@ export const createRepoSurfaceChecks = ({
         failures.push(`missing public API intent source for ${target.name}: ${target.apiSource}`);
         continue;
       }
+      failures.push(...intentDocument(manifest).failures);
 
       const mode = apiSourceMode(target);
       if (sourceTsdocModes.has(mode)) {
@@ -105,11 +96,7 @@ export const createRepoSurfaceChecks = ({
         failures.push(`${target.name}: unsupported apiSourceMode ${mode}`);
       }
 
-      const publicSections = ["Public exports", "Experimental exports", "Deprecated exports"];
-      for (const duplicate of duplicateManifestEntries(manifest, [
-        ...publicSections,
-        "Internal-only exports",
-      ])) {
+      for (const duplicate of duplicateManifestEntries(manifest, allApiIntentSections)) {
         const refs = duplicate.occurrences
           .map((entry) => `${entry.section}:${entry.line}`)
           .join(", ");
@@ -119,7 +106,7 @@ export const createRepoSurfaceChecks = ({
       }
 
       const declaredPublic = new Set(
-        publicSections.flatMap((section) => [...manifestNames(manifest, section)]),
+        publicApiIntentSections.flatMap((section) => [...manifestNames(manifest, section)]),
       );
       const internal = manifestNames(manifest, "Internal-only exports");
       const actual = exportedNamesForPackage(repoRoot, target)

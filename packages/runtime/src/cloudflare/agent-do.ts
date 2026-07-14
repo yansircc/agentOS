@@ -59,16 +59,15 @@ import {
   UnsupportedScopeRef,
   UpstreamFailure,
 } from "@agent-os/core/errors";
+import type { AttachedStreamCancelResult, AttachedStreamStartSpec } from "../attached-stream";
 import type {
-  AttachedStreamCancelResult,
-  AttachedStreamStartSpec,
   AnyMaterializedProjectionDefinition,
   MaterializedProjectionGetSpec,
   MaterializedProjectionListSpec,
   MaterializedProjectionRebuildResult,
   MaterializedProjectionRow,
   MaterializedProjectionStatus,
-} from "@agent-os/runtime";
+} from "../projection";
 import type {
   AgentManifestProjection,
   AgentSubmitBindings,
@@ -80,28 +79,31 @@ import type {
   SubmitSpec,
   SubmitToolIntent,
 } from "@agent-os/core/runtime-protocol";
+import { AttachedStreams } from "../attached-stream";
+import { Dispatch } from "../dispatch";
 import {
-  AttachedStreams,
-  Dispatch,
   DurableTriggerRegistry,
-  BoundaryEvents,
-  BoundaryCommitRejected,
-  commitBoundaryEvent,
-  Ledger,
-  MaterializedProjections,
-  Resources,
   TriggerPump,
-  recordLedgerPortEvent,
-  runWorkspaceJobEffect,
-  runtimeStorageOrJsonError,
-  validateBoundaryEventPayload,
-  type RunWorkspaceJobSpec,
-  type RuntimeStorageError,
   type TriggerCancelResult,
   type TriggerDrainResult,
   type TriggerDrainUntilQuietOptions,
   type TriggerDrainUntilQuietResult,
-} from "@agent-os/runtime";
+} from "../trigger";
+import { BoundaryEvents } from "../boundary-events";
+import {
+  BoundaryCommitRejected,
+  commitBoundaryEvent,
+  validateBoundaryEventPayload,
+} from "../boundary-commit";
+import {
+  Ledger,
+  recordLedgerPortEvent,
+  runtimeStorageOrJsonError,
+  type RuntimeStorageError,
+} from "../ledger";
+import { MaterializedProjections } from "../projection";
+import { Resources } from "../resources";
+import { runWorkspaceJobEffect, type RunWorkspaceJobSpec } from "../workspace-job";
 import { submitAgentEffect, type SubmitAgentProductLink } from "../submit-agent";
 import { encodeSubmitLiveFrame, recordLlmStreamFrame } from "../submit-live";
 import { createSseHttpWritableResponse } from "../sse-http";

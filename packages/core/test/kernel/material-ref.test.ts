@@ -2,7 +2,7 @@ import { Effect, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 
 import { makePreClaim } from "../../src/effect-claim";
-import type { Authored } from "../../src";
+import type { Authored } from "../../src/value-domain";
 import {
   bindingMaterialRef,
   credentialMaterialRef,

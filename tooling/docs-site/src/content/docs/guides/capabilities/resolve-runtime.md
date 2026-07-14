@@ -19,7 +19,7 @@ import {
   defineHost,
   resolveRuntime,
   workspaceOperations,
-} from "@agent-os/runtime";
+} from "@agent-os/runtime/capability";
 
 const host = defineHost({
   target: "custom-node@1",

@@ -45,12 +45,9 @@ through the ledger boundary.
 2. Define the carrier and settlement contract in the owning package.
 
    ```ts
-   import {
-     defineCarrier,
-     makeOperationRef,
-     type EffectClaim,
-     type SettlementContract,
-   } from "@yansirplus/core";
+   import { defineCarrier } from "@yansirplus/core/carrier";
+   import { makeOperationRef, type EffectClaim } from "@yansirplus/core/effect-claim";
+   import type { SettlementContract } from "@yansirplus/core/settlement-contract";
 
    const operationRef = (intent: ProductIntent) =>
      makeOperationRef("product_publish", [intent.productRef]);
@@ -116,7 +113,7 @@ through the ledger boundary.
 4. Commit evidence through runtime boundary ports.
 
    ```ts
-   import { BoundaryEvents, Ledger, WitnessPort } from "@yansirplus/runtime";
+   import { BoundaryEvents, Ledger } from "@yansirplus/runtime";
 
    const boundaryEvents = yield * BoundaryEvents;
    const ledger = yield * Ledger;

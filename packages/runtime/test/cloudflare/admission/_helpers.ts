@@ -16,7 +16,7 @@ import { EventBusLive } from "../../../src/cloudflare/ledger/event-bus";
 import { LedgerLive } from "../../../src/cloudflare/ledger/ledger";
 import { CloudflareMaterializedProjectionsLive } from "../../../src/cloudflare/materialized-projections";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
-import { MaterializedProjectionRegistry } from "@agent-os/runtime";
+import { MaterializedProjectionRegistry } from "../../../src/projection";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { RefResolverLive } from "@agent-os/core/ref-resolver";
 import { fixtureRefResolver } from "../../_material-resolver-fixture";

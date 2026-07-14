@@ -1,9 +1,9 @@
 import { ManagedRuntime, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import { backendProtocolEventIdentityKey } from "@agent-os/core/backend-protocol";
+import { Ledger } from "../../src/ledger";
+import { LedgerArchive } from "../../src/ledger-archive";
 import {
-  Ledger,
-  LedgerArchive,
   MaterializedProjections,
   defineProjection,
   projectionFail,
@@ -11,7 +11,7 @@ import {
   projectionMalformed,
   projectionPut,
   type AnyMaterializedProjectionDefinition,
-} from "@agent-os/runtime";
+} from "../../src/projection";
 import { projectionScopeKey, runtimeEventIdentity, truthIdentity } from "./identity";
 import { createTestInMemoryRuntimeBackend, installTestProjectionRegistry } from "./runtime-helper";
 

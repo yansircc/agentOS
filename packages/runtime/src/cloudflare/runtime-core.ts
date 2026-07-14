@@ -3,23 +3,26 @@ import { Effect, Layer } from "effect";
 import {
   AttachedStreamRegistry,
   AttachedStreams,
-  BoundaryEvents,
-  Dispatch,
+  makeAttachedStreamRegistry,
+} from "../attached-stream";
+import { BoundaryEvents } from "../boundary-events";
+import { Dispatch } from "../dispatch";
+import {
   DurableTriggerRegistry,
-  Ledger,
-  LedgerArchive,
+  TriggerPump,
+  makeDurableTriggerRegistry,
+  scheduledEventTrigger,
+} from "../trigger";
+import { Ledger, type RuntimeStorageError } from "../ledger";
+import { LedgerArchive } from "../ledger-archive";
+import {
   MaterializedProjectionRegistry,
   MaterializedProjections,
-  Quota,
-  Resources,
-  TriggerPump,
   makeProjectionRegistry,
-  makeDurableTriggerRegistry,
-  makeAttachedStreamRegistry,
-  scheduledEventTrigger,
   type AnyMaterializedProjectionDefinition,
-  type RuntimeStorageError,
-} from "@agent-os/runtime";
+} from "../projection";
+import { Quota } from "../quota-service";
+import { Resources } from "../resources";
 import { SqlError, TriggerFactoryError } from "@agent-os/core/errors";
 import {
   DispatchLive,

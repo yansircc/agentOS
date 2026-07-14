@@ -26,7 +26,11 @@ app projections: durable facts are the source, projections are derived.
 
    ```ts
    import { Schema } from "effect";
-   import { defineProjection, projectionIdentity, projectionPut } from "@agent-os/runtime";
+   import {
+     defineProjection,
+     projectionIdentity,
+     projectionPut,
+   } from "@agent-os/runtime/projection";
    ```
 
 2. Define the smallest projection over two event kinds:

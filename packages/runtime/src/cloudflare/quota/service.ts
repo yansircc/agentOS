@@ -15,7 +15,8 @@
  */
 
 import { Clock, Effect, Layer } from "effect";
-import { Quota, runtimeStorageOrJsonError } from "@agent-os/runtime";
+import { Quota } from "../../quota-service";
+import { runtimeStorageOrJsonError } from "../../ledger";
 import {
   decodeQuotaConsumedPayloadSync,
   QUOTA_EVENT_KIND,

@@ -12,7 +12,7 @@ import {
   type DurableObjectRpcClient,
 } from "@agent-os/runtime/cloudflare/do-rpc";
 import { defineAgentBindings, defineAgentManifest } from "@agent-os/core/runtime-protocol";
-import { triggerParseOk, type TriggerTx } from "@agent-os/runtime";
+import { triggerParseOk, type TriggerTx } from "@agent-os/runtime/trigger";
 import { Effect } from "effect";
 import { ToolError } from "@agent-os/core/errors";
 import {

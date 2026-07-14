@@ -4,7 +4,7 @@ import type {
   SafeLedgerEventProjector,
   SafeLedgerPayloadShape,
   SafeLedgerValue,
-} from "@agent-os/core";
+} from "@agent-os/core/safe-ledger-event";
 import { scopeRefKey } from "@agent-os/core/effect-claim";
 import type { Tool } from "@agent-os/core/tools";
 import { decodeRecordedLedgerEvent, type RecordedLedgerEvent } from "@agent-os/core/types";

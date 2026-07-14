@@ -3,10 +3,10 @@ import {
   AttachedStreamRegistry,
   AttachedStreams,
   makeAttachedStreamService,
-  runtimeStorageOrJsonError,
   runSynchronousAttachedStreamCommit,
   type AttachedStreamTx,
-} from "@agent-os/runtime";
+} from "../attached-stream";
+import { runtimeStorageOrJsonError } from "../ledger";
 import type { LedgerEvent } from "@agent-os/core/types";
 import { EventBus } from "./ledger/event-bus";
 import { selectLedgerEvents } from "./ledger/ledger";

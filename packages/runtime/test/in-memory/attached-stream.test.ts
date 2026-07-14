@@ -2,10 +2,10 @@ import { ManagedRuntime } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import {
   AttachedStreams,
-  Ledger,
   attachedStreamParseOk,
   type AttachedStreamHandler,
-} from "@agent-os/runtime";
+} from "../../src/attached-stream";
+import { Ledger } from "../../src/ledger";
 import {
   createTestInMemoryRuntimeBackend,
   type TestInMemoryRuntimeOptions,

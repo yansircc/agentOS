@@ -14,7 +14,7 @@ import { env } from "cloudflare:workers";
 import { runInDurableObject } from "cloudflare:test";
 import type {} from "@effect/vitest";
 
-import { Ledger } from "@agent-os/runtime";
+import { Ledger } from "../../../src/ledger";
 import { internalSubmitSpec } from "../../../src/internal-submit";
 import { submitAgentEffect } from "../../../src/submit-agent";
 import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";

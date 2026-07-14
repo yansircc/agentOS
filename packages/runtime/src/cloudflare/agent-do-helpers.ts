@@ -1,8 +1,9 @@
 import { Layer, ManagedRuntime, Option } from "effect";
 import type { EventHandler } from "@agent-os/core/types";
 import { InvalidResourceAmount, SqlError, TriggerFactoryError } from "@agent-os/core/errors";
-import type { AnyMaterializedProjectionDefinition, RuntimeStorageError } from "@agent-os/runtime";
-import { Admission } from "@agent-os/runtime";
+import type { AnyMaterializedProjectionDefinition } from "../projection";
+import type { RuntimeStorageError } from "../ledger";
+import { Admission } from "../admission";
 import { internalSubmitSpec, type InternalSubmitSpec } from "../internal-submit";
 import { LlmTransport } from "@agent-os/core/llm-protocol";
 import {

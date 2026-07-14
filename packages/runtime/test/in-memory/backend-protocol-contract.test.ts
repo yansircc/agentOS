@@ -12,7 +12,12 @@ import {
   type DispatchReceiver,
   type DispatchTargetAdapter,
 } from "@agent-os/core/backend-protocol";
-import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
+import { Dispatch } from "../../src/dispatch";
+import { Ledger } from "../../src/ledger";
+import { Quota } from "../../src/quota-service";
+import { Resources } from "../../src/resources";
+import { Scheduler } from "../../src/scheduler";
+import { TriggerPump } from "../../src/trigger";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import { createTestInMemoryBackendState, createTestInMemoryRuntimeBackend } from "./runtime-helper";
 import {

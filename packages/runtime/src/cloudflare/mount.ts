@@ -1,4 +1,4 @@
-import type { AnyMaterializedProjectionDefinition } from "@agent-os/runtime";
+import type { AnyMaterializedProjectionDefinition } from "../projection";
 import type {
   AgentBindings,
   AgentHandler,

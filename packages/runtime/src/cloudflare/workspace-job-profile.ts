@@ -1,5 +1,5 @@
 import type { LedgerEventRpc } from "@agent-os/core/types";
-import type { WorkspaceJobObservabilityProjection } from "@agent-os/runtime";
+import type { WorkspaceJobObservabilityProjection } from "../workspace-job-observability";
 import {
   createCloudflareLedgerAgUiHistorySseResponse,
   createCloudflareLedgerAgUiSseResponse,

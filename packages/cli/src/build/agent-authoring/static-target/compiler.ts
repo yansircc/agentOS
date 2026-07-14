@@ -8,12 +8,12 @@ import {
   type AgentToolBindingRef,
   type WorkspaceTopology,
 } from "@agent-os/core/runtime-protocol";
+import { WORKSPACE_OP_FACT_OWNER } from "@agent-os/runtime/workspace-op";
 import {
-  WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_TOOL_DEFAULT_DECLARATIONS,
   WORKSPACE_TOOL_EXPOSURE_PROFILES,
   type WorkspaceToolDefaultDeclaration,
-} from "@agent-os/runtime";
+} from "@agent-os/runtime/workspace-env";
 import { isWorkspaceToolName } from "../shared";
 import {
   PRODUCT_AGENT_KIND,

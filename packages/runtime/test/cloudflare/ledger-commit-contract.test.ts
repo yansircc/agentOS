@@ -8,7 +8,7 @@ import {
   projectionFail,
   projectionIdentity,
   projectionPut,
-} from "@agent-os/runtime";
+} from "../../src/projection";
 import {
   agentRunInterruptedEvent,
   agentRunResumedEvent,
@@ -16,7 +16,7 @@ import {
   RUNTIME_FACT_OWNER,
   runtimeHistoryCompactedEvent,
 } from "@agent-os/core/runtime-protocol";
-import type { AnyMaterializedProjectionDefinition, ProjectionRegistry } from "@agent-os/runtime";
+import type { AnyMaterializedProjectionDefinition, ProjectionRegistry } from "../../src/projection";
 import type { BackendProtocolTruthIdentity } from "@agent-os/core/backend-protocol";
 import type { EventBusService } from "../../src/cloudflare/ledger/event-bus";
 import {

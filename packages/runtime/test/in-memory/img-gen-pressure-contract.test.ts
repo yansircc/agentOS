@@ -5,7 +5,7 @@ import {
   runImgGenPressureContract,
   type ImgGenPressureDriver,
 } from "../../../core/test/backend-protocol/contract/img-gen-pressure-contract";
-import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "@agent-os/runtime";
+import { DurableTriggerRegistry, TriggerPump, type AnyDurableTrigger } from "../../src/trigger";
 import { runtimeEventIdentity, truthIdentity } from "./identity";
 
 const makeDriver = (triggers: ReadonlyArray<AnyDurableTrigger>): ImgGenPressureDriver => {

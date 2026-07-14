@@ -1,7 +1,12 @@
 import type { EventHandler, LedgerEvent } from "@agent-os/core/types";
 import { ManagedRuntime } from "effect";
 import { bindingMaterialRef, materialRefKey } from "@agent-os/core/material-ref";
-import { Dispatch, Ledger, Quota, Resources, Scheduler, TriggerPump } from "@agent-os/runtime";
+import { Dispatch } from "../../src/dispatch";
+import { Ledger } from "../../src/ledger";
+import { Quota } from "../../src/quota-service";
+import { Resources } from "../../src/resources";
+import { Scheduler } from "../../src/scheduler";
+import { TriggerPump } from "../../src/trigger";
 import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import {
   DISPATCH_EVENT_KINDS,

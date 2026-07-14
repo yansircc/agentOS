@@ -10,16 +10,15 @@ import type { EventQueryOptions, LedgerEvent } from "@agent-os/core/types";
 import {
   DEFAULT_TRIGGER_ACQUIRE_DEADLINE_MS,
   DurableTriggerRegistry,
-  RuntimeStorageError,
   TriggerPump,
   drainTriggerPumpUntilQuiet,
-  runtimeStorageError,
   runSynchronousTriggerCommit,
   type AnyDurableTrigger,
   type TriggerCancelResult,
   type TriggerCancellation,
   type TriggerTx,
-} from "@agent-os/runtime";
+} from "../trigger";
+import { RuntimeStorageError, runtimeStorageError } from "../ledger";
 import { selectLedgerEvents } from "./ledger/ledger";
 import { EventBus } from "./ledger/event-bus";
 import {

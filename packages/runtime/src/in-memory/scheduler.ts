@@ -3,7 +3,9 @@ import {
   SCHEDULED_EVENT_TRIGGER_KIND,
   type BackendProtocolTruthIdentity,
 } from "@agent-os/core/backend-protocol";
-import { DurableTriggerRegistry, Scheduler, runtimeStorageOrJsonError } from "@agent-os/runtime";
+import { DurableTriggerRegistry } from "../trigger";
+import { Scheduler } from "../scheduler";
+import { runtimeStorageOrJsonError } from "../ledger";
 import { inMemoryRuntimeEventIdentity, type InMemoryBackendState } from "./state";
 
 export const InMemorySchedulerLive = (
