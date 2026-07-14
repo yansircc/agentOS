@@ -8,7 +8,7 @@ import type {
   ResourceReserveSpec,
 } from "@agent-os/core/types";
 import type { TelemetryFanoutDiagnostic, TraceContext } from "@agent-os/core/telemetry-protocol";
-import { Effect } from "effect";
+import { Cause, Effect, Exit } from "effect";
 import {
   BACKEND_CONFORMANCE_LAWS,
   BACKEND_CONFORMANCE_LAW_ID,
@@ -1466,9 +1466,6 @@ const createDispatchReceiveConcurrencyLaw = (
   return executions;
 };
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
-
 export const createBackendConformanceLaws = (
   makeDriver: RuntimeBackendContractDriverFactory,
   options: RuntimeBackendContractSuiteOptions,
@@ -1507,34 +1504,41 @@ export const registerBackendConformanceSuite = (
   });
 };
 
-export const runBackendConformance = async (
+const backendConformanceFailureMessage = (cause: Cause.Cause<never>): string =>
+  Cause.prettyErrors(cause)[0]?.message ?? Cause.pretty(cause);
+
+const runBackendConformanceLaw = (
+  execution: BackendConformanceLawExecution,
+): Effect.Effect<BackendConformanceLawResult> =>
+  Effect.exit(Effect.suspend(execution.effect)).pipe(
+    Effect.map((exit): BackendConformanceLawResult =>
+      Exit.isSuccess(exit)
+        ? { lawId: execution.lawId, status: "passed", issues: [] }
+        : {
+            lawId: execution.lawId,
+            status: "failed",
+            issues: [{ code: "law.failed", message: backendConformanceFailureMessage(exit.cause) }],
+          },
+    ),
+  );
+
+export const runBackendConformance = (
   backendId: string,
   makeDriver: RuntimeBackendContractDriverFactory,
   options: RuntimeBackendContractSuiteOptions,
-): Promise<BackendConformanceReport> => {
-  const results: BackendConformanceLawResult[] = [];
-  for (const execution of createBackendConformanceLaws(makeDriver, options)) {
-    try {
-      await Effect.runPromise(execution.effect());
-      results.push({ lawId: execution.lawId, status: "passed", issues: [] });
-    } catch (error) {
-      results.push({
-        lawId: execution.lawId,
-        status: "failed",
-        issues: [{ code: "law.failed", message: errorMessage(error) }],
-      });
-    }
-  }
-  const report: BackendConformanceReport = {
-    protocolVersion: BACKEND_CONFORMANCE_PROTOCOL_VERSION,
-    backendId,
-    capabilities: BACKEND_CONFORMANCE_REQUIRED_CAPABILITIES,
-    results,
-    ok: results.every((result) => result.status === "passed"),
-  };
-  const validation = validateBackendConformanceReport(report);
-  if (!validation.ok) {
-    throw new Error(`invalid backend conformance report: ${validation.issues.join(", ")}`);
-  }
-  return validation.report;
-};
+): Effect.Effect<BackendConformanceReport> =>
+  Effect.forEach(createBackendConformanceLaws(makeDriver, options), runBackendConformanceLaw).pipe(
+    Effect.flatMap((results) => {
+      const report: BackendConformanceReport = {
+        protocolVersion: BACKEND_CONFORMANCE_PROTOCOL_VERSION,
+        backendId,
+        capabilities: BACKEND_CONFORMANCE_REQUIRED_CAPABILITIES,
+        results,
+        ok: results.every((result) => result.status === "passed"),
+      };
+      const validation = validateBackendConformanceReport(report);
+      return validation.ok
+        ? Effect.succeed(validation.report)
+        : Effect.die(`invalid backend conformance report: ${validation.issues.join(", ")}`);
+    }),
+  );

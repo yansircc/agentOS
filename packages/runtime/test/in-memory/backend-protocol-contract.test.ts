@@ -247,23 +247,23 @@ it.effect(
   },
 );
 
-const expectBrokenLaw = async (
+const expectBrokenLaw = (
   backendId: string,
   mutate: (driver: RuntimeBackendContractDriver) => RuntimeBackendContractDriver,
   lawId: string,
-): Promise<void> => {
-  const report = await runBackendConformance(
-    backendId,
-    () => mutate(makeInMemoryContractDriver()),
-    { runtimeFactOwner: RUNTIME_FACT_OWNER },
+): Effect.Effect<void> =>
+  runBackendConformance(backendId, () => mutate(makeInMemoryContractDriver()), {
+    runtimeFactOwner: RUNTIME_FACT_OWNER,
+  }).pipe(
+    Effect.map((report) => {
+      expect(report.ok).toBe(false);
+      expect(report.results.find((result) => result.lawId === lawId)?.status).toBe("failed");
+    }),
   );
-  expect(report.ok).toBe(false);
-  expect(report.results.find((result) => result.lawId === lawId)?.status).toBe("failed");
-};
 
 describe("backend conformance red cases", () => {
-  it("rejects a backend that lies about page limits", async () => {
-    await expectBrokenLaw(
+  it.effect("rejects a backend that lies about page limits", () =>
+    expectBrokenLaw(
       "broken-page-policy",
       (driver) => ({
         ...driver,
@@ -273,11 +273,11 @@ describe("backend conformance red cases", () => {
             : driver.events(identity, options),
       }),
       BACKEND_CONFORMANCE_LAW_ID.LEDGER_READ_PREFIX,
-    );
-  });
+    ),
+  );
 
-  it("rejects a backend that exposes a partial batch after rejection", async () => {
-    await expectBrokenLaw(
+  it.effect("rejects a backend that exposes a partial batch after rejection", () =>
+    expectBrokenLaw(
       "broken-batch-atomicity",
       (driver) => ({
         ...driver,
@@ -290,11 +290,11 @@ describe("backend conformance red cases", () => {
         },
       }),
       BACKEND_CONFORMANCE_LAW_ID.LEDGER_BATCH_ATOMICITY,
-    );
-  });
+    ),
+  );
 
-  it("rejects an acknowledgement that is not readable", async () => {
-    await expectBrokenLaw(
+  it.effect("rejects an acknowledgement that is not readable", () =>
+    expectBrokenLaw(
       "broken-ack-readable",
       (driver) => ({
         ...driver,
@@ -304,11 +304,11 @@ describe("backend conformance red cases", () => {
             : driver.events(identity, options),
       }),
       BACKEND_CONFORMANCE_LAW_ID.LEDGER_ACK_READABLE,
-    );
-  });
+    ),
+  );
 
-  it("rejects non-linearized concurrent dispatch receives", async () => {
-    await expectBrokenLaw(
+  it.effect("rejects non-linearized concurrent dispatch receives", () =>
+    expectBrokenLaw(
       "broken-dispatch-linearization",
       (driver) => ({
         ...driver,
@@ -322,11 +322,11 @@ describe("backend conformance red cases", () => {
           ),
       }),
       BACKEND_CONFORMANCE_LAW_ID.DISPATCH_CONCURRENT_RECEIVE_LINEARIZATION,
-    );
-  });
+    ),
+  );
 
-  it("rejects non-serialized concurrent resource reservations", async () => {
-    await expectBrokenLaw(
+  it.effect("rejects non-serialized concurrent resource reservations", () =>
+    expectBrokenLaw(
       "broken-resource-serialization",
       (driver) => {
         let sharedReservation:
@@ -344,6 +344,6 @@ describe("backend conformance red cases", () => {
         };
       },
       BACKEND_CONFORMANCE_LAW_ID.RESOURCE_CONCURRENT_SERIALIZATION,
-    );
-  });
+    ),
+  );
 });
