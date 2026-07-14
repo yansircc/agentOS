@@ -92,7 +92,12 @@
         "runners": ["Effect.runPromise", "Effect.runPromiseExit"],
         "durableObject": {
           "className": "MaterializedProjectionTestDO",
-          "methods": ["archiveLedgerForTest", "evictArchivedLedgerForTest", "emitForFactOwner", "rebuildWithFailingProjection"]
+          "methods": [
+            "archiveLedgerForTest",
+            "evictArchivedLedgerForTest",
+            "emitForFactOwner",
+            "rebuildWithFailingProjection"
+          ]
         }
       }
     }

@@ -75,17 +75,21 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
+const formatterPrintWidth = 100;
+
 const stableJson = (value) =>
   `${JSON.stringify(value, null, 2).replace(
     /\[\n((?:\s+"(?:\\.|[^"\\])*",?\n)+)\s+\]/gu,
-    (match, body) => {
+    (match, body, offset, source) => {
       const items = body
         .trim()
         .split("\n")
         .map((line) => line.trim().replace(/,$/u, ""));
-      return items.every((item) => item.startsWith('"') && item.endsWith('"'))
-        ? `[${items.join(", ")}]`
-        : match;
+      if (!items.every((item) => item.startsWith('"') && item.endsWith('"'))) return match;
+      const compact = `[${items.join(", ")}]`;
+      const lineStart = source.lastIndexOf("\n", offset) + 1;
+      const column = offset - lineStart;
+      return column + compact.length <= formatterPrintWidth ? compact : match;
     },
   )}\n`;
 

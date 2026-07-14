@@ -113,6 +113,32 @@ void test("effect manifest generator projects package path and descriptor facts 
   }
 });
 
+void test("effect manifest generator keeps string arrays within formatter print width", () => {
+  const fixture = makeFixture([]);
+  try {
+    const sourcePath = path.join(fixture.root, "docs/effect-skill.json");
+    const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+    source.root.testGlobs = [
+      "**/first-extremely-long-runtime-contract.test.ts",
+      "**/second-extremely-long-runtime-contract.test.ts",
+      "**/third-extremely-long-runtime-contract.test.ts",
+    ];
+    fs.writeFileSync(sourcePath, JSON.stringify(source));
+
+    const result = runGenerator(fixture.root);
+    assert.equal(result.status, 0, result.stderr);
+    const rootText = fs.readFileSync(path.join(fixture.root, ".effect-skill.json"), "utf8");
+    const packageText = fs.readFileSync(
+      path.join(fixture.root, "packages/core/.effect-skill.json"),
+      "utf8",
+    );
+    assert.match(rootText, /"testGlobs": \[\n/u);
+    assert.match(packageText, /"shape": \["library"\]/u);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 void test("effect manifest generator rejects a root-authored package executable edge", () => {
   const fixture = makeFixture([]);
   try {
