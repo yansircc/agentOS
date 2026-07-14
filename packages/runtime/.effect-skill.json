@@ -1,5 +1,102 @@
 {
   "shape": ["library"],
+  "wranglerPath": "wrangler-cloudflare-test.jsonc",
+  "executableEdges": [
+    {
+      "path": "test/backend-conformance-registrar.ts",
+      "owner": "@agent-os/runtime/backend-conformance-registrar",
+      "reason": "shared Vitest backend-conformance registrar is the terminal Effect execution edge for framework registration across in-memory, Cloudflare, and Node conformance suites",
+      "execution": {
+        "lifecycle": "host-callback",
+        "runners": ["Effect.runPromise"],
+        "hosts": [
+          {
+            "module": "vite-plus/test",
+            "export": "it",
+            "callbackArgument": 1
+          }
+        ]
+      }
+    },
+    {
+      "path": "test/node/backend-protocol-contract.runtime.test.ts",
+      "owner": "@agent-os/runtime/node/backend-conformance-hooks",
+      "reason": "Vitest beforeAll and afterAll callbacks own Postgres harness startup and cleanup terminal execution",
+      "execution": {
+        "lifecycle": "host-callback",
+        "runners": ["Effect.runPromise"],
+        "hosts": [
+          {
+            "module": "vite-plus/test",
+            "export": "beforeAll",
+            "callbackArgument": 0
+          },
+          {
+            "module": "vite-plus/test",
+            "export": "afterAll",
+            "callbackArgument": 0
+          }
+        ]
+      }
+    },
+    {
+      "path": "src/local/index.ts",
+      "owner": "@agent-os/runtime/local",
+      "reason": "the public local package facade owns terminal execution while ordinary consumers receive only Promise and Response members",
+      "execution": {
+        "lifecycle": "package-facade",
+        "runners": ["Effect.runFork", "Effect.runPromise"],
+        "package": {
+          "name": "@agent-os/runtime",
+          "subpath": "./local",
+          "export": "lowerLocalAgentRuntime",
+          "members": [
+            {
+              "kind": "factory-local",
+              "name": "runCapabilityEffect"
+            },
+            {
+              "kind": "factory-local",
+              "name": "submitWithProductLink"
+            },
+            {
+              "kind": "factory-local",
+              "name": "resumeInputRequest"
+            },
+            {
+              "kind": "factory-local",
+              "name": "submitLive"
+            },
+            {
+              "kind": "factory-local",
+              "name": "decideInputRequest"
+            },
+            {
+              "kind": "returned",
+              "path": "commitScheduleFireDispatch"
+            },
+            {
+              "kind": "returned",
+              "path": "commitScheduleFireDispatchWithDelivery"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "test/cloudflare/test-worker.ts",
+      "owner": "@agent-os/runtime/cloudflare/materialized-projection-test-do",
+      "reason": "Wrangler main and Durable Object binding own the MaterializedProjectionTestDO terminal methods",
+      "execution": {
+        "lifecycle": "wrangler-do",
+        "runners": ["Effect.runPromise", "Effect.runPromiseExit"],
+        "durableObject": {
+          "className": "MaterializedProjectionTestDO",
+          "methods": ["archiveLedgerForTest", "evictArchivedLedgerForTest", "emitForFactOwner", "rebuildWithFailingProjection"]
+        }
+      }
+    }
+  ],
   "allowedAdapters": [
     {
       "path": "src/attached-stream-protocol.ts",
@@ -137,19 +234,13 @@
       "path": "src/local/index.ts",
       "owner": "@agent-os/runtime/local",
       "reason": "terminal local Node workspace runtime adapter owns Node filesystem and child_process workspace IO, symbolic material/env rejection, command timeout/error mapping, and the executable submit facade over lowerLocalAgentRuntime",
-      "rules": ["EFF020", "EFF025", "EFF400"]
+      "rules": ["EFF020", "EFF025"]
     },
     {
       "path": "src/testing/conformance-assert.ts",
       "owner": "@agent-os/runtime/backend-conformance-harness",
       "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",
       "rules": ["EFF001", "EFF003", "EFF004", "EFF024", "EFF025"]
-    },
-    {
-      "path": "src/testing/backend-conformance.ts",
-      "owner": "@agent-os/runtime/backend-conformance-runner",
-      "reason": "public executable conformance runner is the terminal Promise boundary that runs the same Effect law bodies used by framework registrars and returns a protocol report",
-      "rules": ["EFF400"]
     },
     {
       "path": "src/node/index.ts",
@@ -245,7 +336,7 @@
       "path": "test/cloudflare/test-worker.ts",
       "owner": "@agent-os/runtime/cloudflare/test-worker",
       "reason": "Cloudflare test Worker entry is the terminal HTTP and Effect execution adapter for worker-pool contract tests",
-      "rules": ["EFF400", "EFF402"]
+      "rules": ["EFF402"]
     },
     {
       "path": "test/cloudflare/backend-protocol-contract.test.ts",
@@ -256,8 +347,8 @@
     {
       "path": "test/cloudflare/backend-protocol-contract.runtime.test.ts",
       "owner": "@agent-os/runtime/cloudflare-tests",
-      "reason": "production Durable Object conformance suite uses the Cloudflare worker-pool registrar and owns terminal Effect law execution because @effect/vitest cannot host this worker runtime",
-      "rules": ["EFF200", "EFF400"]
+      "reason": "production Durable Object conformance suite imports the repository registrar because @effect/vitest cannot host this worker runtime",
+      "rules": ["EFF200"]
     },
     {
       "path": "test/cloudflare/workspace-host-helpers.test.ts",
