@@ -61,6 +61,7 @@
   "globalSurfaces": [
     {
       "patterns": [
+        ".node-version",
         "package.json",
         "pnpm-lock.yaml",
         "pnpm-workspace.yaml",

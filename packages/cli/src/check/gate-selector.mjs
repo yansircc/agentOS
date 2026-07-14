@@ -63,29 +63,48 @@ const extraEdges = (manifest, records) => {
   return edges;
 };
 
-const affectedGraph = (manifest, records) => {
-  const sourceEdges = packageSourceImportEdges(repoRoot, records);
-  const manifestEdges = packageManifestDependencyEdges(repoRoot, records);
-  const tsconfigEdges = tsconfigReferenceEdges(repoRoot, records);
-  const declaredExtraEdges = extraEdges(manifest, records);
-  const edges = [...sourceEdges, ...manifestEdges, ...tsconfigEdges, ...declaredExtraEdges];
+export const projectAffectedGraphFacts = ({
+  sourceEdges,
+  manifestEdges,
+  tsconfigEdges,
+  declaredExtraEdges,
+}) => {
+  const declaredEdges = [...manifestEdges, ...tsconfigEdges, ...declaredExtraEdges];
   const manifestEdgeKeys = new Set(manifestEdges.map(edgeKey));
   const dependencyDrift = sourceEdges
     .filter((edge) => !manifestEdgeKeys.has(edgeKey(edge)))
     .map((edge) => ({
+      kind: "dependency-drift",
       from: edge.from.name,
       to: edge.to.name,
       file: edge.file,
       specifier: edge.specifier,
       reason: "source import edge is not declared in package manifest dependencies",
     }));
-  const sourceEdgeKeys = new Set(sourceEdges.map(edgeKey));
-  const graphEdgeKeys = new Set(edges.map(edgeKey));
-  const fidelityFailures = [...sourceEdgeKeys]
-    .filter((key) => !graphEdgeKeys.has(key))
-    .map((key) => `affected graph is missing source import edge ${key}`);
+  const declaredEdgeKeys = new Set(declaredEdges.map(edgeKey));
+  const fidelityFailures = sourceEdges
+    .filter((edge) => !declaredEdgeKeys.has(edgeKey(edge)))
+    .map((edge) => ({
+      kind: "graph-fidelity-drift",
+      from: edge.from.name,
+      to: edge.to.name,
+      file: edge.file,
+      specifier: edge.specifier,
+      reason: "affected graph is missing a declared source import edge",
+    }));
+  const edges = [
+    ...new Map([...sourceEdges, ...declaredEdges].map((edge) => [edgeKey(edge), edge])).values(),
+  ];
   return { edges, sourceEdges, dependencyDrift, fidelityFailures };
 };
+
+const affectedGraph = (manifest, records) =>
+  projectAffectedGraphFacts({
+    sourceEdges: packageSourceImportEdges(repoRoot, records),
+    manifestEdges: packageManifestDependencyEdges(repoRoot, records),
+    tsconfigEdges: tsconfigReferenceEdges(repoRoot, records),
+    declaredExtraEdges: extraEdges(manifest, records),
+  });
 
 const owningPackage = (records, file) =>
   records
@@ -121,19 +140,52 @@ const proofClassCommand = (manifest, proofClass) => {
   return command;
 };
 
-const fullResult = (manifest, changedPaths, reason) => ({
-  mode: "full",
-  changedPaths,
-  proofClasses: [...(manifest.fullAffectedProofClasses ?? [])].sort(compare),
-  run: [...(manifest.fullAffectedProofClasses ?? [])].sort(compare).map((proofClass) => ({
-    proofClass,
-    command: proofClassCommand(manifest, proofClass),
-    reason,
-  })),
-  skip: [],
-  provenance: [{ kind: "full", reason }],
-  diagnostics: [],
-});
+const alwaysProofClasses = (manifest) =>
+  Object.entries(manifest.proofClasses ?? {})
+    .filter(([, proof]) => proof?.always === true)
+    .map(([proofClass]) => proofClass)
+    .sort(compare);
+
+const proofProjection = (manifest, proofReasons) => {
+  const proofClasses = [...proofReasons.keys()].sort(compare);
+  return {
+    proofClasses,
+    run: proofClasses.map((proofClass) => ({
+      proofClass,
+      command: proofClassCommand(manifest, proofClass),
+      reason: proofReasons.get(proofClass),
+    })),
+    skip: (manifest.expensiveProofClasses ?? [])
+      .filter((proofClass) => !proofReasons.has(proofClass))
+      .sort(compare)
+      .map((proofClass) => ({
+        proofClass,
+        reason: "no affected package or changed-path rule declares this proof",
+      })),
+  };
+};
+
+const alwaysProofReasons = (manifest) =>
+  new Map(
+    alwaysProofClasses(manifest).map((proofClass) => [
+      proofClass,
+      "gates.source.json declares always=true",
+    ]),
+  );
+
+const fullResult = (manifest, changedPaths, reason, diagnostics = []) => {
+  const proofReasons = alwaysProofReasons(manifest);
+  for (const proofClass of manifest.fullAffectedProofClasses ?? []) {
+    proofReasons.set(proofClass, reason);
+  }
+  return {
+    mode: "full",
+    changedPaths,
+    ...proofProjection(manifest, proofReasons),
+    provenance: [{ kind: "full", reason }],
+    diagnostics,
+  };
+};
 
 const defaultBase = () => {
   const detached = (() => {
@@ -167,6 +219,83 @@ const changedPaths = ({ base, head }) => {
   return [...paths].sort(compare);
 };
 
+export const deriveAffectedGateProjection = ({ manifest, records, changedPaths, graph }) => {
+  const changed = [...changedPaths].sort(compare);
+  for (const file of changed) {
+    for (const surface of manifest.globalSurfaces ?? []) {
+      if (matchesAny(file, surface.patterns ?? [])) {
+        return fullResult(manifest, changed, `${file}: ${surface.reason ?? "global surface"}`);
+      }
+    }
+  }
+
+  const graphDiagnostics = [...graph.dependencyDrift, ...graph.fidelityFailures];
+  if (graphDiagnostics.length > 0) {
+    const reason = graphDiagnostics
+      .map(
+        (diagnostic) =>
+          `${diagnostic.file}: ${diagnostic.reason} (${diagnostic.from}->${diagnostic.to})`,
+      )
+      .join("; ");
+    return fullResult(manifest, changed, reason, graphDiagnostics);
+  }
+
+  if (changed.length === 0) {
+    return {
+      mode: "affected",
+      changedPaths: [],
+      ...proofProjection(manifest, alwaysProofReasons(manifest)),
+      provenance: [],
+      diagnostics: [],
+    };
+  }
+
+  const owning = new Map();
+  const proofReasons = alwaysProofReasons(manifest);
+  for (const file of changed) {
+    for (const rule of manifest.changedPathProofRules ?? []) {
+      if (matchesAny(file, rule.patterns ?? [])) {
+        for (const proofClass of rule.proofClasses ?? []) {
+          proofReasons.set(proofClass, `${file}: ${rule.reason ?? "changed path rule"}`);
+        }
+      }
+    }
+    const owner = owningPackage(records, file);
+    if (owner === undefined) {
+      return fullResult(manifest, changed, `${file}: unknown path owner`);
+    }
+    owning.set(owner.name, owner);
+  }
+
+  const affectedNames = reverseClosure(records, graph.edges, owning.keys());
+  const affectedRecords = affectedNames
+    .map((name) => records.find((record) => record.name === name))
+    .filter(Boolean);
+  for (const record of affectedRecords) {
+    const proof = packageProof(manifest, record);
+    for (const proofClass of proof?.affectedProofClasses ?? []) {
+      proofReasons.set(proofClass, `${record.name}: affected package declares ${proofClass} proof`);
+    }
+  }
+
+  return {
+    mode: "affected",
+    changedPaths: changed,
+    owningPackages: [...owning.values()].map((record) => record.name).sort(compare),
+    affectedPackages: affectedNames,
+    ...proofProjection(manifest, proofReasons),
+    provenance: [
+      ...changed.map((file) => ({
+        kind: "changed-path",
+        file,
+        owner: owningPackage(records, file)?.name,
+      })),
+      ...affectedNames.map((name) => ({ kind: "affected-package", package: name })),
+    ],
+    diagnostics: [],
+  };
+};
+
 export const deriveAffectedGates = (options = {}) => {
   const manifest = loadGates();
   const records = workspacePackageRecords(repoRoot).filter((record) =>
@@ -190,95 +319,12 @@ export const deriveAffectedGates = (options = {}) => {
       );
     }
   }
-  if (changed.length === 0) {
-    return {
-      mode: "affected",
-      changedPaths: [],
-      proofClasses: [],
-      run: [],
-      skip: (manifest.expensiveProofClasses ?? []).map((proofClass) => ({
-        proofClass,
-        reason: "no changed paths",
-      })),
-      provenance: [],
-      diagnostics: [],
-    };
-  }
-
-  for (const file of changed) {
-    for (const surface of manifest.globalSurfaces ?? []) {
-      if (matchesAny(file, surface.patterns ?? [])) {
-        return fullResult(manifest, changed, `${file}: ${surface.reason ?? "global surface"}`);
-      }
-    }
-  }
-
-  const graph = affectedGraph(manifest, records);
-  if (graph.fidelityFailures.length > 0) {
-    return fullResult(manifest, changed, graph.fidelityFailures.join("; "));
-  }
-
-  const owning = new Map();
-  const directProofClasses = new Map();
-  for (const file of changed) {
-    for (const rule of manifest.changedPathProofRules ?? []) {
-      if (matchesAny(file, rule.patterns ?? [])) {
-        for (const proofClass of rule.proofClasses ?? []) {
-          directProofClasses.set(proofClass, `${file}: ${rule.reason ?? "changed path rule"}`);
-        }
-      }
-    }
-    const owner = owningPackage(records, file);
-    if (owner === undefined) {
-      return fullResult(manifest, changed, `${file}: unknown path owner`);
-    }
-    owning.set(owner.name, owner);
-  }
-
-  const affectedNames = reverseClosure(records, graph.edges, owning.keys());
-  const affectedRecords = affectedNames
-    .map((name) => records.find((record) => record.name === name))
-    .filter(Boolean);
-  const proofReasons = new Map(directProofClasses);
-  for (const record of affectedRecords) {
-    const proof = packageProof(manifest, record);
-    for (const proofClass of proof?.affectedProofClasses ?? []) {
-      proofReasons.set(proofClass, `${record.name}: affected package declares ${proofClass} proof`);
-    }
-  }
-
-  const proofClasses = [...proofReasons.keys()].sort(compare);
-  const run = proofClasses.map((proofClass) => ({
-    proofClass,
-    command: proofClassCommand(manifest, proofClass),
-    reason: proofReasons.get(proofClass),
-  }));
-  const skip = (manifest.expensiveProofClasses ?? [])
-    .filter((proofClass) => !proofReasons.has(proofClass))
-    .sort(compare)
-    .map((proofClass) => ({
-      proofClass,
-      reason: "no affected package or changed-path rule declares this proof",
-    }));
-
-  return {
-    mode: "affected",
+  return deriveAffectedGateProjection({
+    manifest,
+    records,
     changedPaths: changed,
-    owningPackages: [...owning.values()].map((record) => record.name).sort(compare),
-    affectedPackages: affectedNames,
-    proofClasses,
-    run,
-    skip,
-    provenance: [
-      ...changed.map((file) => ({
-        kind: "changed-path",
-        file,
-        owner: owningPackage(records, file)?.name,
-      })),
-      ...affectedNames.map((name) => ({ kind: "affected-package", package: name })),
-    ],
-    diagnostics: graph.dependencyDrift,
-  };
+    graph: affectedGraph(manifest, records),
+  });
 };
 
 export const printAffectedGates = (result, { json = false } = {}) => {
@@ -295,7 +341,7 @@ export const printAffectedGates = (result, { json = false } = {}) => {
   }
   for (const diagnostic of result.diagnostics ?? []) {
     console.log(
-      `diag  dependency-drift <- ${diagnostic.file}: ${diagnostic.from} imports ${diagnostic.specifier}`,
+      `diag  ${diagnostic.kind} <- ${diagnostic.file}: ${diagnostic.from} imports ${diagnostic.specifier}`,
     );
   }
 };

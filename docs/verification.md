@@ -29,6 +29,37 @@ Use `effect-skill-scan /Users/yansir/code/52/agentOS --strict --output raw-json
 --profile` only when you need the large raw scanner payload for profile/reference
 routing or debugging.
 
+## Toolchain Ownership
+
+`.node-version` is the exact Node runtime-version source for local setup and CI.
+Use a version manager that reads this file before installing dependencies. CI
+passes the same file to `actions/setup-node`; workflow literals, documentation,
+runner defaults, and `@types/node` are not runtime-version sources.
+
+`package.json#packageManager` is the only pnpm-version source. CI installs that
+declared version without repeating it in workflow configuration.
+
+## CI Policy
+
+Pull requests run the affected-gate projection for explicit base and head
+commits and execute every projected command:
+
+```sh
+pnpm run agentos check affected --base <base-sha> --head <head-sha> --run
+```
+
+The projection always includes proof classes declared with `always: true`.
+Global surfaces, unknown path owners, dependency drift, graph-fidelity drift,
+and Git comparison failures select the full affected-gate projection rather
+than bypassing the selector.
+
+Pushes to `main` and published releases do not use affected success as a
+substitute. They run:
+
+```sh
+pnpm run check:full
+```
+
 ## Release Gate
 
 ```sh
