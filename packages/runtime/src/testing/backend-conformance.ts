@@ -1511,14 +1511,17 @@ const runBackendConformanceLaw = (
   execution: BackendConformanceLawExecution,
 ): Effect.Effect<BackendConformanceLawResult> =>
   Effect.exit(Effect.suspend(execution.effect)).pipe(
-    Effect.map((exit): BackendConformanceLawResult =>
-      Exit.isSuccess(exit)
-        ? { lawId: execution.lawId, status: "passed", issues: [] }
-        : {
-            lawId: execution.lawId,
-            status: "failed",
-            issues: [{ code: "law.failed", message: backendConformanceFailureMessage(exit.cause) }],
-          },
+    Effect.map(
+      (exit): BackendConformanceLawResult =>
+        Exit.isSuccess(exit)
+          ? { lawId: execution.lawId, status: "passed", issues: [] }
+          : {
+              lawId: execution.lawId,
+              status: "failed",
+              issues: [
+                { code: "law.failed", message: backendConformanceFailureMessage(exit.cause) },
+              ],
+            },
     ),
   );
 

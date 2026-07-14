@@ -5,8 +5,7 @@ import { stripVTControlCharacters } from "node:util";
 import { runRuleAcceptance, validateRuleAcceptance } from "../src/check/manifest-rules.mjs";
 import { readValidatedProofRegistry, runRegisteredProof } from "../src/check/proof-runner.mjs";
 
-const semanticOutput = (result) =>
-  stripVTControlCharacters(`${result.stdout}${result.stderr}`);
+const semanticOutput = (result) => stripVTControlCharacters(`${result.stdout}${result.stderr}`);
 
 const validate = (rule) => {
   const failures = [];

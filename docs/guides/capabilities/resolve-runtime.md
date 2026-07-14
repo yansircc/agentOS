@@ -32,10 +32,7 @@ import {
   defineHost,
   workspaceOperations,
 } from "@agent-os/runtime/capability";
-import {
-  resolveRuntime,
-  type InMemoryRuntimeExecution,
-} from "@agent-os/runtime/in-memory";
+import { resolveRuntime, type InMemoryRuntimeExecution } from "@agent-os/runtime/in-memory";
 
 const host = defineHost({
   target: "custom-node@1",
