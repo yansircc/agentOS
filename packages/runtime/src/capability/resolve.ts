@@ -3,15 +3,12 @@
  * @public
  */
 
-import { Effect, Result, Schema } from "effect";
-import type { Layer } from "effect";
-import { runPromise as runEffectPromise } from "effect/Effect";
+import { Result, Schema } from "effect";
 import type { HostProfile, ResolvedHostFacts } from "./host";
 import type {
   CapabilityContract,
   CapabilityEventHandlerContext,
   CapabilityInstallation,
-  CapabilityRuntimeHandle,
 } from "./contract";
 import type {
   CapabilityPeerRequirement,
@@ -21,21 +18,10 @@ import type {
 import {
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
   RUNTIME_DIAGNOSTIC_KIND,
-  runtimeDiagnosticBoundaryContract,
   runtimeDiagnosticBoundaryModule,
   type RuntimePreflightPass,
   type PreflightDiagnosticSink,
 } from "../runtime-diagnostic-carrier";
-import {
-  createInMemoryRuntimeBackend,
-  defineResolvedRuntimeInstallGraph,
-  type InMemoryRuntimeLlmTransportLayer,
-  type InMemoryRuntimeBackend,
-  type ResolvedRuntimeInstallGraph,
-} from "../in-memory/runtime-backend";
-import { InMemoryLlmTransportLive, type InMemoryLlmTransportOptions } from "../in-memory/llm";
-import type { LlmTransport } from "@agent-os/core/llm-protocol";
-import type { RefResolver, RefResolverService } from "@agent-os/core/ref-resolver";
 import type { AgentBindings, AgentSubmitBindings } from "@agent-os/core/runtime-protocol";
 import { validateToolRegistry } from "@agent-os/core/tools";
 import {
@@ -44,10 +30,6 @@ import {
   type ExtensionDeclaration,
 } from "@agent-os/core/extensions";
 import type { InstalledCapabilityHandle } from "./install-context";
-import { commitBoundaryEvent, type BoundaryCommitIdentity } from "../boundary-commit";
-import { recordLedgerPortEvent, runtimeStorageOrJsonError } from "../ledger";
-import { inMemoryConversationTruthIdentity } from "../in-memory/state-helpers";
-import type { BoundaryContract } from "@agent-os/core/boundary-contract";
 import { createRuntimeDiagnosticApi } from "./diagnostics";
 import type { EventHandler } from "@agent-os/core/types";
 import type { AnyMaterializedProjectionDefinition } from "../projection";
@@ -71,39 +53,14 @@ export interface PreflightDiagnostic {
 }
 
 /**
- * Options for resolveRuntime
+ * Backend-neutral inputs for capability install graph resolution.
  */
-export interface ResolveRuntimeOptions {
+export interface ResolveRuntimeInstallGraphOptions {
   readonly config?: Readonly<Record<string, unknown>>;
   readonly secrets?: Readonly<Record<string, string>>;
   readonly identity: string;
   readonly diagnosticSink?: PreflightDiagnosticSink;
-  /**
-   * Test fixture transport. Real providers should be installed with
-   * `llmTransport` plus `refResolver`.
-   */
-  readonly llm?: InMemoryLlmTransportOptions;
-  readonly llmTransport?: Layer.Layer<LlmTransport, never, RefResolverService>;
-  readonly refResolver?: RefResolver;
 }
-
-/**
- * Successful resolve result
- */
-export interface ResolvedRuntime {
-  readonly layer: InMemoryRuntimeBackend["layer"];
-  readonly state: InMemoryRuntimeBackend["state"];
-  readonly installGraph: ResolvedRuntimeInstallGraph;
-  readonly bindings: AgentSubmitBindings;
-  readonly manifest: {
-    readonly capabilities: ReadonlyArray<string>;
-    readonly host: string;
-  };
-}
-
-export type ResolveRuntimeResult =
-  | { readonly ok: true; readonly resolved: ResolvedRuntime }
-  | { readonly ok: false; readonly diagnostics: ReadonlyArray<PreflightDiagnostic> };
 
 export interface ResolvedCapabilityEventHandlerFactory {
   readonly eventHandlers: (
@@ -163,13 +120,9 @@ const isResolvedHostFactsRecord = (value: unknown): value is ResolvedHostFacts =
 const promiseResult = <Value>(
   evaluate: () => Value | Promise<Value>,
 ): Promise<Result.Result<Value, unknown>> =>
-  runEffectPromise(
-    Effect.result(
-      Effect.tryPromise({
-        try: () => Promise.resolve(evaluate()),
-        catch: (cause) => cause,
-      }),
-    ),
+  new Promise<Value>((resolve) => resolve(evaluate())).then(
+    (value) => Result.succeed(value),
+    (cause) => Result.fail(cause),
   );
 
 const emptySubmitBindings = (): AgentSubmitBindings => ({
@@ -377,7 +330,7 @@ const isThenable = (value: unknown): value is PromiseLike<unknown> =>
 export const resolveRuntimeInstallGraph = (
   host: HostProfile,
   capabilities: ReadonlyArray<CapabilityContract>,
-  options: Omit<ResolveRuntimeOptions, "llm">,
+  options: ResolveRuntimeInstallGraphOptions,
 ): ResolveRuntimeInstallGraphResult => {
   const diagnostics: PreflightDiagnostic[] = [];
   const sink = options.diagnosticSink;
@@ -807,131 +760,6 @@ export const resolveRuntimeInstallGraph = (
         capabilities: sortedCaps.map((c) => c.capabilityId),
         host: host.target,
       },
-    },
-  };
-};
-
-/**
- * Execute all preflight passes and resolve an in-memory runtime.
- *
- * @agentosPrimitive primitive.runtime.resolveRuntime
- * @agentosInvariant invariant.resolve.single-assembly-point
- * @agentosDocs docs/guides/capabilities/resolve-runtime.md
- * @agentosTest packages/runtime/test/capability/resolve.test.ts
- * @public
- */
-export const resolveRuntime = async (
-  host: HostProfile,
-  capabilities: ReadonlyArray<CapabilityContract>,
-  options: ResolveRuntimeOptions,
-): Promise<ResolveRuntimeResult> => {
-  if (options.llm !== undefined && options.llmTransport !== undefined) {
-    return {
-      ok: false,
-      diagnostics: [
-        {
-          pass: "config",
-          reason:
-            "resolveRuntime accepts either test llm fixture options or llmTransport, not both",
-        },
-      ],
-    };
-  }
-  const graph = resolveRuntimeInstallGraph(host, capabilities, options);
-  if (!graph.ok) return graph;
-
-  const truthIdentity = inMemoryConversationTruthIdentity(options.identity);
-  let backend: InMemoryRuntimeBackend | undefined;
-
-  const commitBoundaryPayload = async (
-    owner: string,
-    contract: BoundaryContract,
-    event: string,
-    data: unknown,
-    authorityBinding: Parameters<typeof commitBoundaryEvent>[3],
-  ): Promise<{ readonly id: number }> => {
-    const runtimeBackend = backend;
-    if (runtimeBackend === undefined) {
-      throw new Error(`${owner} cannot commit before runtime backend exists`);
-    }
-    const committed = await runEffectPromise(
-      commitBoundaryEvent(
-        contract,
-        event,
-        data,
-        authorityBinding,
-        (identity: BoundaryCommitIdentity) =>
-          Effect.gen(function* () {
-            const events = yield* runtimeBackend.state
-              .commitProtocolEvents([
-                {
-                  kind: event,
-                  scopeRef: identity.scopeRef ?? truthIdentity.scopeRef,
-                  effectAuthorityRef:
-                    identity.effectAuthorityRef ?? truthIdentity.effectAuthorityRef,
-                  factOwnerRef: identity.factOwnerRef,
-                  payload: data,
-                },
-              ])
-              .pipe(Effect.mapError((cause) => runtimeStorageOrJsonError("boundary_event", cause)));
-            return yield* recordLedgerPortEvent("boundary_event", events[0]!);
-          }),
-      ),
-    );
-    return { id: committed.id };
-  };
-
-  const runtimeDiagnosticHandle: CapabilityRuntimeHandle = {
-    commit: ({ event, data }) =>
-      commitBoundaryPayload(
-        RUNTIME_DIAGNOSTIC_FACT_OWNER,
-        runtimeDiagnosticBoundaryContract,
-        event,
-        data,
-        undefined,
-      ),
-  };
-  const capabilityHandles = new Map<string, CapabilityRuntimeHandle>([
-    [RUNTIME_DIAGNOSTIC_FACT_OWNER, runtimeDiagnosticHandle],
-  ]);
-  for (const cap of capabilities) {
-    capabilityHandles.set(cap.capabilityId, {
-      commit: ({ event, data, authorityBinding }) =>
-        commitBoundaryPayload(
-          cap.capabilityId,
-          cap.carrier.boundaryContract,
-          event,
-          data,
-          authorityBinding,
-        ),
-    });
-  }
-
-  const llmTransport: InMemoryRuntimeLlmTransportLayer =
-    options.llmTransport ?? InMemoryLlmTransportLive(options.llm ?? {});
-
-  const installGraph = defineResolvedRuntimeInstallGraph({
-    identity: truthIdentity,
-    projections: graph.resolved.projections,
-    triggers: graph.resolved.triggers,
-    handlers: graph.resolved.handlers({ capabilities: capabilityHandles }),
-    llmTransport,
-    refResolver: options.refResolver,
-    graphStatus: {
-      handlers: graph.resolved.graphStatus.handlers.values(),
-      projections: graph.resolved.graphStatus.projections.values(),
-    },
-  });
-  backend = createInMemoryRuntimeBackend(installGraph);
-
-  return {
-    ok: true,
-    resolved: {
-      layer: backend.layer,
-      state: backend.state,
-      installGraph,
-      bindings: graph.resolved.bindings,
-      manifest: graph.resolved.manifest,
     },
   };
 };

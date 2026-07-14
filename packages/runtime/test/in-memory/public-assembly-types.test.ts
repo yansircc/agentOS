@@ -1,10 +1,13 @@
 import { describe, expect, it } from "@effect/vitest";
 import { createLocalAgentRuntime } from "../../src/local/index";
-import { createInMemoryRuntimeBackend } from "../../src/in-memory";
+import { createInMemoryRuntimeBackend, resolveRuntime } from "../../src/in-memory";
 import { truthIdentity } from "./identity";
 
 // @ts-expect-error public in-memory subpath must not export raw backend state construction
 import type { createInMemoryBackendState } from "../../src/in-memory";
+
+// @ts-expect-error backend-specific assembly moved off the capability subpath
+import type { resolveRuntime as capabilityResolveRuntime } from "../../src/capability";
 
 // @ts-expect-error public local subpath must not expose a second workspace-op provider path
 import type { installLocalWorkspaceOperationProvider } from "../../src/local/index";
@@ -12,6 +15,7 @@ import type { installLocalWorkspaceOperationProvider } from "../../src/local/ind
 describe("in-memory public assembly types", () => {
   it("keeps createInMemoryRuntimeBackend as a graph-only public boundary", () => {
     expect(typeof createInMemoryRuntimeBackend).toBe("function");
+    expect(typeof resolveRuntime).toBe("function");
   });
 });
 
@@ -60,8 +64,13 @@ const assertPublicAssemblyTypes = (): void => {
   });
 
   type _RawStateConstructor = typeof createInMemoryBackendState;
+  type _CapabilityResolveRuntime = typeof capabilityResolveRuntime;
   type _LocalWorkspaceOpProvider = typeof installLocalWorkspaceOperationProvider;
-  void (undefined as unknown as [_RawStateConstructor, _LocalWorkspaceOpProvider]);
+  void (undefined as unknown as [
+    _RawStateConstructor,
+    _CapabilityResolveRuntime,
+    _LocalWorkspaceOpProvider,
+  ]);
 };
 
 void assertPublicAssemblyTypes;

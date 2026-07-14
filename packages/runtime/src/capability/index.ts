@@ -26,13 +26,10 @@ export {
 } from "./workspace-operations";
 export {
   resolveRuntimeInstallGraph,
-  resolveRuntime,
   type ResolvedCapabilityInstallGraph,
   type ResolvedCapabilityEventHandlerFactory,
+  type ResolveRuntimeInstallGraphOptions,
   type ResolveRuntimeInstallGraphResult,
-  type ResolvedRuntime,
-  type ResolveRuntimeResult,
-  type ResolveRuntimeOptions,
   type PreflightDiagnostic,
 } from "./resolve";
 export {

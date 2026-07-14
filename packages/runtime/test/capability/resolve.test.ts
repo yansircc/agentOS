@@ -1,5 +1,5 @@
-import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer, Stream } from "effect";
+import { afterAll, describe, expect, it } from "@effect/vitest";
+import { Effect, Layer, ManagedRuntime, Stream } from "effect";
 import { Schema } from "effect";
 import { defineCarrier, event, none } from "@agent-os/core/carrier";
 import { eventNamespace } from "@agent-os/core/extensions";
@@ -8,7 +8,6 @@ import { defineTool, deterministicToolExecution } from "@agent-os/core/tools";
 import { LlmTransport, type LlmRoute } from "@agent-os/core/llm-protocol";
 import {
   WORKSPACE_OPERATION_HOST_FACT,
-  resolveRuntime,
   nodeHost,
   defineCapability,
   defineHost,
@@ -18,6 +17,10 @@ import {
   type WorkspaceOperationEnvResolverInput,
 } from "../../src/capability";
 import {
+  resolveRuntime as resolveInMemoryRuntime,
+  type InMemoryRuntimeExecution,
+} from "../../src/in-memory/resolve-runtime";
+import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
   workspaceOpCarrier,
@@ -26,6 +29,27 @@ import { RUNTIME_DIAGNOSTIC_KIND } from "../../src/runtime-diagnostic-carrier";
 import { inMemoryConversationTruthIdentity } from "../../src/in-memory/state-helpers";
 import type { AnyDurableTrigger } from "../../src/trigger";
 import type { AnyMaterializedProjectionDefinition } from "../../src/projection";
+
+const executionRuntime = ManagedRuntime.make(Layer.empty);
+let executionCalls = 0;
+const execution: InMemoryRuntimeExecution = {
+  runPromise: (effect) => {
+    executionCalls += 1;
+    return executionRuntime.runPromise(effect);
+  },
+};
+const resolveRuntime = (
+  ...args: Parameters<typeof resolveInMemoryRuntime> extends [
+    infer Host,
+    infer Capabilities,
+    infer Options,
+    InMemoryRuntimeExecution,
+  ]
+    ? [Host, Capabilities, Options]
+    : never
+) => resolveInMemoryRuntime(...args, execution);
+
+afterAll(() => executionRuntime.dispose());
 
 const testCarrier = (ownerId: string, prefix: string) =>
   defineCarrier({
@@ -668,6 +692,7 @@ describe("resolveRuntime", () => {
 
   it.effect("commits runtime diagnostic facts when resolved handlers fail", () =>
     Effect.gen(function* () {
+      const initialExecutionCalls = executionCalls;
       const failingCapability = defineCapability({
         capabilityId: workspaceOpCarrier.ownerId,
         carrier: workspaceOpCarrier,
@@ -683,7 +708,7 @@ describe("resolveRuntime", () => {
         }),
       });
 
-      const resolved = yield* Effect.promise(() =>
+      const resolved = yield* Effect.sync(() =>
         resolveRuntime(nodeHost, [failingCapability], {
           identity: "diagnostic-agent",
           llm: {},
@@ -719,6 +744,7 @@ describe("resolveRuntime", () => {
           }),
         }),
       ]);
+      expect(executionCalls).toBe(initialExecutionCalls + 1);
     }),
   );
 });

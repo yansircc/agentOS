@@ -6,11 +6,14 @@ import {
   defineCapability,
   defineHost,
   nodeHost,
-  resolveRuntime,
   workspaceOperations,
   type CapabilityContract,
   type WorkspaceOperationEnvResolverInput,
 } from "../src/capability";
+import {
+  resolveRuntime as resolveInMemoryRuntime,
+  type InMemoryRuntimeExecution,
+} from "../src/in-memory/resolve-runtime";
 import { projectInspectionSnapshot, type InspectionSnapshot } from "../src/inspection";
 import {
   WORKSPACE_OP_FACT_OWNER,
@@ -18,6 +21,23 @@ import {
   WORKSPACE_OP_PROJECTION_KIND,
 } from "../src/workspace-op-carrier";
 import type { AnyMaterializedProjectionDefinition } from "../src/projection";
+
+const unusedExecution: InMemoryRuntimeExecution = {
+  runPromise: () =>
+    new Promise((_resolve, reject) =>
+      reject(new TypeError("inspection tests do not execute capability runtime handles")),
+    ),
+};
+const resolveRuntime = (
+  ...args: Parameters<typeof resolveInMemoryRuntime> extends [
+    infer Host,
+    infer Capabilities,
+    infer Options,
+    InMemoryRuntimeExecution,
+  ]
+    ? [Host, Capabilities, Options]
+    : never
+) => resolveInMemoryRuntime(...args, unusedExecution);
 
 const testCarrier = (ownerId: string, prefix: string) =>
   defineCarrier({

@@ -20,3 +20,10 @@ export type {
   InMemoryRuntimeServices,
   ResolvedRuntimeInstallGraph,
 } from "./runtime-backend";
+export {
+  resolveRuntime,
+  type InMemoryRuntimeExecution,
+  type ResolvedRuntime,
+  type ResolveRuntimeOptions,
+  type ResolveRuntimeResult,
+} from "./resolve-runtime";

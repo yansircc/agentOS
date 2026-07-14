@@ -27,8 +27,8 @@ import type {
   CapabilityHostFactRequirement,
   HostProfile,
   HostProvidedFact,
-  ResolvedRuntime,
 } from "./capability";
+import type { ResolvedRuntime } from "./in-memory/resolve-runtime";
 
 export interface InspectionUnavailableSection {
   readonly status: "unavailable";
