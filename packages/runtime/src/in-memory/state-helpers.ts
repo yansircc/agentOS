@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { JsonStringifyError } from "@agent-os/core/errors";
 import type { EventQueryOptions, LedgerEvent, LedgerEventRpc } from "@agent-os/core/types";
 import {
@@ -14,24 +14,29 @@ import { RUNTIME_FACT_OWNER } from "@agent-os/core/runtime-protocol";
 import type { MaterializedProjectionRow } from "../projection";
 import type { InMemoryProjectionMeta } from "./state";
 
-export const canonicalSerializablePayload = (
+export const canonicalSerializablePayloadResult = (
   payload: unknown,
-): Effect.Effect<unknown, JsonStringifyError> =>
-  Effect.gen(function* () {
-    const serialized = yield* Effect.try({
+): Result.Result<unknown, JsonStringifyError> =>
+  Result.gen(function* () {
+    const serialized = yield* Result.try({
       try: () => JSON.stringify(payload),
       catch: (cause) => new JsonStringifyError({ cause }),
     });
     if (typeof serialized !== "string") {
-      return yield* Effect.fail(
+      return yield* Result.fail(
         new JsonStringifyError({ cause: "ledger event payload must be JSON serializable" }),
       );
     }
     return JSON.parse(serialized) as unknown;
   });
 
+export const canonicalSerializablePayload = (
+  payload: unknown,
+): Effect.Effect<unknown, JsonStringifyError> =>
+  Effect.suspend(() => Effect.fromResult(canonicalSerializablePayloadResult(payload)));
+
 export const canonicalSerializablePayloadSync = (payload: unknown): unknown =>
-  Effect.runSync(canonicalSerializablePayload(payload)); // eff-ignore EFF400 reason="in-memory transaction callbacks are synchronous and must observe the same canonical payload decoder"
+  Result.getOrThrow(canonicalSerializablePayloadResult(payload));
 
 export const canonicalLedgerEventSync = (event: LedgerEvent): LedgerEvent => ({
   ...event,
