@@ -21,6 +21,11 @@ import { catalog, packageImportsEffect, publishedRecords } from "./package-recor
 import { agentCatalogProvenance, allFiles } from "./staging-build.mjs";
 import { packageDepsFromTarballs, packInternal, tarballsByPackage } from "./pack-check.mjs";
 import {
+  materializeQuickstartFiles,
+  readQuickstartBlocks,
+  verifyMaterializedQuickstartFiles,
+} from "./quickstart-contract.mjs";
+import {
   consumerCheck as cliConsumerCheck,
   consumerInstallCommand,
   consumerStatus as cliConsumerStatus,
@@ -58,6 +63,326 @@ const runPackagedAgentosCli = (args, options = {}) =>
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+
+const consumerEnvironmentNames = [
+  "HOME",
+  "PATH",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "CI",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "NODE_EXTRA_CA_CERTS",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NPM_CONFIG_REGISTRY",
+];
+
+const consumerProcessEnv = (overrides) => ({
+  ...Object.fromEntries(
+    consumerEnvironmentNames.flatMap((name) =>
+      process.env[name] === undefined ? [] : [[name, process.env[name]]],
+    ),
+  ),
+  ...overrides,
+});
+
+const externalExecutablePath = () =>
+  (process.env.PATH ?? "")
+    .split(path.delimiter)
+    .filter((entry) => {
+      const relative = path.relative(repoRoot, path.resolve(entry));
+      return relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+    })
+    .join(path.delimiter);
+
+const executableOnPath = (name, executablePath) => {
+  const result = spawnSync("sh", ["-c", 'command -v "$1"', "agentos-which", name], {
+    env: consumerProcessEnv({ PATH: executablePath }),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) return undefined;
+  const executable = result.stdout?.trim();
+  return executable === undefined || executable.length === 0 ? undefined : executable;
+};
+
+const requiredExecutableOnPath = (name, executablePath) => {
+  const executable = executableOnPath(name, executablePath);
+  if (executable === undefined) fail("missing executable on PATH: " + name);
+  return executable;
+};
+
+const writePackedPnpmWrapper = (root) => {
+  const wrapperDir = path.join(root, "harness-bin");
+  const captureFile = path.join(root, "pnpm-invocations.jsonl");
+  const wrapper = path.join(wrapperDir, "pnpm");
+  fs.mkdirSync(wrapperDir, { recursive: true });
+  fs.writeFileSync(
+    wrapper,
+    [
+      "#!/usr/bin/env node",
+      'const { appendFileSync, existsSync, rmSync, writeFileSync } = require("node:fs");',
+      'const { spawnSync } = require("node:child_process");',
+      'const path = require("node:path");',
+      "const args = process.argv.slice(2);",
+      "const resolutions = JSON.parse(process.env.AGENTOS_PACKED_PACKAGE_RESOLUTIONS);",
+      "const installResolution = args[0] === 'add' || args[0] === 'install';",
+      "const workspacePath = path.join(process.cwd(), 'pnpm-workspace.yaml');",
+      "if (installResolution) {",
+      "  if (existsSync(workspacePath)) {",
+      "    throw new Error('packed install resolution collided with an authored workspace');",
+      "  }",
+      "  const overrides = resolutions.map(",
+      "    ([name, tarball]) => '  ' + JSON.stringify(name) + ': ' + JSON.stringify('file:' + tarball),",
+      "  );",
+      "  writeFileSync(",
+      "    workspacePath,",
+      "    ['packages:', '  - .', 'overrides:', ...overrides, ''].join('\\n'),",
+      "  );",
+      "}",
+      "const resolvedArgs = installResolution",
+      "  ? args.map((arg) => {",
+      "      const match = resolutions.find(",
+      "        ([name]) => arg === name || arg.startsWith(name + '@'),",
+      "      );",
+      "      return match === undefined ? arg : match[0] + '@file:' + match[1];",
+      "    })",
+      "  : args;",
+      "appendFileSync(",
+      "  process.env.AGENTOS_PNPM_CAPTURE,",
+      "  JSON.stringify({ args, resolvedArgs }) + '\\n',",
+      ");",
+      "let result;",
+      "try {",
+      "  result = spawnSync(process.env.AGENTOS_REAL_PNPM, resolvedArgs, {",
+      '    stdio: "inherit",',
+      "    env: {",
+      "      ...process.env,",
+      "      PATH: process.env.AGENTOS_REAL_PATH,",
+      "      pnpm_config_verify_deps_before_run: 'false',",
+      "    },",
+      "  });",
+      "} finally {",
+      "  if (installResolution) rmSync(workspacePath, { force: true });",
+      "}",
+      "if (result.error !== undefined) throw result.error;",
+      "process.exit(result.status ?? 1);",
+      "",
+    ].join("\n"),
+  );
+  fs.chmodSync(wrapper, 0o755);
+  return { wrapperDir, captureFile };
+};
+
+const readPnpmInvocations = (captureFile) => {
+  if (!fs.existsSync(captureFile)) return [];
+  const text = fs.readFileSync(captureFile, "utf8").trim();
+  return text.length === 0 ? [] : text.split("\n").map((line) => JSON.parse(line));
+};
+
+export const packedPnpmArgsFor = (args, resolutions) => {
+  if (args[0] !== "add" && args[0] !== "install") return [...args];
+  return args.map((arg) => {
+    const match = resolutions.find(([name]) => arg === name || arg.startsWith(`${name}@`));
+    return match === undefined ? arg : `${match[0]}@file:${match[1]}`;
+  });
+};
+
+const assertPackedResolutionBoundary = (commandResults, resolutions) => {
+  let expectedChangeCount = 0;
+  for (const invocation of commandResults.flatMap((result) => result.invocations)) {
+    const expected = packedPnpmArgsFor(invocation.args, resolutions);
+    if (JSON.stringify(invocation.resolvedArgs) !== JSON.stringify(expected)) {
+      fail("canonical quickstart changed pnpm argv outside packed install resolution");
+    }
+    expectedChangeCount += expected.filter((arg, index) => arg !== invocation.args[index]).length;
+  }
+  if (expectedChangeCount === 0) {
+    fail("canonical quickstart did not resolve documented packages from packed tarballs");
+  }
+};
+
+const assertPackedAgentosExecutable = ({ consumerRoot, commandResults, resolutions }) => {
+  const owners = resolutions.filter(([name]) => {
+    const manifestPath = path.join(
+      consumerRoot,
+      "node_modules",
+      ...name.split("/"),
+      "package.json",
+    );
+    if (!fs.existsSync(manifestPath)) return false;
+    const manifest = readJson(manifestPath);
+    return (
+      manifest.name === name &&
+      manifest.bin !== null &&
+      typeof manifest.bin === "object" &&
+      typeof manifest.bin.agentos === "string"
+    );
+  });
+  if (owners.length !== 1) {
+    fail("canonical quickstart requires one installed packed owner for the agentos executable");
+  }
+  if (!fs.existsSync(path.join(consumerRoot, "node_modules", ".bin", "agentos"))) {
+    fail("canonical quickstart did not install a consumer-local agentos executable");
+  }
+  const [ownerName, ownerTarball] = owners[0];
+  const ownerWasResolved = commandResults
+    .flatMap((result) => result.invocations)
+    .some(
+      (invocation) =>
+        (invocation.args[0] === "add" || invocation.args[0] === "install") &&
+        invocation.args.some(
+          (arg, index) =>
+            (arg === ownerName || arg.startsWith(`${ownerName}@`)) &&
+            invocation.resolvedArgs[index] === `${ownerName}@file:${ownerTarball}`,
+        ),
+    );
+  if (!ownerWasResolved) {
+    fail("canonical quickstart agentos executable was not installed from its packed tarball");
+  }
+};
+
+const runQuickstartCommands = ({ blocks, cwd, env, captureFile }) => {
+  const results = [];
+  const workspacePath = path.join(cwd, "pnpm-workspace.yaml");
+  for (const block of blocks) {
+    if (block.kind !== "command") continue;
+    if (fs.existsSync(workspacePath)) {
+      fail("packed install resolution leaked into a documented product command");
+    }
+    const before = readPnpmInvocations(captureFile).length;
+    const result = run("sh", ["-eu", "-c", block.body], {
+      cwd,
+      env,
+      capture: true,
+    });
+    if (fs.existsSync(workspacePath)) {
+      fail("packed install resolution survived its package-manager subprocess");
+    }
+    const invocations = readPnpmInvocations(captureFile).slice(before);
+    results.push({
+      id: block.id,
+      body: block.body,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      invocations,
+    });
+  }
+  return results;
+};
+
+const expectedFinalFrom = (invocations) => {
+  const invocation = invocations.findLast((candidate) => candidate.args.includes("--llm-response"));
+  if (invocation === undefined) {
+    fail("canonical quickstart terminal command must declare --llm-response");
+  }
+  const responseIndex = invocation.args.indexOf("--llm-response");
+  const expected = invocation.args[responseIndex + 1];
+  if (expected === undefined || expected.length === 0) {
+    fail("canonical quickstart --llm-response requires a value");
+  }
+  if (!invocation.args.includes("--json")) {
+    fail("canonical quickstart terminal command must expose ledger lifecycle JSON");
+  }
+  return expected;
+};
+
+const deliveredProjectionFrom = (stdout) => {
+  let value;
+  try {
+    value = JSON.parse(stdout.trim());
+  } catch (error) {
+    fail(
+      "canonical quickstart terminal command did not emit one JSON result: " +
+        (error instanceof Error ? error.message : String(error)),
+    );
+  }
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    value.ok !== true ||
+    value.status !== "delivered" ||
+    typeof value.final !== "string" ||
+    !Number.isInteger(value.runId) ||
+    value.runId < 1 ||
+    !Number.isInteger(value.eventCount) ||
+    value.eventCount < 1 ||
+    !Number.isInteger(value.tokensUsed) ||
+    value.tokensUsed < 0
+  ) {
+    fail("canonical quickstart did not return a delivered ledger lifecycle projection");
+  }
+  return value;
+};
+
+export const testCanonicalQuickstart = () => {
+  const harnessRoot = mkdtempFixture("agentos-canonical-quickstart-");
+  const consumerRoot = path.join(harnessRoot, "consumer");
+  try {
+    const blocks = readQuickstartBlocks();
+    const initialReceipts = materializeQuickstartFiles({ root: consumerRoot, blocks });
+    if (initialReceipts.length === 0) fail("canonical quickstart must materialize authored files");
+
+    const resolutions = [...tarballsByPackage().entries()];
+    const { wrapperDir, captureFile } = writePackedPnpmWrapper(harnessRoot);
+    const consumerPath = externalExecutablePath();
+    if (executableOnPath("agentos", consumerPath) !== undefined) {
+      fail("canonical quickstart external PATH must not provide an ambient agentos executable");
+    }
+    const commandResults = runQuickstartCommands({
+      blocks,
+      cwd: consumerRoot,
+      captureFile,
+      env: consumerProcessEnv({
+        PATH: wrapperDir + path.delimiter + consumerPath,
+        AGENTOS_PACKED_PACKAGE_RESOLUTIONS: JSON.stringify(resolutions),
+        AGENTOS_PNPM_CAPTURE: captureFile,
+        AGENTOS_REAL_PATH: consumerPath,
+        AGENTOS_REAL_PNPM: requiredExecutableOnPath("pnpm", consumerPath),
+      }),
+    });
+    const terminal = commandResults.at(-1);
+    if (terminal === undefined) fail("canonical quickstart must execute authored commands");
+    const projection = deliveredProjectionFrom(terminal.stdout);
+    const expectedFinal = expectedFinalFrom(terminal.invocations);
+    if (projection.final !== expectedFinal) {
+      fail("canonical quickstart final response differs from the documented LLM response");
+    }
+
+    assertPackedResolutionBoundary(commandResults, resolutions);
+    assertPackedAgentosExecutable({ consumerRoot, commandResults, resolutions });
+
+    const finalReceipts = verifyMaterializedQuickstartFiles({ root: consumerRoot, blocks });
+    if (JSON.stringify(finalReceipts) !== JSON.stringify(initialReceipts)) {
+      fail("canonical quickstart authored-file receipts drifted after execution");
+    }
+    console.log(
+      "verified canonical packed quickstart (" +
+        initialReceipts.length +
+        " authored files, " +
+        projection.eventCount +
+        " ledger events)",
+    );
+    return { files: finalReceipts, projection };
+  } finally {
+    fs.rmSync(harnessRoot, { recursive: true, force: true });
+  }
+};
 
 const runAgentosJson = (args, expectedStatus = 0, options = {}) => {
   const runner = options.runner ?? runAgentosCli;
@@ -2226,6 +2551,7 @@ export const assertConsumerOverlayStatus = () => {
 
 export const testInternalConsumer = () => {
   packInternal();
+  testCanonicalQuickstart();
   negativeContractTests();
   assertPeerFailure();
   assertConsumerOverlayStatus();

@@ -1,169 +1,120 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const contractId = "agentos-ask-quickstart-v1";
-const quickstartDocument = "docs/guides/quickstart-node.md";
-const expectedFilePaths = ["agent/instructions.md", "agent/agent.json"];
-const expectedCommandIds = ["install", "ask"];
-const expectedInstallCommand = [
-  "pnpm init",
-  "pnpm add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect",
-].join("\n");
-const expectedAskCommand =
-  'pnpm exec agentos ask "Say hello" --llm test --llm-response "Hello from agentOS"';
+
+export const quickstartDocument = "docs/guides/quickstart-node.md";
 
 const fail = (message) => {
   throw new Error(`quickstart contract: ${message}`);
 };
 
-const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+const singleAttribute = (rawAttributes, expectedName) => {
+  const entries = rawAttributes.trim().split(/\s+/u).filter(Boolean);
+  if (entries.length !== 1) {
+    fail(`blocks require exactly one ${expectedName} attribute`);
+  }
+  const separator = entries[0].indexOf("=");
+  if (separator <= 0 || separator === entries[0].length - 1) {
+    fail(`invalid block attribute ${entries[0]}`);
+  }
+  const name = entries[0].slice(0, separator);
+  const value = entries[0].slice(separator + 1);
+  if (name !== expectedName) {
+    fail(`expected ${expectedName} attribute, received ${name}`);
+  }
+  return value;
+};
 
-const attributesFrom = (text) =>
-  Object.fromEntries(
-    text
-      .trim()
-      .split(/\s+/u)
-      .filter(Boolean)
-      .map((entry) => {
-        const separator = entry.indexOf("=");
-        if (separator <= 0 || separator === entry.length - 1) {
-          fail(`invalid block attribute ${entry}`);
-        }
-        return [entry.slice(0, separator), entry.slice(separator + 1)];
-      }),
-  );
+const safeDocumentPath = (value) => {
+  if (
+    !/^[0-9A-Za-z._/-]+$/u.test(value) ||
+    value.includes("\\") ||
+    path.posix.isAbsolute(value) ||
+    path.win32.isAbsolute(value)
+  ) {
+    fail(`file block path must be a safe relative POSIX path: ${value}`);
+  }
+  const segments = value.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    fail(`file block path must be normalized: ${value}`);
+  }
+  return value;
+};
+
+const commandId = (value) => {
+  if (!/^[a-z][a-z0-9-]*$/u.test(value)) {
+    fail(`command id must match [a-z][a-z0-9-]*: ${value}`);
+  }
+  return value;
+};
 
 export const parseQuickstartBlocks = (markdown) => {
-  const files = new Map();
-  const commands = new Map();
-  const pattern = /^```agentos-(file|command)([^\n]*)\n([\s\S]*?)^```\s*$/gmu;
+  const blocks = [];
+  const filePaths = new Set();
+  const commandIds = new Set();
+  const markerCount = [...markdown.matchAll(/^```agentos-[^\r\n]*/gmu)].length;
+  const pattern = /^```agentos-(file|command)([^\r\n]*)\r?\n([\s\S]*?)^```[ \t]*$/gmu;
+
   for (const match of markdown.matchAll(pattern)) {
-    const [, kind, rawAttributes, rawBody] = match;
-    const attributes = attributesFrom(rawAttributes);
-    const body = rawBody.endsWith("\n") ? rawBody : `${rawBody}\n`;
+    const [, kind, rawAttributes, body] = match;
     if (kind === "file") {
-      const filePath = attributes.path;
-      if (filePath === undefined || Object.keys(attributes).length !== 1) {
-        fail("file blocks require exactly one path attribute");
-      }
-      if (path.isAbsolute(filePath) || filePath.split("/").includes("..")) {
-        fail(`file block escapes the consumer root: ${filePath}`);
-      }
-      if (files.has(filePath)) fail(`duplicate file block ${filePath}`);
-      files.set(filePath, body);
+      const filePath = safeDocumentPath(singleAttribute(rawAttributes, "path"));
+      if (filePaths.has(filePath)) fail(`duplicate file block ${filePath}`);
+      filePaths.add(filePath);
+      blocks.push({ kind, path: filePath, body });
       continue;
     }
-    const id = attributes.id;
-    if (id === undefined || Object.keys(attributes).length !== 1) {
-      fail("command blocks require exactly one id attribute");
-    }
-    if (commands.has(id)) fail(`duplicate command block ${id}`);
-    commands.set(id, body.trim());
+    const id = commandId(singleAttribute(rawAttributes, "id"));
+    if (commandIds.has(id)) fail(`duplicate command block ${id}`);
+    commandIds.add(id);
+    blocks.push({ kind, id, body });
   }
-  return { files, commands };
+
+  if (blocks.length !== markerCount) fail("document contains an invalid marked quickstart block");
+  if (blocks.length === 0) fail("document has no marked quickstart blocks");
+  return blocks;
 };
 
-const sameOrderedValues = (actual, expected) =>
-  actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+export const readQuickstartBlocks = ({ root = repoRoot } = {}) =>
+  parseQuickstartBlocks(fs.readFileSync(path.join(root, quickstartDocument), "utf8"));
 
-const assertExactBlockSet = (blocks) => {
-  if (!sameOrderedValues([...blocks.files.keys()], expectedFilePaths)) {
-    fail(`file blocks must be exactly ${expectedFilePaths.join(", ")}`);
+const materializedPath = (root, filePath) => {
+  const target = path.resolve(root, ...filePath.split("/"));
+  const relative = path.relative(path.resolve(root), target);
+  if (relative === "" || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    fail(`file block escapes the consumer root: ${filePath}`);
   }
-  if (!sameOrderedValues([...blocks.commands.keys()], expectedCommandIds)) {
-    fail(`command blocks must be exactly ${expectedCommandIds.join(", ")}`);
-  }
+  return target;
 };
 
-const assertCommandBoundary = (blocks) => {
-  if (blocks.commands.get("install") !== expectedInstallCommand) {
-    fail("install command must initialize pnpm and install the canonical package set");
-  }
-  if (blocks.commands.get("ask") !== expectedAskCommand) {
-    fail("ask command must be pnpm exec agentos ask with the canonical local test response");
-  }
-};
+const receiptFor = (filePath, bytes) => ({
+  path: filePath,
+  byteLength: bytes.byteLength,
+  sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+});
 
-const assertProductIntent = (blocks) => {
-  if (blocks.files.get("agent/instructions.md")?.trim().length === 0) {
-    fail("agent/instructions.md must be non-empty");
-  }
-  let agent;
-  try {
-    agent = JSON.parse(blocks.files.get("agent/agent.json"));
-  } catch {
-    fail("agent/agent.json must be valid JSON");
-  }
-  if (agent === null || typeof agent !== "object" || Array.isArray(agent)) {
-    fail("agent/agent.json must be an object");
-  }
-  if (!sameOrderedValues(Object.keys(agent).sort(), ["agentId", "kind"])) {
-    fail("agent/agent.json fields must be exactly agentId, kind");
-  }
-  if (typeof agent.agentId !== "string" || agent.agentId.length === 0) {
-    fail("agent/agent.json requires agentId");
-  }
-  if (agent.kind !== "workspace") fail("agent/agent.json kind must be workspace");
-};
+export const verifyMaterializedQuickstartFiles = ({ root, blocks }) =>
+  blocks
+    .filter((block) => block.kind === "file")
+    .map((block) => {
+      const expected = Buffer.from(block.body, "utf8");
+      const target = materializedPath(root, block.path);
+      if (!fs.existsSync(target)) fail(`materialized file is missing: ${block.path}`);
+      const actual = fs.readFileSync(target);
+      if (!actual.equals(expected)) fail(`materialized file byte readback mismatch: ${block.path}`);
+      return receiptFor(block.path, actual);
+    });
 
-const assertRecipeProjection = (root) => {
-  const recipes = readJson(path.join(root, "docs/agent/recipes.source.json"));
-  const recipe = recipes.recipes.find(
-    (candidate) => candidate.id === "recipe.natural-language-workspace-agent",
-  );
-  if (recipe?.tutorial !== quickstartDocument) {
-    fail(`natural-language recipe must route to ${quickstartDocument}`);
+export const materializeQuickstartFiles = ({ root, blocks }) => {
+  fs.mkdirSync(root, { recursive: true });
+  for (const block of blocks) {
+    if (block.kind !== "file") continue;
+    const target = materializedPath(root, block.path);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, Buffer.from(block.body, "utf8"));
   }
-  for (const evidence of [
-    "tooling/distribution/quickstart-contract.mjs",
-    "tooling/distribution/consumer.mjs",
-  ]) {
-    if (!recipe.evidence?.includes(evidence)) fail(`recipe evidence missing ${evidence}`);
-  }
-};
-
-const assertDistributionComposition = (root) => {
-  const dispatcher = fs.readFileSync(
-    path.join(root, "tooling/distribution/distribution.mjs"),
-    "utf8",
-  );
-  if (!dispatcher.includes("assertQuickstartContract")) {
-    fail("distribution test-consumer does not execute the quickstart contract");
-  }
-  if (!dispatcher.includes("testInternalConsumer")) {
-    fail("distribution test-consumer lost the packed consumer proof");
-  }
-  const quickstartIndex = dispatcher.indexOf("assertQuickstartContract();");
-  const consumerIndex = dispatcher.indexOf("testInternalConsumer();");
-  if (quickstartIndex < 0 || consumerIndex < 0 || quickstartIndex > consumerIndex) {
-    fail("quickstart contract must precede the packed consumer proof in one command");
-  }
-};
-
-export const verifyQuickstartContract = ({ root = repoRoot, markdown } = {}) => {
-  const tutorial = markdown ?? fs.readFileSync(path.join(root, quickstartDocument), "utf8");
-  const blocks = parseQuickstartBlocks(tutorial);
-
-  assertExactBlockSet(blocks);
-  assertProductIntent(blocks);
-  assertCommandBoundary(blocks);
-  assertRecipeProjection(root);
-  assertDistributionComposition(root);
-  if (!tutorial.includes("build-natural-language-workspace-agent.md")) {
-    fail("quickstart must link the generated-target authoring reference");
-  }
-  return {
-    contractId,
-    files: Array.from(blocks.files.keys()),
-    commands: Array.from(blocks.commands.keys()),
-  };
-};
-
-export const assertQuickstartContract = () => {
-  const result = verifyQuickstartContract();
-  console.log(
-    `verified canonical quickstart ${result.contractId} (${result.files.length} files, ${result.commands.length} commands)`,
-  );
+  return verifyMaterializedQuickstartFiles({ root, blocks });
 };

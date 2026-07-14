@@ -10,7 +10,9 @@ Create an empty directory, enter it, then run:
 
 ```agentos-command id=install
 pnpm init
-pnpm add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect
+pnpm add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect@4.0.0-beta.84 \
+  --allow-build=esbuild \
+  --allow-build=msgpackr-extract
 ```
 
 ## 2. Author The Agent
@@ -35,11 +37,12 @@ The scripted LLM keeps this first proof deterministic and free of provider
 credentials.
 
 ```agentos-command id=ask
-pnpm exec agentos ask "Say hello" --llm test --llm-response "Hello from agentOS"
+pnpm exec agentos ask "Say hello" --llm test --llm-response "Hello from agentOS" --json
 ```
 
-The command prints `Hello from agentOS`. Build output, raw command envelopes,
-correlation ids, and ledger projections are not part of first use.
+The delivered result contains `"final":"Hello from agentOS"`. Its `runId` and
+`eventCount` are read-only lifecycle evidence derived from the runtime ledger;
+first use does not require lifecycle configuration or raw command envelopes.
 
 For skills, channels, schedules, workflows, Cloudflare targets, provider
 material, generated clients, and ownership boundaries, continue with the
