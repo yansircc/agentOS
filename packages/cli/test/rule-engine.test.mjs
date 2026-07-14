@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import os from "node:os";
 import test from "node:test";
+import { stripVTControlCharacters } from "node:util";
 import { runRuleAcceptance, validateRuleAcceptance } from "../src/check/manifest-rules.mjs";
 import { readValidatedProofRegistry, runRegisteredProof } from "../src/check/proof-runner.mjs";
+
+const semanticOutput = (result) =>
+  stripVTControlCharacters(`${result.stdout}${result.stderr}`);
 
 const validate = (rule) => {
   const failures = [];
@@ -99,7 +103,7 @@ void test("direct guard executes package proof while structural traversal preser
   const direct = await runRuleAcceptance(rule, { registry, writeOutput: false });
   assert.equal(direct.executed, true);
   assert.equal(direct.result.status, 0);
-  assert.match(`${direct.result.stdout}${direct.result.stderr}`, /Tests\s+\d+ passed/u);
+  assert.match(semanticOutput(direct.result), /Tests\s+\d+ passed/u);
 });
 
 void test("validated proof registry is identity- and root-bound", () => {
