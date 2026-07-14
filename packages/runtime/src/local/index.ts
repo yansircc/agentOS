@@ -1107,23 +1107,25 @@ export const lowerLocalAgentRuntime = async (
   const resumeInputRequest = (
     spec: WorkspaceAgentResumeInputRequestCommandInput,
   ): Promise<SubmitResult> => Effect.runPromise(resumeLocalInputRequestProgram(facadeInput, spec));
+  const submitLive: LocalAgentRuntime["submitLive"] = (submitInput) => {
+    const prepared = prepareLocalAgentLive(facadeInput, submitInput);
+    if (!prepared.ok) return Promise.reject(prepared.error);
+    Effect.runFork(prepared.effect);
+    return Promise.resolve(prepared.response);
+  };
+  const decideInputRequest: LocalAgentRuntime["decideInputRequest"] = (spec) =>
+    spec.decision.kind === "approved"
+      ? resumeInputRequest({
+          ref: spec.ref,
+          decidedBy: spec.decision.decidedBy,
+          answer: spec.decision.answer,
+        })
+      : Effect.runPromise(closeLocalInputRequestProgram(facadeInput, spec));
   const runtime: LocalAgentRuntime = {
     submit: (submitInput) => submitWithProductLink(submitInput),
-    submitLive: (submitInput) => {
-      const prepared = prepareLocalAgentLive(facadeInput, submitInput);
-      if (!prepared.ok) return Promise.reject(prepared.error);
-      Effect.runFork(prepared.effect);
-      return Promise.resolve(prepared.response);
-    },
+    submitLive,
     resumeInputRequest,
-    decideInputRequest: (spec) =>
-      spec.decision.kind === "approved"
-        ? resumeInputRequest({
-            ref: spec.ref,
-            decidedBy: spec.decision.decidedBy,
-            answer: spec.decision.answer,
-          })
-        : Effect.runPromise(closeLocalInputRequestProgram(facadeInput, spec)),
+    decideInputRequest,
     inspectInputRequest: (spec) => inspectLocalInputRequest(facadeInput, spec),
     events: (opts = {}) => facadeInput.resolved.state.snapshot(facadeInput.truthIdentity, opts),
     diagnostics: () => facadeInput.resolved.state.telemetryDiagnostics(),
