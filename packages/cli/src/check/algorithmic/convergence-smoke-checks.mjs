@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "../../lib/typescript-native.mjs";
 
 const runtimeSurfaceClassValues = [
   "stable-contract",

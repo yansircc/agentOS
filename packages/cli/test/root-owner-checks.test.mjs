@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import ts from "typescript";
+import ts from "../src/lib/typescript-native.mjs";
 import {
   packageRootOwnerFailures,
   rootExportRecordsFromSource,

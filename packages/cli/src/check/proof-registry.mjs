@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import ts from "typescript";
+import ts from "../lib/typescript-native.mjs";
 
 const proofKinds = new Set(["algorithmic", "generatedProjection", "packageTest"]);
 const gateCompositionKind = "gateComposition";

@@ -399,7 +399,7 @@ const createOwnerCapabilityLookup = ({
     };
   };
 
-  return { failures: unique(failures), lookup };
+  return { failures: unique(failures), lookup, dispose: () => program.dispose() };
 };
 
 const entrypointAudiences = ({ packageName, surfacePackage, subpath, failures }) => {
@@ -711,6 +711,7 @@ export const packageRootOwnerFailures = ({
     }
   }
 
+  ownerCapabilities.dispose();
   return unique(failures);
 };
 

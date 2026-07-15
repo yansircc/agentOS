@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "./typescript-native.mjs";
 import { sourceTsdocRecordsForPackage } from "./public-api-model.mjs";
 
 const repoRoot = process.cwd();
