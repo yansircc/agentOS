@@ -1594,9 +1594,14 @@ export class AgentDurableObject<Env extends CloudflareAgentEnv, Runtime = AgentR
   }
 }
 
+type ConfiguredAgentDurableObjectConstructor<Env extends CloudflareAgentEnv> = new (
+  ctx: DurableObjectState,
+  env: Env,
+) => AgentDurableObject<Env, AgentRuntimeClient> & AgentRuntimeClient;
+
 export const createAgentDurableObject = <Env extends CloudflareAgentEnv>(
   config: AgentDurableObjectConfig<Env, AgentRuntimeClient>,
-) =>
+): ConfiguredAgentDurableObjectConstructor<Env> =>
   class ConfiguredAgentDurableObject
     extends AgentDurableObject<Env, AgentRuntimeClient>
     implements AgentRuntimeClient
