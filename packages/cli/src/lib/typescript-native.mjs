@@ -544,12 +544,18 @@ const checkerFacade = (checker, project) => {
 const compilerOptionsForJson = (options) =>
   Object.fromEntries(
     Object.entries(options ?? {})
-      .filter(([, value]) => value !== undefined)
+      .filter(
+        ([name, value]) =>
+          value !== undefined && name !== "configFilePath" && name !== "pathsBasePath",
+      )
       .map(([name, value]) => {
         if (name === "target" && typeof value === "number") return [name, ast.ScriptTarget[value]];
         if (name === "module" && typeof value === "number") return [name, ModuleKind[value]];
         if (name === "moduleResolution" && typeof value === "number") {
           return [name, value === 100 ? "Bundler" : value];
+        }
+        if (name === "lib" && Array.isArray(value)) {
+          return [name, value.map((entry) => entry.replace(/^lib\.|\.d\.ts$/gu, ""))];
         }
         return [name, value];
       }),
@@ -637,8 +643,13 @@ const createProgram = (input) => {
   const rootNames = Array.isArray(input) ? input : input.rootNames;
   const options = Array.isArray(input) ? {} : (input.options ?? {});
   const absoluteRoots = rootNames.map((file) => path.resolve(file));
+  const configDirectory =
+    options.pathsBasePath ??
+    (options.configFilePath === undefined
+      ? path.dirname(absoluteRoots[0])
+      : path.dirname(options.configFilePath));
   const configFile = path.join(
-    path.dirname(absoluteRoots[0]),
+    configDirectory,
     `.agentos-native-program-${operationSequence++}.json`,
   );
   overlay.set(
