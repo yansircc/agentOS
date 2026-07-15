@@ -145,8 +145,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "5ccd5afdec8936870f28574e4f2d8abc5782e9d67eef94840127f2bdeb619ad9",
-      "byteSize": 5052
+      "sha256": "87ecae2aaefddc53b65c74898673d546c9a0516f33c28285471347925ac3bcfe",
+      "byteSize": 5028
     },
     {
       "path": "packages/cli/package.json",
@@ -160,8 +160,8 @@
     },
     {
       "path": "packages/core/package.json",
-      "sha256": "41004840367171350b1587ce909526c7faf239a8c983e4ad0d3e332c614770eb",
-      "byteSize": 3808
+      "sha256": "11d9a0b9fce2a114710d66601e1dfebebcf0877b005cf2b9bc557e8c83fb341a",
+      "byteSize": 3796
     },
     {
       "path": "packages/evals/package.json",
@@ -170,8 +170,8 @@
     },
     {
       "path": "packages/runtime/package.json",
-      "sha256": "aa8c100685fcffe552bac2b8c8b092c74eda7e7f4a6fe3a193db2cf57c7c40ab",
-      "byteSize": 7040
+      "sha256": "039a62a7c0081c3fb29f204efa570447ba0b72586c38953e47d1b0314a4c209b",
+      "byteSize": 7028
     },
     {
       "path": "tooling/docs-site/package.json",
