@@ -164,10 +164,14 @@ export const defineProjection = <Identity, State>(
 
 export type ProjectionRegistry = ReadonlyMap<string, AnyMaterializedProjectionDefinition>;
 
-export class MaterializedProjectionRegistry extends Context.Service<
+export type MaterializedProjectionRegistry = ProjectionRegistry;
+
+export const MaterializedProjectionRegistry: Context.Service<
   MaterializedProjectionRegistry,
   ProjectionRegistry
->()("@agent-os/MaterializedProjectionRegistry") {}
+> = Context.Service<MaterializedProjectionRegistry, ProjectionRegistry>(
+  "@agent-os/MaterializedProjectionRegistry",
+);
 
 export class ProjectionRegistryError extends Data.TaggedError(
   "agent_os.projection_registry_error",
@@ -265,38 +269,42 @@ export interface MaterializedProjectionListSpec {
  * @agentosDocs docs/concepts/materialized-projections.md
  * @public
  */
-export class MaterializedProjections extends Context.Service<
+export interface MaterializedProjections {
+  readonly get: (
+    spec: MaterializedProjectionGetSpec,
+  ) => Effect.Effect<
+    MaterializedProjectionRow | null,
+    RuntimeStorageError | UnregisteredProjectionKind
+  >;
+  readonly list: (
+    spec: MaterializedProjectionListSpec,
+  ) => Effect.Effect<
+    ReadonlyArray<MaterializedProjectionRow>,
+    RuntimeStorageError | UnregisteredProjectionKind
+  >;
+  readonly status: (
+    spec: MaterializedProjectionEventIdentity & { readonly kind: string },
+  ) => Effect.Effect<
+    MaterializedProjectionStatus,
+    RuntimeStorageError | UnregisteredProjectionKind
+  >;
+  readonly rebuild: (
+    spec: MaterializedProjectionEventIdentity & { readonly kind: string },
+  ) => Effect.Effect<
+    MaterializedProjectionRebuildResult,
+    | RuntimeStorageError
+    | UnregisteredProjectionKind
+    | ProjectionApplicationError
+    | ProjectionReducerReturnedThenable
+  >;
+}
+
+export const MaterializedProjections: Context.Service<
   MaterializedProjections,
-  {
-    readonly get: (
-      spec: MaterializedProjectionGetSpec,
-    ) => Effect.Effect<
-      MaterializedProjectionRow | null,
-      RuntimeStorageError | UnregisteredProjectionKind
-    >;
-    readonly list: (
-      spec: MaterializedProjectionListSpec,
-    ) => Effect.Effect<
-      ReadonlyArray<MaterializedProjectionRow>,
-      RuntimeStorageError | UnregisteredProjectionKind
-    >;
-    readonly status: (
-      spec: MaterializedProjectionEventIdentity & { readonly kind: string },
-    ) => Effect.Effect<
-      MaterializedProjectionStatus,
-      RuntimeStorageError | UnregisteredProjectionKind
-    >;
-    readonly rebuild: (
-      spec: MaterializedProjectionEventIdentity & { readonly kind: string },
-    ) => Effect.Effect<
-      MaterializedProjectionRebuildResult,
-      | RuntimeStorageError
-      | UnregisteredProjectionKind
-      | ProjectionApplicationError
-      | ProjectionReducerReturnedThenable
-    >;
-  }
->()("@agent-os/MaterializedProjections") {}
+  MaterializedProjections
+> = Context.Service<MaterializedProjections, MaterializedProjections>(
+  "@agent-os/MaterializedProjections",
+);
 
 export interface ProjectionWaitSpec<
   Identity = unknown,

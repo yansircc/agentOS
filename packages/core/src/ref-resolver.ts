@@ -53,10 +53,10 @@ export class RefResolutionFailed extends Data.TaggedError("agent_os.ref_resoluti
   readonly actualVersion?: string;
 }> {}
 
-export class RefResolverService extends Context.Service<
-  RefResolverService,
-  ResolvedMaterialService
->()("@agent-os/RefResolver") {}
+export interface RefResolverService extends ResolvedMaterialService {}
+
+export const RefResolverService: Context.Service<RefResolverService, ResolvedMaterialService> =
+  Context.Service<RefResolverService, ResolvedMaterialService>("@agent-os/RefResolver");
 
 export interface ResolvedMaterialService {
   readonly material: (

@@ -62,6 +62,9 @@ export const makeWitnessPort = (
  *
  * @public
  */
-export class WitnessPort extends Context.Service<WitnessPort, WitnessPortService>()(
-  "@agent-os/WitnessPort",
-) {}
+export interface WitnessPort extends WitnessPortService {}
+
+export const WitnessPort: Context.Service<WitnessPort, WitnessPortService> = Context.Service<
+  WitnessPort,
+  WitnessPortService
+>("@agent-os/WitnessPort");

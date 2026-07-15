@@ -87,10 +87,14 @@ export type AnyAttachedStreamHandler = AttachedStreamHandler<any, any>;
 
 export type AttachedStreamRegistryMap = ReadonlyMap<string, AnyAttachedStreamHandler>;
 
-export class AttachedStreamRegistry extends Context.Service<
+export type AttachedStreamRegistry = AttachedStreamRegistryMap;
+
+export const AttachedStreamRegistry: Context.Service<
   AttachedStreamRegistry,
   AttachedStreamRegistryMap
->()("@agent-os/AttachedStreamRegistry") {}
+> = Context.Service<AttachedStreamRegistry, AttachedStreamRegistryMap>(
+  "@agent-os/AttachedStreamRegistry",
+);
 
 export interface MakeAttachedStreamRegistryOptions {
   readonly reservedKinds?: Iterable<string>;
@@ -216,9 +220,10 @@ export interface AttachedStreamsService {
   ) => Effect.Effect<AttachedStreamCancelResult, AttachedStreamServiceError>;
 }
 
-export class AttachedStreams extends Context.Service<AttachedStreams, AttachedStreamsService>()(
-  "@agent-os/AttachedStreams",
-) {}
+export interface AttachedStreams extends AttachedStreamsService {}
+
+export const AttachedStreams: Context.Service<AttachedStreams, AttachedStreamsService> =
+  Context.Service<AttachedStreams, AttachedStreamsService>("@agent-os/AttachedStreams");
 
 export interface AttachedStreamQueue<T> extends AsyncIterable<T> {
   readonly push: (value: T) => void;

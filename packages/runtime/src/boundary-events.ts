@@ -16,29 +16,31 @@ import type { RuntimeStorageError } from "./ledger";
  *
  * @public
  */
-export class BoundaryEvents extends Context.Service<
+export interface BoundaryEvents {
+  readonly commit: (
+    contract: BoundaryContract,
+    event: string,
+    payload: unknown,
+    authorityBinding: EffectAuthorityBinding | undefined,
+  ) => Effect.Effect<
+    RecordedLedgerEvent,
+    BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+  >;
+  readonly commitWithRuntimeEvents: (
+    contract: BoundaryContract,
+    event: string,
+    payload: unknown,
+    authorityBinding: EffectAuthorityBinding | undefined,
+    runtimeEvents: (
+      boundaryEventId: number,
+    ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
+  ) => Effect.Effect<
+    readonly [RecordedLedgerEvent, ...RecordedLedgerEvent[]],
+    BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
+  >;
+}
+
+export const BoundaryEvents: Context.Service<BoundaryEvents, BoundaryEvents> = Context.Service<
   BoundaryEvents,
-  {
-    readonly commit: (
-      contract: BoundaryContract,
-      event: string,
-      payload: unknown,
-      authorityBinding: EffectAuthorityBinding | undefined,
-    ) => Effect.Effect<
-      RecordedLedgerEvent,
-      BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
-    >;
-    readonly commitWithRuntimeEvents: (
-      contract: BoundaryContract,
-      event: string,
-      payload: unknown,
-      authorityBinding: EffectAuthorityBinding | undefined,
-      runtimeEvents: (
-        boundaryEventId: number,
-      ) => readonly [RuntimeEventCommitSpec, ...RuntimeEventCommitSpec[]],
-    ) => Effect.Effect<
-      readonly [RecordedLedgerEvent, ...RecordedLedgerEvent[]],
-      BoundaryCommitRejected | RuntimeStorageError | JsonStringifyError
-    >;
-  }
->()("@agent-os/BoundaryEvents") {}
+  BoundaryEvents
+>("@agent-os/BoundaryEvents");

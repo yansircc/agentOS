@@ -1,4 +1,5 @@
 import { workspaceCatalog } from "../../lib/workspace-manifest.mjs";
+import { contextServiceDeclarationFailures } from "./context-service-declaration.mjs";
 
 export const createDistributionChecks = ({
   fs,
@@ -895,6 +896,7 @@ export const createDistributionChecks = ({
     );
     const failures = [
       ...distributionArchitectureFailures(),
+      ...contextServiceDeclarationFailures(sourceByFile),
       ...rootLeakFindings.map(formatDistributionFinding),
       ...effectPeerFindings.map(formatDistributionFinding),
     ];

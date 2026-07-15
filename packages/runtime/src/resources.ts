@@ -17,46 +17,48 @@ import type { ResourceProjection } from "@agent-os/core/backend-protocol";
 import type { LedgerTruthIdentity } from "@agent-os/core/runtime-protocol";
 import type { RuntimeStorageError } from "./ledger";
 
-export class Resources extends Context.Service<
+export interface Resources {
+  readonly grant: (
+    identity: LedgerTruthIdentity,
+    spec: ResourceGrantSpec,
+  ) => Effect.Effect<
+    ResourceGrantResult,
+    RuntimeStorageError | JsonStringifyError | InvalidResourceAmount
+  >;
+  readonly reserve: (
+    identity: LedgerTruthIdentity,
+    spec: ResourceReserveSpec,
+  ) => Effect.Effect<
+    ResourceReserveResult,
+    RuntimeStorageError | JsonStringifyError | InvalidResourceAmount | ResourceInsufficient
+  >;
+  readonly consume: (
+    identity: LedgerTruthIdentity,
+    spec: ResourceReservationSpec,
+  ) => Effect.Effect<
+    void,
+    | RuntimeStorageError
+    | JsonStringifyError
+    | ResourceReservationNotFound
+    | ResourceReservationClosed
+  >;
+  readonly release: (
+    identity: LedgerTruthIdentity,
+    spec: ResourceReservationSpec,
+  ) => Effect.Effect<
+    void,
+    | RuntimeStorageError
+    | JsonStringifyError
+    | ResourceReservationNotFound
+    | ResourceReservationClosed
+  >;
+  readonly project: (
+    identity: LedgerTruthIdentity,
+    key: string,
+  ) => Effect.Effect<ResourceProjection, RuntimeStorageError>;
+}
+
+export const Resources: Context.Service<Resources, Resources> = Context.Service<
   Resources,
-  {
-    readonly grant: (
-      identity: LedgerTruthIdentity,
-      spec: ResourceGrantSpec,
-    ) => Effect.Effect<
-      ResourceGrantResult,
-      RuntimeStorageError | JsonStringifyError | InvalidResourceAmount
-    >;
-    readonly reserve: (
-      identity: LedgerTruthIdentity,
-      spec: ResourceReserveSpec,
-    ) => Effect.Effect<
-      ResourceReserveResult,
-      RuntimeStorageError | JsonStringifyError | InvalidResourceAmount | ResourceInsufficient
-    >;
-    readonly consume: (
-      identity: LedgerTruthIdentity,
-      spec: ResourceReservationSpec,
-    ) => Effect.Effect<
-      void,
-      | RuntimeStorageError
-      | JsonStringifyError
-      | ResourceReservationNotFound
-      | ResourceReservationClosed
-    >;
-    readonly release: (
-      identity: LedgerTruthIdentity,
-      spec: ResourceReservationSpec,
-    ) => Effect.Effect<
-      void,
-      | RuntimeStorageError
-      | JsonStringifyError
-      | ResourceReservationNotFound
-      | ResourceReservationClosed
-    >;
-    readonly project: (
-      identity: LedgerTruthIdentity,
-      key: string,
-    ) => Effect.Effect<ResourceProjection, RuntimeStorageError>;
-  }
->()("@agent-os/Resources") {}
+  Resources
+>("@agent-os/Resources");

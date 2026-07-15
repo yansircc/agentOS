@@ -56,18 +56,20 @@ export interface LlmTransportRouteDescriptor {
  * @agentosDocs docs/packages/core.md
  * @public
  */
-export class LlmTransport extends Context.Service<
+export interface LlmTransport {
+  readonly resolveRoute: (
+    route: LlmRoute,
+  ) => EffectType.Effect<LlmTransportRouteDescriptor, UpstreamFailure>;
+  readonly stream: (
+    request: LlmRequest,
+    options?: LlmCallOptions,
+  ) => StreamType.Stream<LlmStreamFrame, UpstreamFailure>;
+}
+
+export const LlmTransport: Context.Service<LlmTransport, LlmTransport> = Context.Service<
   LlmTransport,
-  {
-    readonly resolveRoute: (
-      route: LlmRoute,
-    ) => EffectType.Effect<LlmTransportRouteDescriptor, UpstreamFailure>;
-    readonly stream: (
-      request: LlmRequest,
-      options?: LlmCallOptions,
-    ) => StreamType.Stream<LlmStreamFrame, UpstreamFailure>;
-  }
->()("@agent-os/LlmTransport") {}
+  LlmTransport
+>("@agent-os/LlmTransport");
 
 export const llmRouteMaterialRefs = (route: LlmRoute): ReadonlyArray<MaterialRef> => [
   ...(typeof route.endpointRef === "string"

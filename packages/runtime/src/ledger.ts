@@ -101,23 +101,21 @@ export type LedgerPreparedCommit = (
  * @agentosDocs docs/concepts/durable-truth.md
  * @public
  */
-export class Ledger extends Context.Service<
-  Ledger,
-  {
-    readonly commit: (
-      events: ReadonlyArray<LedgerCommitEventSpec>,
-    ) => Effect.Effect<
-      ReadonlyArray<RecordedLedgerEvent>,
-      RuntimeStorageError | JsonStringifyError
-    >;
-    readonly commitPrepared: LedgerPreparedCommit;
-    readonly events: (
-      identity: LedgerTruthIdentity,
-      opts?: EventQueryOptions,
-    ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError>;
-    readonly streamSnapshot: (
-      identity: LedgerTruthIdentity,
-      opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
-    ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError>;
-  }
->()("@agent-os/Ledger") {}
+export interface Ledger {
+  readonly commit: (
+    events: ReadonlyArray<LedgerCommitEventSpec>,
+  ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError | JsonStringifyError>;
+  readonly commitPrepared: LedgerPreparedCommit;
+  readonly events: (
+    identity: LedgerTruthIdentity,
+    opts?: EventQueryOptions,
+  ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError>;
+  readonly streamSnapshot: (
+    identity: LedgerTruthIdentity,
+    opts?: Pick<EventQueryOptions, "afterId" | "kinds" | "factOwnerRefs">,
+  ) => Effect.Effect<ReadonlyArray<RecordedLedgerEvent>, RuntimeStorageError>;
+}
+
+export const Ledger: Context.Service<Ledger, Ledger> = Context.Service<Ledger, Ledger>(
+  "@agent-os/Ledger",
+);

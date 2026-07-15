@@ -150,9 +150,12 @@ export interface TelemetryService {
   readonly eventTree: () => EffectType.Effect<TelemetryEventTree>;
 }
 
-export class Telemetry extends Context.Service<Telemetry, TelemetryService>()(
-  "@agent-os/Telemetry",
-) {}
+export interface Telemetry extends TelemetryService {}
+
+export const Telemetry: Context.Service<Telemetry, TelemetryService> = Context.Service<
+  Telemetry,
+  TelemetryService
+>("@agent-os/Telemetry");
 
 const volatileTelemetryAttributeKeys = new Set([
   "agentos.backend.host_id",

@@ -101,10 +101,10 @@ export type AnyDurableTrigger = DurableTrigger<any, any, never>;
 
 export type TriggerRegistry = ReadonlyMap<string, AnyDurableTrigger>;
 
-export class DurableTriggerRegistry extends Context.Service<
-  DurableTriggerRegistry,
-  TriggerRegistry
->()("@agent-os/DurableTriggerRegistry") {}
+export type DurableTriggerRegistry = TriggerRegistry;
+
+export const DurableTriggerRegistry: Context.Service<DurableTriggerRegistry, TriggerRegistry> =
+  Context.Service<DurableTriggerRegistry, TriggerRegistry>("@agent-os/DurableTriggerRegistry");
 
 export const getDurableTrigger = (
   registry: TriggerRegistry,
@@ -251,38 +251,40 @@ export const drainTriggerPumpUntilQuiet = <E>(
     }),
   );
 
-export class TriggerPump extends Context.Service<
+export interface TriggerPump {
+  readonly drainDue: (
+    now: number,
+  ) => Effect.Effect<
+    TriggerDrainResult,
+    | RuntimeStorageError
+    | JsonStringifyError
+    | UnregisteredDurableTriggerKind
+    | DurableTriggerCommitReturnedThenable
+  >;
+  readonly drainUntilQuiet: (
+    now: number,
+    options?: TriggerDrainUntilQuietOptions,
+  ) => Effect.Effect<
+    TriggerDrainUntilQuietResult,
+    | RuntimeStorageError
+    | JsonStringifyError
+    | UnregisteredDurableTriggerKind
+    | DurableTriggerCommitReturnedThenable
+    | DurableTriggerDrainLimitExceeded
+  >;
+  readonly cancelTrigger: (
+    spec: TriggerCancelSpec,
+  ) => Effect.Effect<
+    TriggerCancelResult,
+    | RuntimeStorageError
+    | JsonStringifyError
+    | UnregisteredDurableTriggerKind
+    | DurableTriggerCommitReturnedThenable
+  >;
+  readonly stuckTriggers: (now: number) => Effect.Effect<TriggerStuckResult, RuntimeStorageError>;
+}
+
+export const TriggerPump: Context.Service<TriggerPump, TriggerPump> = Context.Service<
   TriggerPump,
-  {
-    readonly drainDue: (
-      now: number,
-    ) => Effect.Effect<
-      TriggerDrainResult,
-      | RuntimeStorageError
-      | JsonStringifyError
-      | UnregisteredDurableTriggerKind
-      | DurableTriggerCommitReturnedThenable
-    >;
-    readonly drainUntilQuiet: (
-      now: number,
-      options?: TriggerDrainUntilQuietOptions,
-    ) => Effect.Effect<
-      TriggerDrainUntilQuietResult,
-      | RuntimeStorageError
-      | JsonStringifyError
-      | UnregisteredDurableTriggerKind
-      | DurableTriggerCommitReturnedThenable
-      | DurableTriggerDrainLimitExceeded
-    >;
-    readonly cancelTrigger: (
-      spec: TriggerCancelSpec,
-    ) => Effect.Effect<
-      TriggerCancelResult,
-      | RuntimeStorageError
-      | JsonStringifyError
-      | UnregisteredDurableTriggerKind
-      | DurableTriggerCommitReturnedThenable
-    >;
-    readonly stuckTriggers: (now: number) => Effect.Effect<TriggerStuckResult, RuntimeStorageError>;
-  }
->()("@agent-os/TriggerPump") {}
+  TriggerPump
+>("@agent-os/TriggerPump");

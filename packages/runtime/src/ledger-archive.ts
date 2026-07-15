@@ -22,16 +22,18 @@ export interface StoredLedgerArchiveSegment {
   readonly bytes: Uint8Array;
 }
 
-export class LedgerArchive extends Context.Service<
+export interface LedgerArchive {
+  readonly archive: (spec: {
+    readonly identity: LedgerTruthIdentity;
+    readonly throughEventId: number;
+  }) => Promise<LedgerArchiveReceipt>;
+  readonly evict: (receipt: LedgerArchiveReceipt) => Promise<{ readonly evicted: number }>;
+}
+
+export const LedgerArchive: Context.Service<LedgerArchive, LedgerArchive> = Context.Service<
   LedgerArchive,
-  {
-    readonly archive: (spec: {
-      readonly identity: LedgerTruthIdentity;
-      readonly throughEventId: number;
-    }) => Promise<LedgerArchiveReceipt>;
-    readonly evict: (receipt: LedgerArchiveReceipt) => Promise<{ readonly evicted: number }>;
-  }
->()("@agent-os/LedgerArchive") {}
+  LedgerArchive
+>("@agent-os/LedgerArchive");
 
 const sameEvent = (left: LedgerEvent, right: LedgerEvent): boolean =>
   canonicalLedgerArchiveJson(left) === canonicalLedgerArchiveJson(right);

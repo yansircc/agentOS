@@ -14,32 +14,33 @@ import type { InvalidTraceContext } from "@agent-os/core/telemetry-protocol";
 import type { DispatchEnvelope, DispatchReceiverResult } from "@agent-os/core/backend-protocol";
 import type { RuntimeStorageError } from "./ledger";
 
-export class Dispatch extends Context.Service<
-  Dispatch,
-  {
-    readonly dispatchToScope: (
-      spec: DispatchToScopeSpec,
-    ) => Effect.Effect<
-      DispatchToScopeResult,
-      | RuntimeStorageError
-      | JsonStringifyError
-      | DispatchTargetNotFound
-      | InvalidTraceContext
-      | CapabilityRejected
-      | UnsupportedScopeRef
-      | UnregisteredDurableTriggerKind
-      | DurableTriggerCommitReturnedThenable
-    >;
-    readonly receive: (
-      envelope: DispatchEnvelope,
-    ) => Effect.Effect<
-      DispatchReceiverResult,
-      | RuntimeStorageError
-      | JsonStringifyError
-      | InvalidTraceContext
-      | CapabilityRejected
-      | ScopeMissingError
-      | DispatchScopeMismatch
-    >;
-  }
->()("@agent-os/Dispatch") {}
+export interface Dispatch {
+  readonly dispatchToScope: (
+    spec: DispatchToScopeSpec,
+  ) => Effect.Effect<
+    DispatchToScopeResult,
+    | RuntimeStorageError
+    | JsonStringifyError
+    | DispatchTargetNotFound
+    | InvalidTraceContext
+    | CapabilityRejected
+    | UnsupportedScopeRef
+    | UnregisteredDurableTriggerKind
+    | DurableTriggerCommitReturnedThenable
+  >;
+  readonly receive: (
+    envelope: DispatchEnvelope,
+  ) => Effect.Effect<
+    DispatchReceiverResult,
+    | RuntimeStorageError
+    | JsonStringifyError
+    | InvalidTraceContext
+    | CapabilityRejected
+    | ScopeMissingError
+    | DispatchScopeMismatch
+  >;
+}
+
+export const Dispatch: Context.Service<Dispatch, Dispatch> = Context.Service<Dispatch, Dispatch>(
+  "@agent-os/Dispatch",
+);
