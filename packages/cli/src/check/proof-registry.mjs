@@ -10,6 +10,8 @@ const entryFields = new Set(["ruleId", "owner", "invariantId", "source", "proof"
 const proofFields = new Set(["kind", "command", "positive", "redCases", "blindSpots"]);
 const liveSourceFields = new Set(["kind", "path", "selector", "entrypoint"]);
 const historicalSourceFields = new Set(["kind", "commit", "path", "supersededBy"]);
+const selectorResultBySource = new Map();
+const relativeImportsBySource = new Map();
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const nonEmpty = (value) => typeof value === "string" && value.trim().length > 0;
@@ -28,6 +30,8 @@ const unexpectedFieldFailures = ({ value, allowed, label }) =>
     : [];
 
 const astSelectorExists = ({ sourcePath, content, selector }) => {
+  const cacheKey = `${sourcePath}\0${selector.kind}\0${selector.value}\0${content}`;
+  if (selectorResultBySource.has(cacheKey)) return selectorResultBySource.get(cacheKey);
   const ast = ts.createSourceFile(sourcePath, content, ts.ScriptTarget.Latest, true);
   let found = false;
   const visit = (node) => {
@@ -63,6 +67,7 @@ const astSelectorExists = ({ sourcePath, content, selector }) => {
     ts.forEachChild(node, visit);
   };
   visit(ast);
+  selectorResultBySource.set(cacheKey, found);
   return found;
 };
 
@@ -92,6 +97,9 @@ const resolvedRelativeModule = (repoRoot, importerPath, specifier) => {
 
 const importedRelativeModules = ({ repoRoot, sourcePath }) => {
   const source = fs.readFileSync(path.join(repoRoot, sourcePath), "utf8");
+  const cacheKey = `${repoRoot}\0${sourcePath}\0${source}`;
+  const cached = relativeImportsBySource.get(cacheKey);
+  if (cached !== undefined) return cached;
   const ast = ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true);
   const imports = [];
   const visit = (node) => {
@@ -106,6 +114,7 @@ const importedRelativeModules = ({ repoRoot, sourcePath }) => {
     ts.forEachChild(node, visit);
   };
   visit(ast);
+  relativeImportsBySource.set(cacheKey, imports);
   return imports;
 };
 
