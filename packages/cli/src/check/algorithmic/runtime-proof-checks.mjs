@@ -1,5 +1,7 @@
 import os from "node:os";
 
+import { workspacePackagePaths } from "../../lib/workspace-manifest.mjs";
+
 const runtimePackageName = "@agent-os/runtime";
 const runtimeRootFile = "packages/runtime/src/index.ts";
 const nodeRuntimeRoot = "packages/runtime/src/node";
@@ -63,7 +65,33 @@ const runtimeCompilerOptions = ({ fs, path, ts, repoRoot }) => {
   return parsed.options;
 };
 
-const resolveRuntimeModule = ({ fs, path, ts, repoRoot, fromFile, specifier }) => {
+const runtimeWorkspaceRoots = ({ fs, path, repoRoot }) =>
+  workspacePackagePaths(repoRoot).map((logicalRoot) => ({
+    logicalRoot,
+    physicalRoot: fs.realpathSync(path.resolve(repoRoot, logicalRoot)),
+  }));
+
+const workspaceOwnedModulePath = ({ path, workspaceRoots, physicalFile }) => {
+  const logicalFiles = new Set(
+    workspaceRoots.flatMap((root) =>
+      pathIsInside(path, root.physicalRoot, physicalFile)
+        ? [
+            path
+              .join(root.logicalRoot, path.relative(root.physicalRoot, physicalFile))
+              .split(path.sep)
+              .join("/"),
+          ]
+        : [],
+    ),
+  );
+  if (logicalFiles.size === 0) return undefined;
+  if (logicalFiles.size === 1) return logicalFiles.values().next().value;
+  throw new Error(
+    `compiler-resolved workspace ownership is ambiguous: ${[...logicalFiles].sort().join(", ")}`,
+  );
+};
+
+const resolveRuntimeModule = ({ fs, path, ts, repoRoot, workspaceRoots, fromFile, specifier }) => {
   const host = {
     ...ts.sys,
     fileExists: (file) => fs.existsSync(file) && fs.statSync(file).isFile(),
@@ -80,10 +108,8 @@ const resolveRuntimeModule = ({ fs, path, ts, repoRoot, fromFile, specifier }) =
   if (resolved === undefined || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     return undefined;
   }
-  const physicalRoot = fs.realpathSync(repoRoot);
   const physicalFile = fs.realpathSync(resolved);
-  if (!pathIsInside(path, physicalRoot, physicalFile)) return undefined;
-  return path.relative(physicalRoot, physicalFile).split(path.sep).join("/");
+  return workspaceOwnedModulePath({ path, workspaceRoots, physicalFile });
 };
 
 const productionProfiles = (rootPackage) =>
@@ -155,6 +181,7 @@ const canonicalProfileEntrypoint = ({ fs, path, runtimePackageRoot, suffix }) =>
 
 export const backendProviderAxisFailures = ({ fs, path, ts, repoRoot, read, readJson, walk }) => {
   const failures = [];
+  const workspaceRoots = runtimeWorkspaceRoots({ fs, path, repoRoot });
   const rootPackage = readJson("package.json");
   const runtimePackage = readJson("packages/runtime/package.json");
   const runtimePackageRoot = path.resolve(repoRoot, "packages/runtime");
@@ -274,11 +301,19 @@ export const backendProviderAxisFailures = ({ fs, path, ts, repoRoot, read, read
         );
         continue;
       }
-      const resolved = resolveRuntimeModule({ fs, path, ts, repoRoot, fromFile: file, specifier });
+      const resolved = resolveRuntimeModule({
+        fs,
+        path,
+        ts,
+        repoRoot,
+        workspaceRoots,
+        fromFile: file,
+        specifier,
+      });
       if (resolved === undefined) continue;
       if (!isImplementationTypeScriptFile(resolved)) {
         failures.push(
-          `${file}: compiler-resolved repo-local dependency ${resolved} must be an implementation .ts file`,
+          `${file}: compiler-resolved workspace-owned dependency ${resolved} must be an implementation .ts file`,
         );
         continue;
       }
@@ -317,13 +352,14 @@ export const backendProviderAxisFailures = ({ fs, path, ts, repoRoot, read, read
           path,
           ts,
           repoRoot,
+          workspaceRoots,
           fromFile: file,
           specifier,
         });
         if (resolved === undefined) continue;
         if (!isImplementationTypeScriptFile(resolved)) {
           failures.push(
-            `${file}: compiler-resolved repo-local dependency ${resolved} must be an implementation .ts file`,
+            `${file}: compiler-resolved workspace-owned dependency ${resolved} must be an implementation .ts file`,
           );
           continue;
         }
@@ -555,6 +591,7 @@ export const backendNeutralProductionRuntimeProofFailures = ({
   readJson,
 }) => {
   const failures = [];
+  const workspaceRoots = runtimeWorkspaceRoots({ fs, path, repoRoot });
   const profiles = productionProfiles(readJson("package.json"));
   const labels = new Set();
   failures.push(...productionProfileIdentityFailures(profiles));
@@ -649,6 +686,7 @@ export const backendNeutralProductionRuntimeProofFailures = ({
             path,
             ts,
             repoRoot,
+            workspaceRoots,
             fromFile: profile.contractTest,
             specifier: registrarOrigin.moduleSpecifier,
           });
@@ -856,6 +894,7 @@ export const nodePostgresRuntimeImportBoundaryFailures = ({
   walk,
 }) => {
   const failures = [];
+  const workspaceRoots = runtimeWorkspaceRoots({ fs, path, repoRoot });
   for (const file of walk("packages/runtime/src").filter(
     (entry) =>
       /\.(?:ts|tsx)$/u.test(entry) &&
@@ -866,7 +905,15 @@ export const nodePostgresRuntimeImportBoundaryFailures = ({
     failures.push(...graph.failures);
     for (const specifier of graph.specifiers) {
       const selfImport = profileFamilyContains(specifier, `${runtimePackageName}/node`);
-      const resolved = resolveRuntimeModule({ fs, path, ts, repoRoot, fromFile: file, specifier });
+      const resolved = resolveRuntimeModule({
+        fs,
+        path,
+        ts,
+        repoRoot,
+        workspaceRoots,
+        fromFile: file,
+        specifier,
+      });
       if (
         selfImport ||
         resolved === nodeRuntimeRoot ||

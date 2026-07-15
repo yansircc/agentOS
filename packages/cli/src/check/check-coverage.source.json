@@ -2136,7 +2136,7 @@
           "dependencyMode": "linked"
         },
         "positive": {
-          "contract": "packages/runtime/src and every compiler-resolved repo-local dependency contain only implementation .ts files; each uniquely identified production backend profile owns a distinct explicit runtime subpath, exposes exactly the types and default conditions at its canonical entrypoint, admits only enumerable TypeScript module syntax, and neither the compiler-resolved static/preprocessed repo-local neutral graph nor a sibling profile graph can reach its implementation axis.",
+          "contract": "packages/runtime/src and every compiler-resolved workspace-owned dependency contain only implementation .ts files; workspace ownership comes from the canonical workspacePackagePaths projection of pnpm-workspace.yaml, while external dependencies terminate traversal regardless of physical repository location; each uniquely identified production backend profile owns a distinct explicit runtime subpath, exposes exactly the types and default conditions at its canonical entrypoint, admits only enumerable TypeScript module syntax, and neither the compiler-resolved static/preprocessed workspace-owned neutral graph nor a sibling profile graph can reach its implementation axis.",
           "expectedExitCode": 0
         },
         "redCases": [
@@ -2289,7 +2289,7 @@
             ],
             "expected": {
               "exitCode": 1,
-              "outputIncludes": "compiler-resolved repo-local dependency packages/runtime/test/phase-o-adapter.d.ts must be an implementation .ts file"
+              "outputIncludes": "compiler-resolved workspace-owned dependency packages/runtime/test/phase-o-adapter.d.ts must be an implementation .ts file"
             }
           },
           {

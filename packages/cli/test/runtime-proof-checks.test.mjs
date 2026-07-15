@@ -29,6 +29,8 @@ const withFixture = (run) => {
       .readdirSync(absolute, { withFileTypes: true })
       .flatMap((entry) => walk(path.join(relativePath, entry.name).split(path.sep).join("/")));
   };
+  write("pnpm-workspace.yaml", "packages:\n  - packages/*\n");
+  write("packages/runtime/package.json", JSON.stringify({ name: "@agent-os/runtime" }));
   write(
     "packages/runtime/tsconfig.json",
     JSON.stringify({
@@ -95,6 +97,7 @@ const seedProfiles = ({ write }) => {
       },
     }),
   );
+  write("packages/core/package.json", JSON.stringify({ name: "@agent-os/core" }));
   write("packages/runtime/src/index.ts", 'export { neutral } from "./neutral";\n');
   write("packages/runtime/src/neutral.ts", "export const neutral = true;\n");
   write(
@@ -149,6 +152,45 @@ void test("backend provider proof follows the neutral import graph transitively"
         (failure) =>
           failure.includes("imports production profile @agent-os/runtime/cloudflare/internal"),
       ),
+    );
+  }));
+
+void test("backend provider proof terminates at external dependencies inside repo node_modules", () =>
+  withFixture(({ root, write, read, readJson, walk }) => {
+    seedProfiles({ write });
+    write(
+      "node_modules/external-runtime-contract/package.json",
+      JSON.stringify({
+        name: "external-runtime-contract",
+        version: "1.0.0",
+        types: "./index.d.ts",
+      }),
+    );
+    write(
+      "node_modules/external-runtime-contract/index.d.ts",
+      "export interface ExternalRuntimeContract { readonly id: string }\n",
+    );
+    write(
+      "packages/runtime/src/node/index.ts",
+      'export type { ExternalRuntimeContract } from "external-runtime-contract";\n',
+    );
+
+    assert.deepEqual(
+      backendProviderAxisFailures({ fs, path, ts, repoRoot: root, read, readJson, walk }),
+      [],
+    );
+  }));
+
+void test("backend provider proof rejects ambiguous workspace physical aliases", () =>
+  withFixture(({ root, write, read, readJson, walk }) => {
+    seedProfiles({ write });
+    write("pnpm-workspace.yaml", "packages:\n  - packages/runtime\n  - aliases/runtime\n");
+    fs.mkdirSync(path.join(root, "aliases"), { recursive: true });
+    fs.symlinkSync(path.join(root, "packages/runtime"), path.join(root, "aliases/runtime"), "dir");
+
+    assert.throws(
+      () => backendProviderAxisFailures({ fs, path, ts, repoRoot: root, read, readJson, walk }),
+      /compiler-resolved workspace ownership is ambiguous: aliases\/runtime\/src\/neutral\.ts, packages\/runtime\/src\/neutral\.ts/u,
     );
   }));
 
@@ -227,7 +269,8 @@ void test("production profile graphs resolve TypeScript-valid sibling source edg
     assert.ok(
       backendProviderAxisFailures({ fs, path, ts, repoRoot: root, read, readJson, walk }).some(
         (failure) =>
-          failure.includes("repo-local dependency") && failure.includes("phase-o-adapter.d.ts"),
+          failure.includes("workspace-owned dependency") &&
+          failure.includes("phase-o-adapter.d.ts"),
       ),
     );
 
