@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runCommand } from "./command-runner.mjs";
 import {
   packageManifestDependencyEdges,
+  packageSourceFiles,
   packageSourceImportEdges,
   tsconfigReferenceEdges,
   workspacePackageRecords,
@@ -48,6 +50,7 @@ const matchesAny = (file, patterns) => patterns.some((pattern) => matchesPattern
 const loadGates = () => readJson(gatesPath);
 
 const edgeKey = (edge) => `${edge.from.name}->${edge.to.name}`;
+let affectedGraphCache;
 
 const extraEdges = (manifest, records) => {
   const byPath = new Map(records.map((record) => [record.path, record]));
@@ -98,13 +101,45 @@ export const projectAffectedGraphFacts = ({
   return { edges, sourceEdges, dependencyDrift, fidelityFailures };
 };
 
-const affectedGraph = (manifest, records) =>
-  projectAffectedGraphFacts({
+const affectedGraphInputDigest = (manifest, records) => {
+  const files = new Set([
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.json",
+    "tsconfig.source-paths.json",
+  ]);
+  for (const record of records) {
+    files.add(`${record.path}/package.json`);
+    files.add(`${record.path}/tsconfig.json`);
+    for (const file of packageSourceFiles(repoRoot, record)) files.add(file);
+  }
+  const hash = createHash("sha256").update(JSON.stringify(manifest));
+  for (const file of [...files].sort(compare)) {
+    const absolute = path.join(repoRoot, file);
+    hash.update(file);
+    if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) {
+      hash.update("missing");
+      continue;
+    }
+    hash.update(fs.realpathSync(absolute));
+    hash.update(fs.readFileSync(absolute));
+  }
+  return hash.digest("hex");
+};
+
+const affectedGraph = (manifest, records) => {
+  const digest = affectedGraphInputDigest(manifest, records);
+  if (affectedGraphCache?.digest === digest) return affectedGraphCache.graph;
+  const graph = projectAffectedGraphFacts({
     sourceEdges: packageSourceImportEdges(repoRoot, records),
     manifestEdges: packageManifestDependencyEdges(repoRoot, records),
     tsconfigEdges: tsconfigReferenceEdges(repoRoot, records),
     declaredExtraEdges: extraEdges(manifest, records),
   });
+  affectedGraphCache = { digest, graph };
+  return graph;
+};
 
 const owningPackage = (records, file) =>
   records
