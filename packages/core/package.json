@@ -124,7 +124,7 @@
     "test": "vp test run --configLoader runner --exclude '**/*.runtime.test.ts'"
   },
   "devDependencies": {
-    "@effect/language-service": "catalog:",
+    "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "effect": "catalog:",
