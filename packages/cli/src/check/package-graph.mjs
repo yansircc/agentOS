@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "../lib/typescript-native.mjs";
 import { workspacePackageRecords as workspaceManifestPackageRecords } from "../lib/workspace-manifest.mjs";
 
 const compare = (left, right) => left.localeCompare(right);
@@ -233,42 +233,47 @@ export const resolveModuleSpecifier = (repoRoot, fromFile, specifier, compilerOp
 const edgeKey = (edge) => `${edge.fromFile}\0${edge.specifier}\0${edge.toFile}\0${edge.importKind}`;
 
 export const sourceModuleImportEdges = (repoRoot, records) => {
+  const resolutionSession = ts.beginModuleResolutionSession();
   const compilerOptionsForFile = compilerOptionsLoader(repoRoot);
   const edges = [];
   const seen = new Set();
-  for (const from of records) {
-    for (const file of packageSourceFiles(repoRoot, from)) {
-      const source = fs.readFileSync(path.join(repoRoot, file), "utf8");
-      const compilerOptions = compilerOptionsForFile(file);
-      for (const importRecord of importSpecifierRecords(source, file)) {
-        const toFile = resolveModuleSpecifier(
-          repoRoot,
-          file,
-          importRecord.specifier,
-          compilerOptions,
-        );
-        if (toFile === undefined) continue;
-        const to = owningPackageForFile(records, toFile);
-        if (to === undefined) continue;
-        const edge = {
-          from,
-          to,
-          fromFile: file,
-          toFile,
-          file,
-          specifier: importRecord.specifier,
-          importKind: importRecord.importKind,
-          syntaxKind: importRecord.syntaxKind,
-          line: importRecord.line,
-          column: importRecord.column,
-          source: "source-module-import",
-        };
-        const key = edgeKey(edge);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        edges.push(edge);
+  try {
+    for (const from of records) {
+      for (const file of packageSourceFiles(repoRoot, from)) {
+        const source = fs.readFileSync(path.join(repoRoot, file), "utf8");
+        const compilerOptions = compilerOptionsForFile(file);
+        for (const importRecord of importSpecifierRecords(source, file)) {
+          const toFile = resolveModuleSpecifier(
+            repoRoot,
+            file,
+            importRecord.specifier,
+            compilerOptions,
+          );
+          if (toFile === undefined) continue;
+          const to = owningPackageForFile(records, toFile);
+          if (to === undefined) continue;
+          const edge = {
+            from,
+            to,
+            fromFile: file,
+            toFile,
+            file,
+            specifier: importRecord.specifier,
+            importKind: importRecord.importKind,
+            syntaxKind: importRecord.syntaxKind,
+            line: importRecord.line,
+            column: importRecord.column,
+            source: "source-module-import",
+          };
+          const key = edgeKey(edge);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          edges.push(edge);
+        }
       }
     }
+  } finally {
+    resolutionSession.dispose();
   }
   return edges.sort(
     (left, right) =>

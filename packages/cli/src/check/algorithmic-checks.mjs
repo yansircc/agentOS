@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript";
+import ts from "../lib/typescript-native.mjs";
 import {
   importSpecifierRecords,
   packageImportCycles as graphPackageImportCycles,
@@ -650,7 +650,12 @@ export const runAlgorithmicChecker = async (checkerId, args = []) => {
   const definition = checkerById.get(checkerId);
   if (definition === undefined) throw new Error(`unknown algorithmic checker ${checkerId}`);
   console.log(`$ agentos algorithmic-check ${checkerId}`);
-  await Promise.resolve(definition.run(args));
+  const resolutionSession = ts.beginModuleResolutionSession();
+  try {
+    await Promise.resolve(definition.run(args));
+  } finally {
+    resolutionSession.dispose();
+  }
 };
 
 const isCli =

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "../../packages/cli/src/lib/typescript-native.mjs";
 import {
   escapeRegExp,
   fail,

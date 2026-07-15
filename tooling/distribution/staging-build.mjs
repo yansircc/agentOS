@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import ts from "../../packages/cli/src/lib/typescript-native.mjs";
 import {
   distRoot,
   fail,
@@ -316,6 +316,24 @@ export const runtimeSourceFiles = (record) => {
   return [...visited].sort((left, right) => left.localeCompare(right));
 };
 
+const rawEmitText = ({ file, options, extension, label }) => {
+  const result = ts.emitRaw({ rootNames: [file], options });
+  if (result.emitSkipped) {
+    fail(`${label}: TypeScript 7 emit failed\n${result.diagnosticsText}`);
+  }
+  const rootDir = options.rootDir ?? path.dirname(file);
+  const expected = path
+    .relative(rootDir, file)
+    .replace(/\.(?:cts|mts|tsx|ts)$/u, extension)
+    .split(path.sep)
+    .join("/");
+  const matches = result.outputs.filter((output) => output.fileName === expected);
+  if (matches.length !== 1) {
+    fail(`${label}: TypeScript 7 emit produced ${matches.length} ${expected} artifacts`);
+  }
+  return matches[0].text;
+};
+
 export const emitJsFile = (record, file, out) => {
   const source = fs.readFileSync(file, "utf8");
   if (file.endsWith(".mjs")) {
@@ -325,20 +343,23 @@ export const emitJsFile = (record, file, out) => {
     );
     return;
   }
-  const transpiled = ts.transpileModule(source, {
-    fileName: file,
-    compilerOptions: {
+  const outputText = rawEmitText({
+    file,
+    extension: ".js",
+    label: `${record.packagePath}: ${repoPath(file)}`,
+    options: {
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.ES2022,
-      importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
       sourceMap: false,
+      noResolve: true,
+      noCheck: true,
+      noEmitOnError: false,
+      rootDir: path.dirname(file),
     },
   });
   fs.writeFileSync(
     out,
-    rewritePublicScopePlaceholders(
-      rewriteModuleSpecifiers(record, transpiled.outputText, file, out, false),
-    ),
+    rewritePublicScopePlaceholders(rewriteModuleSpecifiers(record, outputText, file, out, false)),
   );
 };
 
@@ -351,151 +372,38 @@ export const emitJs = (record) => {
   }
 };
 
-export const sourceDeclaresContextService = (file, source) => {
-  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-  const isContextServiceExpression = (expression) => {
-    if (ts.isCallExpression(expression)) return isContextServiceExpression(expression.expression);
-    return (
-      ts.isPropertyAccessExpression(expression) &&
-      expression.name.text === "Service" &&
-      ts.isIdentifier(expression.expression) &&
-      expression.expression.text === "Context"
-    );
-  };
-  let found = false;
-  const visit = (node) => {
-    if (found) return;
-    if (ts.isClassDeclaration(node)) {
-      for (const clause of node.heritageClauses ?? []) {
-        if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue;
-        for (const type of clause.types) {
-          if (isContextServiceExpression(type.expression)) {
-            found = true;
-            return;
-          }
-        }
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found;
-};
-
-export const emitIsolatedDeclaration = (record, file, source) => {
-  const rel = path.relative(path.join(record.packageDir, "src"), file);
-  const out = path.join(record.stageDir, "dist", rel.replace(/\.ts$/u, ".d.ts"));
-  const result = ts.transpileDeclaration(source, {
-    fileName: file,
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ES2022,
-      strict: true,
-      isolatedDeclarations: true,
-      removeComments: true,
-    },
-  });
-  fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(
-    out,
-    rewritePublicScopePlaceholders(
-      rewriteModuleSpecifiers(record, result.outputText, file, out, true),
-    ),
-  );
-};
-
-export const emitSemanticDeclaration = (record, file) => {
+export const emitDeclarations = (record) => {
+  const files = runtimeSourceFiles(record).filter((candidate) => candidate.endsWith(".ts"));
   const sourceRoot = path.join(record.packageDir, "src");
-  const configPath = path.join(record.packageDir, "tsconfig.json");
-  const config = ts.readConfigFile(configPath, (fileName) => ts.sys.readFile(fileName));
-  if (config.error !== undefined) {
-    fail(`${record.packagePath}: failed to read tsconfig\n${formatTsDiagnostics([config.error])}`);
-  }
-  const parsed = ts.parseJsonConfigFileContent(
-    config.config,
-    ts.sys,
-    record.packageDir,
-    {
-      noEmit: false,
-      declaration: true,
-      emitDeclarationOnly: true,
-      declarationMap: false,
-      removeComments: true,
-      noEmitOnError: false,
-      noCheck: true,
-      outDir: path.join(record.stageDir, "dist"),
-      rootDir: repoRoot,
-      incremental: false,
-      composite: false,
-    },
-    configPath,
-  );
-  if (parsed.errors.length > 0) {
-    fail(`${record.packagePath}: failed to parse tsconfig\n${formatTsDiagnostics(parsed.errors)}`);
-  }
-  const options = {
-    ...parsed.options,
-    noEmit: false,
-    declaration: true,
-    emitDeclarationOnly: true,
-    declarationMap: false,
-    removeComments: true,
-    noEmitOnError: false,
-    noCheck: true,
-    outDir: path.join(record.stageDir, "dist"),
-    rootDir: repoRoot,
-    incremental: false,
-    composite: false,
-    tsBuildInfoFile: undefined,
-  };
-  const outForSourceFile = (file) => {
+  for (const file of files) {
     const rel = path.relative(sourceRoot, file);
-    if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
-    return path.join(record.stageDir, "dist", rel.replace(/\.ts$/u, ".d.ts"));
-  };
-  const emitted = new Set();
-  const host = ts.createCompilerHost(options);
-  host.writeFile = (fileName, text, writeByteOrderMark, onError, sourceFileList) => {
-    const sourceFile = sourceFileList?.find((candidate) => outForSourceFile(candidate.fileName));
-    const out = sourceFile === undefined ? undefined : outForSourceFile(sourceFile.fileName);
-    if (out === undefined) return;
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      fail(`${record.packagePath}: declaration source not found ${repoPath(file)}`);
+    }
+    const out = path.join(record.stageDir, "dist", rel.replace(/\.ts$/u, ".d.ts"));
+    const outputText = rawEmitText({
+      file,
+      extension: ".d.ts",
+      label: `${record.packagePath}: ${repoPath(file)}`,
+      options: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.ES2022,
+        strict: true,
+        declaration: true,
+        emitDeclarationOnly: true,
+        declarationMap: false,
+        removeComments: true,
+        noEmitOnError: false,
+        noCheck: true,
+        noResolve: true,
+        rootDir: path.dirname(file),
+      },
+    });
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(
       out,
-      rewritePublicScopePlaceholders(
-        rewriteModuleSpecifiers(record, text, sourceFile.fileName, out, true),
-      ),
-      writeByteOrderMark ? { encoding: "utf8" } : "utf8",
+      rewritePublicScopePlaceholders(rewriteModuleSpecifiers(record, outputText, file, out, true)),
     );
-    emitted.add(out);
-  };
-  const program = ts.createProgram([file], options, host);
-  const sourceFile = program.getSourceFile(file);
-  if (sourceFile === undefined) {
-    fail(`${record.packagePath}: semantic declaration source not found ${repoPath(file)}`);
-  }
-  const emitResult = program.emit(sourceFile, host.writeFile, undefined, true);
-  if (emitResult.emitSkipped) {
-    fail(
-      `${record.packagePath}: semantic declaration emit skipped ${repoPath(file)}\n${formatTsDiagnostics(
-        emitResult.diagnostics,
-      )}`,
-    );
-  }
-  const out = outForSourceFile(file);
-  if (out !== undefined && !emitted.has(out)) {
-    fail(`${record.packagePath}: semantic declaration emit skipped ${repoPath(file)}`);
-  }
-};
-
-export const emitDeclarations = (record) => {
-  for (const file of runtimeSourceFiles(record).filter((candidate) => candidate.endsWith(".ts"))) {
-    const source = fs.readFileSync(file, "utf8");
-    if (sourceDeclaresContextService(file, source)) {
-      emitSemanticDeclaration(record, file);
-      continue;
-    }
-    emitIsolatedDeclaration(record, file, source);
   }
 };
 
