@@ -13,23 +13,23 @@ catalogs:
       specifier: 4.20260525.1
       version: 4.20260525.1
     '@effect/ai-anthropic':
-      specifier: 4.0.0-beta.84
-      version: 4.0.0-beta.84
+      specifier: 4.0.0-beta.98
+      version: 4.0.0-beta.98
     '@effect/sql-sqlite-do':
-      specifier: 4.0.0-beta.84
-      version: 4.0.0-beta.84
+      specifier: 4.0.0-beta.98
+      version: 4.0.0-beta.98
     '@effect/tsgo':
       specifier: 0.21.0
       version: 0.21.0
     '@effect/vitest':
-      specifier: 4.0.0-beta.84
-      version: 4.0.0-beta.84
+      specifier: 4.0.0-beta.98
+      version: 4.0.0-beta.98
     '@types/react':
       specifier: 19.2.16
       version: 19.2.16
     effect:
-      specifier: 4.0.0-beta.84
-      version: 4.0.0-beta.84
+      specifier: 4.0.0-beta.98
+      version: 4.0.0-beta.98
     fast-check:
       specifier: 4.8.0
       version: 4.8.0
@@ -69,16 +69,16 @@ importers:
         version: 4.20260525.1
       '@effect/ai-anthropic':
         specifier: 'catalog:'
-        version: 4.0.0-beta.84(effect@4.0.0-beta.84)
+        version: 4.0.0-beta.98(effect@4.0.0-beta.98)
       '@effect/sql-sqlite-do':
         specifier: 'catalog:'
-        version: 4.0.0-beta.84(effect@4.0.0-beta.84)
+        version: 4.0.0-beta.98(effect@4.0.0-beta.98)
       '@effect/tsgo':
         specifier: 'catalog:'
         version: 0.21.0
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-beta.84(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.84)
+        version: 4.0.0-beta.98(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.98)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -87,7 +87,7 @@ importers:
         version: 19.2.16
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.84
+        version: 4.0.0-beta.98
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
@@ -126,7 +126,7 @@ importers:
         version: link:../runtime
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.84
+        version: 4.0.0-beta.98
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
@@ -173,13 +173,13 @@ importers:
         version: 0.21.0
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-beta.84(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.84)
+        version: 4.0.0-beta.98(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.98)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.84
+        version: 4.0.0-beta.98
       fast-check:
         specifier: 'catalog:'
         version: 4.8.0
@@ -215,7 +215,7 @@ importers:
         version: link:../core
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.84
+        version: 4.0.0-beta.98
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: 'catalog:'
@@ -225,16 +225,16 @@ importers:
         version: 4.20260525.1
       '@effect/ai-anthropic':
         specifier: 'catalog:'
-        version: 4.0.0-beta.84(effect@4.0.0-beta.84)
+        version: 4.0.0-beta.98(effect@4.0.0-beta.98)
       '@effect/sql-sqlite-do':
         specifier: 'catalog:'
-        version: 4.0.0-beta.84(effect@4.0.0-beta.84)
+        version: 4.0.0-beta.98(effect@4.0.0-beta.98)
       '@effect/tsgo':
         specifier: 'catalog:'
         version: 0.21.0
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-beta.84(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.84)
+        version: 4.0.0-beta.98(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.98)
       '@types/node':
         specifier: 24.12.4
         version: 24.12.4
@@ -395,15 +395,15 @@ packages:
     resolution: {integrity: sha512-kzyuwOAQnXJNLS9PSyrk0CWk35nWJW/zl/6KvnTBMFK65gm7U1/Z5BqjxeapjZCIhQcM/DsrEmcbRwDyXyXK4A==}
     engines: {node: '>=14'}
 
-  '@effect/ai-anthropic@4.0.0-beta.84':
-    resolution: {integrity: sha512-G9tIiL9wFL+imdP8p/OI5iVzdIkUo8eSwulkwQmW5DxUHcPIi1cK6HiFv3YineM2y7gYdbuYLWiIMMSySbfD8w==}
+  '@effect/ai-anthropic@4.0.0-beta.98':
+    resolution: {integrity: sha512-pwG0CAp5qcIaBlriAfIW9Ejj7l6ood4TB534Xmma14z9uWpOposoKtMqDc/IFyL913XICmvhWKIbJKMV3YLDJQ==}
     peerDependencies:
-      effect: ^4.0.0-beta.84
+      effect: ^4.0.0-beta.98
 
-  '@effect/sql-sqlite-do@4.0.0-beta.84':
-    resolution: {integrity: sha512-BzGxOzbfWMElmYecLEh/V4YGg60U90p5TSV8YVBuvFFr97FMmBLDXvCrkUf8nJ+GJlY7A8mJe2HgOuPtKpcZNA==}
+  '@effect/sql-sqlite-do@4.0.0-beta.98':
+    resolution: {integrity: sha512-hGLed6PK739h3s0Yi/H0pmfswPovWt6Do+bWwb6YqLf6eFtIBjim8bR+UrFqeG1jSSU4MlebIeyUKlWgB3nnvA==}
     peerDependencies:
-      effect: ^4.0.0-beta.84
+      effect: ^4.0.0-beta.98
 
   '@effect/tsgo-darwin-arm64@0.21.0':
     resolution: {integrity: sha512-cTh8nsNwsxyCAwKEc8euvon2zMMBBA7ZlHmPKEX5hcX1iLCbAeOg0uOQKse3uGwg2dZG1C8YTMBdGN+JQIdPrA==}
@@ -444,10 +444,10 @@ packages:
     resolution: {integrity: sha512-bsctKj3pcr/pz6mzGq/AGpFoa8LFkKukmpYmXKxdCRbPybC2EBJHOLag8mAKkr64ZqKpjHthgb2X4xXEKV+McA==}
     hasBin: true
 
-  '@effect/vitest@4.0.0-beta.84':
-    resolution: {integrity: sha512-TNeqfWnX34CSArTXcRPwUh7g7evQU8qEJniD7XKUj+Yv79qV9BfRC+SA2V2u2gUcZoaks9RC1K2Ha49UOUz52Q==}
+  '@effect/vitest@4.0.0-beta.98':
+    resolution: {integrity: sha512-uXRPuN8Y6v43/OVmQwKOd/VFDh+dipaxGKdWPr1bdnM+4bl8NZlYYRJi5omgXLFZ6ZbleduXKcmLM3NeePe69w==}
     peerDependencies:
-      effect: ^4.0.0-beta.84
+      effect: ^4.0.0-beta.98
       vitest: ^3.0.0 || ^4.0.0
 
   '@emnapi/runtime@1.11.1':
@@ -1901,8 +1901,8 @@ packages:
     resolution: {integrity: sha512-2QF/g9/zTaPDc3BjNcVTGoBbXBgYfMTTceLaYcFJ/W9kggFUkhxD/hMEeuLKbugyef9SqAx8cpgwlIP/jinUTA==}
     engines: {node: '>=4'}
 
-  effect@4.0.0-beta.84:
-    resolution: {integrity: sha512-zWwFI9WZ4TsddBmtcuuAO2IXGR0Dp56xIUt8cX29ZeyOEtErXqP6muDaVpro08lGiMSOGMqSpuH/C1TUxHsRAA==}
+  effect@4.0.0-beta.98:
+    resolution: {integrity: sha512-oz+bsG5h+6RNrw4t5GMfQrk/xBS8ROoqkYsuvRhBr5O7mCOrpvH/hbw+QrDzvKIpX4HJClwm86F94c87W0sJxg==}
 
   entities@4.5.0:
     resolution: {integrity: sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==}
@@ -1982,6 +1982,10 @@ packages:
 
   fast-check@4.8.0:
     resolution: {integrity: sha512-GOJ158CUMnN6cSahsv4+ExARvIDuzzinFjkp0E9WtiBa5zcVeLozVkWaE4IzFcc+Y48Wp1EDlUZsXRyAztQcSg==}
+    engines: {node: '>=12.17.0'}
+
+  fast-check@4.9.0:
+    resolution: {integrity: sha512-7ms6T7SybUev/PQITciI0yLM2pOSFy5zpG8Ty7tQofcVaQUvrMXp6CBwqF6fThLCLOrfBtuHAtwq6Yu4XPCllg==}
     engines: {node: '>=12.17.0'}
 
   fast-string-truncated-width@3.0.3:
@@ -2461,8 +2465,8 @@ packages:
   msgpackr@2.0.4:
     resolution: {integrity: sha512-o1C5KRmuRt+apqMr1HuGSqWStZoRBUpEsCsl15uM9VdAF1qHLtvMOU2En747EnTyEl6c4pzPewRMFF31s1CNbA==}
 
-  multipasta@0.2.7:
-    resolution: {integrity: sha512-KPA58d68KgGil15oDqXjkUBEBYc00XvbPj5/X+dyzeo/lWm9Nc25pQRlf1D+gv4OpK7NM0J1odrbu9JNNGvynA==}
+  multipasta@0.2.8:
+    resolution: {integrity: sha512-ZPWuMKyv0cSO29f7hozp+k6+crZbQijV8ipMvxNxRf2SwtYGTX1ZX89Kd20VV4H9Znonx+EQn+iy1wGQsJ+b+Q==}
 
   nanoid@3.3.15:
     resolution: {integrity: sha512-y7Wygv/7mEOvxTuEQDB8StXdMRBWf1kR/tlhAzBRUFkB2jfcLOAxO/SHmOO2zgz1pVgK29/kyupn059/bCHdjA==}
@@ -2823,8 +2827,8 @@ packages:
     resolution: {integrity: sha512-Bf+ILmBgretUrdJxzXM0SgXLZ3XfiaUuOj/IKQHuTXip+05Xn+uyEYdVg0kYDipTBcLrCVyUzAPz7QmArb0mmw==}
     engines: {node: '>=14.0.0'}
 
-  toml@4.1.1:
-    resolution: {integrity: sha512-EBJnVBr3dTXdA89WVFoAIPUqkBjxPMwRqsfuo1r240tKFHXv3zgca4+NJib/h6TyvGF7vOawz0jGuryJCdNHrw==}
+  toml@4.3.0:
+    resolution: {integrity: sha512-lVb8X9BsPVuH0M4BKeS91tXAmJvCjQ5UIyAbQFaxkKGyUFK2RPkhwaFSQH8vbpl1d23eu/IBH+dwVMHWaq9A5A==}
     engines: {node: '>=20'}
 
   totalist@3.0.1:
@@ -3330,13 +3334,13 @@ snapshots:
 
   '@ctrl/tinycolor@4.2.0': {}
 
-  '@effect/ai-anthropic@4.0.0-beta.84(effect@4.0.0-beta.84)':
+  '@effect/ai-anthropic@4.0.0-beta.98(effect@4.0.0-beta.98)':
     dependencies:
-      effect: 4.0.0-beta.84
+      effect: 4.0.0-beta.98
 
-  '@effect/sql-sqlite-do@4.0.0-beta.84(effect@4.0.0-beta.84)':
+  '@effect/sql-sqlite-do@4.0.0-beta.98(effect@4.0.0-beta.98)':
     dependencies:
-      effect: 4.0.0-beta.84
+      effect: 4.0.0-beta.98
 
   '@effect/tsgo-darwin-arm64@0.21.0':
     optional: true
@@ -3369,9 +3373,9 @@ snapshots:
       '@effect/tsgo-win32-arm64': 0.21.0
       '@effect/tsgo-win32-x64': 0.21.0
 
-  '@effect/vitest@4.0.0-beta.84(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.84)':
+  '@effect/vitest@4.0.0-beta.98(@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0))(effect@4.0.0-beta.98)':
     dependencies:
-      effect: 4.0.0-beta.84
+      effect: 4.0.0-beta.98
       vitest: '@voidzero-dev/vite-plus-test@0.1.22(@types/node@24.12.4)(esbuild@0.27.3)(typescript@7.0.2)(vite@7.3.5(@types/node@24.12.4)(lightningcss@1.32.0)(yaml@2.9.0))(yaml@2.9.0)'
 
   '@emnapi/runtime@1.11.1':
@@ -4427,16 +4431,16 @@ snapshots:
 
   dset@3.1.4: {}
 
-  effect@4.0.0-beta.84:
+  effect@4.0.0-beta.98:
     dependencies:
       '@standard-schema/spec': 1.1.0
-      fast-check: 4.8.0
+      fast-check: 4.9.0
       find-my-way-ts: 0.1.6
       ini: 7.0.0
       kubernetes-types: 1.30.0
       msgpackr: 2.0.4
-      multipasta: 0.2.7
-      toml: 4.1.1
+      multipasta: 0.2.8
+      toml: 4.3.0
       uuid: 14.0.1
       yaml: 2.9.0
 
@@ -4548,6 +4552,10 @@ snapshots:
   extend@3.0.2: {}
 
   fast-check@4.8.0:
+    dependencies:
+      pure-rand: 8.4.0
+
+  fast-check@4.9.0:
     dependencies:
       pure-rand: 8.4.0
 
@@ -5408,7 +5416,7 @@ snapshots:
     optionalDependencies:
       msgpackr-extract: 3.0.4
 
-  multipasta@0.2.7: {}
+  multipasta@0.2.8: {}
 
   nanoid@3.3.15: {}
 
@@ -5946,7 +5954,7 @@ snapshots:
 
   tinyrainbow@3.1.0: {}
 
-  toml@4.1.1: {}
+  toml@4.3.0: {}
 
   totalist@3.0.1: {}
 

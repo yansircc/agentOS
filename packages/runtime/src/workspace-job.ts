@@ -540,7 +540,7 @@ const currentProjection = (
 ): WorkspaceJobProjection => projectWorkspaceJob(events, runId);
 
 const workspaceJobSeedWriteRetrySchedule = Schedule.exponential(Duration.millis(100)).pipe(
-  Schedule.both(Schedule.recurs(2)),
+  Schedule.upTo({ times: 2 }),
   Schedule.jittered,
 );
 

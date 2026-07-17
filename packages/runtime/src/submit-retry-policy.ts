@@ -33,7 +33,7 @@ const applyRetryLimit = (
   schedule: Schedule.Schedule<unknown, unknown, never>,
   maxRetries: number,
 ): Schedule.Schedule<unknown, unknown, never> =>
-  schedule.pipe(Schedule.both(Schedule.recurs(maxRetries)));
+  schedule.pipe(Schedule.upTo({ times: maxRetries }));
 
 export const executionRetryScheduleFromPolicy = (
   policy: SubmitToolExecutionRetryPolicy | undefined,
