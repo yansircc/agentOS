@@ -10,7 +10,7 @@ Create an empty directory, enter it, then run:
 
 ```agentos-command id=install
 pnpm init
-pnpm add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect@4.0.0-beta.84 \
+pnpm add @yansirplus/core @yansirplus/runtime @yansirplus/client @yansirplus/cli effect@4.0.0-beta.98 \
   --allow-build=esbuild \
   --allow-build=msgpackr-extract
 ```
