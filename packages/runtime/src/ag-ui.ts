@@ -10,13 +10,10 @@ import type { Tool } from "@agent-os/core/tools";
 import { decodeRecordedLedgerEvent, type RecordedLedgerEvent } from "@agent-os/core/types";
 import {
   inputRequestKindFromReason,
-  parseInputRequestResumePayload,
   projectRuntimeSafeLedgerEvent,
   RUNTIME_FACT_OWNER,
-  submitResumeDecisionFromInputRequestRef,
   type InputRequestDescriptor,
   type SubmitRunInput,
-  type SubmitResumeDecision,
 } from "@agent-os/core/runtime-protocol";
 import {
   projectWorkspaceJobSafeLedgerEvent,
@@ -26,7 +23,8 @@ import {
   projectWorkspaceOperationSafeLedgerEvent,
   WORKSPACE_OP_FACT_OWNER,
 } from "./workspace-op-carrier";
-import { decodeSseHttpEvents, encodeSseHttpJsonEvent, type SseHttpChunk } from "./sse-http";
+import { encodeSseHttpJsonEvent } from "./sse-http";
+import { submitResumeForAgUiInput } from "./ag-ui-resume-codec";
 
 export const AG_UI_WIRE_COMPATIBILITY = {
   core: "@ag-ui/core@0.0.55",
@@ -483,54 +481,6 @@ const selectedForwardedProps = (
     }
   }
   return selected;
-};
-
-const singleResumeEntry = (
-  resume: ReadonlyArray<NonNullable<AgUiRunAgentInput["resume"]>[number]>,
-): NonNullable<AgUiRunAgentInput["resume"]>[number] | undefined => {
-  if (resume.length === 0) return undefined;
-  if (resume.length !== 1) {
-    throw new TypeError("AG-UI resume input must contain exactly one resume entry");
-  }
-  return resume[0];
-};
-
-const inputRequestBindingFor = (
-  bindings: ReadonlyArray<AgUiInputRequestResumeBinding> | undefined,
-  interruptId: string,
-): AgUiInputRequestResumeBinding => {
-  const matches = (bindings ?? []).filter(
-    (binding) => binding.request.ref.interruptId === interruptId,
-  );
-  if (matches.length !== 1) {
-    throw new TypeError("AG-UI resume input has no unique runtime InputRequest binding");
-  }
-  return matches[0]!;
-};
-
-const submitResumeForAgUiInput = (
-  input: AgUiRunAgentInput,
-  defaults: AgUiSubmitDefaults,
-): SubmitResumeDecision | undefined => {
-  const entry = singleResumeEntry(input.resume ?? []);
-  if (entry === undefined) return defaults.resume;
-  if (defaults.resume !== undefined) {
-    throw new TypeError("AG-UI resume input cannot be combined with defaults.resume");
-  }
-  if (entry.status !== "resolved") {
-    throw new TypeError(
-      "AG-UI resume input must be resolved before it can become SubmitSpec.resume",
-    );
-  }
-  const binding = inputRequestBindingFor(defaults.inputRequests, entry.interruptId);
-  const parsed = parseInputRequestResumePayload(binding.request.kind, entry.payload);
-  if (!parsed.ok) {
-    throw new TypeError(`AG-UI resume input failed InputRequest contract: ${parsed.reason}`);
-  }
-  return submitResumeDecisionFromInputRequestRef(binding.request.ref, {
-    decisionRef: binding.decisionRef,
-    resume: parsed.resume,
-  });
 };
 
 export const agUiRunAgentInputToSubmitInput = (
@@ -1066,18 +1016,6 @@ export const encodeAgUiLedgerEventEnvelopeSse = (
   eventName = "ag_ui",
 ): string => encodeSseHttpJsonEvent(eventName, envelope);
 
-export type AgUiSseChunk = SseHttpChunk;
-
-export async function* projectLedgerSseToAgUiEnvelopes(
-  chunks: AsyncIterable<AgUiSseChunk>,
-  spec: AgUiLedgerEnvelopeProjectionSpec = {},
-): AsyncGenerator<AgUiLedgerEventEnvelope> {
-  for await (const parsed of decodeSseHttpEvents(chunks)) {
-    if (parsed.event !== "ledger" || parsed.data.length === 0) continue;
-    yield decodeLedgerEventToAgUiEnvelope(JSON.parse(parsed.data) as unknown, spec);
-  }
-}
-
 /**
  * Transports ledger SSE events as AG-UI SSE envelopes.
  *
@@ -1086,11 +1024,8 @@ export async function* projectLedgerSseToAgUiEnvelopes(
  * @agentosDocs docs/concepts/ag-ui-wire-adapter.md
  * @public
  */
-export async function* projectLedgerSseToAgUiSse(
-  chunks: AsyncIterable<AgUiSseChunk>,
-  spec: AgUiLedgerEnvelopeProjectionSpec = {},
-): AsyncGenerator<string> {
-  for await (const envelope of projectLedgerSseToAgUiEnvelopes(chunks, spec)) {
-    yield encodeAgUiLedgerEventEnvelopeSse(envelope);
-  }
-}
+export {
+  projectLedgerSseToAgUiEnvelopes,
+  projectLedgerSseToAgUiSse,
+  type AgUiSseChunk,
+} from "./ag-ui-wire-adapter";

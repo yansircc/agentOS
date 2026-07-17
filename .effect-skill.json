@@ -165,6 +165,18 @@
       "rules": ["EFF001"]
     },
     {
+      "path": "packages/runtime/src/ag-ui-resume-codec.ts",
+      "owner": "@agent-os/runtime/ag-ui-resume-codec",
+      "reason": "whole-file AG-UI resume codec owns synchronous fail-fast validation of authored resume cardinality, runtime InputRequest binding, and payload grammar before SubmitSpec construction",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "packages/runtime/src/ag-ui-wire-adapter.ts",
+      "owner": "@agent-os/runtime/ag-ui-wire-adapter",
+      "reason": "whole-file AG-UI SSE wire adapter owns async iterator pumping between ledger SSE decoding and owner-safe AG-UI envelope encoding",
+      "rules": ["EFF002", "EFF004"]
+    },
+    {
       "path": "packages/runtime/src/ledger-archive.ts",
       "owner": "@agent-os/runtime/ledger-archive-codec",
       "reason": "backend-neutral archive storage codec owns Promise-based checksum verification and fail-closed mapping of malformed persisted segment chains before any logical ledger read",
