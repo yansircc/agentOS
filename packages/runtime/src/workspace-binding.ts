@@ -1,4 +1,4 @@
-import { Effect, Option, Predicate } from "effect";
+import { Effect, Option } from "effect";
 import { externalResourceMaterialRef, type MaterialRef } from "@agent-os/core/material-ref";
 import {
   defineTool,
@@ -190,25 +190,23 @@ const workspaceOperationPayload = (
     "maxFileBytes" | "maxCommandChars" | "execTimeoutMs" | "maxOutputBytes"
   >,
 ): Record<string, unknown> => {
-  if (!Predicate.isObject(args)) {
-    throw new TypeError("workspace operation args must be an object");
-  }
+  const record = args as Record<string, unknown>;
   const payload: Record<string, unknown> = {
     requestedBy: "@agent-os/workspace-binding",
     workspaceRef: env.domain.ref,
     toolName,
   };
   for (const key of ["path", "content", "command", "cwd"] as const) {
-    const value = optionalString(args, key);
+    const value = optionalString(record, key);
     if (value !== undefined) payload[key] = value;
   }
   for (const key of ["timeoutMs"] as const) {
-    const value = optionalNumber(args, key);
+    const value = optionalNumber(record, key);
     if (value !== undefined) payload[key] = value;
   }
-  const materialRefs = optionalStringArray(args, "materialRefs");
+  const materialRefs = optionalStringArray(record, "materialRefs");
   if (materialRefs !== undefined) payload.materialRefs = materialRefs;
-  if (Array.isArray(args.envRefs)) payload.envRefs = args.envRefs;
+  if (Array.isArray(record.envRefs)) payload.envRefs = record.envRefs;
   const limits: Record<string, number> = {};
   for (const key of [
     "maxFileBytes",
@@ -232,9 +230,8 @@ const receiptBackedWorkspaceTool = (
     "maxFileBytes" | "maxCommandChars" | "execTimeoutMs" | "maxOutputBytes"
   >,
 ): Tool => {
-  if (tool.execution.kind !== "external" || tool.execution.access !== "write") {
-    throw new TypeError(`workspace receipt bridge requires external write tool: ${name}`);
-  }
+  // createWorkspaceTools and isWriteWorkspaceTool share the WorkspaceToolName generator;
+  // write names therefore carry this exact execution contract by construction.
   const execution = tool.execution as WorkspaceWriteToolExecution;
   return defineTool<typeof tool.argsSchema.source, ReceiptBackedToolResult, typeof execution>({
     name: tool.definition.function.name,

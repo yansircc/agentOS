@@ -2,9 +2,8 @@
  * Host-neutral workspace operation install helpers.
  */
 
-import { Effect, Option, Predicate, Schema } from "effect";
-import { CapabilityRejected } from "@agent-os/core/errors";
-import { type EventHandler, type LedgerEventRpc } from "@agent-os/core/types";
+import { Effect, Predicate, Schema } from "effect";
+import type { EventHandler, LedgerEventRpc } from "@agent-os/core/types";
 import type { BoundaryModule } from "@agent-os/core/boundary-contract";
 import type { ToolAdmitter } from "@agent-os/core/tools";
 import {
@@ -25,7 +24,6 @@ import {
 import {
   WORKSPACE_OP_FACT_OWNER,
   WORKSPACE_OP_KIND,
-  WORKSPACE_OP_AUTHORITY_CONTRACT,
   WORKSPACE_OP_PROJECTION_KIND,
   projectWorkspaceOperation,
   workspaceOpBoundaryModule,
@@ -38,15 +36,16 @@ import {
   type BindWorkspaceToolsForRuntimeOptions,
   type WorkspaceToolExposurePolicy,
 } from "../workspace-binding";
-import {
-  createWorkspaceOperationLocalProvider,
-  type CreateWorkspaceOperationLocalProviderOptions,
-  type WorkspaceOperationLocalProvider,
-} from "../workspace-op-local";
+import type { CreateWorkspaceOperationLocalProviderOptions } from "../workspace-op-local";
 import { defineCapability } from "./contract";
 import type { CapabilityInstallContext } from "./contract";
 import type { CapabilityCommitInput } from "./install-context";
 import { WORKSPACE_OPERATION_HOST_FACT } from "./materialized-host-facts";
+import {
+  createWorkspaceOperationEventHandler,
+  resolveWorkspaceOperationBindingEnv,
+  workspaceOperationEnvResolverFromHost,
+} from "./workspace-operations-host-adapter";
 
 export { WORKSPACE_OPERATION_HOST_FACT } from "./materialized-host-facts";
 
@@ -116,61 +115,6 @@ const DEFAULT_WORKSPACE_OP_BOUNDARY_VERSION = "0.2.9";
 const WORKSPACE_OPERATIONS_CAPABILITY_BINDING_REF = WORKSPACE_OP_FACT_OWNER;
 
 const allowWorkspaceTool: ToolAdmitter<unknown> = () => Effect.succeed({ ok: true as const });
-
-const requestedPayload = (event: LedgerEventRpc): WorkspaceOperationRequestedPayload | null =>
-  event.kind === WORKSPACE_OP_KIND.REQUESTED &&
-  event.factOwnerRef === WORKSPACE_OP_FACT_OWNER &&
-  event.payload !== null &&
-  typeof event.payload === "object"
-    ? (event.payload as WorkspaceOperationRequestedPayload)
-    : null;
-
-const workspaceOpCapability = (capabilities: WorkspaceOperationInstallContext["capabilities"]) => {
-  const capability = capabilities.get(WORKSPACE_OP_FACT_OWNER);
-  return Option.getOrThrowWith(
-    Option.fromNullishOr(capability),
-    () =>
-      new CapabilityRejected({
-        event: WORKSPACE_OP_KIND.COMPLETED,
-        capability: `extension:${WORKSPACE_OP_FACT_OWNER}`,
-      }),
-  );
-};
-
-const runIdFromRequest = (request: WorkspaceOperationRequestedPayload): string | undefined => {
-  const origin = request.claim.originRef;
-  if (origin.originKind !== "submit" && origin.originKind !== "run") return undefined;
-  return origin.originId.startsWith("run:") ? origin.originId.slice(4) : origin.originId;
-};
-
-const isThenable = (value: unknown): value is PromiseLike<unknown> =>
-  typeof value === "object" &&
-  value !== null &&
-  "then" in value &&
-  typeof (value as { readonly then?: unknown }).then === "function";
-
-const workspaceOperationEnvResolverFromHost = (
-  host: CapabilityInstallContext["host"],
-): WorkspaceOperationEnvResolver => {
-  const resolver = host[WORKSPACE_OPERATION_HOST_FACT];
-  if (typeof resolver !== "function") {
-    throw new TypeError(
-      `host fact ${WORKSPACE_OPERATION_HOST_FACT} must materialize a WorkspaceOperationEnvResolver`,
-    );
-  }
-  return resolver as WorkspaceOperationEnvResolver;
-};
-
-const providerOptions = (
-  options: WorkspaceOperationsOptions,
-  env: WorkspaceEnv,
-): CreateWorkspaceOperationLocalProviderOptions => ({
-  env,
-  ...(options.maxFileBytes === undefined ? {} : { maxFileBytes: options.maxFileBytes }),
-  ...(options.maxCommandChars === undefined ? {} : { maxCommandChars: options.maxCommandChars }),
-  ...(options.execTimeoutMs === undefined ? {} : { execTimeoutMs: options.execTimeoutMs }),
-  ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
-});
 
 const workspaceOperationsAgentCapability = (
   boundaryModule: BoundaryModule,
@@ -284,37 +228,12 @@ export const createWorkspaceOperationInstall = (
   const boundaryModule = workspaceOpBoundaryModule(
     options.boundaryVersion ?? DEFAULT_WORKSPACE_OP_BOUNDARY_VERSION,
   );
-  const providers = new Map<string, WorkspaceOperationLocalProvider>();
-  const providerFor = async (
-    event: LedgerEventRpc,
-    payload: WorkspaceOperationRequestedPayload,
-  ): Promise<WorkspaceOperationLocalProvider> => {
-    const runId = runIdFromRequest(payload);
-    const key = `${payload.workspaceRef}\0${runId ?? ""}`;
-    const existing = providers.get(key);
-    if (existing !== undefined) return existing;
-    const env = await envResolver({
-      mode: "operation",
-      event,
-      payload,
-      workspaceRef: payload.workspaceRef,
-      ...(runId === undefined ? {} : { runId }),
-    });
-    const provider = createWorkspaceOperationLocalProvider(providerOptions(options, env));
-    providers.set(key, provider);
-    return provider;
-  };
   const toolBindingsRequested =
     (options.toolNames !== undefined && options.toolNames.length > 0) ||
     options.exposure !== undefined;
   const bindings = (): BindWorkspaceToolsForRuntimeOptions | undefined => {
     if (!toolBindingsRequested) return undefined;
-    const env = envResolver({ mode: "binding" });
-    if (isThenable(env)) {
-      throw new TypeError(
-        "workspaceOperations tool bindings require a synchronous fs.workspace resolver",
-      );
-    }
+    const env = resolveWorkspaceOperationBindingEnv(envResolver);
     return {
       env,
       authority: options.authority ?? "agentos.workspace.capability",
@@ -362,21 +281,7 @@ export const createWorkspaceOperationInstall = (
     eventHandlers: (context) => [
       {
         kind: WORKSPACE_OP_KIND.REQUESTED,
-        handler: (async (event: LedgerEventRpc) => {
-          const request = requestedPayload(event);
-          if (request === null) return;
-          const provider = await providerFor(event, request);
-          const result = await provider.execute({ id: event.id, payload: request });
-          const capability = workspaceOpCapability(context.capabilities);
-          await capability.commit({
-            event: result.ok ? WORKSPACE_OP_KIND.COMPLETED : WORKSPACE_OP_KIND.REJECTED,
-            data: result.payload,
-            authorityBinding: {
-              authorityContractId: WORKSPACE_OP_AUTHORITY_CONTRACT,
-              expectedAuthorityRef: event.effectAuthorityRef,
-            },
-          });
-        }) as EventHandler,
+        handler: createWorkspaceOperationEventHandler(options, envResolver, context),
       },
     ],
   };

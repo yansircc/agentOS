@@ -302,6 +302,18 @@
       "rules": ["EFF003", "EFF004"]
     },
     {
+      "path": "src/workspace-session.ts",
+      "owner": "@agent-os/runtime/workspace-session-host-contract",
+      "reason": "whole-file workspace session lease contract owns synchronous authored lease validation and the default Promise cleanup callback before any workspace job runtime executes",
+      "rules": ["EFF003", "EFF025"]
+    },
+    {
+      "path": "src/capability/workspace-operations-host-adapter.ts",
+      "owner": "@agent-os/runtime/workspace-operations-host-adapter",
+      "reason": "whole-file workspace operation host adapter owns injected environment resolution, provider Promise execution, capability commit awaiting, and fail-fast host fact shape validation; capability vocabulary and projections remain in workspace-operations",
+      "rules": ["EFF003", "EFF004", "EFF025"]
+    },
+    {
       "path": "src/testing/conformance-assert.ts",
       "owner": "@agent-os/runtime/backend-conformance-harness",
       "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",
