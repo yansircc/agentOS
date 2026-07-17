@@ -17,7 +17,6 @@ import type {
 } from "./requirements";
 import {
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
-  RUNTIME_DIAGNOSTIC_KIND,
   runtimeDiagnosticBoundaryModule,
   type RuntimePreflightPass,
   type PreflightDiagnosticSink,
@@ -40,6 +39,10 @@ import {
 } from "../runtime-graph-status";
 import { allMaterializedHostFactContracts, hasResolvedHostFact } from "./materialized-host-facts";
 import { bindDeclaredBoundaryIntents } from "./boundary-modules";
+import {
+  createResolvedCapabilityEventHandlers,
+  type ResolvedHandlerFactory,
+} from "./resolve-handler-adapter";
 
 /**
  * Preflight diagnostic returned when resolve fails
@@ -121,14 +124,6 @@ const syncResult = <Value>(evaluate: () => Value): Result.Result<Value, unknown>
 
 const isResolvedHostFactsRecord = (value: unknown): value is ResolvedHostFacts =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const promiseResult = <Value>(
-  evaluate: () => Value | Promise<Value>,
-): Promise<Result.Result<Value, unknown>> =>
-  new Promise<Value>((resolve) => resolve(evaluate())).then(
-    (value) => Result.succeed(value),
-    (cause) => Result.fail(cause),
-  );
 
 const emptySubmitBindings = (): AgentSubmitBindings => ({
   tools: {},
@@ -554,10 +549,7 @@ export const resolveRuntimeInstallGraph = (
     readonly boundaryOwnerId: string;
   }> = [];
   const allAgentCapabilities: NonNullable<AgentBindings["capabilities"]> = {};
-  const handlerFactories: Array<{
-    readonly capabilityId: string;
-    readonly register: NonNullable<CapabilityInstallation["eventHandlers"]>;
-  }> = [];
+  const handlerFactories: ResolvedHandlerFactory[] = [];
   const allHandlerRegistrations: ResolvedRuntimeGraphRegistration[] = [];
   let mergedBindings: AgentSubmitBindings = emptySubmitBindings();
 
@@ -753,30 +745,7 @@ export const resolveRuntimeInstallGraph = (
       projections: allProjections,
       triggers: allTriggers,
       handlers: (context) =>
-        handlerFactories.flatMap(({ capabilityId, register }) =>
-          Array.from(register(context)).map((registration) => ({
-            kind: registration.kind,
-            handler: async (event) => {
-              const handlerResult = await promiseResult(() => registration.handler(event));
-              if (Result.isSuccess(handlerResult)) return;
-              const runtimeDiagnostic = context.capabilities.get(RUNTIME_DIAGNOSTIC_FACT_OWNER);
-              if (runtimeDiagnostic === undefined) {
-                throw new RuntimeInstallGraphUnavailable({
-                  reason: "runtime diagnostic capability missing from resolved install graph",
-                });
-              }
-              await runtimeDiagnostic.commit({
-                event: RUNTIME_DIAGNOSTIC_KIND.HANDLER_FAILED,
-                data: {
-                  capabilityId,
-                  handler: registration.kind,
-                  reason: describeCause(handlerResult.failure),
-                  requestedEventId: event.id,
-                },
-              });
-            },
-          })),
-        ),
+        createResolvedCapabilityEventHandlers(handlerFactories, context, describeCause),
       graphStatus: defineResolvedRuntimeGraphStatus({
         handlers: allHandlerRegistrations,
         projections: allProjectionRegistrations,

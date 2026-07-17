@@ -326,6 +326,12 @@
       "rules": ["EFF003", "EFF004", "EFF025"]
     },
     {
+      "path": "src/capability/resolve-handler-adapter.ts",
+      "owner": "@agent-os/runtime/capability-handler-adapter",
+      "reason": "whole-file resolved capability handler adapter owns Promise handler observation, runtime diagnostic commit awaiting, and fail-fast absence of the required diagnostic capability",
+      "rules": ["EFF003", "EFF004", "EFF025"]
+    },
+    {
       "path": "src/testing/conformance-assert.ts",
       "owner": "@agent-os/runtime/backend-conformance-harness",
       "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",
