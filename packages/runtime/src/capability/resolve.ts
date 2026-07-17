@@ -3,7 +3,8 @@
  * @public
  */
 
-import { Data, Result, Schema } from "effect";
+import { Result, Schema } from "effect";
+import { CapabilityRejected } from "@agent-os/core/errors";
 import type { HostProfile, ResolvedHostFacts } from "./host";
 import type {
   CapabilityContract,
@@ -53,12 +54,6 @@ export interface PreflightDiagnostic {
   readonly reason: string;
   readonly detail?: string;
 }
-
-class RuntimeInstallGraphUnavailable extends Data.TaggedError(
-  "agent_os.runtime_install_graph_unavailable",
-)<{
-  readonly reason: string;
-}> {}
 
 /**
  * Backend-neutral inputs for capability install graph resolution.
@@ -557,8 +552,9 @@ export const resolveRuntimeInstallGraph = (
     capabilityId: cap.capabilityId,
     commit: () =>
       Promise.reject(
-        new RuntimeInstallGraphUnavailable({
-          reason: `${cap.capabilityId} cannot commit during install graph assembly`,
+        new CapabilityRejected({
+          event: "install_graph.commit",
+          capability: cap.capabilityId,
         }),
       ),
   });

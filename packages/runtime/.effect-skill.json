@@ -84,6 +84,26 @@
       }
     },
     {
+      "path": "src/capability/index.ts",
+      "owner": "@agent-os/runtime/capability-facade",
+      "reason": "the public capability package facade owns terminal execution of the Effect-native dynamic resolver while preserving the existing Promise method shape",
+      "execution": {
+        "lifecycle": "package-facade",
+        "runners": ["Effect.runPromise"],
+        "package": {
+          "name": "@agent-os/runtime",
+          "subpath": "./capability",
+          "export": "createCapabilityResolverRuntime",
+          "members": [
+            {
+              "kind": "factory-local",
+              "name": "runDynamicCapabilityResolvers"
+            }
+          ]
+        }
+      }
+    },
+    {
       "path": "test/cloudflare/test-worker.ts",
       "owner": "@agent-os/runtime/cloudflare/materialized-projection-test-do",
       "reason": "Wrangler main and Durable Object binding own the MaterializedProjectionTestDO terminal methods",
@@ -110,16 +130,10 @@
       "rules": ["EFF001"]
     },
     {
-      "path": "src/ag-ui-resume-codec.ts",
-      "owner": "@agent-os/runtime/ag-ui-resume-codec",
-      "reason": "whole-file AG-UI resume codec owns synchronous fail-fast validation of authored resume cardinality, runtime InputRequest binding, and payload grammar before SubmitSpec construction",
-      "rules": ["EFF025"]
-    },
-    {
-      "path": "src/ag-ui-wire-adapter.ts",
-      "owner": "@agent-os/runtime/ag-ui-wire-adapter",
-      "reason": "whole-file AG-UI SSE wire adapter owns async iterator pumping between ledger SSE decoding and owner-safe AG-UI envelope encoding",
-      "rules": ["EFF002", "EFF004"]
+      "path": "src/ag-ui.ts",
+      "owner": "@agent-os/runtime/ag-ui",
+      "reason": "whole-file AG-UI codec and wire projection owns synchronous resume contract rejection plus async ledger-SSE to owner-safe AG-UI envelope projection",
+      "rules": ["EFF002", "EFF004", "EFF025"]
     },
     {
       "path": "src/ledger-archive.ts",

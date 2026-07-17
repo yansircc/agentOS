@@ -565,7 +565,8 @@ const runResolver = (
     }),
   );
 
-const runDynamicCapabilityResolversEffect = (
+/** @internal */
+export const runDynamicCapabilityResolversEffect = (
   input: DynamicCapabilityResolverServiceInput,
 ): Effect.Effect<DynamicCapabilityResolverServiceResult> =>
   Effect.gen(function* () {
@@ -624,8 +625,3 @@ const runDynamicCapabilityResolversEffect = (
     }
     return { ok: true, projection: merged.value };
   });
-
-export const runDynamicCapabilityResolvers = (
-  input: DynamicCapabilityResolverServiceInput,
-): Promise<DynamicCapabilityResolverServiceResult> =>
-  Effect.runPromise(runDynamicCapabilityResolversEffect(input));

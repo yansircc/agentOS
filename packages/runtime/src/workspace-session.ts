@@ -68,9 +68,7 @@ export class WorkspaceSessionLifecycleError extends Error {
 
 const requireNonEmpty = (value: string, field: string): string => {
   if (value.length === 0) {
-    throw new WorkspaceSessionLifecycleError(
-      `workspace session ${field} is required`,
-    );
+    throw new WorkspaceSessionLifecycleError(`workspace session ${field} is required`);
   }
   return value;
 };

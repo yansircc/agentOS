@@ -321,8 +321,7 @@ export const createScheduleContext = (
 
 export const dispatchScheduleFire = <TResult = unknown>(
   input: ScheduleFireDispatchInput<TResult>,
-): Promise<ScheduleFireDispatchResult> =>
-  dispatchScheduleFireHost(input, scheduleDispatchContract);
+): Promise<ScheduleFireDispatchResult> => dispatchScheduleFireHost(input, scheduleDispatchContract);
 
 export const dispatchScheduleFireDelivery = <TResult = unknown>(
   input: ScheduleFireDeliveryDispatchInput<TResult>,

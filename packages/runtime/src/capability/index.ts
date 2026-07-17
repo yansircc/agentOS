@@ -1,3 +1,10 @@
+import { Effect } from "effect";
+import {
+  runDynamicCapabilityResolversEffect,
+  type DynamicCapabilityResolverServiceInput,
+  type DynamicCapabilityResolverServiceResult,
+} from "./dynamic-resolver";
+
 export {
   defineCapability,
   type CapabilityEventHandlerContext,
@@ -34,12 +41,32 @@ export {
 } from "./resolve";
 export {
   makeDynamicCapabilityContext,
-  runDynamicCapabilityResolvers,
   type DynamicCapabilityResolverDefinition,
   type DynamicCapabilityResolverServiceInput,
   type DynamicCapabilityResolverServiceIssue,
   type DynamicCapabilityResolverServiceResult,
 } from "./dynamic-resolver";
+
+type DynamicCapabilityResolverRunner = (
+  input: DynamicCapabilityResolverServiceInput,
+) => Promise<DynamicCapabilityResolverServiceResult>;
+
+/**
+ * Lowers the Effect-native dynamic capability resolver into the public Promise facade.
+ * @public
+ */
+export const createCapabilityResolverRuntime = (): Readonly<{
+  runDynamicCapabilityResolvers: DynamicCapabilityResolverRunner;
+}> => {
+  const runDynamicCapabilityResolvers: DynamicCapabilityResolverRunner = (input) =>
+    Effect.runPromise(runDynamicCapabilityResolversEffect(input));
+  return { runDynamicCapabilityResolvers };
+};
+
+const capabilityResolverRuntime = createCapabilityResolverRuntime();
+
+export const runDynamicCapabilityResolvers: DynamicCapabilityResolverRunner =
+  capabilityResolverRuntime.runDynamicCapabilityResolvers;
 export { nodeHost } from "./hosts";
 export type {
   CapabilityRequirement,

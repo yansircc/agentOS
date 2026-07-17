@@ -122,6 +122,7 @@ Status: 0.6.x active development. Public exports are listed for accidental expor
 - `./capability:CapabilityRequirements`
 - `./capability:CapabilityRuntimeHandle`
 - `./capability:CapabilitySecretRequirement`
+- `./capability:createCapabilityResolverRuntime`
 - `./capability:defineCapability`
 - `./capability:DefineCapabilitySpec`
 - `./capability:defineHost`

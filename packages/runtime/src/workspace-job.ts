@@ -203,12 +203,6 @@ export class WorkspaceJobVerifierFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-export class WorkspaceJobProjectionInvalid extends Data.TaggedError(
-  "agent_os.workspace_job_projection_invalid",
-)<{
-  readonly reason: string;
-}> {}
-
 const textEncoder = new TextEncoder();
 
 const bytesOf = (bytes: string | Uint8Array): Uint8Array =>
@@ -830,9 +824,9 @@ const runWorkspaceJobAttemptEffect = (
           return Effect.fail(
             new WorkspaceJobDataPlaneFailed({
               phase: "terminal_read",
-              cause: new WorkspaceJobProjectionInvalid({
+              cause: {
                 reason: "workspace-job external-effect runner expected running projection",
-              }),
+              },
             }),
           );
         }
@@ -917,9 +911,7 @@ const runWorkspaceJobAttemptEffect = (
               ? Effect.fail(
                   new WorkspaceJobDataPlaneFailed({
                     phase: "terminal_read",
-                    cause: new WorkspaceJobProjectionInvalid({
-                      reason: "workspace job submit result is not reconstructable",
-                    }),
+                    cause: { reason: "workspace job submit result is not reconstructable" },
                   }),
                 )
               : Effect.succeed(projected);

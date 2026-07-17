@@ -1,16 +1,11 @@
-import { Data, Result } from "effect";
+import { Result } from "effect";
+import { CapabilityRejected } from "@agent-os/core/errors";
 import type { EventHandler } from "@agent-os/core/types";
 import {
   RUNTIME_DIAGNOSTIC_FACT_OWNER,
   RUNTIME_DIAGNOSTIC_KIND,
 } from "../runtime-diagnostic-carrier";
 import type { CapabilityEventHandlerContext, CapabilityInstallation } from "./contract";
-
-class RuntimeDiagnosticCapabilityUnavailable extends Data.TaggedError(
-  "agent_os.runtime_diagnostic_capability_unavailable",
-)<{
-  readonly reason: string;
-}> {}
 
 export interface ResolvedHandlerFactory {
   readonly capabilityId: string;
@@ -38,8 +33,9 @@ export const createResolvedCapabilityEventHandlers = (
         if (Result.isSuccess(handlerResult)) return;
         const runtimeDiagnostic = context.capabilities.get(RUNTIME_DIAGNOSTIC_FACT_OWNER);
         if (runtimeDiagnostic === undefined) {
-          throw new RuntimeDiagnosticCapabilityUnavailable({
-            reason: "runtime diagnostic capability missing from resolved install graph",
+          throw new CapabilityRejected({
+            event: RUNTIME_DIAGNOSTIC_KIND.HANDLER_FAILED,
+            capability: `extension:${RUNTIME_DIAGNOSTIC_FACT_OWNER}`,
           });
         }
         await runtimeDiagnostic.commit({

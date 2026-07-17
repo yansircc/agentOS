@@ -195,7 +195,11 @@ export const dispatchScheduleFireHost = async <TResult = unknown>(
     requested,
     productLink: dispatchedProductLink,
     outcome: (requestedEventId) =>
-      scheduleFireDispatchedEvent({ ...base, requestedEventId, productLink: dispatchedProductLink }),
+      scheduleFireDispatchedEvent({
+        ...base,
+        requestedEventId,
+        productLink: dispatchedProductLink,
+      }),
   };
 };
 
@@ -218,7 +222,8 @@ export const dispatchScheduleFireDeliveryHost = async <TResult = unknown>(
     principal: appPrincipal,
     ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
   });
-  if (delivery.kind === "replay") return { kind: "replay", fireId, delivery, projection: delivery.projection };
+  if (delivery.kind === "replay")
+    return { kind: "replay", fireId, delivery, projection: delivery.projection };
   const schedule = await dispatchScheduleFireHost(
     { ...input, appPrincipal, scheduleId, scheduledAt },
     contract,

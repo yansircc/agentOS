@@ -291,6 +291,7 @@ receipt, checksum, chain, or hot-row mismatch.
 - `./capability:CapabilityRequirements`
 - `./capability:CapabilityRuntimeHandle`
 - `./capability:CapabilitySecretRequirement`
+- `./capability:createCapabilityResolverRuntime`
 - `./capability:defineCapability`
 - `./capability:DefineCapabilitySpec`
 - `./capability:defineHost`
