@@ -42,7 +42,7 @@
     "effect-manifests:generate": "pnpm run agentos generate effect-manifests",
     "effect-manifests:check": "pnpm run agentos check effect-manifests",
     "check": "pnpm run agentos check default",
-    "check:runtime": "vp run --cache -r test:runtime",
+    "check:runtime": "pnpm -r --if-present run test:runtime",
     "check:release": "pnpm run check:structural && pnpm run typecheck && pnpm run test && pnpm run check:distribution && pnpm run test:internal-consumer && pnpm run agentos check effect-scan --evidence /tmp/agentos-release-scan",
     "check:full": "pnpm run check:release && pnpm run docs:site:check && pnpm run check:runtime",
     "docs:project": "pnpm run agentos generate site",
