@@ -22,6 +22,7 @@ import type {
   RunRequestStatus,
 } from "@agent-os/core/types";
 import { ABORT } from "@agent-os/core/abort";
+import { createAgentClientTransport } from "./client-transport-adapter";
 
 export type AgentClientListener = () => void;
 export type AgentClientUnsubscribe = () => void;
@@ -674,7 +675,6 @@ export const createAgentClient = <Commands extends AgentClientCommandMap = Agent
   options: CreateAgentClientOptions<Commands> = {},
 ): AgentClientController<Commands> => {
   const store = createAgentClientStore(createInitialAgentClientSnapshot(options.initialEvents));
-  let activeStreamAbort: AbortController | undefined;
 
   const setSnapshot = (snapshot: AgentClientSnapshot) => {
     store.setSnapshot(snapshot);
@@ -684,12 +684,12 @@ export const createAgentClient = <Commands extends AgentClientCommandMap = Agent
     setSnapshot(appendRuntimeEventsToSnapshot(store.getSnapshot(), events));
   };
 
-  const invoke: AgentClientRpcInvoker<Commands> = (name, input, commandOptions) => {
-    if (options.rpcInvoker === undefined) {
-      return Promise.reject(new Error(`missing rpcInvoker for command ${name}`));
-    }
-    return options.rpcInvoker(name, input, commandOptions);
-  };
+  const transport = createAgentClientTransport(options, {
+    getSnapshot: store.getSnapshot,
+    appendEvents,
+    setConnection: (status, error) =>
+      setSnapshot(setConnection(store.getSnapshot(), status, error)),
+  });
 
   return {
     subscribe(listener) {
@@ -698,48 +698,9 @@ export const createAgentClient = <Commands extends AgentClientCommandMap = Agent
     getSnapshot() {
       return store.getSnapshot();
     },
-    invoke,
+    invoke: transport.invoke,
     appendEvents,
-    async connect(connectOptions) {
-      if (options.streamSource === undefined) {
-        throw new Error("missing streamSource");
-      }
-      if (connectOptions?.signal?.aborted === true) {
-        setSnapshot(setConnection(store.getSnapshot(), "closed"));
-        return;
-      }
-
-      activeStreamAbort?.abort();
-      const streamAbort = new AbortController();
-      activeStreamAbort = streamAbort;
-      const abortFromCaller = () => streamAbort.abort(connectOptions?.signal?.reason);
-      connectOptions?.signal?.addEventListener("abort", abortFromCaller, { once: true });
-
-      try {
-        setSnapshot(setConnection(store.getSnapshot(), "connecting"));
-        const cursor = { afterEventId: store.getSnapshot().lastEventId };
-        const stream = options.streamSource.open(cursor, { signal: streamAbort.signal });
-        setSnapshot(setConnection(store.getSnapshot(), "open"));
-        for await (const event of stream) {
-          if (streamAbort.signal.aborted) break;
-          appendEvents([event]);
-        }
-        setSnapshot(setConnection(store.getSnapshot(), "closed"));
-      } catch (error) {
-        if (streamAbort.signal.aborted) {
-          setSnapshot(setConnection(store.getSnapshot(), "closed"));
-        } else {
-          setSnapshot(setConnection(store.getSnapshot(), "failed", error));
-        }
-      } finally {
-        connectOptions?.signal?.removeEventListener("abort", abortFromCaller);
-        if (activeStreamAbort === streamAbort) activeStreamAbort = undefined;
-      }
-    },
-    disconnect() {
-      activeStreamAbort?.abort();
-      activeStreamAbort = undefined;
-      setSnapshot(setConnection(store.getSnapshot(), "closed"));
-    },
+    connect: transport.connect,
+    disconnect: transport.disconnect,
   };
 };

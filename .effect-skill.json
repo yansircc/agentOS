@@ -599,6 +599,12 @@
       "owner": "@agent-os/core/runtime-event-codec",
       "reason": "runtime event codec owns synchronous fail-fast discrimination when a caller requests run identity from event vocabularies that are positively non-run-bound",
       "rules": ["EFF025"]
+    },
+    {
+      "path": "packages/client/src/client-transport-adapter.ts",
+      "owner": "@agent-os/client/transport-adapter",
+      "reason": "whole-file client transport adapter owns RPC Promise rejection, stream lifecycle error mapping, AbortSignal wiring, and async iterator pumping while snapshot semantics remain in the client core",
+      "rules": ["EFF001", "EFF004", "EFF024", "EFF025"]
     }
   ]
 }
