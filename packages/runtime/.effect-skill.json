@@ -332,6 +332,18 @@
       "rules": ["EFF003", "EFF004", "EFF025"]
     },
     {
+      "path": "src/schedule/dispatch-host-adapter.ts",
+      "owner": "@agent-os/runtime/schedule-dispatch-host-adapter",
+      "reason": "whole-file schedule dispatch host adapter owns session and workflow Promise invocation, authored handler awaiting, ingress failure mapping, and single-ingress/idempotency fail-fast control flow; schedule identity and projection algebra remain in schedule/index",
+      "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
+    },
+    {
+      "path": "src/schedule/contract-codec.ts",
+      "owner": "@agent-os/runtime/schedule-contract-codec",
+      "reason": "whole-file schedule authoring codec owns synchronous fail-fast rejection for malformed cron, identity, principal, runtime, and defined-schedule contract values before host dispatch",
+      "rules": ["EFF025"]
+    },
+    {
       "path": "src/testing/conformance-assert.ts",
       "owner": "@agent-os/runtime/backend-conformance-harness",
       "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",

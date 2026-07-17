@@ -28,6 +28,12 @@ import {
   type AgentSessionTurnProjection,
   type WorkflowRunProjection,
 } from "../run-projector";
+import {
+  dispatchScheduleFireDeliveryHost,
+  dispatchScheduleFireHost,
+  type ScheduleDispatchContract,
+} from "./dispatch-host-adapter";
+import { failScheduleContract } from "./contract-codec";
 
 const CRON_FIELD_PATTERN = /^[0-9*,/-]+$/u;
 const SCHEDULED_MINUTE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/u;
@@ -313,200 +319,15 @@ export const createScheduleContext = (
   });
 };
 
-export const dispatchScheduleFire = async <TResult = unknown>(
+export const dispatchScheduleFire = <TResult = unknown>(
   input: ScheduleFireDispatchInput<TResult>,
-): Promise<ScheduleFireDispatchResult> => {
-  assertScheduleRuntime(input.runtime);
-  assertDefinedSchedule(input.schedule);
-  const appPrincipal = normalizePrincipal(input.appPrincipal);
-  const scheduleId = nonEmptyString(input.scheduleId)
-    ? input.scheduleId
-    : failScheduleContract("Schedule dispatch requires scheduleId");
-  const scheduledAt = scheduledMinute(input.scheduledAt);
-  const fireId = scheduleFireId({ appPrincipal, scheduleId, scheduledAt });
-  const requested = scheduleFireRequestedEvent({
-    scopeRef: input.scopeRef,
-    effectAuthorityRef: input.effectAuthorityRef,
-    scheduleId,
-    fireId,
-    scheduledAt,
-    appPrincipal,
-    ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
-  });
-  const base = {
-    scopeRef: input.scopeRef,
-    effectAuthorityRef: input.effectAuthorityRef,
-    scheduleId,
-    fireId,
-    scheduledAt,
-    ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
-  };
-  const failed = (
-    phase: ScheduleFireFailedPayload["phase"],
-    reason: string,
-  ): ScheduleFireDispatchResult => ({
-    ok: false,
-    fireId,
-    requested,
-    phase,
-    reason,
-    outcome: (requestedEventId) =>
-      scheduleFireFailedEvent({
-        ...base,
-        requestedEventId,
-        phase,
-        reason,
-      }),
-  });
+): Promise<ScheduleFireDispatchResult> =>
+  dispatchScheduleFireHost(input, scheduleDispatchContract);
 
-  let productLink: ScheduleFireProductLink | undefined;
-  let firstFailure: ScheduleFireDispatchFailure | undefined;
-  const rememberFailure = (
-    phase: ScheduleFireFailedPayload["phase"],
-    reason: string,
-  ): ScheduleFireDispatchFailure => {
-    const failure = new ScheduleFireDispatchFailure(phase, reason);
-    firstFailure ??= failure;
-    return failure;
-  };
-  const normalizedRuntime: ScheduleRuntime = Object.freeze({
-    sessions: Object.freeze({
-      submitTurn: async (submitInput: ScheduleSessionSubmitTurnInput) => {
-        const idempotencyKey = requiredFireIdempotencyKey(
-          submitInput.idempotencyKey,
-          fireId,
-          rememberFailure,
-        );
-        assertSingleProductIngress(productLink, rememberFailure);
-        let result: SubmitResult;
-        try {
-          result = await input.runtime.sessions.submitTurn({
-            ...submitInput,
-            idempotencyKey,
-          });
-        } catch {
-          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_failed");
-        }
-        const decoded = decodeSubmitResult(result);
-        if (decoded === null) {
-          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_result_invalid");
-        }
-        productLink = {
-          kind: "session_turn",
-          sessionRef: submitInput.sessionRef,
-          turnRef: submitInput.turnRef,
-          runtimeRunId: decoded.runId,
-          idempotencyKey,
-        };
-        return decoded;
-      },
-    }),
-    workflows: Object.freeze({
-      run: async (runInput: ScheduleWorkflowRunInput) => {
-        const idempotencyKey = requiredFireIdempotencyKey(
-          runInput.idempotencyKey,
-          fireId,
-          rememberFailure,
-        );
-        assertSingleProductIngress(productLink, rememberFailure);
-        let result: SubmitResult;
-        try {
-          result = await input.runtime.workflows.run({
-            ...runInput,
-            idempotencyKey,
-          });
-        } catch {
-          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_failed");
-        }
-        const decoded = decodeSubmitResult(result);
-        if (decoded === null) {
-          throw rememberFailure("product_ingress", "schedule_fire_product_ingress_result_invalid");
-        }
-        productLink = {
-          kind: "workflow_run",
-          workflowId: runInput.workflowId,
-          workflowRunId: runInput.workflowRunId,
-          runtimeRunId: decoded.runId,
-          idempotencyKey,
-          ...(runInput.inputDigest === undefined ? {} : { inputDigest: runInput.inputDigest }),
-        };
-        return decoded;
-      },
-    }),
-  });
-
-  try {
-    await input.schedule.handler(
-      createScheduleContext(normalizedRuntime, { appPrincipal, fireId, scheduledAt }),
-    );
-  } catch (cause) {
-    if (cause instanceof ScheduleFireDispatchFailure) {
-      return failed(cause.phase, cause.reason);
-    }
-    return failed("handler", "schedule_fire_handler_failed");
-  }
-
-  if (firstFailure !== undefined) {
-    return failed(firstFailure.phase, firstFailure.reason);
-  }
-  if (productLink === undefined) {
-    return failed("contract", "schedule_fire_product_ingress_missing");
-  }
-  const dispatchedProductLink = productLink;
-  return {
-    ok: true,
-    fireId,
-    requested,
-    productLink: dispatchedProductLink,
-    outcome: (requestedEventId) =>
-      scheduleFireDispatchedEvent({
-        ...base,
-        requestedEventId,
-        productLink: dispatchedProductLink,
-      }),
-  };
-};
-
-export const dispatchScheduleFireDelivery = async <TResult = unknown>(
+export const dispatchScheduleFireDelivery = <TResult = unknown>(
   input: ScheduleFireDeliveryDispatchInput<TResult>,
-): Promise<ScheduleFireDeliveryDispatchResult> => {
-  const appPrincipal = normalizePrincipal(input.appPrincipal);
-  const scheduleId = nonEmptyString(input.scheduleId)
-    ? input.scheduleId
-    : failScheduleContract("Schedule dispatch requires scheduleId");
-  const scheduledAt = scheduledMinute(input.scheduledAt);
-  const fireId = scheduleFireId({ appPrincipal, scheduleId, scheduledAt });
-  const delivery = planIngressDelivery({
-    history: input.history,
-    scopeRef: input.scopeRef,
-    effectAuthorityRef: input.effectAuthorityRef,
-    deliveryKey: fireId,
-    slot: { kind: "schedule", id: scheduleId },
-    principal: appPrincipal,
-    ...(input.traceContext === undefined ? {} : { traceContext: input.traceContext }),
-  });
-  if (delivery.kind === "replay") {
-    return {
-      kind: "replay",
-      fireId,
-      delivery,
-      projection: delivery.projection,
-    };
-  }
-  const schedule = await dispatchScheduleFire({
-    ...input,
-    appPrincipal,
-    scheduleId,
-    scheduledAt,
-  });
-  return {
-    kind: "attempt",
-    fireId,
-    delivery,
-    schedule,
-  };
-};
-
+): Promise<ScheduleFireDeliveryDispatchResult> =>
+  dispatchScheduleFireDeliveryHost(input, scheduleDispatchContract);
 export const projectScheduleIngressDeliveryHistory = (
   events: ReadonlyArray<LedgerEvent>,
 ): ReturnType<typeof projectIngressDeliveryHistory> =>
@@ -559,37 +380,9 @@ const assertScheduleRuntime = (runtime: ScheduleRuntime): void => {
   }
 };
 
-class ScheduleFireDispatchFailure extends Error {
-  constructor(
-    readonly phase: ScheduleFireFailedPayload["phase"],
-    readonly reason: string,
-  ) {
-    super(reason);
-  }
-}
-
 const assertDefinedSchedule = (schedule: DefinedSchedule): void => {
   if (!isRecord(schedule) || typeof schedule.handler !== "function") {
     failScheduleContract("Schedule dispatch requires a defined schedule");
-  }
-};
-
-const requiredFireIdempotencyKey = (
-  idempotencyKey: string | undefined,
-  fireId: string,
-  fail: (phase: ScheduleFireFailedPayload["phase"], reason: string) => ScheduleFireDispatchFailure,
-): string => {
-  if (idempotencyKey === undefined) return fireId;
-  if (idempotencyKey === fireId) return idempotencyKey;
-  throw fail("contract", "schedule_fire_idempotency_key_mismatch");
-};
-
-const assertSingleProductIngress = (
-  productLink: ScheduleFireProductLink | undefined,
-  fail: (phase: ScheduleFireFailedPayload["phase"], reason: string) => ScheduleFireDispatchFailure,
-): void => {
-  if (productLink !== undefined) {
-    throw fail("contract", "schedule_fire_multiple_product_ingress_calls");
   }
 };
 
@@ -619,8 +412,15 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 const nonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
-const failScheduleContract = (message: string): never => {
-  throw new TypeError(message);
+const scheduleDispatchContract: ScheduleDispatchContract = {
+  assertScheduleRuntime,
+  assertDefinedSchedule,
+  normalizePrincipal,
+  nonEmptyString,
+  failScheduleContract,
+  scheduledMinute,
+  scheduleFireId,
+  createScheduleContext,
 };
 
 type ScheduleFireRequestedEvent = RuntimeLedgerEventByKind<
