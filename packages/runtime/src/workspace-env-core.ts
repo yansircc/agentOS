@@ -22,7 +22,6 @@ import {
   isInside,
   normalizeAbsolutePath,
   normalizeToolPathForEnv,
-  parentDir,
   relativePath,
   resolveReadFileLineRange,
   textDecoder,
@@ -30,6 +29,11 @@ import {
   utf8Bytes,
 } from "./workspace-env-core/path-policy";
 import { globWorkspaceFiles, grepWorkspaceFiles } from "./workspace-env-core/file-ops";
+import {
+  executeWorkspaceCommand,
+  removeWorkspacePath,
+  writeWorkspaceFile,
+} from "./workspace-env-core/host-adapter";
 export {
   WorkspaceEnvInputError,
   normalizeWorkspaceToolPath,
@@ -355,17 +359,8 @@ export const createWorkspaceEnv = (options: CreateWorkspaceEnvOptions): Workspac
       checkSignal(operationOptions?.signal);
       return options.backend.readFileBuffer(resolvePath(path), operationOptions);
     },
-    writeFile: async (path, content, operationOptions) => {
-      checkSignal(operationOptions?.signal);
-      const resolved = resolvePath(path);
-      await options.backend.mkdir(parentDir(cwd, resolved), {
-        recursive: true,
-        signal: operationOptions?.signal,
-      });
-      checkSignal(operationOptions?.signal);
-      await options.backend.writeFile(resolved, content, operationOptions);
-      checkSignal(operationOptions?.signal);
-    },
+    writeFile: (path, content, operationOptions) =>
+      writeWorkspaceFile(options.backend, cwd, () => resolvePath(path), content, operationOptions),
     stat: (path, operationOptions) => {
       checkSignal(operationOptions?.signal);
       return options.backend.stat(resolvePath(path), operationOptions);
@@ -382,18 +377,13 @@ export const createWorkspaceEnv = (options: CreateWorkspaceEnvOptions): Workspac
       checkSignal(operationOptions?.signal);
       return options.backend.mkdir(resolvePath(path), operationOptions);
     },
-    rm: async (path, operationOptions) => {
-      checkSignal(operationOptions?.signal);
-      await options.backend.rm(resolvePath(path), operationOptions);
-      checkSignal(operationOptions?.signal);
-    },
-    exec: async (command, execOptions) => {
-      checkSignal(execOptions.signal);
-      const cwdPath = execOptions.cwd === undefined ? cwd : resolvePath(execOptions.cwd);
-      const result = await options.backend.exec(command, { ...execOptions, cwd: cwdPath });
-      checkSignal(execOptions.signal);
-      return result;
-    },
+    rm: (path, operationOptions) =>
+      removeWorkspacePath(options.backend, () => resolvePath(path), operationOptions),
+    exec: (command, execOptions) =>
+      executeWorkspaceCommand(options.backend, command, () => ({
+        ...execOptions,
+        cwd: execOptions.cwd === undefined ? cwd : resolvePath(execOptions.cwd),
+      })),
   };
 };
 
@@ -405,6 +395,25 @@ const workspaceToolPromise = <A>(
     try: run,
     catch: (cause) => new ToolError({ toolName, cause }),
   });
+
+const isThenable = <A>(value: A | Promise<A>): value is Promise<A> =>
+  (typeof value === "object" || typeof value === "function") &&
+  value !== null &&
+  "then" in value &&
+  typeof value.then === "function";
+
+const workspaceToolCallback = <A>(
+  toolName: string,
+  run: () => A | Promise<A>,
+): Effect.Effect<A, ToolError> =>
+  Effect.try({
+    try: run,
+    catch: (cause) => new ToolError({ toolName, cause }),
+  }).pipe(
+    Effect.flatMap((value) =>
+      isThenable(value) ? workspaceToolPromise(toolName, () => value) : Effect.succeed(value),
+    ),
+  );
 
 interface WorkspaceToolFactoryContext {
   readonly env: WorkspaceEnv;
@@ -454,7 +463,7 @@ const workspaceToolDefinitions = [
         execution: writeExecution,
         execute: (args) =>
           withToolWriteRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
+            Effect.gen(function* () {
               const command = args.command.trim();
               if (command.length === 0) return failInput("command required");
               if (command.length > maxCommandChars) {
@@ -462,34 +471,40 @@ const workspaceToolDefinitions = [
                   `command exceeds ${maxCommandChars} character workspace tool limit`,
                 );
               }
-              const result = await env.exec(command, {
-                cwd:
-                  args.cwd === undefined
-                    ? undefined
-                    : normalizeToolPathForEnv(env, args.cwd, "cwd", { allowRoot: true }),
-                timeoutMs: args.timeoutMs ?? execTimeoutMs,
-                maxOutputBytes,
-                signal,
-                envRefs:
-                  args.envRefs === undefined
-                    ? undefined
-                    : Object.fromEntries(args.envRefs.map((entry) => [entry.name, entry.ref])),
-                materialRefs: args.materialRefs,
-              });
+              const result = yield* workspaceToolPromise(spec.name, (signal) =>
+                env.exec(command, {
+                  cwd:
+                    args.cwd === undefined
+                      ? undefined
+                      : normalizeToolPathForEnv(env, args.cwd, "cwd", { allowRoot: true }),
+                  timeoutMs: args.timeoutMs ?? execTimeoutMs,
+                  maxOutputBytes,
+                  signal,
+                  envRefs:
+                    args.envRefs === undefined
+                      ? undefined
+                      : Object.fromEntries(args.envRefs.map((entry) => [entry.name, entry.ref])),
+                  materialRefs: args.materialRefs,
+                }),
+              );
               const cwd =
                 args.cwd === undefined
                   ? env.cwd
                   : env.resolvePath(
                       normalizeToolPathForEnv(env, args.cwd, "cwd", { allowRoot: true }),
                     );
-              await hooks?.onAfterExec?.({
-                command,
-                cwd: relativePath(env.cwd, cwd),
-                exitCode: result.exitCode,
-                stdoutBytes: result.stdoutBytes,
-                stderrBytes: result.stderrBytes,
-                durationMs: result.durationMs,
-              });
+              if (hooks?.onAfterExec !== undefined) {
+                yield* workspaceToolCallback(spec.name, () =>
+                  hooks.onAfterExec!({
+                    command,
+                    cwd: relativePath(env.cwd, cwd),
+                    exitCode: result.exitCode,
+                    stdoutBytes: result.stdoutBytes,
+                    stderrBytes: result.stderrBytes,
+                    durationMs: result.durationMs,
+                  }),
+                );
+              }
               return { ...result, command, cwd: relativePath(env.cwd, cwd) };
             }),
           ),
@@ -586,9 +601,11 @@ const workspaceToolDefinitions = [
         execution: readExecution,
         execute: (args) =>
           withToolReadRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
+            Effect.gen(function* () {
               const path = env.resolvePath(normalizeToolPathForEnv(env, args.path, "path"));
-              const bytes = await env.readFileBuffer(path, { signal });
+              const bytes = yield* workspaceToolPromise(spec.name, (signal) =>
+                env.readFileBuffer(path, { signal }),
+              );
               const content = textDecoder.decode(bytes);
               const range = resolveReadFileLineRange(content, args.startLine, args.endLine);
               const selected =
@@ -630,14 +647,20 @@ const workspaceToolDefinitions = [
         execution: writeExecution,
         execute: (args) =>
           withToolWriteRequirement(
-            workspaceToolPromise(spec.name, async (signal) => {
+            Effect.gen(function* () {
               const path = env.resolvePath(normalizeToolPathForEnv(env, args.path, "path"));
               const bytes = utf8Bytes(args.content);
               if (bytes > maxFileBytes) {
                 return failInput(`file exceeds ${maxFileBytes} byte workspace tool limit`);
               }
-              await env.writeFile(path, args.content, { signal });
-              await hooks?.onAfterWrite?.({ path: relativePath(env.cwd, path), bytes });
+              yield* workspaceToolPromise(spec.name, (signal) =>
+                env.writeFile(path, args.content, { signal }),
+              );
+              if (hooks?.onAfterWrite !== undefined) {
+                yield* workspaceToolCallback(spec.name, () =>
+                  hooks.onAfterWrite!({ path: relativePath(env.cwd, path), bytes }),
+                );
+              }
               return { path: relativePath(env.cwd, path), bytesWritten: bytes };
             }),
           ),

@@ -138,7 +138,7 @@ describe("external-effect testing conformance", () => {
         projectCurrent: () => ({ status: "done", value: "unexpected" }),
         isRunningProjection: (current) => current.status === "running",
         activeSpecFromRunningProjection: (spec) => spec,
-        requestStateFromRunningProjection: () => ({ requestId: "unexpected" }),
+        requestStateFromRunningProjection: () => Effect.succeed({ requestId: "unexpected" }),
         request: (spec) =>
           Effect.sync(() => {
             requestBeforeEffect.push("request");
@@ -172,7 +172,7 @@ describe("external-effect testing conformance", () => {
         projectCurrent: () => ({ status: "done", value: "existing" }),
         isRunningProjection: (current) => current.status === "running",
         activeSpecFromRunningProjection: (spec) => spec,
-        requestStateFromRunningProjection: () => ({ requestId: "unexpected" }),
+        requestStateFromRunningProjection: () => Effect.succeed({ requestId: "unexpected" }),
         request: () =>
           Effect.sync(() => {
             duplicateCalls.push("request");
@@ -207,8 +207,10 @@ describe("external-effect testing conformance", () => {
         isRunningProjection: (current) => current.status === "running",
         activeSpecFromRunningProjection: () => ({ value: "active-from-projection" }),
         requestStateFromRunningProjection: (projection) => {
-          if (projection.status !== "running") throw new Error("expected running projection");
-          return projection.request;
+          if (projection.status !== "running") {
+            return Effect.die("expected running projection");
+          }
+          return Effect.succeed(projection.request);
         },
         request: () =>
           Effect.sync(() => {
@@ -247,9 +249,9 @@ describe("external-effect testing conformance", () => {
         activeSpecFromRunningProjection: (spec) => spec,
         requestStateFromRunningProjection: (current) => {
           if (current.status !== "running") {
-            throw new Error("test expected running projection");
+            return Effect.die("test expected running projection");
           }
-          return current.request;
+          return Effect.succeed(current.request);
         },
         request: (spec) => Effect.succeed({ requestId: spec.value }),
         runRequested: ({ request }) => Effect.succeed({ status: "done", value: request.requestId }),

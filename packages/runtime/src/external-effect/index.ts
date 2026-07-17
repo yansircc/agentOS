@@ -87,7 +87,9 @@ export interface RunExternalEffectAttemptSpec<Spec, Event, Projection, Request, 
   readonly projectCurrent: (events: ReadonlyArray<Event>, attemptKey: AttemptKey) => Projection;
   readonly isRunningProjection: (projection: Projection) => boolean;
   readonly activeSpecFromRunningProjection: (spec: Spec, projection: Projection) => Spec;
-  readonly requestStateFromRunningProjection: (projection: Projection) => Request;
+  readonly requestStateFromRunningProjection: (
+    projection: Projection,
+  ) => Effect.Effect<Request, E, R>;
   readonly request: (spec: Spec) => Effect.Effect<Request, E, R>;
   readonly runRequested: (
     state: ExternalEffectRequestedState<Spec, Request>,
@@ -121,7 +123,7 @@ export const runExternalEffectAttempt = <Spec, Event, Projection, Request, Attem
         return projection;
       }
       const activeSpec = runner.activeSpecFromRunningProjection(runner.spec, projection);
-      const request = runner.requestStateFromRunningProjection(projection);
+      const request = yield* runner.requestStateFromRunningProjection(projection);
       return yield* runner.runRequested({ activeSpec, request });
     }
 

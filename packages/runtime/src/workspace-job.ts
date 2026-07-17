@@ -203,6 +203,12 @@ export class WorkspaceJobVerifierFailed extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+export class WorkspaceJobProjectionInvalid extends Data.TaggedError(
+  "agent_os.workspace_job_projection_invalid",
+)<{
+  readonly reason: string;
+}> {}
+
 const textEncoder = new TextEncoder();
 
 const bytesOf = (bytes: string | Uint8Array): Uint8Array =>
@@ -702,10 +708,19 @@ const shouldRepair = (
   recovery: WorkspaceJobRecovery,
   input: WorkspaceJobRepairDecisionInput,
 ): Effect.Effect<boolean, WorkspaceJobFailure> =>
-  Effect.tryPromise({
-    try: async () => recovery.shouldRepair?.(input) ?? true,
+  Effect.try({
+    try: () => recovery.shouldRepair?.(input) ?? true,
     catch: () => requestFailure("repair_decision_failed"),
-  });
+  }).pipe(
+    Effect.flatMap((decision) =>
+      typeof decision === "boolean"
+        ? Effect.succeed(decision)
+        : Effect.tryPromise({
+            try: () => decision,
+            catch: () => requestFailure("repair_decision_failed"),
+          }),
+    ),
+  );
 
 const activeSpecForCurrentAttempt = (
   spec: RunWorkspaceJobSpec,
@@ -812,12 +827,19 @@ const runWorkspaceJobAttemptEffect = (
       },
       requestStateFromRunningProjection: (projection) => {
         if (projection.status !== "running") {
-          throw new TypeError("workspace-job external-effect runner expected running projection");
+          return Effect.fail(
+            new WorkspaceJobDataPlaneFailed({
+              phase: "terminal_read",
+              cause: new WorkspaceJobProjectionInvalid({
+                reason: "workspace-job external-effect runner expected running projection",
+              }),
+            }),
+          );
         }
-        return {
+        return Effect.succeed({
           requestedEventId: projection.requestedEventId,
           claim: projection.request.claim,
-        };
+        });
       },
       request: (activeSpec) =>
         Effect.gen(function* () {
@@ -895,7 +917,9 @@ const runWorkspaceJobAttemptEffect = (
               ? Effect.fail(
                   new WorkspaceJobDataPlaneFailed({
                     phase: "terminal_read",
-                    cause: new Error("workspace job submit result is not reconstructable"),
+                    cause: new WorkspaceJobProjectionInvalid({
+                      reason: "workspace job submit result is not reconstructable",
+                    }),
                   }),
                 )
               : Effect.succeed(projected);

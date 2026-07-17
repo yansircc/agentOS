@@ -296,6 +296,12 @@
       "rules": ["EFF001", "EFF003", "EFF004"]
     },
     {
+      "path": "src/workspace-env-core/host-adapter.ts",
+      "owner": "@agent-os/runtime/workspace-env-host-adapter",
+      "reason": "whole-file WorkspaceEnv backend adapter owns Promise sequencing and AbortSignal checks across injected filesystem and command host operations; shared path and tool semantics remain in workspace-env-core",
+      "rules": ["EFF003", "EFF004"]
+    },
+    {
       "path": "src/testing/conformance-assert.ts",
       "owner": "@agent-os/runtime/backend-conformance-harness",
       "reason": "framework-neutral packed-consumer assertion adapter owns JSON formatting fallback, assertion throws, and Promise rejection observation without importing a test framework or runtime Effect service",

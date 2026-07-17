@@ -3,7 +3,7 @@
  * @public
  */
 
-import { Result, Schema } from "effect";
+import { Data, Result, Schema } from "effect";
 import type { HostProfile, ResolvedHostFacts } from "./host";
 import type {
   CapabilityContract,
@@ -30,7 +30,6 @@ import {
   type ExtensionDeclaration,
 } from "@agent-os/core/extensions";
 import type { InstalledCapabilityHandle } from "./install-context";
-import { createRuntimeDiagnosticApi } from "./diagnostics";
 import type { EventHandler } from "@agent-os/core/types";
 import type { AnyMaterializedProjectionDefinition } from "../projection";
 import type { AnyDurableTrigger } from "../trigger";
@@ -51,6 +50,12 @@ export interface PreflightDiagnostic {
   readonly reason: string;
   readonly detail?: string;
 }
+
+class RuntimeInstallGraphUnavailable extends Data.TaggedError(
+  "agent_os.runtime_install_graph_unavailable",
+)<{
+  readonly reason: string;
+}> {}
 
 /**
  * Backend-neutral inputs for capability install graph resolution.
@@ -337,14 +342,7 @@ export const resolveRuntimeInstallGraph = (
   const addDiagnostic = (diag: PreflightDiagnostic) => {
     diagnostics.push(diag);
     if (sink) {
-      const commitResult = syncResult(() => {
-        const committed = sink.commit(diag);
-        if (isThenable(committed)) {
-          void Promise.resolve(committed).catch(() => undefined);
-          throw new Error("Diagnostic sink commit returned an async result");
-        }
-        return committed;
-      });
+      const commitResult = syncResult(() => sink.commit(diag));
       if (Result.isFailure(commitResult)) {
         diagnostics.push({
           pass: "diagnostic_sink",
@@ -352,6 +350,19 @@ export const resolveRuntimeInstallGraph = (
           detail: diagnosticDetail({
             failedDiagnostic: diag,
             cause: describeCause(commitResult.failure),
+          }),
+        });
+      } else if (isThenable(commitResult.success)) {
+        void commitResult.success.then(
+          () => undefined,
+          () => undefined,
+        );
+        diagnostics.push({
+          pass: "diagnostic_sink",
+          reason: "Diagnostic sink commit failed; resolveRuntime fails closed",
+          detail: diagnosticDetail({
+            failedDiagnostic: diag,
+            cause: "Diagnostic sink commit returned an async result",
           }),
         });
       }
@@ -474,21 +485,26 @@ export const resolveRuntimeInstallGraph = (
   }
 
   let resolvedHostFacts: ResolvedHostFacts | undefined;
-  const hostFactsResult = syncResult(() => {
-    const materialized = host.materialize({ config, secrets, identity: options.identity });
-    if (isThenable(materialized)) {
-      throw new Error(`Host ${host.target} materialize returned an async result`);
-    }
-    if (!isResolvedHostFactsRecord(materialized)) {
-      throw new Error(`Host ${host.target} materialize must return a host facts record`);
-    }
-    return materialized;
-  });
+  const hostFactsResult = syncResult(() =>
+    host.materialize({ config, secrets, identity: options.identity }),
+  );
   if (Result.isFailure(hostFactsResult)) {
     addDiagnostic({
       pass: "host_fact",
       reason: `Host ${host.target} failed to materialize provided facts`,
       detail: describeCause(hostFactsResult.failure),
+    });
+  } else if (isThenable(hostFactsResult.success)) {
+    addDiagnostic({
+      pass: "host_fact",
+      reason: `Host ${host.target} failed to materialize provided facts`,
+      detail: `Host ${host.target} materialize returned an async result`,
+    });
+  } else if (!isResolvedHostFactsRecord(hostFactsResult.success)) {
+    addDiagnostic({
+      pass: "host_fact",
+      reason: `Host ${host.target} failed to materialize provided facts`,
+      detail: `Host ${host.target} materialize must return a host facts record`,
     });
   } else {
     resolvedHostFacts = hostFactsResult.success;
@@ -548,7 +564,11 @@ export const resolveRuntimeInstallGraph = (
   const handleFor = (cap: CapabilityContract): InstalledCapabilityHandle => ({
     capabilityId: cap.capabilityId,
     commit: () =>
-      Promise.reject(new Error(`${cap.capabilityId} cannot commit during install graph assembly`)),
+      Promise.reject(
+        new RuntimeInstallGraphUnavailable({
+          reason: `${cap.capabilityId} cannot commit during install graph assembly`,
+        }),
+      ),
   });
 
   const globalKeys = new Map<string, string>();
@@ -577,7 +597,10 @@ export const resolveRuntimeInstallGraph = (
 
   for (const cap of sortedCaps) {
     installedCaps.set(cap.capabilityId, handleFor(cap));
-    const diagnostics = createRuntimeDiagnosticApi(cap.capabilityId, async () => undefined);
+    const diagnostics = {
+      handlerFailed: () => undefined,
+      projectionTimeout: () => undefined,
+    };
     const installCtx = {
       capabilities: installedCaps,
       host: resolvedHostFacts,
@@ -587,19 +610,22 @@ export const resolveRuntimeInstallGraph = (
       identity: options.identity,
     };
     let installResult: CapabilityInstallation;
-    const installAttempt = syncResult(() => {
-      const installed = cap.install(installCtx);
-      if (isThenable(installed)) {
-        throw new Error(`Capability ${cap.capabilityId} install returned an async result`);
-      }
-      return installed;
-    });
+    const installAttempt = syncResult(() => cap.install(installCtx));
     if (Result.isFailure(installAttempt)) {
       addDiagnostic({
         pass: "install",
         capabilityId: cap.capabilityId,
         reason: `Capability ${cap.capabilityId} install failed`,
         detail: describeCause(installAttempt.failure),
+      });
+      return failed();
+    }
+    if (isThenable(installAttempt.success)) {
+      addDiagnostic({
+        pass: "install",
+        capabilityId: cap.capabilityId,
+        reason: `Capability ${cap.capabilityId} install failed`,
+        detail: `Capability ${cap.capabilityId} install returned an async result`,
       });
       return failed();
     }
@@ -735,9 +761,9 @@ export const resolveRuntimeInstallGraph = (
               if (Result.isSuccess(handlerResult)) return;
               const runtimeDiagnostic = context.capabilities.get(RUNTIME_DIAGNOSTIC_FACT_OWNER);
               if (runtimeDiagnostic === undefined) {
-                throw new Error(
-                  "runtime diagnostic capability missing from resolved install graph",
-                );
+                throw new RuntimeInstallGraphUnavailable({
+                  reason: "runtime diagnostic capability missing from resolved install graph",
+                });
               }
               await runtimeDiagnostic.commit({
                 event: RUNTIME_DIAGNOSTIC_KIND.HANDLER_FAILED,

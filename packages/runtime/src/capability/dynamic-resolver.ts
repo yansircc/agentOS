@@ -18,6 +18,7 @@ import {
   parseDynamicCapabilityResolverResult,
 } from "@agent-os/core/runtime-protocol";
 import type { MaterialRef } from "@agent-os/core/material-ref";
+import { Duration, Effect } from "effect";
 
 export interface DynamicCapabilityResolverDefinition {
   readonly resolverId: string;
@@ -453,38 +454,52 @@ const invalidTimeoutIssues = (
   return issues;
 };
 
-const withTimeout = async (
-  run: (signal: AbortSignal) => unknown | Promise<unknown>,
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  (typeof value === "object" || typeof value === "function") &&
+  value !== null &&
+  "then" in value &&
+  typeof value.then === "function";
+
+const abortResolver = (controller: AbortController): Effect.Effect<void> =>
+  Effect.sync(() => controller.abort());
+
+const resolveWithTimeout = (
+  resolver: DynamicCapabilityResolverDefinition,
+  context: DynamicCapabilityContext,
   timeoutMs: number,
-): Promise<
+): Effect.Effect<
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly reason: DynamicCapabilityFailureReason }
 > =>
-  new Promise((resolve) => {
-    let settled = false;
+  Effect.gen(function* () {
     const controller = new AbortController();
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      controller.abort();
-      resolve({ ok: false, reason: DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_TIMEOUT });
-    }, timeoutMs);
-    Promise.resolve()
-      .then(() => run(controller.signal))
-      .then(
-        (value) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          resolve({ ok: true, value });
-        },
-        () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          resolve({ ok: false, reason: DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_THROW });
-        },
-      );
+    const attempt = Effect.try({
+      try: () => resolver.resolve(context, controller.signal),
+      catch: () => DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_THROW,
+    }).pipe(
+      Effect.flatMap((value) =>
+        isThenable(value)
+          ? Effect.tryPromise({
+              try: () => value,
+              catch: () => DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_THROW,
+            })
+          : Effect.succeed(value),
+      ),
+      Effect.map((value) => ({ ok: true as const, value })),
+      Effect.catch((reason) => Effect.succeed({ ok: false as const, reason })),
+      Effect.timeoutOrElse({
+        duration: Duration.millis(timeoutMs),
+        orElse: () =>
+          abortResolver(controller).pipe(
+            Effect.as({
+              ok: false as const,
+              reason: DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_TIMEOUT,
+            }),
+          ),
+      }),
+      Effect.onInterrupt(() => abortResolver(controller)),
+    );
+    return yield* attempt;
   });
 
 const failedResolver = (
@@ -530,80 +545,87 @@ const appliedResolver = (
   result,
 });
 
-const runResolver = async (
+const runResolver = (
   resolver: DynamicCapabilityResolverDefinition,
   context: DynamicCapabilityContext,
   event: DynamicCapabilityEventRef,
   timeoutMs: number,
-): Promise<DynamicCapabilityResolverMergeInput> => {
-  const resolved = await withTimeout(
-    (signal) => resolver.resolve(context, signal),
-    resolver.timeoutMs ?? timeoutMs,
+): Effect.Effect<DynamicCapabilityResolverMergeInput> =>
+  resolveWithTimeout(resolver, context, resolver.timeoutMs ?? timeoutMs).pipe(
+    Effect.map((resolved) => {
+      if (!resolved.ok) {
+        return resolved.reason === DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_TIMEOUT
+          ? timedOutResolver(resolver, event)
+          : failedResolver(resolver, event, resolved.reason);
+      }
+      const parsed = parseDynamicCapabilityResolverResult(resolved.value);
+      return parsed.ok
+        ? appliedResolver(resolver, event, parsed.value)
+        : failedResolver(resolver, event, DYNAMIC_CAPABILITY_FAILURE_REASON.INVALID_OUTPUT);
+    }),
   );
-  if (!resolved.ok) {
-    return resolved.reason === DYNAMIC_CAPABILITY_FAILURE_REASON.RESOLVER_TIMEOUT
-      ? timedOutResolver(resolver, event)
-      : failedResolver(resolver, event, resolved.reason);
-  }
-  const parsed = parseDynamicCapabilityResolverResult(resolved.value);
-  if (!parsed.ok) {
-    return failedResolver(resolver, event, DYNAMIC_CAPABILITY_FAILURE_REASON.INVALID_OUTPUT);
-  }
-  return appliedResolver(resolver, event, parsed.value);
-};
 
-export const runDynamicCapabilityResolvers = async (
+const runDynamicCapabilityResolversEffect = (
   input: DynamicCapabilityResolverServiceInput,
-): Promise<DynamicCapabilityResolverServiceResult> => {
-  const selected = selectDynamicCapabilityServiceInput(
-    input,
-    SERVICE_WRAPPER_FIELDS,
-    SERVICE_REQUIRED_FIELDS,
-  );
-  if (!selected.ok) return { ok: false, issues: [selected.issue] };
-  const serviceInput = selected.value as unknown as DynamicCapabilityResolverServiceInput;
-  const acceptedResolvers = serviceInput.resolvers;
-  const acceptedTimeoutMs = serviceInput.timeoutMs;
-  const contextSnapshot = dynamicCapabilityContextSnapshot(selected.value);
-  if (!contextSnapshot.ok) return { ok: false, issues: [contextSnapshot.issue] };
-  if (!Array.isArray(acceptedResolvers)) {
-    return {
-      ok: false,
-      issues: [
-        {
-          kind: "context_invalid",
-          path: '$["resolvers"]',
-          reason: "json_value_required",
-        },
-      ],
-    };
-  }
-  const inputIssues = [
-    ...duplicateResolverIssues(acceptedResolvers),
-    ...invalidTimeoutIssues(acceptedResolvers, acceptedTimeoutMs),
-  ];
-  if (inputIssues.length > 0) return { ok: false, issues: inputIssues };
+): Effect.Effect<DynamicCapabilityResolverServiceResult> =>
+  Effect.gen(function* () {
+    const selected = selectDynamicCapabilityServiceInput(
+      input,
+      SERVICE_WRAPPER_FIELDS,
+      SERVICE_REQUIRED_FIELDS,
+    );
+    if (!selected.ok) return { ok: false, issues: [selected.issue] };
+    const serviceInput = selected.value as unknown as DynamicCapabilityResolverServiceInput;
+    const acceptedResolvers = serviceInput.resolvers;
+    const acceptedTimeoutMs = serviceInput.timeoutMs;
+    const contextSnapshot = dynamicCapabilityContextSnapshot(selected.value);
+    if (!contextSnapshot.ok) return { ok: false, issues: [contextSnapshot.issue] };
+    if (!Array.isArray(acceptedResolvers)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            kind: "context_invalid",
+            path: '$["resolvers"]',
+            reason: "json_value_required",
+          },
+        ],
+      };
+    }
+    const inputIssues = [
+      ...duplicateResolverIssues(acceptedResolvers),
+      ...invalidTimeoutIssues(acceptedResolvers, acceptedTimeoutMs),
+    ];
+    if (inputIssues.length > 0) return { ok: false, issues: inputIssues };
 
-  const context = contextSnapshot.value;
-  const runnableSlots = new Set(dynamicCapabilitySlotsForEvent(context.event.name));
-  const runnableResolvers = acceptedResolvers.filter((resolver) =>
-    runnableSlots.has(resolver.slot),
-  );
-  const results = await Promise.all(
-    runnableResolvers.map((resolver) =>
-      runResolver(
-        resolver,
-        context,
-        context.event,
-        acceptedTimeoutMs ?? DEFAULT_DYNAMIC_RESOLVER_TIMEOUT_MS,
+    const context = contextSnapshot.value;
+    const runnableSlots = new Set(dynamicCapabilitySlotsForEvent(context.event.name));
+    const runnableResolvers = acceptedResolvers.filter((resolver) =>
+      runnableSlots.has(resolver.slot),
+    );
+    const results = yield* Effect.all(
+      runnableResolvers.map((resolver) =>
+        runResolver(
+          resolver,
+          context,
+          context.event,
+          acceptedTimeoutMs ?? DEFAULT_DYNAMIC_RESOLVER_TIMEOUT_MS,
+        ),
       ),
-    ),
-  );
-  const merged = mergeDynamicCapabilityProjection({
-    event: context.event,
-    catalog: context.catalog,
-    results,
+      { concurrency: "unbounded" },
+    );
+    const merged = mergeDynamicCapabilityProjection({
+      event: context.event,
+      catalog: context.catalog,
+      results,
+    });
+    if (!merged.ok) {
+      return { ok: false, issues: [{ kind: "merge_failed", issues: merged.issues }] };
+    }
+    return { ok: true, projection: merged.value };
   });
-  if (!merged.ok) return { ok: false, issues: [{ kind: "merge_failed", issues: merged.issues }] };
-  return { ok: true, projection: merged.value };
-};
+
+export const runDynamicCapabilityResolvers = (
+  input: DynamicCapabilityResolverServiceInput,
+): Promise<DynamicCapabilityResolverServiceResult> =>
+  Effect.runPromise(runDynamicCapabilityResolversEffect(input));

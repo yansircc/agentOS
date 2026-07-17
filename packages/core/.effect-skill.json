@@ -6,6 +6,36 @@
       "owner": "@agent-os/core/ledger-archive-codec",
       "reason": "backend-neutral archive protocol codec owns synchronous fail-closed canonical JSON validation and the Web Crypto Promise boundary used to derive content-addressed artifacts and exact readback receipts",
       "rules": ["EFF001", "EFF003", "EFF004", "EFF025"]
+    },
+    {
+      "path": "src/agent-schema.ts",
+      "owner": "@agent-os/core/agent-schema-codec",
+      "reason": "pure authored agent-schema codec owns synchronous fail-fast rejection for unsupported schema ASTs and invalid decoded profiles before runtime execution",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/json-schema-dialect.ts",
+      "owner": "@agent-os/core/json-schema-codec",
+      "reason": "pure JSON Schema dialect codec owns synchronous JSON parse classification at the untrusted wire boundary before runtime execution",
+      "rules": ["EFF001"]
+    },
+    {
+      "path": "src/runtime-protocol/manifest.ts",
+      "owner": "@agent-os/core/runtime-manifest-codec",
+      "reason": "runtime manifest codec owns synchronous fail-fast construction from authored manifest values after positive schema validation",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/runtime-protocol/mount.ts",
+      "owner": "@agent-os/core/runtime-mount-codec",
+      "reason": "runtime mount codec owns synchronous fail-fast construction from authored mount values after positive contract validation",
+      "rules": ["EFF025"]
+    },
+    {
+      "path": "src/runtime-protocol/runtime-events.ts",
+      "owner": "@agent-os/core/runtime-event-codec",
+      "reason": "runtime event codec owns synchronous fail-fast discrimination when a caller requests run identity from event vocabularies that are positively non-run-bound",
+      "rules": ["EFF025"]
     }
   ]
 }
